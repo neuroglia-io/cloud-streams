@@ -1,5 +1,4 @@
-﻿global using CloudNative.CloudEvents;
-global using CloudStreams.Infrastructure.Services;
+﻿global using CloudStreams.Infrastructure.Services;
 global using EventStore.Client;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.DependencyInjection.Extensions;

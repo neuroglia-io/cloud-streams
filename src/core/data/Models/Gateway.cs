@@ -14,6 +14,9 @@ public class Gateway
 
     const string ResourcePlural = "gateways";
 
+    /// <summary>
+    /// Gets the <see cref="Gateway"/>'s resource type
+    /// </summary>
     public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural);
 
     /// <inheritdoc/>

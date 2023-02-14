@@ -17,45 +17,23 @@ public interface ICloudEventStore
     /// <summary>
     /// Reads stored <see cref="CloudEvent"/>s
     /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="readDirection">The direction in which to read the stream</param>
     /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="amount">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    IAsyncEnumerable<CloudEvent> ReadAsync(StreamReadDirection readDirection, long offset, ulong? amount = null, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<CloudEvent> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by source
+    /// Reads stored <see cref="CloudEvent"/>s
     /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="source">The source of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="partition">An object used to reference the partition to read</param>
+    /// <param name="readDirection">The direction in which to read the partition</param>
     /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="amount">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store
-    IAsyncEnumerable<CloudEvent> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? amount = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by type
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="type">The type of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="amount">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store
-    IAsyncEnumerable<CloudEvent> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? amount = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by correlation id
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="correlationId">The correlation id of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="amount">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store
-    IAsyncEnumerable<CloudEvent> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? amount = null, CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
+    IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionRef partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Subscribes to consumed <see cref="CloudEvent"/>s

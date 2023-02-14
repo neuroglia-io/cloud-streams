@@ -10,7 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\core\infrastructure\abstractions\CloudStreams.Infrastructure.Abstractions.csproj" />
+    <Compile Remove="Commands\**" />
+    <Content Remove="Commands\**" />
+    <EmbeddedResource Remove="Commands\**" />
+    <None Remove="Commands\**" />
   </ItemGroup>
 	
   <ItemGroup>
@@ -19,7 +22,11 @@
   </ItemGroup>
 	
   <ItemGroup>
-    <Folder Include="Commands\" />
+    <ProjectReference Include="..\core\CloudStreams.Api.Core.csproj" />
+  </ItemGroup>
+	
+  <ItemGroup>
+    <Folder Include="Configuration\" />
   </ItemGroup>
 
 </Project>

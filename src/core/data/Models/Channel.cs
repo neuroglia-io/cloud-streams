@@ -14,6 +14,9 @@ public class Channel
 
     const string ResourcePlural = "channels";
 
+    /// <summary>
+    /// Gets the <see cref="Channel"/>'s resource type
+    /// </summary>
     public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural);
 
     /// <inheritdoc/>

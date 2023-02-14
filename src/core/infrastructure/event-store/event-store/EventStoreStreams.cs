@@ -1,4 +1,6 @@
-﻿namespace CloudStreams.Infrastructure;
+﻿using CloudStreams.Data.Models;
+
+namespace CloudStreams.Infrastructure;
 
 /// <summary>
 /// Exposes constants about the EventStore streams used by Cloud Streams
@@ -13,7 +15,7 @@ public static class EventStoreStreams
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by source
     /// </summary>
-    public static string ByCloudEventSource(Uri source) => $"{All}-by_source-{source}";
+    public static string ByCloudEventSource(Uri source) => $"{All}-by_source-{source.OriginalString}";
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by type
     /// </summary>
@@ -21,6 +23,6 @@ public static class EventStoreStreams
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by correlation id
     /// </summary>
-    public static string ByCorrelationId(string correlationId) => $"bc-{correlationId}";
+    public static string ByCorrelationId(string correlationId) => $"$bc-{correlationId}";
 
 }

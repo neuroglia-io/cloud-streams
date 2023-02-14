@@ -1,5 +1,4 @@
-﻿using CloudNative.CloudEvents.SystemTextJson;
-using CloudStreams.Infrastructure.Services;
+﻿using CloudStreams.Infrastructure.Services;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Neuroglia.Serialization;
@@ -54,7 +53,7 @@ public class CloudStreamsApiBuilder
     /// <summary>
     /// Gets a <see cref="List{T}"/> containing the assemblies to scan for mediation components
     /// </summary>
-    protected List<Assembly> MediationAssemblies { get; } = new();
+    protected List<Assembly> MediationAssemblies { get; } = new() { typeof(CloudStreamsApiBuilder).Assembly };
 
     /// <inheritdoc/>
     public virtual ICloudStreamsApiBuilder RegisterMediationAssembly<TMarkup>()
@@ -94,9 +93,7 @@ public class CloudStreamsApiBuilder
         if (this.CloudEventStoreType == null) throw new Exception("Invalid Cloud Streams API configuration: the cloud event store type must be set");
         if (this.ResourceRepositoryType == null) throw new Exception("Invalid Cloud Streams API configuration: the resource repository type must be set");
         if (this.SchemaRegistryType == null) throw new Exception("Invalid Cloud Streams API configuration: the schema registry type must be set");
-        this.Services.AddSingleton<CloudEventFormatter>(provider => provider.GetRequiredService<JsonEventFormatter>());
         this.Services.AddMediatR(this.MediationAssemblies.ToArray());
-        this.Services.TryAddSingleton(new JsonEventFormatter(Serializer.Json.DefaultOptions, new()));
         this.Services.TryAddSingleton<IAuthorizationManager, AuthorizationManager>();
         this.Services.TryAddSingleton<ICloudEventAdmissionControl, CloudEventAdmissionControl>();
         this.Services.TryAddSingleton<ISchemaGenerator, SchemaGenerator>();

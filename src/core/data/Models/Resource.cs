@@ -20,6 +20,7 @@ public abstract class Resource
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
     /// </summary>
+    /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
     /// <param name="metadata">The object that describes the resource</param>
     protected Resource(ResourceType type, ResourceMetadata metadata)
         : this(type)
@@ -85,6 +86,7 @@ public abstract class Resource<TSpec>
 /// Represents the base class of all cloud stream resources
 /// </summary>
 /// <typeparam name="TSpec">The type of the resource's spec</typeparam>
+/// <typeparam name="TStatus">The type of the resource's status</typeparam>
 public abstract class Resource<TSpec, TStatus>
     : Resource<TSpec>, IResource<TSpec, TStatus>
     where TSpec : class, new()

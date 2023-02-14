@@ -36,7 +36,7 @@ public static class IRequestHandlerExtensions
     /// Creates a new <see cref="Response"/> that describes a successfull operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
-    /// <param name="request">The extended request handler</param>
+    /// <param name="handler">The extended request handler</param>
     /// <returns>A new <see cref="Response"/></returns>
     public static Response Ok<TRequest>(this IRequestHandler<TRequest> handler)
         where TRequest : IRequest
@@ -76,8 +76,9 @@ public static class IRequestHandlerExtensions
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
+    /// <param name="validationResults">The <see cref="ValidationResults"/> used to describe the failed validation</param>
     /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, ValidationResults? validationResults = null)
+    public static Response ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, ValidationResults validationResults)
         where TRequest : IRequest
     {
         return Response.ValidationFailed(validationResults);
@@ -89,11 +90,26 @@ public static class IRequestHandlerExtensions
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
+    /// <param name="validationResults">The <see cref="ValidationResults"/> used to describe the failed validation</param>
     /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, ValidationResults? validationResults = null)
+    public static Response ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, ValidationResults validationResults)
         where TRequest : IRequest<TResult>
     {
         return Response.ValidationFailed(validationResults);
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="Response"/> that describes failure due to validation problems
+    /// </summary>
+    /// <typeparam name="TRequest">The type of request to handle</typeparam>
+    /// <typeparam name="TResult">The expected type of result</typeparam>
+    /// <param name="handler">The extended request handler</param>
+    /// <param name="errors">The errors that have occured during validation</param>
+    /// <returns>A new <see cref="Response"/></returns>
+    public static Response<TResult> ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, params KeyValuePair<string, string[]>[] errors)
+        where TRequest : IRequest<TResult>
+    {
+        return Response.ValidationFailed<TResult>(errors);
     }
 
 }

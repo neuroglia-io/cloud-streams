@@ -1,4 +1,7 @@
-﻿namespace CloudStreams.Data.Models;
+﻿using Json.Schema;
+using System.Xml.Schema;
+
+namespace CloudStreams.Data.Models;
 
 /// <summary>
 /// Represents an object used to describe a response to a request
@@ -22,7 +25,7 @@ public class Response
     /// <param name="detail">A human-readable explanation specific to this occurrence of the response</param>
     /// <param name="instance">An URI reference that identifies the specific occurrence of the response. It may or may not yield further information if dereferenced.</param>
     /// <param name="content">The <see cref="Response"/>'s content, if any</param>
-    /// <param name="errors">An <see cref="IDictionary{TKey, TValue}"/> containing they code/message mappings of the errors that have occured during the <see cref="IRequest"/>'s execution</param>
+    /// <param name="errors">An <see cref="IDictionary{TKey, TValue}"/> containing they code/message mappings of the errors that have occured during the request's execution</param>
     public Response(int status, Uri? type = null, string? title = null, string? detail = null, Uri? instance = null, object? content = null, IDictionary<string, string[]>? errors = null)
     {
         this.Status = status;
@@ -109,7 +112,7 @@ public class Response
     /// <summary>
     /// Creates a new <see cref="Response"/> to inform about a validation failure
     /// </summary>
-    /// <param name="errors">An <see cref="IDictionary{TKey, TValue}"/> that contains the <see cref="Error"/> that have been produced during validation</param>
+    /// <param name="detail">Describes the validation error</param>
     /// <returns>A new <see cref="Response"/></returns>
     public static Response ValidationFailed(string? detail = null)
     {
@@ -135,10 +138,25 @@ public class Response
         };
     }
 
+    /// <summary>
+    /// Creates a new <see cref="Response"/> that describes failure due to validation problems
+    /// </summary>
+    /// <typeparam name="TContent">The expected type of result</typeparam>
+    /// <param name="errors">The errors that have occured during validation</param>
+    /// <returns>A new <see cref="Response"/></returns>
+    public static Response<TContent> ValidationFailed<TContent>(params KeyValuePair<string, string[]>[] errors)
+    {
+        return new((int)HttpStatusCode.BadRequest)
+        {
+            Title = ProblemTitles.ValidationFailed,
+            Errors = errors.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+        };
+    }
+
 }
 
 /// <summary>
-/// Describes a response produced to an <see cref="IRequest"/>
+/// Describes a response produced to a request
 /// </summary>
 /// <typeparam name="TContent">The type of content wrapped by the <see cref="Response"/></typeparam>
 public class Response<TContent>

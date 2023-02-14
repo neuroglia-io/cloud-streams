@@ -44,7 +44,7 @@ services:
     image: ${DOCKER_REGISTRY-}cloudstreams-api-server
     build:
       context: .
-      dockerfile: ../../src/apps/server/DockerFile
+      dockerfile: ../../src/apps/api-server/Dockerfile
     environment:
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio

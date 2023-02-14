@@ -1,6 +1,6 @@
 ﻿using CloudStreams.Data.Models;
 
-namespace CloudStreams.Api.Server;
+namespace CloudStreams.Api.Http;
 
 /// <summary>
 /// Represents the base class for all Cloud Streams <see cref="ControllerBase"/> implementations

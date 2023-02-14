@@ -1,12 +1,8 @@
-using CloudNative.CloudEvents.SystemTextJson;
 using CloudStreams;
-using CloudStreams.Api.Server.Services;
-using CloudStreams.Application.Configuration;
-using CloudStreams.Data.Models;
+using CloudStreams.Api.Configuration;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
@@ -14,28 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddCloudStreamsApi(builder =>
 {
+    builder.UseHttpEndpoints();
     builder.UseESCloudEventStore();
     builder.UseApicurioSchemaRegistry();
     builder.UseKubernetesResourceStore();
 });
 
-builder.Services.AddHealthChecks();
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true;
-    options.Providers.Add<BrotliCompressionProvider>();
-    options.Providers.Add<GzipCompressionProvider>();
-});
-builder.Services.AddProblemDetails();
-builder.Services.AddControllers(options =>
-{
-    options.InputFormatters.Insert(0, new CloudEventInputFormatter(new JsonEventFormatter()));
-})
-    .AddJsonOptions(options =>
-    {
-        Serializer.Json.DefaultOptionsConfiguration?.Invoke(options.JsonSerializerOptions);
-    });
-builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(builder =>
 {
     builder.CustomOperationIds(o =>

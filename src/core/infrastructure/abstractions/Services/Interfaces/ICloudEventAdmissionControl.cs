@@ -1,6 +1,4 @@
-﻿using CloudStreams.Data.Models;
-
-namespace CloudStreams.Infrastructure.Services;
+﻿namespace CloudStreams.Infrastructure.Services;
 
 /// <summary>
 /// Defines the fundamentals of a service that controls <see cref="CloudEvent"/> admission

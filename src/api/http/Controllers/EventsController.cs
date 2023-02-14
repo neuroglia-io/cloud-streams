@@ -1,12 +1,12 @@
-﻿using CloudStreams.Application.Commands.CloudEvents;
-using CloudStreams.Application.Queries.CloudEvents;
+﻿using CloudStreams.Api.Commands.CloudEvents;
+using CloudStreams.Api.Queries.CloudEvents;
 
-namespace CloudStreams.Api.Server.Controllers;
+namespace CloudStreams.Api.Http.Controllers;
 
 /// <summary>
 /// Represents the API controller used to manage events
 /// </summary>
-[Route("api/events")]
+[Route("api/v1/events")]
 public class EventsController
     : ApiController
 {
@@ -17,14 +17,16 @@ public class EventsController
     /// <summary>
     /// Reads stored cloud events
     /// </summary>
+    /// <param name="options">The object used to configure the query to perform</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<CloudEvent>), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> ReadEvents(CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> ReadEvents([FromQuery]CloudEventStreamReadOptions options, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new ListCloudEventsQuery(), cancellationToken));
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.Send(new ListCloudEventsQuery(options), cancellationToken));
     }
 
     /// <summary>
@@ -34,6 +36,7 @@ public class EventsController
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost("pub")]
+    [Consumes(CloudEventMediaTypeNames.CloudEvents, CloudEventMediaTypeNames.CloudEventsJson, CloudEventMediaTypeNames.CloudEventsYaml)]
     [ProducesResponseType((int)HttpStatusCode.Accepted)]
     [ProducesResponseType((int)HttpStatusCode.ServiceUnavailable)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]

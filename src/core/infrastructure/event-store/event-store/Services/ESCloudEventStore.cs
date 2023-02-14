@@ -1,4 +1,5 @@
-﻿using System.Net.Mime;
+﻿using CloudStreams.Data.Models;
+using System.Net.Mime;
 using System.Runtime.CompilerServices;
 
 namespace CloudStreams.Infrastructure.Services;
@@ -16,13 +17,11 @@ public class ESCloudEventStore
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
     /// <param name="streams">The service used to interact with the <see href="https://www.eventstore.com/">EventStore</see> streams API</param>
     /// <param name="projections">The service used to interact with the <see href="https://www.eventstore.com/">EventStore</see> projections API</param>
-    /// <param name="cloudEventFormatter">The service used to format <see cref="CloudEvent"/>s</param>
-    public ESCloudEventStore(ILoggerFactory loggerFactory, EventStoreClient streams, EventStoreProjectionManagementClient projections, CloudEventFormatter cloudEventFormatter)
+    public ESCloudEventStore(ILoggerFactory loggerFactory, EventStoreClient streams, EventStoreProjectionManagementClient projections)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.Streams = streams;
         this.Projections = projections;
-        this.CloudEventFormatter = cloudEventFormatter;
     }
 
     /// <summary>
@@ -39,11 +38,6 @@ public class ESCloudEventStore
     /// Gets the service used to interact with the <see href="https://www.eventstore.com/">EventStore</see> projections API
     /// </summary>
     protected EventStoreProjectionManagementClient Projections { get; set; }
-
-    /// <summary>
-    /// Gets the service used to format <see cref="CloudEvent"/>s
-    /// </summary>
-    protected CloudEventFormatter CloudEventFormatter { get; }
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -62,11 +56,12 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEvent> ReadAsync(StreamReadDirection readDirection, long offset, ulong? amount = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public virtual async IAsyncEnumerable<CloudEvent> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var streamName = EventStoreStreams.All;
         var resolveLinkTos = true;
-        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, StreamPosition.FromInt64(offset), (long)(amount ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
             yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
@@ -74,38 +69,83 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEvent> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? amount = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionRef partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
+    {
+        switch (partition.Type)
+        {
+            case CloudEventPartitionType.BySource:
+                if (!Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out var source)) throw new Exception();
+                return this.ReadBySourceAsync(readDirection, source, offset, length, cancellationToken);
+            case CloudEventPartitionType.ByType:
+                return this.ReadByTypeAsync(readDirection, partition.Id, offset, length, cancellationToken);
+            case CloudEventPartitionType.BySubject:
+                return this.ReadByCorrelationIdAsync(readDirection, partition.Id, offset, length, cancellationToken);
+            default:
+                throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partition.Type}' is not supported");
+        }
+    }
+
+    /// <summary>
+    /// Reads stored <see cref="CloudEvent"/>s by source
+    /// </summary>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="source">The source of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="offset">The offset starting from which to read events</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
+    protected virtual async IAsyncEnumerable<CloudEvent> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         var streamName = EventStoreStreams.ByCloudEventSource(source);
         var resolveLinkTos = true;
-        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, StreamPosition.FromInt64(offset), (long)(amount ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
             yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
         }
     }
 
+    /// <summary>
+    /// Reads stored <see cref="CloudEvent"/>s by type
+    /// </summary>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="type">The type of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="offset">The offset starting from which to read events</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEvent> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? amount = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected virtual async IAsyncEnumerable<CloudEvent> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         var streamName = EventStoreStreams.ByCloudEventType(type);
         var resolveLinkTos = true;
-        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, StreamPosition.FromInt64(offset), (long)(amount ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
             yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
         }
     }
 
-    /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEvent> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? amount = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Reads stored <see cref="CloudEvent"/>s by correlation id
+    /// </summary>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="correlationId">The correlation id of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="offset">The offset starting from which to read events</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
+    protected virtual async IAsyncEnumerable<CloudEvent> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = EventStoreStreams.ByCorrelationId(correlationId);
         var resolveLinkTos = true;
-        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, StreamPosition.FromInt64(offset), (long)(amount ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
             yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
@@ -160,8 +200,7 @@ public class ESCloudEventStore
         if (e == null) throw new ArgumentNullException(nameof(e));
         var id = Uuid.NewUuid();
         var type = e.Type!;
-        var encoded = this.CloudEventFormatter.EncodeStructuredModeMessage(e, out _);
-        var metadataObject = Serializer.Json.Deserialize<JsonObject>(encoded.Span)!;
+        var metadataObject = (JsonObject)Serializer.Json.SerializeToNode(e)!;
         metadataObject.Remove("data", out var dataObject);
         var data = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(dataObject));
         var metadata = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(metadataObject));
@@ -183,11 +222,10 @@ public class ESCloudEventStore
         var rawEvent = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(eventObject));
         using var stream = new MemoryStream(rawEvent);
         string? dataContentType = null;
-        if (eventObject.TryGetPropertyValue("datacontenttype", out var dataContentTypeNode) && dataContentTypeNode != null) dataContentType = Serializer.Json.Deserialize<string>(dataContentTypeNode);
+        if (!eventObject.TryGetPropertyValue(CloudEventExtensionAttributes.Sequence, out _)) eventObject[CloudEventExtensionAttributes.Sequence] = e.OriginalEventNumber.ToInt64();
+        if (eventObject.TryGetPropertyValue(CloudEventAttributes.DataContentType, out var dataContentTypeNode) && dataContentTypeNode != null) dataContentType = Serializer.Json.Deserialize<string>(dataContentTypeNode);
         if (string.IsNullOrWhiteSpace(dataContentType)) dataContentType = MediaTypeNames.Application.Json;
-        var contentType = new ContentType(dataContentType);
-        var extensionAttributes = Array.Empty<CloudEventAttribute>();
-        return Task.FromResult(this.CloudEventFormatter.DecodeStructuredModeMessage(stream, contentType, extensionAttributes.AsEnumerable()));
+        return Task.FromResult(Serializer.Json.Deserialize<CloudEvent>(eventObject)!);
     }
 
 }

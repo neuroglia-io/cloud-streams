@@ -1,0 +1,58 @@
+﻿using CloudStreams.Data.Models;
+using CloudStreams.Infrastructure.Services;
+
+namespace CloudStreams.Api.Commands.CloudEvents;
+
+/// <summary>
+/// Represents the <see cref="ICommand"/> used to consume an incoming <see cref="Data.Models.CloudEvent"/>s
+/// </summary>
+public class ConsumeCloudEventCommand
+    : ICommand
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="ConsumeCloudEventCommand"/>
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to consume</param>
+    public ConsumeCloudEventCommand(CloudEvent cloudEvent)
+    {
+        this.CloudEvent = cloudEvent;
+    }
+
+    /// <summary>
+    /// Gets the <see cref="Data.Models.CloudEvent"/> to consume
+    /// </summary>
+    public CloudEvent CloudEvent { get; }
+
+}
+
+/// <summary>
+/// Represents the service used to handle <see cref="ConsumeCloudEventCommand"/>s
+/// </summary>
+public class ConsumeCloudEventCommandHandler
+    : ICommandHandler<ConsumeCloudEventCommand>
+{
+
+    /// <inheritdoc/>
+    public ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, ICloudEventStore eventStore)
+    {
+        this._EventAdmissionControl = eventAdmissionControl;
+        this._EventStore = eventStore;
+    }
+
+    ICloudEventAdmissionControl _EventAdmissionControl;
+
+    ICloudEventStore _EventStore;
+
+    /// <inheritdoc/>
+    public async Task<Response> Handle(ConsumeCloudEventCommand command, CancellationToken cancellationToken)
+    {
+        var e = command.CloudEvent;
+        var admissionResult = await this._EventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
+        if (!admissionResult.IsSuccessStatusCode()) return admissionResult;
+        if(!e.Time.HasValue) e.Time = DateTimeOffset.Now;
+        await this._EventStore.AppendAsync(e, cancellationToken).ConfigureAwait(false);
+        return this.Accepted();
+    }
+
+}

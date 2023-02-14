@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "CloudStreams.Api.Http": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:52337;http://localhost:52338"
+    }
+  }
+}

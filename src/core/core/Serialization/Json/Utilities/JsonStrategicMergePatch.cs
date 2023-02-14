@@ -249,13 +249,13 @@ public static class JsonStrategicMergePatch
     }
 
     /// <summary>
-    /// Enumerates all <see cref="StrategicMergePatch"/>-specific <see cref="JsonSchema"/> properties
+    /// Enumerates all <see cref="JsonStrategicMergePatch"/>-specific <see cref="JsonSchema"/> properties
     /// </summary>
     public static class JsonSchemaProperties
     {
 
         /// <summary>
-        /// Gets the prefix of all <see cref="StrategicMergePatch"/>-specific <see cref="JsonSchema"/> properties
+        /// Gets the prefix of all <see cref="JsonStrategicMergePatch"/>-specific <see cref="JsonSchema"/> properties
         /// </summary>
         public const string Prefix = "x-strategic-merge-patch-";
         /// <summary>

@@ -1,16 +1,32 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	<GenerateDocumentationFile>True</GenerateDocumentationFile>
+	<DockerFileTag>cloudstreams-api-server</DockerFileTag>
+	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	<DockerfileContext>..\..\..</DockerfileContext>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\api\http\CloudStreams.Api.Http.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Infrastructure.EventSourcing.EventStore.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Infrastructure.ResourceRepository.Kubernetes.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Infrastructure.SchemaRegistry.Apicurio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Services\" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.5" />
+	<PackageReference Include="AspNetCore.HealthChecks.Uris" Version="6.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.2" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
 
 </Project>

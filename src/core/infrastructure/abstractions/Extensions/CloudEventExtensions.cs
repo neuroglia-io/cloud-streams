@@ -15,8 +15,7 @@ public static class CloudEventExtensions
     /// <returns>A boolean indicating whether or not the <see cref="CloudEvent"/> containing the specified attribute</returns>
     public static bool TryGetAttribute(this CloudEvent e, string attributeName, out object? value)
     {
-        var attribute = e.GetAttribute(attributeName);
-        value = attribute == null ? null : e[attribute];
+        value = e.GetAttribute(attributeName);
         return value != null;
     }
 
