@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Infrastructure.EventSourcing.EventStore.csproj" />
+    <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Infrastructure.ResourceRepository.Kubernetes.csproj" />
+    <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Infrastructure.SchemaRegistry.Apicurio.csproj" />
+  </ItemGroup>
+
+</Project>

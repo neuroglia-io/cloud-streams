@@ -1,0 +1,87 @@
+﻿namespace CloudStreams.Data.Models;
+
+/// <summary>
+/// Represents an event produced during a watch
+/// </summary>
+[DataContract]
+public class ResourceWatchEvent
+    : IResourceWatchEvent
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceWatchEvent"/>
+    /// </summary>
+    public ResourceWatchEvent() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceWatchEvent"/>
+    /// </summary>
+    /// <param name="type">The <see cref="ResourceWatchEvent"/>'s type</param>
+    /// <param name="resource">The resource that has produced the <see cref="ResourceWatchEvent"/></param>
+    /// <exception cref="ArgumentNullException"></exception>
+    public ResourceWatchEvent(string type, IResource resource)
+    {
+        if(string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
+        if (resource == null) throw new ArgumentNullException(nameof(resource));
+        this.Type = type;
+        this.State = resource;
+    }
+
+    /// <summary>
+    /// Gets/sets the event's type<para></para>
+    /// See <see cref="ResourceWatchEventType"/>
+    /// </summary>
+    [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
+    public virtual string Type { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the resource that has produced the event
+    /// </summary>
+    [DataMember(Order = 2, Name = "resource"), JsonPropertyName("resource"), YamlMember(Alias = "resource")]
+    public virtual IResource State { get; set; } = null!;
+
+}
+
+/// <summary>
+/// Represents an event produced during a watch
+/// </summary>
+[DataContract]
+public class ResourceWatchEvent<TResource>
+    : IResourceWatchEvent<TResource>
+    where TResource : class, IResource, new()
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceWatchEvent{TResource}"/>
+    /// </summary>
+    public ResourceWatchEvent() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceWatchEvent{TResource}"/>
+    /// </summary>
+    /// <param name="type">The <see cref="ResourceWatchEvent{TResource}"/>'s type</param>
+    /// <param name="resource">The resource that has produced the <see cref="ResourceWatchEvent{TResource}"/></param>
+    public ResourceWatchEvent(string type, TResource resource)
+    {
+        if (string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
+        if (resource == null) throw new ArgumentNullException(nameof(resource));
+        this.Type = type;
+        this.State = resource;
+    }
+
+    /// <summary>
+    /// Gets/sets the event's type<para></para>
+    /// See <see cref="ResourceWatchEventType"/>
+    /// </summary>
+    [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
+    public virtual string Type { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the resource that has produced the <see cref="ResourceWatchEvent"/>
+    /// </summary>
+    [DataMember(Order = 2, Name = "resource"), JsonPropertyName("resource"), YamlMember(Alias = "resource")]
+    public virtual TResource State { get; set; } = null!;
+
+    IResource IResourceWatchEvent.State => this.State;
+
+}

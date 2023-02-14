@@ -1,0 +1,63 @@
+version: '3.4'
+
+services:
+
+  eventstore:
+    image: eventstore/eventstore:latest
+    environment:
+      - EVENTSTORE_INSECURE=true
+      - EVENTSTORE_EXT_TCP_PORT=1113
+      - EVENTSTORE_HTTP_PORT=2113
+      - EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true
+      - EVENTSTORE_RUN_PROJECTIONS=all
+      - EVENTSTORE_START_STANDARD_PROJECTIONS=true
+    ports:
+      - "1113:1113"
+      - "2113:2113"
+    volumes:
+      - type: volume
+        source: eventstore-data
+        target: /var/lib/eventstore
+      - type: volume
+        source: eventstore-logs
+        target: /var/log/eventstore
+
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: apicurio-registry
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  apicurio:
+    image: apicurio/apicurio-registry-sql:latest-release
+    environment:
+      REGISTRY_DATASOURCE_URL: jdbc:postgresql://postgres/apicurio-registry
+      REGISTRY_DATASOURCE_USERNAME: ${POSTGRES_USERNAME}
+      REGISTRY_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      - postgres
+
+  cloudstreams:
+    image: ${DOCKER_REGISTRY-}cloudstreams-api-server
+    build:
+      context: .
+      dockerfile: ../../src/apps/server/DockerFile
+    environment:
+      CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
+      CONNECTIONSTRINGS__APICURIO: http://apicurio
+    ports:
+      - 9696:80
+    volumes:
+      - ./k8s/config:/root/.kube/config
+    depends_on:
+      - eventstore
+      - postgres
+      - apicurio
+
+volumes:
+  eventstore-data:
+  eventstore-logs:
+  postgres_data:
