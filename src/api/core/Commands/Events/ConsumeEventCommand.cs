@@ -6,15 +6,15 @@ namespace CloudStreams.Api.Commands.CloudEvents;
 /// <summary>
 /// Represents the <see cref="ICommand"/> used to consume an incoming <see cref="Data.Models.CloudEvent"/>s
 /// </summary>
-public class ConsumeCloudEventCommand
+public class ConsumeEventCommand
     : ICommand
 {
 
     /// <summary>
-    /// Initializes a new <see cref="ConsumeCloudEventCommand"/>
+    /// Initializes a new <see cref="ConsumeEventCommand"/>
     /// </summary>
     /// <param name="cloudEvent">The <see cref="CloudEvent"/> to consume</param>
-    public ConsumeCloudEventCommand(CloudEvent cloudEvent)
+    public ConsumeEventCommand(CloudEvent cloudEvent)
     {
         this.CloudEvent = cloudEvent;
     }
@@ -27,10 +27,10 @@ public class ConsumeCloudEventCommand
 }
 
 /// <summary>
-/// Represents the service used to handle <see cref="ConsumeCloudEventCommand"/>s
+/// Represents the service used to handle <see cref="ConsumeEventCommand"/>s
 /// </summary>
 public class ConsumeCloudEventCommandHandler
-    : ICommandHandler<ConsumeCloudEventCommand>
+    : ICommandHandler<ConsumeEventCommand>
 {
 
     /// <inheritdoc/>
@@ -45,7 +45,7 @@ public class ConsumeCloudEventCommandHandler
     ICloudEventStore _EventStore;
 
     /// <inheritdoc/>
-    public async Task<Response> Handle(ConsumeCloudEventCommand command, CancellationToken cancellationToken)
+    public async Task<Response> Handle(ConsumeEventCommand command, CancellationToken cancellationToken)
     {
         var e = command.CloudEvent;
         var admissionResult = await this._EventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);

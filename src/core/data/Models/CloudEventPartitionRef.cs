@@ -19,9 +19,8 @@ public class CloudEventPartitionRef
     /// </summary>
     /// <param name="type">The referenced stream partition's type</param>
     /// <param name="id">The referenced stream partition's id</param>
-    public CloudEventPartitionRef(string type, string id)
+    public CloudEventPartitionRef(CloudEventPartitionType type, string id)
     {
-        if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
         this.Type = type;
         this.Id = id;
@@ -30,9 +29,8 @@ public class CloudEventPartitionRef
     /// <summary>
     /// Gets/sets the referenced stream partition's type
     /// </summary>
-    [OneOf<string>(CloudEventPartitionType.BySource, CloudEventPartitionType.ByType, CloudEventPartitionType.BySubject)]
     [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual string Type { get; set; } = null!;
+    public virtual CloudEventPartitionType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the referenced stream partition's id

@@ -1,7 +1,7 @@
-﻿using CloudStreams.Infrastructure.Services;
+﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+using CloudStreams.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Neuroglia.Data.SchemaRegistry;
 
 namespace CloudStreams.Infrastructure.Configuration;
 
@@ -22,7 +22,7 @@ public static class ICloudStreamsApiBuilderExtensions
     {
         var connectionString = builder.Configuration.GetConnectionString(ConnectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString)) throw new Exception($"Failed to find the '{ConnectionStringName}' connection string");
-        builder.Services.AddApiCurioRegistryClient(builder.Configuration, options =>
+        builder.Services.AddApiCurioRegistryClient(options =>
         {
             options.ServerUri = new(connectionString, UriKind.RelativeOrAbsolute);
             options.LineEndingFormatMode = LineEndingFormatMode.ConvertToUnix;

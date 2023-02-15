@@ -3,20 +3,22 @@
 /// <summary>
 /// Enumerates all supported cloud event stream partition types
 /// </summary>
-public static class CloudEventPartitionType
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum CloudEventPartitionType
 {
-
     /// <summary>
     /// Indicates a partition by cloud event source
     /// </summary>
-    public const string BySource = "by-source";
+    [EnumMember(Value = "by-source")]
+    BySource = 0,
     /// <summary>
     /// Indicates a partition by cloud event type
     /// </summary>
-    public const string ByType = "by-type";
+    [EnumMember(Value = "by-type")]
+    ByType = 1,
     /// <summary>
     /// Indicates a partition by subject
     /// </summary>
-    public const string BySubject = "by-subject";
-
+    [EnumMember(Value = "by-subject")]
+    BySubject = 2
 }

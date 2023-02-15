@@ -100,8 +100,6 @@ public class CloudStreamsApiBuilder
         this.Services.TryAddSingleton(provider => (ICloudEventStore)provider.GetRequiredService(this.CloudEventStoreType));
         this.Services.TryAddSingleton(provider => (IResourceRepository)provider.GetRequiredService(this.ResourceRepositoryType));
         this.Services.TryAddSingleton(provider => (ISchemaRegistry)provider.GetRequiredService(this.SchemaRegistryType));
-
-        this.Services.AddJsonSerializer(Serializer.Json.DefaultOptionsConfiguration); //todo: aim to remove all neuroglia dependencies (Apicurio)
     }
 
 }

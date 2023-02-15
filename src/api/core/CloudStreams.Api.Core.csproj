@@ -17,9 +17,5 @@
     <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.0.0" />
     <PackageReference Include="Neuroglia.Serialization.Json" Version="2.0.12" />
   </ItemGroup>
-	
-  <ItemGroup>
-    <Folder Include="Commands\" />
-  </ItemGroup>
 
 </Project>

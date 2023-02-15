@@ -85,7 +85,7 @@ public class CloudEventAdmissionControl
         var policy = this.Configuration.State.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization;
         if (policy == null) policy = this.Configuration.State.Spec.Authorization;
         if (policy == null) return Response.Ok();
-        var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken);
+        var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Authorization denied for cloud event with id '{eventId}': {detail}", e.Id, result.Detail);
@@ -122,15 +122,22 @@ public class CloudEventAdmissionControl
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);
                 return Response.ValidationFailed(StringExtensions.Format(ProblemDetails.MissingDataSchema, e.Source!));
             }
-            if (dataSchemaPolicy?.AutoGenerate == true && e.Data != null) 
+            var schemaUri = await this.SchemaRegistry.GetSchemaUriByIdAsync(e.Type, cancellationToken).ConfigureAwait(false);
+            if(schemaUri != null)
             {
-                schema = await this.SchemaGenerator.GenerateAsync(e.Data, cancellationToken);
-                await this.SchemaRegistry.RegisterSchemaAsync(schema, cancellationToken);
+                schema = await this.SchemaRegistry.GetSchemaAsync(schemaUri, cancellationToken).ConfigureAwait(false);
+                e.DataSchema = schemaUri;
+            }
+            else if(dataSchemaPolicy?.AutoGenerate == true && e.Data != null) 
+            {
+                schema = await this.SchemaGenerator.GenerateAsync(e.Data, new() { Id = e.Type }, cancellationToken).ConfigureAwait(false);
+                schemaUri = await this.SchemaRegistry.RegisterSchemaAsync(schema!, cancellationToken).ConfigureAwait(false);
+                e.DataSchema = schemaUri;
             }
         }
         else
         {
-            schema = await this.SchemaRegistry.GetSchemaAsync(e.DataSchema, cancellationToken);
+            schema = await this.SchemaRegistry.GetSchemaAsync(e.DataSchema, cancellationToken).ConfigureAwait(false);
             if (schema == null)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: failed to find the specified data schema '{dataSchemaUri}'", e.Id, e.DataSchema);
@@ -139,7 +146,7 @@ public class CloudEventAdmissionControl
         }
         if(schema != null)
         {
-            var validationOptions = new ValidationOptions();
+            var validationOptions = new ValidationOptions() { OutputFormat = OutputFormat.Detailed };
             var validationResults = schema.Validate(Serializer.Json.SerializeToNode(e.Data), validationOptions);
             if (!validationResults.IsValid)
             {

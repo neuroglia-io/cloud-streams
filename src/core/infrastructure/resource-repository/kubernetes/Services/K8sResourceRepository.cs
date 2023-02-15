@@ -5,6 +5,7 @@ using k8s.Models;
 using Microsoft.Extensions.Hosting;
 using System.Net;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Text.Json;
 
 namespace CloudStreams.Infrastructure.Services;
@@ -148,16 +149,12 @@ public class K8sResourceRepository
         HttpOperationResponse<object> response;
         if (string.IsNullOrWhiteSpace(@namespace)) response = await this.Kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(group, version, plural, watch: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         else response = await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, @namespace, plural, watch: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var watch = response.Watch((WatchEventType watchEventType, TResource resource) => { });
+        var subject = new Subject<IResourceWatchEvent<TResource>>();
+        var watch = response.Watch((WatchEventType watchEventType, TResource resource) => subject.OnNext(new ResourceWatchEvent<TResource>(watchEventType.ToCloudStreamsEventType(), resource)));
         return Observable.Using
         (
             () => watch, 
-            watch => Observable.FromEvent<Action<WatchEventType, TResource>, IResourceWatchEvent<TResource>>
-            (
-                onNext => (WatchEventType watchEventType, TResource resource) => new ResourceWatchEvent<TResource>(watchEventType.ToCloudStreamsEventType(), resource),
-                handler => watch.OnEvent += handler,
-                handler => watch.OnEvent -= handler
-            )
+            watch => subject
         );
     }
 

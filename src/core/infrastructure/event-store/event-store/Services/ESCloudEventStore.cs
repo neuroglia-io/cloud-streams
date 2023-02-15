@@ -1,4 +1,5 @@
 ﻿using CloudStreams.Data.Models;
+using System.Collections.Concurrent;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
 
@@ -53,6 +54,47 @@ public class ESCloudEventStore
         var eventData = await this.SerializeAsync(e, cancellationToken).ConfigureAwait(false);
         var writeResult = await this.Streams.AppendToStreamAsync(streamName, StreamState.Any, new EventData[] { eventData }, cancellationToken: cancellationToken).ConfigureAwait(false);
         return writeResult.NextExpectedStreamRevision.ToUInt64();
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<CloudEventStreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreStreams.All, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, EventStoreStreams.All, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        return new()
+        {
+            FirstEvent = firstEvent.OriginalEvent.Created,
+            LastEvent = lastEvent.OriginalEvent.Created,
+            Length = lastEvent.OriginalEventNumber
+        };
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionRef partition, CancellationToken cancellationToken = default)
+    {
+        var streamName = partition.GetStreamName();
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, streamName, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        return new()
+        {
+            Id = partition.Id,
+            Type = partition.Type,
+            FirstEvent = firstEvent.OriginalEvent.Created,
+            LastEvent = lastEvent.OriginalEvent.Created,
+            Length = lastEvent.OriginalEventNumber
+        };
+    }
+
+    /// <inheritdoc/>
+    public virtual async IAsyncEnumerable<CloudEventPartitionMetadata> ListPartitionsMetadataAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var partitionId in this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreProjections.ByStreams, StreamPosition.Start, resolveLinkTos: true, cancellationToken: cancellationToken)
+            .Where(e => !e.Event.EventStreamId.StartsWith('$') && EventStoreStreams.IsPartition(e.Event.EventStreamId, partitionType))
+            .Select(e => EventStoreStreams.ExtractPartitionIdFrom(e.Event.EventStreamId, partitionType))
+            .Distinct())
+        {
+            yield return await this.GetPartitionMetadataAsync(new(partitionType, partitionId), cancellationToken);
+        }
     }
 
     /// <inheritdoc/>

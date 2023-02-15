@@ -1,5 +1,6 @@
 using CloudStreams;
 using CloudStreams.Api.Configuration;
+using CloudStreams.Infrastructure.Services;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc.Controllers;

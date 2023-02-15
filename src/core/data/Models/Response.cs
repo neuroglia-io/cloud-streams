@@ -133,8 +133,8 @@ public class Response
         return new((int)HttpStatusCode.BadRequest)
         {
             Title = ProblemTitles.ValidationFailed,
-            Detail = $"{validationResults?.InstanceLocation}: {validationResults?.Message}",
-            Errors = validationResults?.NestedResults?.ToDictionary(r => r.InstanceLocation.ToString(), r => r.GetErrorMessages().ToArray())
+            Detail = $"{validationResults.SchemaLocation}: {validationResults.GetErrorMessage()}",
+            Errors = validationResults?.NestedResults?.Any() == true ? validationResults?.NestedResults?.ToDictionary(r => r.InstanceLocation.ToString(), r => r.GetErrorMessages().ToArray()) : null
         };
     }
 

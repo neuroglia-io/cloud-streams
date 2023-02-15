@@ -11,18 +11,68 @@ public static class EventStoreStreams
     /// <summary>
     /// Gets the name of the stream that contains all <see cref="CloudEvent"/>s
     /// </summary>
-    public const string All = "cse";
+    public const string All = "cloud-events";
+
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySource"/> partition EventStore streams
+    /// </summary>
+    public const string ByCloudEventSourcePrefix = $"{All}-";
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByType"/> partition EventStore streams
+    /// </summary>
+    public const string ByCloudEventTypePrefix = $"$et-";
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySubject"/> partition EventStore streams
+    /// </summary>
+    public const string ByCorrelationIdPrefix = $"$bc-";
+
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by source
     /// </summary>
-    public static string ByCloudEventSource(Uri source) => $"{All}-by_source-{source.OriginalString}";
+    public static string ByCloudEventSource(Uri source) => $"{ByCloudEventSourcePrefix}{source.OriginalString}";
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by type
     /// </summary>
-    public static string ByCloudEventType(string type) => $"$et-{type}";
+    public static string ByCloudEventType(string type) => $"{ByCloudEventTypePrefix}{type}";
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by correlation id
     /// </summary>
-    public static string ByCorrelationId(string correlationId) => $"$bc-{correlationId}";
+    public static string ByCorrelationId(string correlationId) => $"{ByCorrelationIdPrefix}{correlationId}";
+
+    /// <summary>
+    /// Determines whether or not the specified EventStore stream name is the one of a partition of the specified type
+    /// </summary>
+    /// <param name="streamName">The EventStore stream name</param>
+    /// <param name="partitionType">The partition type</param>
+    /// <returns>A boolean indicating whether or not the specified EventStore stream name is the one of a partition of the specified type</returns>
+    public static bool IsPartition(string streamName, CloudEventPartitionType partitionType)
+    {
+        if(string.IsNullOrWhiteSpace(streamName)) throw new ArgumentNullException(nameof(streamName));
+        return partitionType switch
+        {
+            CloudEventPartitionType.BySource => streamName.StartsWith(ByCloudEventSourcePrefix),
+            CloudEventPartitionType.ByType => streamName.StartsWith(ByCloudEventTypePrefix),
+            CloudEventPartitionType.BySubject => streamName.StartsWith(ByCorrelationIdPrefix),
+            _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
+        };
+    }
+
+    /// <summary>
+    /// Extracts the id of a partition of the specified type from an EventStore stream name
+    /// </summary>
+    /// <param name="streamName">The EventStore stream name to extract the id from</param>
+    /// <param name="partitionType">The type of partition ot get the id of</param>
+    /// <returns>The id of the specified partition</returns>
+    public static string ExtractPartitionIdFrom(string streamName, CloudEventPartitionType partitionType)
+    {
+        if(string.IsNullOrWhiteSpace(streamName)) throw new ArgumentNullException(nameof(streamName));
+        return partitionType switch
+        {
+            CloudEventPartitionType.BySource => streamName.Substring(ByCloudEventSourcePrefix.Length),
+            CloudEventPartitionType.ByType => streamName.Substring(ByCloudEventTypePrefix.Length),
+            CloudEventPartitionType.BySubject => streamName.Substring(ByCorrelationIdPrefix.Length),
+            _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
+        };
+    }
 
 }

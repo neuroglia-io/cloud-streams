@@ -37,6 +37,8 @@ services:
       REGISTRY_DATASOURCE_URL: jdbc:postgresql://postgres/apicurio-registry
       REGISTRY_DATASOURCE_USERNAME: ${POSTGRES_USERNAME}
       REGISTRY_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - 9697:8080
     depends_on:
       - postgres
 
@@ -47,7 +49,7 @@ services:
       dockerfile: ../../src/apps/api-server/Dockerfile
     environment:
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
-      CONNECTIONSTRINGS__APICURIO: http://apicurio
+      CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
     ports:
       - 9696:80
     volumes:

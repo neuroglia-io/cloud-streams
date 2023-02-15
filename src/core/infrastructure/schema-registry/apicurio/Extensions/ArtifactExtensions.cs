@@ -1,4 +1,4 @@
-﻿using Neuroglia.Data.SchemaRegistry.Models;
+﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
 
 namespace CloudStreams.Infrastructure;
 

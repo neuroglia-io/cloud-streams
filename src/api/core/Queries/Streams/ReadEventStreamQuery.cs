@@ -1,22 +1,22 @@
 ﻿using CloudStreams.Data.Models;
 using CloudStreams.Infrastructure.Services;
 
-namespace CloudStreams.Api.Queries.CloudEvents;
+namespace CloudStreams.Api.Queries.Streams;
 
 /// <summary>
 /// Represents the <see cref="IQuery{TResult}"/> used to list stored <see cref="CloudEvent"/>s
 /// </summary>
-public class ListCloudEventsQuery
+public class ReadEventStreamQuery
     : IQuery<IAsyncEnumerable<CloudEvent>>
 {
 
     /// <summary>
-    /// Initializes a new <see cref="ListCloudEventsQuery"/>
+    /// Initializes a new <see cref="ReadEventStreamQuery"/>
     /// </summary>
     /// <param name="options">The object used to configure the query to perform</param>
-    public ListCloudEventsQuery(CloudEventStreamReadOptions options)
+    public ReadEventStreamQuery(CloudEventStreamReadOptions options)
     {
-        this.Options = options;
+        Options = options;
     }
 
     /// <summary>
@@ -27,14 +27,14 @@ public class ListCloudEventsQuery
 }
 
 /// <summary>
-/// Represents the service used to handle <see cref="ListCloudEventsQuery"/> instances
+/// Represents the service used to handle <see cref="ReadEventStreamQuery"/> instances
 /// </summary>
-public class ListCloudEventsQueryHandler
-    : IQueryHandler<ListCloudEventsQuery, IAsyncEnumerable<CloudEvent>>
+public class ReadCloudEventStreamQueryHandler
+    : IQueryHandler<ReadEventStreamQuery, IAsyncEnumerable<CloudEvent>>
 {
 
     /// <inheritdoc/>
-    public ListCloudEventsQueryHandler(ICloudEventStore eventStore)
+    public ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
     {
         this._EventStore = eventStore;
     }
@@ -42,7 +42,7 @@ public class ListCloudEventsQueryHandler
     ICloudEventStore _EventStore;
 
     /// <inheritdoc/>
-    public Task<Response<IAsyncEnumerable<CloudEvent>>> Handle(ListCloudEventsQuery query, CancellationToken cancellationToken)
+    public Task<Response<IAsyncEnumerable<CloudEvent>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
     {
         var length = query.Options.Length > CloudEventStreamReadOptions.MaxLength ? CloudEventStreamReadOptions.MaxLength : query.Options.Length;
         if (length < 1) length = 1;
@@ -58,11 +58,11 @@ public class ListCloudEventsQueryHandler
                     offset = CloudEventStreamPosition.End;
                     break;
                 default:
-                    return Task.FromResult(this.ValidationFailed(new KeyValuePair<string, string[]>[] { new(nameof(query.Options.Direction).ToLowerInvariant(), new string[] { $"The specified {nameof(StreamReadDirection)} '{query.Options.Direction}' is not supported" })}));
+                    return Task.FromResult(this.ValidationFailed(new KeyValuePair<string, string[]>[] { new(nameof(query.Options.Direction).ToLowerInvariant(), new string[] { $"The specified {nameof(StreamReadDirection)} '{query.Options.Direction}' is not supported" }) }));
             }
         }
-        var events = query.Options.Partition == null ? 
-            this._EventStore.ReadAsync(query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken) 
+        var events = query.Options.Partition == null ?
+            this._EventStore.ReadAsync(query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken)
             : this._EventStore.ReadPartitionAsync(query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);
         return Task.FromResult(this.Ok(events));
     }

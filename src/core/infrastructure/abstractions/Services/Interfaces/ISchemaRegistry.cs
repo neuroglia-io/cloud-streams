@@ -22,4 +22,12 @@ public interface ISchemaRegistry
     /// <returns>The <see cref="JsonSchema"/> at the specified <see cref="Uri"/></returns>
     Task<JsonSchema?> GetSchemaAsync(Uri uri, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Gets the <see cref="Uri"/> of the <see cref="JsonSchema"/> with the specified id
+    /// </summary>
+    /// <param name="id">The id of the <see cref="JsonSchema"/> to get</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The <see cref="Uri"/> of the <see cref="JsonSchema"/> with the specified id, if any</returns>
+    Task<Uri?> GetSchemaUriByIdAsync(string id, CancellationToken cancellationToken = default);
+
 }

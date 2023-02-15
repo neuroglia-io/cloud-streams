@@ -12,6 +12,6 @@ public static class UriHelper
     /// </summary>
     /// <param name="components">The components to combine</param>
     /// <returns>A new <see cref="Uri"/></returns>
-    public static Uri Combine(params string[] components) => new(string.Join('/', components.Select(c => c.Trim('/')), UriKind.RelativeOrAbsolute));
+    public static Uri Combine(params string[] components) => new(string.Join('/', components.Select(c => c.Trim('/'))));
 
 }

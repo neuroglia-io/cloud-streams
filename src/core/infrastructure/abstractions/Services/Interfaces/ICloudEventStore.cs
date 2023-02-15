@@ -15,6 +15,29 @@ public interface ICloudEventStore
     Task<ulong> AppendAsync(CloudEvent e, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the metadata used to describe the application's <see cref="CloudEvent"/> stream
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="CloudEventStreamMetadata"/> used to describe the <see cref="CloudEvent"/> stream</returns>
+    Task<CloudEventStreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the metadata used to describe the specified <see cref="CloudEvent"/> partition
+    /// </summary>
+    /// <param name="partition">An object used to reference the <see cref="CloudEvent"/> partition to get the metadata of</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="CloudEventPartitionMetadata"/> used to describe the <see cref="CloudEvent"/> partition</returns>
+    Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionRef partition, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists the metadata of <see cref="CloudEvent"/> partitions of the specified type
+    /// </summary>
+    /// <param name="partitionType">The type of partition to list</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> that contains metadata that describes the partitions of the specified type</returns>
+    IAsyncEnumerable<CloudEventPartitionMetadata> ListPartitionsMetadataAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reads stored <see cref="CloudEvent"/>s
     /// </summary>
     /// <param name="readDirection">The direction in which to read the stream</param>

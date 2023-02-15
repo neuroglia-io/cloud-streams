@@ -1,6 +1,4 @@
-﻿using CloudStreams.Data.Models;
-
-namespace CloudStreams.Api.Http;
+﻿namespace CloudStreams.Api.Http;
 
 /// <summary>
 /// Represents the base class for all Cloud Streams <see cref="ControllerBase"/> implementations
@@ -31,7 +29,7 @@ public abstract class ApiController
     protected virtual IActionResult Process(Response response)
     {
         if (response.IsSuccessStatusCode()) return new ObjectResult(response.Content) { StatusCode = response.Status };
-        return new ObjectResult(response.Content) { StatusCode = response.Status };
+        return new ObjectResult(response) { StatusCode = response.Status };
     }
 
 }
