@@ -59,11 +59,21 @@ public interface ICloudEventStore
     IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionRef partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Subscribes to consumed <see cref="CloudEvent"/>s
+    /// Subscribes to <see cref="CloudEvent"/>s
     /// </summary>
+    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.End"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>The id of the newly created subscription</returns>
-    Task<string> SubscribeAsync(CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s</returns>
+    Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Subscribes to <see cref="CloudEvent"/>s
+    /// </summary>
+    /// <param name="partition">An object used to reference the partition to subscribe to the events of</param>
+    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.End"/></param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s of the specified partition</returns>
+    Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Truncates stored <see cref="CloudEvent"/>s

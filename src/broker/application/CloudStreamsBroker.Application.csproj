@@ -9,11 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MediatR" Version="12.0.0" />
+    <ProjectReference Include="..\..\core\application\CloudStreams.Core.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\core\infrastructure\abstractions\CloudStreams.Core.Infrastructure.Abstractions.csproj" />
+    <Folder Include="Commands\" />
   </ItemGroup>
 
 </Project>

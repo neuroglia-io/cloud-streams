@@ -1,5 +1,6 @@
 using CloudStreams.Api.Configuration;
 using CloudStreams.Core.Application.Configuration;
+using CloudStreams.Core.Infrastructure.Services;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -71,5 +72,12 @@ app.UseSwaggerUI(builder =>
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");
+
+var sub = await app.Services.GetRequiredService<ICloudEventStore>().SubscribeAsync();
+sub.Subscribe(e =>
+{
+    Console.WriteLine($"Yaaai, a new cloud event has been received:");
+    Console.WriteLine(Serializer.Yaml.Serialize(e));
+});
 
 app.Run();

@@ -1,6 +1,8 @@
 ﻿using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Models;
 using System.Net.Mime;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Runtime.CompilerServices;
 
 namespace CloudStreams.Core.Infrastructure.Services;
@@ -133,6 +135,40 @@ public class ESCloudEventStore
         }
     }
 
+    /// <inheritdoc/>
+    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default)
+    {
+        var subject = new Subject<CloudEvent>();
+        var subscription = await this.Streams.SubscribeToStreamAsync(
+            EventStoreStreams.All, 
+            offset.ToSubscriptionPosition(), 
+            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeAsync(e, cancellation).ConfigureAwait(false)), 
+            cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return Observable.Using
+        (
+            () => subscription,
+            watch => subject
+        );
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default)
+    {
+        var subject = new Subject<CloudEvent>();
+        var subscription = await this.Streams.SubscribeToStreamAsync(
+            partition.GetStreamName(),
+            offset.ToSubscriptionPosition(), 
+            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeAsync(e, cancellation).ConfigureAwait(false)), 
+            cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        return Observable.Using
+        (
+            () => subscription,
+            watch => subject
+        );
+    }
+
     /// <summary>
     /// Reads stored <see cref="CloudEvent"/>s by source
     /// </summary>
@@ -198,12 +234,6 @@ public class ESCloudEventStore
         {
             yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
         }
-    }
-
-    /// <inheritdoc/>
-    public virtual Task<string> SubscribeAsync(CancellationToken cancellationToken = default)
-    {
-        throw new NotImplementedException(); //todo
     }
 
     /// <inheritdoc/>
