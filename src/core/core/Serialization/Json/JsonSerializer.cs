@@ -91,6 +91,15 @@ public static partial class Serializer
         /// <returns>The deserialized value</returns>
         public static T? Deserialize<T>(ReadOnlySpan<byte> buffer) => JsonSerializer.Deserialize<T>(buffer, DefaultOptions);
 
+        /// <summary>
+        /// Deserializes the specified <see cref="Stream"/> as a new <see cref="IAsyncEnumerable{T}"/>
+        /// </summary>
+        /// <typeparam name="T">The expected type of elements to enumerate</typeparam>
+        /// <param name="stream">The <see cref="Stream"/> to deserialize</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+        /// <returns>A new <see cref="IAsyncEnumerable{T}"/></returns>
+        public static IAsyncEnumerable<T?> DeserializeAsyncEnumerable<T>(Stream stream, CancellationToken cancellationToken = default) => JsonSerializer.DeserializeAsyncEnumerable<T>(stream, DefaultOptions, cancellationToken);
+
     }
 
 }

@@ -1,0 +1,11 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@typeparam TData
+
+<span title="@RenderContext.Column.Description">@RenderContext.Column.Name</span>
+
+@code {
+
+    [Parameter]
+    public ColumnHeaderRenderingContext<TData> RenderContext { get; set; }
+
+}

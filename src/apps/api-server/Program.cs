@@ -1,6 +1,5 @@
 using CloudStreams;
 using CloudStreams.Api.Configuration;
-using CloudStreams.Infrastructure.Services;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -41,7 +40,13 @@ builder.Services.AddSwaggerGen(builder =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
+else app.UseExceptionHandler("/error");
+
 app.UseResponseCompression();
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+app.UseRouting();
 app.UseAuthorization();
 app.UseHealthChecks("/healthz", new HealthCheckOptions()
 {
@@ -60,5 +65,6 @@ app.UseSwaggerUI(builder =>
 });
 
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.Run();

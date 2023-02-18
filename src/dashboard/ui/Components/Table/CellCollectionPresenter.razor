@@ -1,0 +1,20 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@typeparam TData
+
+ @foreach(var column in Table.columns.Where(c => c.IsVisible))
+{
+    <td class="@(Table.CellClass + "" + column.CssClass)">
+        @if(column.CellTemplate == null)
+            @Table.DefaultCellTemplate(new(Table, column, Item))
+        else
+            @column.CellTemplate(new(Table, column, Item))
+    </td>
+}
+
+@code {
+
+    [CascadingParameter] public Table<TData> Table { get; set; }
+
+    [Parameter] public TData Item { get; set; }
+
+}

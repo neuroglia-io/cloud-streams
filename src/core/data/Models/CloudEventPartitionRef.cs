@@ -1,6 +1,4 @@
-﻿using CloudStreams.Data.Attributes;
-
-namespace CloudStreams.Data.Models;
+﻿namespace CloudStreams.Data.Models;
 
 /// <summary>
 /// Represents an object used to reference a cloud event partition

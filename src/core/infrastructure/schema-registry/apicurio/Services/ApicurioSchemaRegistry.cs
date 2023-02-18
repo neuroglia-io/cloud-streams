@@ -65,7 +65,7 @@ public class ApiCurioSchemaRegistry
         var artifactId = schema.Keywords?.OfType<IdKeyword>().FirstOrDefault()?.Id.OriginalString!;
         var groupId = "cloud-events";
         var artifact = await this.ApicurioRegistry.Artifacts.CreateArtifactAsync(ArtifactType.JSON, json, IfArtifactExistsAction.ReturnOrUpdate, artifactId, groupId, true, null, null, null, cancellationToken);
-        var schemaUri = BuildArtifactUri(artifactId, artifact.Version);
+        var schemaUri = BuildArtifactUri(artifactId);
         Json.Schema.SchemaRegistry.Global.Register(schemaUri, schema);
         return schemaUri;
     }
@@ -128,9 +128,8 @@ public class ApiCurioSchemaRegistry
     /// Builds a new <see cref="Uri"/> for the specified <see cref="Artifact"/>
     /// </summary>
     /// <param name="id">The id of the <see cref="Artifact"/> to build a new <see cref="Uri"/> for</param>
-    /// <param name="version">The version of the <see cref="Artifact"/> to build a new <see cref="Uri"/> for</param>
     /// <returns>A new <see cref="Uri"/></returns>
-    protected virtual Uri BuildArtifactUri(string id, string? version = "latest") => UriHelper.Combine(this.ApicurioRegistryOptions.ServerUri.OriginalString, PathPrefix, this.ApicurioRegistryOptions.DefaultGroupId, "artifacts", id, "versions", version!);
+    protected virtual Uri BuildArtifactUri(string id) => UriHelper.Combine(this.ApicurioRegistryOptions.ServerUri.OriginalString, PathPrefix, this.ApicurioRegistryOptions.DefaultGroupId, "artifacts", id);
 
     /// <summary>
     /// Disposes of the <see cref="ApiCurioSchemaRegistry"/>

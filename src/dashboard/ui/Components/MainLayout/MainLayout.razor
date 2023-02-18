@@ -1,0 +1,30 @@
+﻿@namespace CloudStreams.Dashboard
+@inherits LayoutComponentBase
+
+<div class="page h-100 d-flex flex-column">
+    <nav class="header navbar navbar-expand-lg flex-row navbar-dark bg-dark">
+        <a class="navbar-brand d-flex flex-row align-items-center justify-content-center" href="#">        
+            <img src="/img/logo_white.svg" height="100" />
+            <span>Cloud Streams</span>
+        </a>
+
+        <div class="navbar-collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="events" Match="NavLinkMatch.All">
+                        <small class="bi bi-house" aria-hidden="true"></small><span class="btn-label">Cloud Events</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="streams" Match="NavLinkMatch.Prefix">
+                        <small class="bi bi-gear" aria-hidden="true"></small><span class="btn-label"></span>
+                    </NavLink>
+                </li>
+            </ul>
+        </div>
+
+    </nav>
+    <div class="content flex-grow">
+        @Body
+    </div>
+</div>

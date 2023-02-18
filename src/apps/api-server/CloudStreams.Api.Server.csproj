@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Infrastructure.EventSourcing.EventStore.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Infrastructure.ResourceRepository.Kubernetes.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Infrastructure.SchemaRegistry.Apicurio.csproj" />
+    <ProjectReference Include="..\..\dashboard\ui\CloudStreams.Dashboard.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,7 @@
   <ItemGroup>
 	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.5" />
 	<PackageReference Include="AspNetCore.HealthChecks.Uris" Version="6.0.3" />
+	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="7.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.2" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />

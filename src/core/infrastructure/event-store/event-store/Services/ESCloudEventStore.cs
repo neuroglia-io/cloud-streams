@@ -1,6 +1,5 @@
 ﻿using CloudStreams.Data.Models;
 using CloudStreams.Infrastructure.Models;
-using System.Collections.Concurrent;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
 
@@ -223,7 +222,7 @@ public class ESCloudEventStore
     {
         try
         {
-            if ((await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreProjections.PartitionBySource, StreamPosition.Start, cancellationToken: cancellationToken).ToListAsync()).Any()) return;
+            if (await this.Projections.GetStatusAsync(EventStoreProjections.PartitionBySource, cancellationToken: cancellationToken) != null) return;
         }
         catch (StreamNotFoundException) { }
 

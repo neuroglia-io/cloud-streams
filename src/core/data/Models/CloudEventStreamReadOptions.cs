@@ -4,13 +4,41 @@
 /// Represents an object used to configure the options of a query used to read a cloud event stream
 /// </summary>
 [DataContract]
-public class CloudEventStreamReadOptions
+public record CloudEventStreamReadOptions
 {
 
     /// <summary>
     /// Gets the maximum length of a stream read operation
     /// </summary>
     public const long MaxLength = 100;
+
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// </summary>
+    public CloudEventStreamReadOptions() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// </summary>
+    /// <param name="partition">A reference to the cloud event partition to read</param>
+    /// <param name="direction">The direction in which to read the stream of cloud events</param>
+    /// <param name="offset">The offset starting from which to read the stream</param>
+    /// <param name="length">The amount of events to read from the stream</param>
+    public CloudEventStreamReadOptions(CloudEventPartitionRef partition, StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength)
+    {
+        this.Partition = partition;
+        this.Direction = direction;
+        this.Offset = offset;
+        this.Length = length;
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// </summary>
+    /// <param name="direction">The direction in which to read the stream of cloud events</param>
+    /// <param name="offset">The offset starting from which to read the stream</param>
+    /// <param name="length">The amount of events to read from the stream</param>
+    public CloudEventStreamReadOptions(StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength) : this(null!, direction, offset, length) { }
 
     /// <summary>
     /// Gets/sets a reference to the cloud event partition to read, if any

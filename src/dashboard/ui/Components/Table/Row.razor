@@ -1,0 +1,12 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@typeparam TData
+
+<tr class="@RenderContext.Table.RowClass">
+    <CellCollectionPresenter Item="@RenderContext.Item" />
+</tr>
+@code {
+
+    [Parameter]
+    public RowRenderingContext<TData> RenderContext { get; set; }
+
+}

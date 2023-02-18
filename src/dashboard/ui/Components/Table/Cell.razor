@@ -1,0 +1,11 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@typeparam TData
+
+<span>@RenderContext.Value</span>
+
+@code {
+
+    [Parameter]
+    public CellRenderingContext<TData> RenderContext { get; set; }
+
+}

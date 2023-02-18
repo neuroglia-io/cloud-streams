@@ -45,9 +45,11 @@ services:
   cloudstreams:
     image: ${DOCKER_REGISTRY-}cloudstreams-api-server
     build:
-      context: .
-      dockerfile: ../../src/apps/api-server/Dockerfile
+      context: ../../
+      dockerfile: src/apps/api-server/Dockerfile
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
     ports:

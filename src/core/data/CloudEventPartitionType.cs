@@ -10,15 +10,15 @@ public enum CloudEventPartitionType
     /// Indicates a partition by cloud event source
     /// </summary>
     [EnumMember(Value = "by-source")]
-    BySource = 0,
+    BySource = 1,
     /// <summary>
     /// Indicates a partition by cloud event type
     /// </summary>
     [EnumMember(Value = "by-type")]
-    ByType = 1,
+    ByType = 2,
     /// <summary>
     /// Indicates a partition by subject
     /// </summary>
     [EnumMember(Value = "by-subject")]
-    BySubject = 2
+    BySubject = 4
 }

@@ -5,13 +5,13 @@ namespace CloudStreams.Api.Http.Controllers;
 /// <summary>
 /// Represents the API controller used to manage events
 /// </summary>
-[Route("api/v1/events")]
-public class EventsController
+[Route("api/v1/cloud-events")]
+public class CloudEventsController
     : ApiController
 {
 
     /// <inheritdoc/>
-    public EventsController(IMediator mediator) : base(mediator) { }
+    public CloudEventsController(IMediator mediator) : base(mediator) { }
 
     /// <summary>
     /// Publishes the specified cloud event
@@ -25,7 +25,7 @@ public class EventsController
     [ProducesResponseType((int)HttpStatusCode.ServiceUnavailable)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
     [ProducesResponseType((int)HttpStatusCode.Forbidden)]
-    public virtual async Task<IActionResult> Publish([FromBody] CloudEvent e, CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> PublishCloudEvent([FromBody] CloudEvent e, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         return this.Process(await this.Mediator.Send(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false));

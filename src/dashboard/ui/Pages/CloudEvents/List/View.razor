@@ -1,0 +1,159 @@
+﻿@namespace CloudStreams.Dashboard
+@page "/"
+@using CloudStreams.Dashboard.Pages.CloudEvents.List
+@using System.Reactive.Linq
+@using CloudStreams.Dashboard.StateManagement
+@inherits StatefulComponent<CloudEventListStore, CloudEventListState>
+@inject ICloudStreamsGatewayApiClient CloudStreamsGatewayApi
+
+<PageTitle>Cloud Events</PageTitle>
+
+<div class="container-fluid text-center">
+
+    <div>
+        <div class="form-group mb-3">
+            <div class="input-group search-box"> 
+                <div class="input-left">
+                     <select name="partitionType" class="form-control" @onchange="e => OnSetCloudEventPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
+                        <option value="" selected="@(readOptions.Partition == null)"></option>
+                        @foreach(var value in Enum.GetValues<CloudEventPartitionType>())
+                        {
+                            <option value="@value" selected="@(readOptions.Partition?.Type == value)">@value</option>
+                        }
+                    </select>
+                </div>
+                <span class="input-group-append">
+                    <input type="text" class="form-control" value="@readOptions.Partition?.Id" @onchange="e => OnSetCloudEventPartitionId((string?)e.Value)" list="partitions" />
+                    <datalist id="partitions">
+                        @if(readOptions.Partition != null && partitions != null)
+                        {
+                            foreach (var partition in partitions)
+                            {
+                                <option value="@partition.Id"></option>
+                            }
+                        }
+                    </datalist>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <Table Items="events"
+        AutoGenerateColumns="false"
+        TableClass="table table-striped table-hover">
+        <Columns>
+            <Column TData="CloudEvent" 
+                ValueProvider="e => e.ExtensionAttributes == null ? null : e.ExtensionAttributes[CloudEventExtensionAttributes.Sequence]">
+                <HeaderTemplate>Sequence</HeaderTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.Id">
+                <HeaderTemplate>Id</HeaderTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.Time"
+                    Format="R">
+                <HeaderTemplate>Time</HeaderTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.Source">
+                <HeaderTemplate>Source</HeaderTemplate>
+                <CellTemplate Context="context">
+                    <a href="#by-source" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, context.Value!.ToString()!)">@context.Value</a>
+                </CellTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.Type">
+                <HeaderTemplate>Type</HeaderTemplate>
+                <CellTemplate Context="context">
+                    <a href="#by-type" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, context.Value!.ToString()!)">@context.Value</a>
+                </CellTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.Subject">
+                <HeaderTemplate>Subject</HeaderTemplate>
+                <CellTemplate Context="context">
+                    <a href="#by-subject" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, context.Value!.ToString()!)">@context.Value</a>
+                </CellTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.DataSchema">
+                <HeaderTemplate>Data Schema</HeaderTemplate>
+                <CellTemplate Context="context">
+                    <a href="@context.Value" target="_blank">@context.Value</a>
+                </CellTemplate>
+            </Column>
+            <Column TData="CloudEvent"
+                    ValueProvider="e => e.DataContentType">
+                <HeaderTemplate>Data Content Type</HeaderTemplate>
+                <CellTemplate Context="context">
+                    <span class="badge rounded-pill bg-secondary">@context.Value</span>
+                </CellTemplate>
+            </Column>
+            <Column TData="CloudEvent">
+                <HeaderTemplate />
+                <CellTemplate Context="context">
+                    <button class="btn btn-outline-dark"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                </CellTemplate>
+            </Column>
+        </Columns>
+    </Table>
+
+</div>
+
+@code{
+
+    private CloudEventStreamReadOptions readOptions = new();
+    private List<CloudEvent?>? events;
+    private List<CloudEventPartitionMetadata?>? partitions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.ReadOptions.Subscribe(async options => await OnCloudEventStreamReadOptionsChanged(options));
+        this.Store.CloudEvents.Subscribe(async events => await OnCloudEventCollectionChanged(events));
+    }
+
+    void OnSetCloudEventPartitionType(CloudEventPartitionType? partitionType)
+    {
+        this.Store.SetStreamReadOptions(options => options with 
+        { 
+            Partition = !partitionType.HasValue ? null : new() { Type = partitionType.Value }
+        });
+    }
+
+    void OnSetCloudEventPartitionId(string? partitionId)
+    {
+        this.Store.SetStreamReadOptions(options => options with 
+        { 
+            Partition = string.IsNullOrWhiteSpace(partitionId) || readOptions.Partition == null ? null : new(readOptions.Partition.Type, partitionId) 
+        });
+    }
+
+    void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
+    {
+        this.Store.SetStreamReadOptions(options => options with 
+        { 
+            Partition = new(type, id) 
+        });
+    }
+
+    async Task OnCloudEventStreamReadOptionsChanged(CloudEventStreamReadOptions readOptions)
+    {
+        this.readOptions = readOptions;
+        if(this.readOptions.Partition != null) this.partitions = await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync();
+        this.StateHasChanged();
+    }
+
+    async Task OnCloudEventCollectionChanged(IAsyncEnumerable<CloudEvent?>? events)
+    {
+        if(events == null)
+        {
+            this.events = null;
+            return;
+        }
+        this.events = await events.ToListAsync();
+        this.StateHasChanged();
+    }
+
+}

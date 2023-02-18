@@ -1,0 +1,139 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@typeparam TData
+
+<CascadingValue Value="this">
+    @Columns
+    <table class="@TableClass">
+        <thead>
+            <tr class="@HeaderRowClass">
+                <ColumnHeaderCollectionPresenter TData="TData" />
+            </tr>
+        </thead>
+        <tbody>
+            @if(items != null)
+            {
+                var index = 0;
+                @foreach (var item in items)
+                {
+                    @RowTemplate(new(this, item, index))
+                    index++;
+                }
+            }
+        </tbody>
+    </table>
+
+</CascadingValue>
+
+@code {
+
+    internal List<Column<TData>> columns = new();
+    private IEnumerable<TData>? items;
+    private Column<TData>? draggedColumn;
+
+    [Parameter] public string? TableClass { get; set; } = "table table-stripped table-hover";
+
+    [Parameter] public string? HeaderRowClass { get; set; }
+
+    [Parameter] public string? HeaderClass { get; set; }
+
+    [Parameter] public string? RowClass { get; set; }
+
+    [Parameter] public string? CellClass { get; set; }
+
+    [Parameter] public RenderFragment Columns { get; set; } = null!;
+
+    [Parameter] public bool AutoGenerateColumns { get; set; } = true;
+
+    [Parameter]
+    public RenderFragment<ColumnHeaderRenderingContext<TData>> DefaultHeaderTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(ColumnHeader<TData>));
+        __builder.AddAttribute(0, nameof(ColumnHeader<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    [Parameter]
+    public RenderFragment<RowRenderingContext<TData>> RowTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(Row<TData>));
+        __builder.AddAttribute(0, nameof(Row<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    [Parameter]
+    public RenderFragment<CellRenderingContext<TData>> DefaultCellTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(Cell<TData>));
+        __builder.AddAttribute(0, nameof(Cell<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    [Parameter] public IEnumerable<TData>? Items { get; set; }
+
+    [Parameter] public EventCallback<Column<TData>> OnOrderBy { get; set; }
+
+    public void AddColumn(Column<TData> column)
+    {
+        this.columns.Add(column);
+        this.StateHasChanged();
+    }
+
+    public bool RemoveColumn(Column<TData> column)
+    {
+        var removed = this.columns.Remove(column);
+        this.StateHasChanged();
+        return removed;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (this.AutoGenerateColumns)
+        {
+            foreach (var property in typeof(TData)
+                .GetProperties()
+                .Where(p => p.PropertyType.IsPrimitiveType() || p.PropertyType == typeof(string) || p.PropertyType == typeof(DateTimeOffset) || p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(TimeSpan) || p.PropertyType == typeof(Uri)))
+            {
+                this.AddColumn(Column<TData>.CreateFor(property));
+            }
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (this.Items is IAsyncEnumerable<TData> asyncEnumerable) this.items = await asyncEnumerable.ToListAsync();
+        else this.items = this.Items;
+    }
+
+    internal async Task OnClickColumn(Column<TData> column)
+    {
+        if (!column.IsSorteable || column.PropertyPath == null) return;
+        column.ToggleSortMode();
+        if (this.OnOrderBy.HasDelegate) await this.OnOrderBy.InvokeAsync(column);
+    }
+
+    internal void OnStartDragColumn(Column<TData> column)
+    {
+        this.draggedColumn = column;
+    }
+
+    internal void OnEndDragColumn(Column<TData> column)
+    {
+        this.draggedColumn = null;
+    }
+
+    internal void OnDropColumnOn(Column<TData> column)
+    {
+        if (column == null || this.draggedColumn == null) return;
+        int draggedIndex = this.columns.IndexOf(this.draggedColumn);
+        int droppedIndex = this.columns.IndexOf(column);
+        this.columns.Remove(this.draggedColumn);
+        int insertAt;
+        if (draggedIndex < droppedIndex)  insertAt = droppedIndex++;
+        else insertAt = droppedIndex;
+        if (droppedIndex >= this.columns.Count) droppedIndex = this.columns.Count - 1;
+        this.columns.Insert(insertAt, this.draggedColumn);
+        this.StateHasChanged();
+    }
+
+}
