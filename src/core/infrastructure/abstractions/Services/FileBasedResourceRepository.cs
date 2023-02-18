@@ -21,6 +21,7 @@ public class FileBasedResourceRepository
     public FileBasedResourceRepository(IOptions<FileBasedResourceRepositoryOptions> options)
     {
         this.Options = options.Value;
+        this.Subject = new();
     }
 
     /// <summary>
@@ -28,8 +29,14 @@ public class FileBasedResourceRepository
     /// </summary>
     protected FileBasedResourceRepositoryOptions Options { get; }
 
+    /// <summary>
+    /// Gets the <see cref="Subject{T}"/> used to observe and emit <see cref="IResourceWatchEvent"/>s
+    /// </summary>
     protected Subject<IResourceWatchEvent> Subject { get; }
 
+    /// <summary>
+    /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> used to cache managed <see cref="IResource"/>s
+    /// </summary>
     protected ConcurrentDictionary<string, FileBasedResourceDescriptor> Cache { get; } = new();
 
     /// <summary>
