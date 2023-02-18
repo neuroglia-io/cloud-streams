@@ -14,7 +14,7 @@ public interface IResourceWatchEvent
     /// <summary>
     /// Gets the object that has produced the <see cref="IResourceWatchEvent"/>
     /// </summary>
-    IResource State { get; }
+    IResource Resource { get; }
 
 }
 
@@ -26,10 +26,9 @@ public interface IResourceWatchEvent<TResource>
     where TResource : class, IResource, new()
 {
 
-
     /// <summary>
     /// Gets the object that has produced the <see cref="IResourceWatchEvent"/>
     /// </summary>
-    new TResource State { get; }
+    new TResource Resource { get; }
 
 }

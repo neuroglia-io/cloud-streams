@@ -24,7 +24,7 @@ public class ResourceWatchEvent
         if(string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         this.Type = type;
-        this.State = resource;
+        this.Resource = resource;
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public class ResourceWatchEvent
     /// Gets/sets the resource that has produced the event
     /// </summary>
     [DataMember(Order = 2, Name = "resource"), JsonPropertyName("resource"), YamlMember(Alias = "resource")]
-    public virtual IResource State { get; set; } = null!;
+    public virtual IResource Resource { get; set; } = null!;
 
 }
 
@@ -66,7 +66,7 @@ public class ResourceWatchEvent<TResource>
         if (string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         this.Type = type;
-        this.State = resource;
+        this.Resource = resource;
     }
 
     /// <summary>
@@ -80,8 +80,8 @@ public class ResourceWatchEvent<TResource>
     /// Gets/sets the resource that has produced the <see cref="ResourceWatchEvent"/>
     /// </summary>
     [DataMember(Order = 2, Name = "resource"), JsonPropertyName("resource"), YamlMember(Alias = "resource")]
-    public virtual TResource State { get; set; } = null!;
+    public virtual TResource Resource { get; set; } = null!;
 
-    IResource IResourceWatchEvent.State => this.State;
+    IResource IResourceWatchEvent.Resource => this.Resource;
 
 }

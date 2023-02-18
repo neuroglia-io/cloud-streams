@@ -34,7 +34,7 @@ public interface IResourceRepository
     /// <param name="namespace">The namespace the resources to list belong to, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IList{T}"/> containing the resources matching the query</returns>
-    Task<IList<TResource>?> ListResourcesAsync<TResource>(string? @namespace, CancellationToken cancellationToken = default)
+    Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>

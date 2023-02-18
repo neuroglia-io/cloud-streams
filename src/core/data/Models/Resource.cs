@@ -3,18 +3,25 @@
 /// <summary>
 /// Represents the base class of all cloud stream resources
 /// </summary>
-public abstract class Resource
+public class Resource
     : IResource
 {
 
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
     /// </summary>
+    public Resource() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="Resource"/>
+    /// </summary>
     /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
-    protected Resource(ResourceType type) 
+    public Resource(ResourceType type) 
     {
         if (type == null) throw new ArgumentNullException(nameof(type));
         this.Type = type;
+        this.ApiVersion = this.Type.GetApiVersion();
+        this.Kind = this.Type.Kind;
     }
 
     /// <summary>
@@ -22,7 +29,7 @@ public abstract class Resource
     /// </summary>
     /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
     /// <param name="metadata">The object that describes the resource</param>
-    protected Resource(ResourceType type, ResourceMetadata metadata)
+    public Resource(ResourceType type, ResourceMetadata metadata)
         : this(type)
     {
         if (metadata == null) throw new ArgumentNullException(nameof(metadata));
@@ -30,16 +37,34 @@ public abstract class Resource
     }
 
     /// <summary>
+    /// Gets the resource's API version
+    /// </summary>
+    [Required, JsonRequired]
+    [DataMember(Order = 1, Name = "apiVersion", IsRequired = true), JsonPropertyName("apiVersion"), YamlMember(Alias = "apiVersion")]
+    public virtual string ApiVersion { get; set; } = null!;
+
+    /// <summary>
+    /// Gets the resource's kind
+    /// </summary>
+    [Required, JsonRequired]
+    [DataMember(Order = 2, Name = "kind"), JsonPropertyName("kind"), YamlMember(Alias = "kind")]
+    public virtual string Kind { get; set; } = null!;
+
+    /// <summary>
     /// Gets/sets the object that describes the resource
     /// </summary>
-    [DataMember(Order = 1, Name = "metadata"), JsonPropertyName("metadata"), YamlMember(Alias = "metadata")]
+    [Required, JsonRequired]
+    [DataMember(Order = 3, Name = "metadata", IsRequired = true), JsonPropertyName("metadata"), YamlMember(Alias = "metadata")]
     public virtual ResourceMetadata Metadata { get; set; } = null!;
 
     object IMetadata.Metadata => this.Metadata;
 
     /// <inheritdoc/>
     [IgnoreDataMember, JsonIgnore, YamlIgnore]
-    public virtual ResourceType Type { get; }
+    public virtual ResourceType Type { get; } = null!;
+
+    [DataMember(Order = 2, Name = "extensionData"), JsonExtensionData]
+    IDictionary<string, object>? IExtensible.ExtensionData => throw new NotImplementedException();
 
 }
 
@@ -47,7 +72,7 @@ public abstract class Resource
 /// Represents the base class of all cloud stream resources
 /// </summary>
 /// <typeparam name="TSpec">The type of the resource's spec</typeparam>
-public abstract class Resource<TSpec>
+public class Resource<TSpec>
     : Resource, IResource<TSpec>
     where TSpec : class, new()
 {
@@ -55,8 +80,13 @@ public abstract class Resource<TSpec>
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
     /// </summary>
+    public Resource() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="Resource"/>
+    /// </summary>
     /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
-    protected Resource(ResourceType type) : base(type) { }
+    public Resource(ResourceType type) : base(type) { }
 
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
@@ -64,7 +94,7 @@ public abstract class Resource<TSpec>
     /// <param name="type">An object used to describe the resource's type</param>
     /// <param name="metadata">The object that describes the resource</param>
     /// <param name="spec">The resource's spec</param>
-    protected Resource(ResourceType type, ResourceMetadata metadata, TSpec spec)
+    public Resource(ResourceType type, ResourceMetadata metadata, TSpec spec)
         : base(type, metadata)
     {
         if(spec == null) throw new ArgumentNullException(nameof(spec));
@@ -81,13 +111,12 @@ public abstract class Resource<TSpec>
 
 }
 
-
 /// <summary>
 /// Represents the base class of all cloud stream resources
 /// </summary>
 /// <typeparam name="TSpec">The type of the resource's spec</typeparam>
 /// <typeparam name="TStatus">The type of the resource's status</typeparam>
-public abstract class Resource<TSpec, TStatus>
+public class Resource<TSpec, TStatus>
     : Resource<TSpec>, IResource<TSpec, TStatus>
     where TSpec : class, new()
     where TStatus : class, new()
@@ -96,8 +125,13 @@ public abstract class Resource<TSpec, TStatus>
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
     /// </summary>
+    public Resource() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="Resource"/>
+    /// </summary>
     /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
-    protected Resource(ResourceType type) : base(type) { }
+    public Resource(ResourceType type) : base(type) { }
 
     /// <summary>
     /// Initializes a new <see cref="Resource"/>
@@ -106,7 +140,7 @@ public abstract class Resource<TSpec, TStatus>
     /// <param name="metadata">The object that describes the resource</param>
     /// <param name="spec">The resource's spec</param>
     /// <param name="status">An object that describes the resource's status</param>
-    protected Resource(ResourceType type, ResourceMetadata metadata, TSpec spec, TStatus? status = null)
+    public Resource(ResourceType type, ResourceMetadata metadata, TSpec spec, TStatus? status = null)
         : base(type, metadata, spec)
     {
         this.Status = status;

@@ -51,9 +51,9 @@ public class ResourceMonitor<TResource>
         if (this.Running) return;
         this.Observable = (await this.Resources.WatchResourcesAsync<TResource>(this.State.Metadata.Namespace, cancellationToken))
             .Where(e => (e.Type == ResourceWatchEventType.Updated || e.Type == ResourceWatchEventType.Deleted) 
-                && e.State.Metadata.Namespace == this.State.Metadata.Namespace && e.State.Metadata.Name == this.State.Metadata.Name)
+                && e.Resource.Metadata.Namespace == this.State.Metadata.Namespace && e.Resource.Metadata.Name == this.State.Metadata.Name)
             .TakeUntil(e => e.Type == ResourceWatchEventType.Deleted)
-            .Select(e => e.State);
+            .Select(e => e.Resource);
         this.Subscription = this.Observable.Subscribe(this.OnStateChanged);
         this.Running = true;
     }

@@ -4,8 +4,18 @@
 /// Defines the fundamentals of a resource
 /// </summary>
 public interface IResource
-    : IMetadata<ResourceMetadata>
+    : IExtensible, IMetadata<ResourceMetadata>
 {
+
+    /// <summary>
+    /// Gets the resource's API version
+    /// </summary>
+    string ApiVersion { get; }
+
+    /// <summary>
+    /// Gets the resource's kind
+    /// </summary>
+    string Kind { get; }
 
     /// <summary>
     /// Gets an object used to describe the resource's type
