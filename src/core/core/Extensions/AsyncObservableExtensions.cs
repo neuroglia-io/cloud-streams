@@ -1,6 +1,6 @@
 ﻿using System.Reactive.Linq;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines extensions for <see cref="IObservable{T}"/>

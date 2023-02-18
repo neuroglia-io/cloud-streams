@@ -1,7 +1,7 @@
 ﻿using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
-namespace CloudStreams.Serialization.Yaml;
+namespace CloudStreams.Core.Serialization.Yaml;
 
 /// <summary>
 /// Represents the <see cref="INodeDeserializer"/> used to deserialize <see cref="JsonObject"/>s

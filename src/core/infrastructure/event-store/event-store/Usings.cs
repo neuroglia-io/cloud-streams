@@ -1,4 +1,4 @@
-﻿global using CloudStreams.Infrastructure.Services;
+﻿global using CloudStreams.Core.Infrastructure.Services;
 global using EventStore.Client;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.DependencyInjection.Extensions;

@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\api\gateway\client\CloudStreams.Api.Gateway.Client.csproj" />
+    <ProjectReference Include="..\..\gateway\client\CloudStreams.Gateway.Api.Client.csproj" />
     <ProjectReference Include="..\state-management\CloudStreams.Dashboard.StateManagement.csproj" />
   </ItemGroup>
 

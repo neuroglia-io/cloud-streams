@@ -1,6 +1,6 @@
 ﻿using YamlDotNet.Serialization;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Describes the type of a resource

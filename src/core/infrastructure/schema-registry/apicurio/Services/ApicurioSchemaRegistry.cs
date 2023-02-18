@@ -1,11 +1,11 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
-using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
-using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 using Json.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the <see href="https://www.apicur.io/registry/">Apicurio Registry</see> based implementation of the <see cref="ISchemaRegistry"/> interface

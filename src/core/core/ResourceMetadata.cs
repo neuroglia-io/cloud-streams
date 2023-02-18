@@ -1,6 +1,6 @@
 ﻿using YamlDotNet.Serialization;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Represents an object used to describe a resource

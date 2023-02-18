@@ -1,9 +1,9 @@
-﻿using CloudStreams.Serialization.Yaml;
+﻿using CloudStreams.Core.Serialization.Yaml;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NodeDeserializers;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Provides functionality to serialize/deserialize objects to/from JSON and YAML

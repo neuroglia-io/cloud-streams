@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Data.Models;
+﻿namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents an object used to describe a <see cref="Channel"/>'s status

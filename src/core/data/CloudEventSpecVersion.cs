@@ -1,4 +1,4 @@
-﻿namespace CloudStreams;
+﻿namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all supported version of the <see href="https://cloudevents.io/">Cloud Event spec</see>

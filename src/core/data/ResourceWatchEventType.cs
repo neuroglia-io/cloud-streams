@@ -1,4 +1,4 @@
-﻿namespace CloudStreams;
+﻿namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all default types of resource-related event

@@ -1,8 +1,8 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 
 /// <summary>
 /// Represents the default implementation of the <see cref="IApicurioRegistryApiClient"/> interface

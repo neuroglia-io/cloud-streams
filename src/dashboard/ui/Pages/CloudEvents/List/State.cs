@@ -1,4 +1,4 @@
-﻿using CloudStreams.Data.Models;
+﻿using CloudStreams.Core.Data.Models;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 

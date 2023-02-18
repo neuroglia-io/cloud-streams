@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 
-namespace CloudStreams.Infrastructure.Configuration;
+namespace CloudStreams.Core.Infrastructure.Configuration;
 
 /// <summary>
-/// Defines extensions for <see cref="ICloudStreamsApiBuilder"/>s
+/// Defines extensions for <see cref="ICloudStreamsApplicationBuilder"/>s
 /// </summary>
 public static class ICloudStreamsApiBuilderExtensions
 {
@@ -13,9 +13,9 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <summary>
     /// Configures Cloud Streams to use the <see href="https://www.eventstore.com/">EventStore</see> implementation of the <see cref="ICloudEventStore"/> interface
     /// </summary>
-    /// <param name="builder">The <see cref="ICloudStreamsApiBuilder"/> to configure</param>
-    /// <returns>The configured <see cref="ICloudStreamsApiBuilder"/></returns>
-    public static ICloudStreamsApiBuilder UseESCloudEventStore(this ICloudStreamsApiBuilder builder)
+    /// <param name="builder">The <see cref="ICloudStreamsApplicationBuilder"/> to configure</param>
+    /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
+    public static ICloudStreamsApplicationBuilder UseESCloudEventStore(this ICloudStreamsApplicationBuilder builder)
     {
         var connectionString = builder.Configuration.GetConnectionString(ConnectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString)) throw new Exception($"Failed to find the '{ConnectionStringName}' connection string");

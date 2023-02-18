@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Acts as a helper class for locating <see cref="Assembly"/> instances

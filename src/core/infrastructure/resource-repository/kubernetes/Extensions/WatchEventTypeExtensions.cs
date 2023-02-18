@@ -1,8 +1,8 @@
-﻿using CloudStreams.Infrastructure.Services;
+﻿using CloudStreams.Core.Infrastructure.Services;
 using k8s;
 using System.Text.Json;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 
 /// <summary>

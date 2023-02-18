@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Serialization.Json.Converters;
+﻿namespace CloudStreams.Core.Serialization.Json.Converters;
 
 /// <summary>
 /// Represents a <see cref="JsonConverter"/> to read and write using 

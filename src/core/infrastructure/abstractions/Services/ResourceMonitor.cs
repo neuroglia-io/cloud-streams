@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure.Services;
+﻿namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the default implementation of the <see cref="IResourceRepository"/> interface

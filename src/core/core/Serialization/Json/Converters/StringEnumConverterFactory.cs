@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace CloudStreams.Serialization.Json.Converters;
+namespace CloudStreams.Core.Serialization.Json.Converters;
 
 /// <summary>
 /// Represents the <see cref="JsonConverterFactory"/> used to create <see cref="StringEnumConverter{TEnum}"/>

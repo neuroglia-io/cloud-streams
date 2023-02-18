@@ -1,7 +1,7 @@
 ﻿using k8s;
 using k8s.Models;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Exposes constants about Kubernetes resources required by Cloud Streams

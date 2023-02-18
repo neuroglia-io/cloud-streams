@@ -1,4 +1,4 @@
-﻿namespace CloudStreams;
+﻿namespace CloudStreams.Core;
 
 /// <summary>
 /// Exposes methods to help handling <see cref="Uri"/>s

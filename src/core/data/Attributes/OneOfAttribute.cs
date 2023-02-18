@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Data.Attributes;
+﻿namespace CloudStreams.Core.Data.Attributes;
 
 /// <summary>
 /// Represents an <see cref="Attribute"/> used to validate that the value of the marked property falls within range

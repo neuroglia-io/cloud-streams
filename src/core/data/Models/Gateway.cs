@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Data.Models;
+﻿namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents a cloud event gateway, reponsible for authorizing, validating and persisting inbound events

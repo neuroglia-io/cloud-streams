@@ -1,7 +1,7 @@
 ﻿using k8s;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace CloudStreams.Infrastructure.Configuration;
+namespace CloudStreams.Core.Infrastructure.Configuration;
 
 /// <summary>
 /// Defines extensions for <see cref="IServiceCollection"/>s

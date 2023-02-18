@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Data.Models;
+﻿namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents an object used to configuring filtering of cloud events based on context attribute

@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+﻿namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 
 /// <summary>
 /// Defines the fundamentals of an Apicurio Registry client

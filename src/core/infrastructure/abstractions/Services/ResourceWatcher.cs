@@ -1,6 +1,6 @@
-﻿using CloudStreams.Infrastructure.Configuration;
+﻿using CloudStreams.Core.Infrastructure.Configuration;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the default implementation of the <see cref="IResourceWatcher{TResource}"/> interface

@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Text;
 
-namespace CloudStreams.Serialization.Json.Converters;
+namespace CloudStreams.Core.Serialization.Json.Converters;
 
 /// <summary>
 /// Represents the <see cref="JsonConverter{T}"/> used to convert from and to <see cref="Enum"/>s

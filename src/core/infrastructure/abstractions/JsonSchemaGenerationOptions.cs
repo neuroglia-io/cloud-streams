@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure;
+﻿namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Represents an object used to configure how to generate <see cref="JsonSchema"/>s

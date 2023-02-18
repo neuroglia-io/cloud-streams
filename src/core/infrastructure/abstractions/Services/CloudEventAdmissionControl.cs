@@ -1,6 +1,6 @@
-﻿using CloudStreams.Data.Properties;
+﻿using CloudStreams.Core.Data.Properties;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the default implementation of the <see cref="ICloudEventAdmissionControl"/> interface

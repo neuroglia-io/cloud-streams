@@ -1,9 +1,9 @@
-﻿using CloudStreams.Data.Models;
-using CloudStreams.Infrastructure.Models;
+﻿using CloudStreams.Core.Data.Models;
+using CloudStreams.Core.Infrastructure.Models;
 using System.Net.Mime;
 using System.Runtime.CompilerServices;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the <see href="https://www.eventstore.com/">EventStore</see> based implementation of the <see cref="ICloudEventStore"/> interface

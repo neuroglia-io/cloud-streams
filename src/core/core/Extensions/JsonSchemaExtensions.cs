@@ -1,6 +1,6 @@
-﻿using CloudStreams.Serialization.Json.Utilities;
+﻿using CloudStreams.Core.Serialization.Json.Utilities;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines extensions for <see cref="JsonSchema"/>s

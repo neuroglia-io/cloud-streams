@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace CloudStreams.Infrastructure.Models;
+namespace CloudStreams.Core.Infrastructure.Models;
 
 internal class ListCloudEventSubjectsQueryResult
 {

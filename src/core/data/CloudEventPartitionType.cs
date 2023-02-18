@@ -1,4 +1,4 @@
-﻿namespace CloudStreams;
+﻿namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all supported cloud event stream partition types

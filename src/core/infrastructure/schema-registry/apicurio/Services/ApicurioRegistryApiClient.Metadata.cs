@@ -1,7 +1,7 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 using Microsoft.Extensions.Logging;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 
 public partial class ApicurioRegistryApiClient
     : IMetadataApi

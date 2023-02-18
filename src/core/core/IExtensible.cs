@@ -1,4 +1,4 @@
-﻿namespace CloudStreams;
+﻿namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines the fundamentals of an extensible object

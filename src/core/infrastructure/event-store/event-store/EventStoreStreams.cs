@@ -1,6 +1,6 @@
-﻿using CloudStreams.Data.Models;
+﻿using CloudStreams.Core.Data.Models;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Exposes constants about the EventStore streams used by Cloud Streams

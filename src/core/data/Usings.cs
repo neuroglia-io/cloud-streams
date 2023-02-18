@@ -1,4 +1,4 @@
-﻿global using CloudStreams.Data.Properties;
+﻿global using CloudStreams.Core.Data.Properties;
 global using Json.Schema;
 global using System.ComponentModel;
 global using System.ComponentModel.DataAnnotations;

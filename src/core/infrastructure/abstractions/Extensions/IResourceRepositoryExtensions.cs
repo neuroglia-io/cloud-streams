@@ -1,6 +1,6 @@
-﻿using CloudStreams.Infrastructure.Services;
+﻿using CloudStreams.Core.Infrastructure.Services;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Defines extensions for <see cref="IResourceMonitor{TResource}"/> instances

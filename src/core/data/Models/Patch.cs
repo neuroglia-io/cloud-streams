@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Data.Models;
+﻿namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Describes a patch

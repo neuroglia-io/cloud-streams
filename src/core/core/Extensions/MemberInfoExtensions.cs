@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines extension methods for <see cref="MemberInfo"/>s

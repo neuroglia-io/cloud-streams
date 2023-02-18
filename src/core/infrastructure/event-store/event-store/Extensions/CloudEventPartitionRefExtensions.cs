@@ -1,6 +1,6 @@
-﻿using CloudStreams.Data.Models;
+﻿using CloudStreams.Core.Data.Models;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Defines extensions for <see cref="CloudEventPartitionRef"/>s

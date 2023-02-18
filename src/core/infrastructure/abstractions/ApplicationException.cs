@@ -1,6 +1,6 @@
-﻿using CloudStreams.Data.Properties;
+﻿using CloudStreams.Core.Data.Properties;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Represents an <see cref="Exception"/> produced by a CloudStreams app

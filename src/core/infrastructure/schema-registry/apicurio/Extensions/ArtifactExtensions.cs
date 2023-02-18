@@ -1,6 +1,6 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 
-namespace CloudStreams.Infrastructure;
+namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Defines extensions for <see cref="Artifact"/>s

@@ -1,4 +1,4 @@
-﻿using CloudStreams.Api.Gateway.Client;
+﻿using CloudStreams.Gateway.Api.Client;
 using CloudStreams.Dashboard;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;

@@ -1,7 +1,7 @@
 ﻿using Json.Schema;
 using System.Xml.Schema;
 
-namespace CloudStreams.Data.Models;
+namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents an object used to describe a response to a request

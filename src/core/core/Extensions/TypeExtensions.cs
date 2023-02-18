@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 
 /// <summary>

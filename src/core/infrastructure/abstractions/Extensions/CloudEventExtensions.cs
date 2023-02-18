@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure;
+﻿namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
 /// Defines extensions for <see cref="CloudEvent"/>

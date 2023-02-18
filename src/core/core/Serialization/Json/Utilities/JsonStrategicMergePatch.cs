@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Serialization.Json.Utilities;
+﻿namespace CloudStreams.Core.Serialization.Json.Utilities;
 
 /// <summary>
 /// Provides functionality to handle <see href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-api-machinery/strategic-merge-patch.md">Json Strategic Merge Patches</see>

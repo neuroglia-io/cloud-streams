@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 
 public partial class ApicurioRegistryApiClient
     : IVersionsApi

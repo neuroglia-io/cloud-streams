@@ -4,7 +4,7 @@ using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents a list of custom objects

@@ -1,6 +1,6 @@
-﻿using CloudStreams.Data.Models;
+﻿using CloudStreams.Core.Data.Models;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines extensions for <see cref="Response"/>s

@@ -1,7 +1,7 @@
-﻿using CloudStreams.Serialization.Json.Converters;
+﻿using CloudStreams.Core.Serialization.Json.Converters;
 using System.Text.Json.Serialization;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 
 /// <summary>
 /// Describes an artifact

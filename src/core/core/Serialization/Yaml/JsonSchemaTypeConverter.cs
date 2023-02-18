@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
-namespace CloudStreams.Serialization.Yaml;
+namespace CloudStreams.Core.Serialization.Yaml;
 
 /// <summary>
 /// Represents the <see cref="IYamlTypeConverter"/> used to convert <see cref="JsonSchema"/>s

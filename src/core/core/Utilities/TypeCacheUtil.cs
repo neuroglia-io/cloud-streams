@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Acts as an helper to find a filter types

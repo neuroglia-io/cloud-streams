@@ -42,11 +42,11 @@ services:
     depends_on:
       - postgres
 
-  cloudstreams:
-    image: ${DOCKER_REGISTRY-}cloudstreams-api-server
+  gateway:
+    image: ${DOCKER_REGISTRY-}cloudstreams-gateway
     build:
       context: ../../
-      dockerfile: src/apps/api-server/Dockerfile
+      dockerfile: src/gateway/server/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80

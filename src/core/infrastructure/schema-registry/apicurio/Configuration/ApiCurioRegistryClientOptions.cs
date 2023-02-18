@@ -1,6 +1,6 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
 
 /// <summary>
 /// Represents the options used to configure an <see cref="IApicurioRegistryApiClient"/>

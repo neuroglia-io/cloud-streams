@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure.Services;
+﻿namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Defines the fundamentals of a service used to watch resources

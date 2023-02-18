@@ -1,6 +1,6 @@
-﻿using CloudStreams.Api.Gateway.Client.Services;
+﻿using CloudStreams.Gateway.Api.Client.Services;
 using CloudStreams.Dashboard.StateManagement;
-using CloudStreams.Data.Models;
+using CloudStreams.Core.Data.Models;
 using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;

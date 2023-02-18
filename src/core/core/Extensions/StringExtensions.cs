@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace CloudStreams;
+namespace CloudStreams.Core;
 
 /// <summary>
 /// Defines extensions for <see cref="string"/>s

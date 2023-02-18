@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace CloudStreams.Data.Properties {
+namespace CloudStreams.Core.Data.Properties {
     using System;
     
     
@@ -39,7 +39,7 @@ namespace CloudStreams.Data.Properties {
         public static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("CloudStreams.Data.Properties.ProblemDetails", typeof(ProblemDetails).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("CloudStreams.Core.Data.Properties.ProblemDetails", typeof(ProblemDetails).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;

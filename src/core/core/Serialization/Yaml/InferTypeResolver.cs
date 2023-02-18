@@ -1,7 +1,7 @@
 ﻿using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 
-namespace CloudStreams.Serialization.Yaml;
+namespace CloudStreams.Core.Serialization.Yaml;
 
 /// <summary>
 /// Represents an <see cref="INodeTypeResolver"/> used to infer node types from deserialized values

@@ -1,7 +1,7 @@
 ﻿using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 
 /// <summary>
 /// Enumerates all actions to undertake if an artifact already exist when attempting to create a new one

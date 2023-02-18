@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Infrastructure.Configuration;
+﻿namespace CloudStreams.Core.Infrastructure.Configuration;
 
 /// <summary>
 /// Represents an object used to configure an <see cref="Services.IResourceWatcher{TResource}"/>

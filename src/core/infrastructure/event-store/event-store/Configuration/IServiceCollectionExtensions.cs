@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace CloudStreams.Infrastructure.Configuration;
+namespace CloudStreams.Core.Infrastructure.Configuration;
 
 /// <summary>
 /// Defines extensions for <see cref="IServiceCollection"/>s

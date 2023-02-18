@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Serialization.Json;
+﻿namespace CloudStreams.Core.Serialization.Json;
 
 /// <summary>
 /// Enumerates all supported types of <see cref="JsonObjectPropertyReferenceType"/>s

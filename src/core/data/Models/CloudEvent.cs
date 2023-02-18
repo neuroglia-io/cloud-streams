@@ -1,7 +1,7 @@
 ﻿using System.Net.Mime;
 using YamlDotNet.Core.Tokens;
 
-namespace CloudStreams.Data.Models;
+namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents a <see href="https://cloudevents.io/">Cloud Event</see> envelope

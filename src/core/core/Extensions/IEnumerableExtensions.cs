@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Reflection;
 
-namespace CloudStreams.EnumerableExtensions;
+namespace CloudStreams.Core.EnumerableExtensions;
 
 /// <summary>
 /// Defines extensions for <see cref="IEnumerable"/>s

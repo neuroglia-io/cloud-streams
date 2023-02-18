@@ -5,7 +5,7 @@ using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace CloudStreams.Serialization.Yaml;
+namespace CloudStreams.Core.Serialization.Yaml;
 
 
 /// <summary>

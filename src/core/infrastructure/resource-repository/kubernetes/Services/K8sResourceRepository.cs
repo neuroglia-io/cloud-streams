@@ -1,4 +1,4 @@
-﻿using CloudStreams.Data.Models;
+﻿using CloudStreams.Core.Data.Models;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
@@ -8,7 +8,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Text.Json;
 
-namespace CloudStreams.Infrastructure.Services;
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Represents the <see href="https://kubernetes.io">Kubernetes</see>-based implementation of the <see cref="IResourceRepository"/> interface

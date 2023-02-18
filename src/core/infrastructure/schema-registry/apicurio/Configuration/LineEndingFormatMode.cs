@@ -1,7 +1,7 @@
 ﻿using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
 
 /// <summary>
 /// Enumerates all supported line ending formats

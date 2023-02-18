@@ -1,8 +1,8 @@
-﻿using CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Services;
+﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace CloudStreams.Infrastructure.SchemaRegistry.Apicurio.Configuration;
+namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
 
 /// <summary>
 /// Defines extensions for <see cref="IServiceCollection"/>s
