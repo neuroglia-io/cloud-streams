@@ -86,14 +86,27 @@ public class FileBasedResourceRepository
     public virtual async Task<TResource?> GetResourceAsync<TResource>(string name, string? @namespace, CancellationToken cancellationToken)
         where TResource : class, IResource, new()
     {
-
+        var resource = new TResource();
+        var resourceFile = new FileInfo(this.GetResourceFilePath(resource.ApiVersion, resource.Kind, name, @namespace));
+        if (!resourceFile.Exists) return null;
+        using var stream = resourceFile.OpenRead();
+        using var streamReader = new StreamReader(stream);
+        var content = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        if(resourceFile.IsJson()) return Serializer.Json.Deserialize<TResource>(content);
+        else return Serializer.Yaml.Deserialize<TResource>(content);
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace, CancellationToken cancellationToken)
+    public virtual Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace, CancellationToken cancellationToken)
         where TResource : class, IResource, new()
     {
-        
+        var resource = new TResource();
+        var keyPattern = $"{resource.ApiVersion}/{resource.Kind}";
+        if (!string.IsNullOrWhiteSpace(@namespace)) keyPattern += $"namespace/{@namespace}";
+        return Task.FromResult(this.Cache.Keys
+            .Where(k => k.StartsWith(keyPattern))
+            .Select(k => Serializer.Json.Deserialize<TResource>(Serializer.Json.Serialize(this.Cache[k]!.State))!)
+            .ToAsyncEnumerable())!;
     }
 
     /// <inheritdoc/>
