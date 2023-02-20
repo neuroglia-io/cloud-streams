@@ -1,6 +1,5 @@
 using CloudStreams.Api.Configuration;
 using CloudStreams.Core.Application.Configuration;
-using CloudStreams.Core.Infrastructure.Services;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -73,4 +72,4 @@ app.UseSwaggerUI(builder =>
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
-app.Run();
+await app.RunAsync();

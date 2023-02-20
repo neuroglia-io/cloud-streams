@@ -32,19 +32,19 @@ public class ChannelResourceController
     /// <inheritdoc/>
     protected override Task OnResourceAddedAsync(Channel resource, CancellationToken cancellationToken = default)
     {
-        
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     protected override Task OnResourceUpdatedAsync(Channel resource, CancellationToken cancellationToken = default)
     {
-       
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     protected override Task OnResourceDeletedAsync(Channel resource, CancellationToken cancellationToken = default)
     {
-        
+        return Task.CompletedTask;
     }
 
 }

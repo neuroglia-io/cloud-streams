@@ -1,6 +1,4 @@
-﻿using Json.Schema.Generation;
-
-namespace CloudStreams.Core.Infrastructure.Services;
+﻿namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Defines the fundamentals of a service used to manage the application's resources
@@ -34,17 +32,21 @@ public interface IResourceRepository
     /// </summary>
     /// <typeparam name="TResource">The type of resources to list</typeparam>
     /// <param name="namespace">The namespace the resources to list belong to, if any</param>
+    /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing all label-based selectors to filter resources by</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IList{T}"/> containing the resources matching the query</returns>
-    Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>
     /// Watches resources of the specified type
     /// </summary>
     /// <typeparam name="TResource">The type of resource to watch</typeparam>
+    /// <param name="namespace">The namespace the resources to watch belong to, if any</param>
+    /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing all label-based selectors to filter resources to watch by</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IObservable{T}"/></returns>
-    Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
 }

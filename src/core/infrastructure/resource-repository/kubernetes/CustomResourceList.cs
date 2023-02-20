@@ -34,6 +34,7 @@ public class CustomResourceList<TResource>
     [DataMember(Order = 3, Name = "metadata"), JsonPropertyName("metadata"), YamlMember(Alias = "metadata")]
     public virtual V1ListMeta Metadata { get; set; } = null!;
 
+    /// <summary>
     /// Gets/sets the items the list is made out of
     /// </summary>
     [DataMember(Order = 4, Name = "items"), JsonPropertyName("items"), YamlMember(Alias = "items")]

@@ -75,11 +75,12 @@ public class ResourceLabelSelector
     {
         if (string.IsNullOrWhiteSpace(input)) throw new ArgumentNullException(nameof(input));
         if (input.StartsWith('!')) return new(input[1..], ResourceLabelSelectionOperator.NotContains);
+        string key;
         var components = input.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         ResourceLabelSelectionOperator selectionOperator;
         if (components.Length == 2)
         {
-            var key = components[0];
+            key = components[0];
             selectionOperator = ResourceLabelSelectionOperator.Equals;
             if (key.EndsWith('!'))
             {
@@ -90,15 +91,16 @@ public class ResourceLabelSelector
         }
         components = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (components.Length == 1) return new(input, ResourceLabelSelectionOperator.Contains);
-        selectionOperator = components[2] switch
+        selectionOperator = components[1] switch
         {
             "in" =>  ResourceLabelSelectionOperator.Contains,
             "notin" => ResourceLabelSelectionOperator.NotContains,
             _ => throw new NotSupportedException($"The specified selection operator '{components[2]}' is not supported")
         };
-        var operatorIndex = input.IndexOf(components[2]) + components.Length + 1;
+        key = components[0];
+        var operatorIndex = input.IndexOf(components[1], key.Length + 1) + components[1].Length + 1;
         components = input[operatorIndex..].Trim().TrimStart('(').TrimEnd(')').Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return new ResourceLabelSelector(components[0], selectionOperator, components);
+        return new ResourceLabelSelector(key, selectionOperator, components);
     }
 
     /// <summary>

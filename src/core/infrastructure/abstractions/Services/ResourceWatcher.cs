@@ -47,7 +47,7 @@ public class ResourceWatcher<TResource>
     public virtual async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         if (this.Running) return;
-        this.Observable = await this.Resources.WatchResourcesAsync<TResource>(this.Options.Namespace, cancellationToken);
+        this.Observable = await this.Resources.WatchResourcesAsync<TResource>(this.Options.Namespace, cancellationToken: cancellationToken).ConfigureAwait(false);
         this.Running = true;
     }
 

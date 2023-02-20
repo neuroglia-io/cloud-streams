@@ -137,7 +137,7 @@ public class StringEnumConverter<T>
     /// <inheritdoc/>
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        var rawValue = this.GetRawValue(value);
+        var rawValue = this.GetRawValue(value!);
         if (this.ValueMappings.TryGetValue(rawValue, out var fieldMetadata))
         {
             writer.WriteStringValue(fieldMetadata.TransformedName);

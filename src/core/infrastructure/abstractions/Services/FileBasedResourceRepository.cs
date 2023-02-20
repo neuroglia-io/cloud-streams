@@ -97,7 +97,7 @@ public class FileBasedResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
@@ -110,7 +110,7 @@ public class FileBasedResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         return Task.FromResult(this.Subject.Where(e => e.Resource.IsOfType<TResource>()).Select(e => e.ToType<TResource>()));

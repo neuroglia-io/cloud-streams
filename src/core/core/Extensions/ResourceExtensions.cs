@@ -11,7 +11,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The <see cref="IResource"/> to get the name of</param>
     /// <returns>The <see cref="IResource"/>'s name</returns>
-    public static string GetName(this IResource resource) => resource.Metadata.Name;
+    public static string GetName(this IResource resource) => resource.Metadata.Name!;
 
     /// <summary>
     /// Gets the <see cref="IResource"/>'s namespace

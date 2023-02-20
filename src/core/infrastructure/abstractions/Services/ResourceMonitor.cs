@@ -49,7 +49,7 @@ public class ResourceMonitor<TResource>
     public virtual async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         if (this.Running) return;
-        this.Observable = (await this.Resources.WatchResourcesAsync<TResource>(this.State.Metadata.Namespace, cancellationToken))
+        this.Observable = (await this.Resources.WatchResourcesAsync<TResource>(this.State.Metadata.Namespace, cancellationToken: cancellationToken).ConfigureAwait(false))
             .Where(e => (e.Type == ResourceWatchEventType.Updated || e.Type == ResourceWatchEventType.Deleted) 
                 && e.Resource.Metadata.Namespace == this.State.Metadata.Namespace && e.Resource.Metadata.Name == this.State.Metadata.Name)
             .TakeUntil(e => e.Type == ResourceWatchEventType.Deleted)

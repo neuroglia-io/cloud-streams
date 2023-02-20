@@ -104,8 +104,8 @@
 @code{
 
     private CloudEventStreamReadOptions readOptions = new();
-    private List<CloudEvent?>? events;
-    private List<CloudEventPartitionMetadata?>? partitions;
+    private List<CloudEvent>? events;
+    private List<CloudEventPartitionMetadata>? partitions;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,7 +116,7 @@
 
     void OnSetCloudEventPartitionType(CloudEventPartitionType? partitionType)
     {
-        this.Store.SetStreamReadOptions(options => options with 
+        this.Store.ReduceStreamReadOptions(options => options with 
         { 
             Partition = !partitionType.HasValue ? null : new() { Type = partitionType.Value }
         });
@@ -124,7 +124,7 @@
 
     void OnSetCloudEventPartitionId(string? partitionId)
     {
-        this.Store.SetStreamReadOptions(options => options with 
+        this.Store.ReduceStreamReadOptions(options => options with 
         { 
             Partition = string.IsNullOrWhiteSpace(partitionId) || readOptions.Partition == null ? null : new(readOptions.Partition.Type, partitionId) 
         });
@@ -132,7 +132,7 @@
 
     void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
     {
-        this.Store.SetStreamReadOptions(options => options with 
+        this.Store.ReduceStreamReadOptions(options => options with 
         { 
             Partition = new(type, id) 
         });
@@ -141,7 +141,7 @@
     async Task OnCloudEventStreamReadOptionsChanged(CloudEventStreamReadOptions readOptions)
     {
         this.readOptions = readOptions;
-        if(this.readOptions.Partition != null) this.partitions = await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync();
+        if(this.readOptions.Partition != null) this.partitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync().ConfigureAwait(false))!;
         this.StateHasChanged();
     }
 
@@ -152,7 +152,7 @@
             this.events = null;
             return;
         }
-        this.events = await events.ToListAsync();
+        this.events = (await events.ToListAsync().ConfigureAwait(false))!;
         this.StateHasChanged();
     }
 

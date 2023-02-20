@@ -49,45 +49,36 @@ public class Feature<TState>
     /// <inheritdoc/>
     public virtual void AddReducer(IReducer<TState> reducer)
     {
-        if (reducer == null)
-            throw new ArgumentNullException(nameof(reducer));
+        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
         var genericReducerType = reducer.GetType().GetGenericType(typeof(IReducer<,>));
+        if (genericReducerType == null) throw new Exception($"The specified {nameof(IReducer<TState>)} '{reducer.GetType()}' does not implement the '{typeof(IReducer<,>)}' interface");
         var actionType = genericReducerType.GetGenericArguments()[1];
-        if (this.Reducers.TryGetValue(actionType, out var reducers))
-            reducers.Add(reducer);
-        else
-            this.Reducers.Add(actionType, new() { reducer });
+        if (this.Reducers.TryGetValue(actionType, out var reducers)) reducers.Add(reducer);
+        else this.Reducers.Add(actionType, new() { reducer });
     }
 
     void IFeature.AddReducer(IReducer reducer)
     {
-        if (reducer == null)
-            throw new ArgumentNullException(nameof(reducer));
+        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
         this.AddReducer((IReducer<TState>)reducer);
     }
 
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<TState> observer)
-    {
-        return this.Stream.Subscribe(observer);
-    }
+    public virtual IDisposable Subscribe(IObserver<TState> observer) =>this.Stream.Subscribe(observer);
 
     /// <inheritdoc/>
     public virtual bool ShouldReduceStateFor(object action)
     {
-        if (action == null)
-            throw new ArgumentNullException(nameof(action));
+        if (action == null) throw new ArgumentNullException(nameof(action));
         return this.Reducers.ContainsKey(action.GetType());
     }
     
     /// <inheritdoc/>
     public virtual async Task ReduceStateAsync(IActionContext context, Func<DispatchDelegate, DispatchDelegate> reducerPipelineBuilder)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
-        if (reducerPipelineBuilder == null)
-            throw new ArgumentNullException(nameof(reducerPipelineBuilder));
-            var pipeline = reducerPipelineBuilder(ApplyReducersAsync);
+        if (context == null) throw new ArgumentNullException(nameof(context));
+        if (reducerPipelineBuilder == null) throw new ArgumentNullException(nameof(reducerPipelineBuilder));
+        var pipeline = reducerPipelineBuilder(ApplyReducersAsync);
         this.State = (TState)await pipeline(context);
     }
 
@@ -98,8 +89,7 @@ public class Feature<TState>
     /// <returns>The reduced <see cref="IFeature"/>'s state</returns>
     protected virtual async Task<object> ApplyReducersAsync(IActionContext context)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
+        if (context == null) throw new ArgumentNullException(nameof(context));
         return (await Task.Run(() =>
         {
             var newState = this.State;
