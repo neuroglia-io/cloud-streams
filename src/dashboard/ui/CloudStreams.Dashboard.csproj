@@ -17,4 +17,8 @@
     <ProjectReference Include="..\state-management\CloudStreams.Dashboard.StateManagement.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\lib\bootstrap\" />
+  </ItemGroup>
+
 </Project>

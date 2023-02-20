@@ -3,25 +3,26 @@
 
 <CascadingValue Value="this">
     @Columns
-    <table class="@TableClass">
-        <thead>
-            <tr class="@HeaderRowClass">
-                <ColumnHeaderCollectionPresenter TData="TData" />
-            </tr>
-        </thead>
-        <tbody>
-            @if(items != null)
-            {
-                var index = 0;
-                @foreach (var item in items)
+    <div class="table-container">
+        <table class="@TableClass">
+            <thead>
+                <tr class="@HeaderRowClass">
+                    <ColumnHeaderCollectionPresenter TData="TData" />
+                </tr>
+            </thead>
+            <tbody>
+                @if(items != null)
                 {
-                    @RowTemplate(new(this, item, index))
-                    index++;
+                    var index = 0;
+                    @foreach (var item in items)
+                    {
+                        @RowTemplate(new(this, item, index))
+                        index++;
+                    }
                 }
-            }
-        </tbody>
-    </table>
-
+            </tbody>
+        </table>
+    </div>
 </CascadingValue>
 
 @code {

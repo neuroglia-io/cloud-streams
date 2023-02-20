@@ -9,7 +9,7 @@
         @ondragend="() => Table.OnEndDragColumn(column)"
         @ondrop="() => Table.OnDropColumnOn(column)"
         @onclick="async () => await Table.OnClickColumn(column)"
-        class="dropzone @Table.HeaderClass">
+        class="sticky-header dropzone @Table.HeaderClass">
         @if(column.HeaderTemplate == null)
             @Table.DefaultHeaderTemplate(new(Table, column))
         else
