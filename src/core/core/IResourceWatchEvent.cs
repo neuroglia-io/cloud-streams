@@ -9,7 +9,7 @@ public interface IResourceWatchEvent
     /// <summary>
     /// Gets the event's type<para></para>
     /// </summary>
-    string Type { get; }
+    ResourceWatchEventType Type { get; }
 
     /// <summary>
     /// Gets the object that has produced the <see cref="IResourceWatchEvent"/>

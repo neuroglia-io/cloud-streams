@@ -1,4 +1,6 @@
-﻿namespace CloudStreams.Core.Infrastructure.Services;
+﻿using Json.Schema.Generation;
+
+namespace CloudStreams.Core.Infrastructure.Services;
 
 /// <summary>
 /// Defines the fundamentals of a service used to manage the application's resources
@@ -34,7 +36,7 @@ public interface IResourceRepository
     /// <param name="namespace">The namespace the resources to list belong to, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IList{T}"/> containing the resources matching the query</returns>
-    Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace, CancellationToken cancellationToken = default)
+    Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>

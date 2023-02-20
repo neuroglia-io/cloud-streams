@@ -19,9 +19,8 @@ public class ResourceWatchEvent
     /// <param name="type">The <see cref="ResourceWatchEvent"/>'s type</param>
     /// <param name="resource">The resource that has produced the <see cref="ResourceWatchEvent"/></param>
     /// <exception cref="ArgumentNullException"></exception>
-    public ResourceWatchEvent(string type, IResource resource)
+    public ResourceWatchEvent(ResourceWatchEventType type, IResource resource)
     {
-        if(string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         this.Type = type;
         this.Resource = resource;
@@ -32,7 +31,7 @@ public class ResourceWatchEvent
     /// See <see cref="ResourceWatchEventType"/>
     /// </summary>
     [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual string Type { get; set; } = null!;
+    public virtual ResourceWatchEventType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the resource that has produced the event
@@ -61,9 +60,8 @@ public class ResourceWatchEvent<TResource>
     /// </summary>
     /// <param name="type">The <see cref="ResourceWatchEvent{TResource}"/>'s type</param>
     /// <param name="resource">The resource that has produced the <see cref="ResourceWatchEvent{TResource}"/></param>
-    public ResourceWatchEvent(string type, TResource resource)
+    public ResourceWatchEvent(ResourceWatchEventType type, TResource resource)
     {
-        if (string.IsNullOrEmpty(type)) throw new ArgumentNullException(nameof(type));
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         this.Type = type;
         this.Resource = resource;
@@ -74,7 +72,7 @@ public class ResourceWatchEvent<TResource>
     /// See <see cref="ResourceWatchEventType"/>
     /// </summary>
     [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual string Type { get; set; } = null!;
+    public virtual ResourceWatchEventType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the resource that has produced the <see cref="ResourceWatchEvent"/>

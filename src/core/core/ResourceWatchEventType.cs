@@ -3,24 +3,27 @@
 /// <summary>
 /// Enumerates all default types of resource-related event
 /// </summary>
-public static class ResourceWatchEventType
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ResourceWatchEventType
 {
-
     /// <summary>
     /// Indicates an event that describes the creation of a resource
     /// </summary>
-    public const string Created = "created";
+    [EnumMember(Value = "created")]
+    Created = 0,
     /// <summary>
     /// Indicates an event that describes the update of a resource
     /// </summary>
-    public const string Updated = "updated";
+    [EnumMember(Value = "updated")]
+    Updated = 1,
     /// <summary>
     /// Indicates an event that describes the deletion of a resource
     /// </summary>
-    public const string Deleted = "deleted";
+    [EnumMember(Value = "deleted")]
+    Deleted = 2,
     /// <summary>
     /// Indicates an event that describes a resource-related error
     /// </summary>
-    public const string Error = "error";
-
+    [EnumMember(Value = "error")]
+    Error = 4
 }

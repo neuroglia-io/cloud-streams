@@ -14,10 +14,12 @@ public class Gateway
 
     const string ResourcePlural = "gateways";
 
+    const string ResourceKind = "Gateway";
+
     /// <summary>
-    /// Gets the <see cref="Gateway"/>'s resource type
+    /// Gets the <see cref="Channel"/>'s resource type
     /// </summary>
-    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural);
+    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
 
     /// <inheritdoc/>
     public Gateway() : base(ResourceType) { }

@@ -23,7 +23,7 @@
                     </select>
                 </div>
                 <span class="input-group-append">
-                    <input type="text" class="form-control" value="@readOptions.Partition?.Id" @onchange="e => OnSetCloudEventPartitionId((string?)e.Value)" list="partitions" />
+                    <input type="text" class="form-control" value="@readOptions.Partition?.Id" list="partitions" autocomplete="on" @onchange="e => OnSetCloudEventPartitionId((string?)e.Value)" />
                     <datalist id="partitions">
                         @if(readOptions.Partition != null && partitions != null)
                         {

@@ -12,14 +12,14 @@ public class CloudEventDispatcher
     /// <summary>
     /// Gets the service used to manage <see cref="CloudEvent"/>s
     /// </summary>
-    protected ICloudEventStore Store { get; }
+    protected ICloudEventStore CloudEventStore { get; }
 
-    protected IObservable<CloudEvent> Stream { get; private set; }
+    protected IObservable<CloudEvent> CloudEventStream { get; private set; }
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        this.Stream = await this.Store.SubscribeAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
+        this.CloudEventStream = await this.CloudEventStore.SubscribeAsync(cancellationToken: stoppingToken).ConfigureAwait(false);
     }
 
     protected async Task OnCloudEventAsync(CloudEvent e)

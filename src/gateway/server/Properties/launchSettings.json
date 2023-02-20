@@ -5,7 +5,9 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "CONNECTIONSTRINGS__EVENTSTORE": "esdb://localhost:2113?tls=false",
+        "CONNECTIONSTRINGS__APICURIO": "http://localhost:8080"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5224"

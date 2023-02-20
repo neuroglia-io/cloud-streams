@@ -48,4 +48,20 @@ public static class StringExtensions
         return formattedText;
     }
 
+    /// <summary>
+    /// Joins the values of the <see cref="IEnumerable{T}"/> with the specified character
+    /// </summary>
+    /// <param name="values">The values to join</param>
+    /// <param name="separator">The separator char</param>
+    /// <returns>A new string that consists of the joined values, separated by the specified char</returns>
+    public static string Join(this IEnumerable<string> values, char separator) => string.Join(separator, values);
+
+    /// <summary>
+    /// Joins the values of the <see cref="IEnumerable{T}"/> with the specified string
+    /// </summary>
+    /// <param name="values">The values to join</param>
+    /// <param name="separator">The separator string</param>
+    /// <returns>A new string that consists of the joined values, separated by the specified string</returns>
+    public static string Join(this IEnumerable<string> values, string separator) => string.Join(separator, values);
+
 }

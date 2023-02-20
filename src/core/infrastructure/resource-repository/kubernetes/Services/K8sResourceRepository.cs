@@ -101,18 +101,19 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IList<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
+        var labelSelector = (string)null;
         JsonElement? resourceObjectArray;
-        if (string.IsNullOrWhiteSpace(@namespace)) resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListClusterCustomObjectAsync(group, version, plural, cancellationToken: cancellationToken).ConfigureAwait(false);
-        else resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectAsync(group, version, @namespace, plural, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(@namespace)) resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListClusterCustomObjectAsync(group, version, plural, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
+        else resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectAsync(group, version, @namespace, plural, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (resourceObjectArray == null) return null;
-        return Serializer.Json.Deserialize<CustomResourceList<TResource>>((JsonElement)resourceObjectArray)?.Items;
+        return Serializer.Json.Deserialize<CustomResourceList<TResource>>((JsonElement)resourceObjectArray)?.Items.ToAsyncEnumerable();
     }
 
     /// <inheritdoc/>

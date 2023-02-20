@@ -254,7 +254,7 @@ public class ESCloudEventStore
         {
             if (await this.Projections.GetStatusAsync(EventStoreProjections.PartitionBySource, cancellationToken: cancellationToken) != null) return;
         }
-        catch (StreamNotFoundException) { }
+        catch { }
 
         await this.Projections.EnableAsync(EventStoreProjections.BuiltInProjections.Streams, cancellationToken: cancellationToken);
         await this.Projections.EnableAsync(EventStoreProjections.BuiltInProjections.PartitionByEventType, cancellationToken: cancellationToken);
