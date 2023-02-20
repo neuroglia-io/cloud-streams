@@ -16,14 +16,13 @@ public static class EnumHelper
     /// <param name="value">The value to parse</param>
     /// <param name="enumType">The type of the enum to parse</param>
     /// <returns>The parsed value</returns>
-    public static object Parse(string value, Type enumType)
+    public static object? Parse(string value, Type enumType)
     {
-        if (int.TryParse(value, out int intValue))
-            return intValue;
-        List<int> values = new();
+        if (int.TryParse(value, out int intValue)) return intValue;
+        var values = new List<int>();
         foreach (string flag in value.Split("|", StringSplitOptions.RemoveEmptyEntries).Select(f => f.Trim()))
         {
-            bool match = false;
+            var match = false;
             foreach (string name in Enum.GetNames(enumType))
             {
                 if (flag == name)
@@ -32,10 +31,10 @@ public static class EnumHelper
                     match = true;
                     break;
                 }
-                EnumMemberAttribute enumMemberAttribute = enumType.GetField(name).GetCustomAttribute<EnumMemberAttribute>();
+                var enumMemberAttribute = enumType.GetField(name)?.GetCustomAttribute<EnumMemberAttribute>();
                 if (enumMemberAttribute != null)
                 {
-                    if (flag.ToLower() == enumMemberAttribute.Value.ToLower())
+                    if (flag.ToLower() == enumMemberAttribute.Value?.ToLower())
                     {
                         values.Add((int)Enum.Parse(enumType, name));
                         match = true;
@@ -43,10 +42,9 @@ public static class EnumHelper
                     }
                 }
             }
-            if (!match)
-                return enumType.GetDefaultValue();
+            if (!match) return enumType.GetDefaultValue();
         }
-        int result = values.First();
+        var result = values.First();
         for (int i = 1; i < values.Count; i++)
         {
             result |= values[i];
@@ -60,10 +58,7 @@ public static class EnumHelper
     /// <typeparam name="TEnum">The type of the enum to parse</typeparam>
     /// <param name="value">The value to parse</param>
     /// <returns>The parsed value</returns>
-    public static TEnum Parse<TEnum>(string value)
-    {
-        return (TEnum)Parse(value, typeof(TEnum));
-    }
+    public static TEnum? Parse<TEnum>(string value) => (TEnum?)Parse(value, typeof(TEnum));
 
     /// <summary>
     /// Gets the string representation for the specified enum value
@@ -73,22 +68,22 @@ public static class EnumHelper
     /// <returns>The string representation for the specified enum value</returns>
     public static string Stringify(Enum value, Type enumType)
     {
-        List<string> names = new();
+        var names = new List<string>();
         if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
         {
-            string name = Enum.GetName(enumType, value);
-            EnumMemberAttribute enumMemberAttribute = enumType.GetField(name).GetCustomAttribute<EnumMemberAttribute>();
-            if (enumMemberAttribute != null)
-                name = enumMemberAttribute.Value;
-            return name;
+            var name = Enum.GetName(enumType, value);
+            if (string.IsNullOrWhiteSpace(name)) throw new Exception($"Failed to resolve the name of the specified enum value '{value}'");
+            var enumMemberAttribute = enumType.GetField(name)?.GetCustomAttribute<EnumMemberAttribute>();
+            if (enumMemberAttribute != null) name = enumMemberAttribute.Value;
+            return name!;
         }
         foreach (object flag in GetFlags(value, enumType))
         {
-            string name = Enum.GetName(enumType, flag);
-            EnumMemberAttribute enumMemberAttribute = enumType.GetField(name).GetCustomAttribute<EnumMemberAttribute>();
-            if (enumMemberAttribute != null)
-                name = enumMemberAttribute.Value;
-            names.Add(name);
+            var name = Enum.GetName(enumType, flag);
+            if (string.IsNullOrWhiteSpace(name)) throw new Exception($"Failed to resolve the name of the specified enum value '{value}'");
+            var enumMemberAttribute = enumType.GetField(name)?.GetCustomAttribute<EnumMemberAttribute>();
+            if (enumMemberAttribute != null) name = enumMemberAttribute.Value;
+            names.Add(name!);
         }
         return string.Join(" | ", names);
     }
@@ -115,8 +110,7 @@ public static class EnumHelper
     {
         foreach (Enum value in Enum.GetValues(enumType))
         {
-            if (flags.HasFlag(value))
-                yield return value;
+            if (flags.HasFlag(value)) yield return value;
         }
     }
 
@@ -138,10 +132,10 @@ public static class EnumHelper
     /// <typeparam name="TEnum">The type of the enumeration to get a <see cref="FieldInfo"/> of</typeparam>
     /// <param name="value">The enum value to get the <see cref="FieldInfo"/> of</param>
     /// <returns>The <see cref="FieldInfo"/> that corresponds to the specified enum value</returns>
-    public static FieldInfo GetField<TEnum>(TEnum value)
+    public static FieldInfo? GetField<TEnum>(TEnum value)
         where TEnum : Enum
     {
-        return typeof(TEnum).GetField(Enum.GetName(typeof(TEnum), value));
+        return typeof(TEnum).GetField(Enum.GetName(typeof(TEnum), value)!);
     }
 
 }

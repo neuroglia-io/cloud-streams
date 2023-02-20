@@ -55,7 +55,7 @@ public abstract class ResourceController<TResource>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await this.ReconcileAsync(stoppingToken).ConfigureAwait(false);
-        this.ResourceWatcher = await this.ResourceRepository.WatchResourcesAsync<TResource>(this.Options.ResourceNamespace, stoppingToken).ConfigureAwait(false);
+        this.ResourceWatcher = await this.ResourceRepository.WatchResourcesAsync<TResource>(this.Options.ResourceNamespace, cancellationToken: stoppingToken).ConfigureAwait(false);
         this.ResourceWatcher.SubscribeAsync(async e => await this.OnResourceChangedAsync(e, stoppingToken).ConfigureAwait(false), cancellationToken: stoppingToken);
         this.ReconciliationTimer = new(async _ => await this.ReconcileAsync(stoppingToken).ConfigureAwait(false), null, TimeSpan.Zero, this.Options.Reconciliation.Interval);
     }

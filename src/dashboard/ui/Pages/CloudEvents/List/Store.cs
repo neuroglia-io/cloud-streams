@@ -5,6 +5,9 @@ using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
+/// <summary>
+/// Reoresents the Cloud Event List's <see cref="ComponentStore{TState}"/>
+/// </summary>
 public class CloudEventListStore
     : ComponentStore<CloudEventListState>
 {
@@ -12,6 +15,10 @@ public class CloudEventListStore
     ICloudStreamsGatewayApiClient cloudStreamsGatewayApi;
     CloudEventStreamReadOptions readOptions;
 
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventListStore"/>
+    /// </summary>
+    /// <param name="cloudStreamsGatewayApi">The service used to interact with the Cloud Streams Gateway API</param>
     public CloudEventListStore(ICloudStreamsGatewayApiClient cloudStreamsGatewayApi) 
         : base(new())
     { 
@@ -21,15 +28,25 @@ public class CloudEventListStore
         this.Reduce(state => state with { ReadOptions = this.readOptions });
     }
 
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/>-related changes
+    /// </summary>
     public IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(s => s.ReadOptions).DistinctUntilChanged();
 
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/>-related changes
+    /// </summary>
     public IObservable<IAsyncEnumerable<CloudEvent?>?> CloudEvents => this.Select(s => s.CloudEvents).DistinctUntilChanged();
 
-    public void SetStreamReadOptions(Func<CloudEventStreamReadOptions, CloudEventStreamReadOptions> optionsReducer)
+    /// <summary>
+    /// Sets the current <see cref="CloudEventStreamReadOptions"/>
+    /// </summary>
+    /// <param name="reducer">A <see cref="Func{T, TResult}"/> used to reduce the current <see cref="CloudEventStreamReadOptions"/></param>
+    public void ReduceStreamReadOptions(Func<CloudEventStreamReadOptions, CloudEventStreamReadOptions> reducer)
     {
         this.Reduce(state => state with
         {
-            ReadOptions = optionsReducer(state.ReadOptions)
+            ReadOptions = reducer(state.ReadOptions)
         });
     }
 

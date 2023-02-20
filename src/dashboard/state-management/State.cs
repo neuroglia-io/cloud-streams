@@ -39,36 +39,28 @@ public class State<TState>
     /// <inheritdoc/>
     public virtual void AddReducer(IReducer<TState> reducer)
     {
-        if(reducer == null)
-            throw new ArgumentNullException(nameof(reducer));
+        if(reducer == null) throw new ArgumentNullException(nameof(reducer));
         var reducerGenericType = reducer.GetType().GetGenericType(typeof(IReducer<,>));
+        if (reducerGenericType == null) throw new Exception($"The specified {nameof(IReducer<TState>)} '{reducer.GetType()}' does not implement the '{typeof(IReducer<,>)}' interface");
         var actionType = reducerGenericType.GetGenericArguments()[1];
-        if (this.Reducers.TryGetValue(actionType, out var reducers))
-            reducers.Add(reducer);
-        else
-            this.Reducers.Add(actionType, new List<IReducer<TState>>() { reducer });
+        if (this.Reducers.TryGetValue(actionType, out var reducers)) reducers.Add(reducer);
+        else this.Reducers.Add(actionType, new List<IReducer<TState>>() { reducer });
     }
 
     void IState.AddReducer(IReducer reducer)
     {
-        if (reducer == null)
-            throw new ArgumentNullException(nameof(reducer));
+        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
         this.AddReducer((IReducer<TState>)reducer);
     }
 
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<TState> observer)
-    {
-        return this.Stream.Subscribe(observer);
-    }
+    public virtual IDisposable Subscribe(IObserver<TState> observer) => this.Stream.Subscribe(observer);
 
     /// <inheritdoc/>
     public virtual bool TryDispatch(object action)
     {
-        if (action == null)
-            throw new ArgumentNullException(nameof(action));
-        if (!this.Reducers.TryGetValue(action.GetType(), out var reducers))
-            return false;
+        if (action == null) throw new ArgumentNullException(nameof(action));
+        if (!this.Reducers.TryGetValue(action.GetType(), out var reducers))return false;
         foreach(var reducer in reducers)
         {
             this.Value = reducer.Reduce(this.Value, action);

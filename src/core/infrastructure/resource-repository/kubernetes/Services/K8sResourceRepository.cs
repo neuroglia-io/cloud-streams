@@ -3,6 +3,7 @@ using k8s;
 using k8s.Autorest;
 using k8s.Models;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -20,11 +21,18 @@ public class K8sResourceRepository
     /// <summary>
     /// Initializes a new <see cref="K8sResourceRepository"/>
     /// </summary>
+    /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
     /// <param name="kubernetes"></param>
-    public K8sResourceRepository(Kubernetes kubernetes)
+    public K8sResourceRepository(ILoggerFactory loggerFactory, Kubernetes kubernetes)
     {
+        this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.Kubernetes = kubernetes;
     }
+
+    /// <summary>
+    /// Gets the service used to perform logging
+    /// </summary>
+    protected ILogger Logger { get; }
 
     /// <summary>
     /// Gets the service used to interact with the Kubernetes API
@@ -58,7 +66,7 @@ public class K8sResourceRepository
             }
             catch(Exception ex)
             {
-
+                this.Logger.LogError("An error occured while seeding the resource repository: {ex}", ex);
             }
         }
     }
@@ -101,14 +109,14 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
-        var labelSelector = (string)null;
+        var labelSelector = labelSelectors?.Select(l => l.ToString()).Join(',');
         JsonElement? resourceObjectArray;
         if (string.IsNullOrWhiteSpace(@namespace)) resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListClusterCustomObjectAsync(group, version, plural, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
         else resourceObjectArray = (JsonElement)await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectAsync(group, version, @namespace, plural, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -140,16 +148,17 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
+        var labelSelector = labelSelectors?.Select(l => l.ToString()).Join(',');
         HttpOperationResponse<object> response;
         if (string.IsNullOrWhiteSpace(@namespace)) response = await this.Kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(group, version, plural, watch: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-        else response = await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, @namespace, plural, watch: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        else response = await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, @namespace, plural, watch: true, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
         var subject = new Subject<IResourceWatchEvent<TResource>>();
         var watch = response.Watch((WatchEventType watchEventType, TResource resource) => subject.OnNext(new ResourceWatchEvent<TResource>(watchEventType.ToCloudStreamsEventType(), resource)));
         return Observable.Using
