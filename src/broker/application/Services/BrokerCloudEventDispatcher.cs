@@ -131,14 +131,14 @@ public class BrokerCloudEventDispatcher
         }
         foreach (var channel in this.ChannelController.Resources.ToList())
         {
-            this.OnChannelCreated(channel);
+            await this.OnChannelCreatedAsync(channel).ConfigureAwait(false);
         }
         this.EventStream = await this.EventStore.SubscribeAsync((long)offset.Value, cancellationToken: this.CancellationToken).ConfigureAwait(false);
         this.EventStream.SubscribeAsync(OnCloudEventAsync, this.CancellationToken);
-        await Task.Delay(50);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).Subscribe(this.OnChannelCreated, stoppingToken);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Updated).Select(e => e.Resource).Subscribe(this.OnChannelUpdated, stoppingToken);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).Subscribe(this.OnChannelDeleted, stoppingToken);
+        await Task.Delay(50, stoppingToken);
+        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnChannelCreatedAsync, stoppingToken);
+        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Updated).Select(e => e.Resource).SubscribeAsync(this.OnChannelUpdatedAsync, stoppingToken);
+        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnChannelDeletedAsync, stoppingToken);
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public class BrokerCloudEventDispatcher
     /// Handles the creation of a new <see cref="Channel"/>
     /// </summary>
     /// <param name="channel">The newly created <see cref="Channel"/></param>
-    protected virtual async void OnChannelCreated(Channel channel)
+    protected virtual async Task OnChannelCreatedAsync(Channel channel)
     {
         var brokerOffset = this.Broker.Resource.Status!.Stream!.AckedOffset!.Value;
         var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
@@ -166,13 +166,13 @@ public class BrokerCloudEventDispatcher
     /// Handles the update of an existing <see cref="Channel"/>
     /// </summary>
     /// <param name="channel">The newly updated <see cref="Channel"/></param>
-    protected virtual void OnChannelUpdated(Channel channel)
+    protected virtual async Task OnChannelUpdatedAsync(Channel channel)
     {
         var brokerOffset = this.Broker.Resource.Status!.Stream!.AckedOffset!.Value;
         var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
         if (this.Channels.TryGetValue(key, out var dispatcher) && dispatcher != null)
         {
-            dispatcher.SetChannelAsync(channel);
+            await dispatcher.SetChannelAsync(channel).ConfigureAwait(false);
             return;
         }
         dispatcher = ActivatorUtilities.CreateInstance<ChannelCloudEventDispatcher>(this.ServiceProvider, channel, brokerOffset);
@@ -187,11 +187,11 @@ public class BrokerCloudEventDispatcher
     /// Handles the deletion of a new <see cref="Channel"/>
     /// </summary>
     /// <param name="channel">The newly deleted <see cref="Channel"/></param>
-    protected virtual void OnChannelDeleted(Channel channel)
+    protected virtual Task OnChannelDeletedAsync(Channel channel)
     {
         var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
-        if (!this.Channels.Remove(key, out var dispatcher) || dispatcher == null) return;
-        dispatcher.Dispose();
+        if (this.Channels.Remove(key, out var dispatcher) && dispatcher != null) dispatcher.Dispose();
+        return Task.CompletedTask;
     }
 
     /// <summary>

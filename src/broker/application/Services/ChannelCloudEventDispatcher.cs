@@ -114,19 +114,19 @@ public class ChannelCloudEventDispatcher
         if (this.Channel.Status == null)
         {
             var resource = this.Channel.Clone()!;
-            resource.Status = new() { ObservedGeneration = resource.Metadata.Generation, Stream = new() { AckedOffset = offset.Value } };
+            resource.Status = new() { ObservedGeneration = resource.Metadata.Generation, Stream = new() { AckedOffset = offset } };
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
         else if (this.Channel.Status.Stream == null)
         {
             var resource = this.Channel.Clone()!;
-            resource.Status!.Stream = new() { AckedOffset = offset.Value };
+            resource.Status!.Stream = new() { AckedOffset = offset };
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
         else if (!this.Channel.Status.Stream.AckedOffset.HasValue)
         {
             var resource = this.Channel.Clone()!;
-            resource.Status!.Stream!.AckedOffset = offset.Value;
+            resource.Status!.Stream!.AckedOffset = offset;
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
         if (offset < this.BrokerOffset) await this.CatchUpAsync().ConfigureAwait(false);
@@ -161,16 +161,9 @@ public class ChannelCloudEventDispatcher
     /// <returns></returns>
     public virtual Task DispatchAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            this.BrokerOffset = e.GetSequence()!.Value;
-            if (!this.ChannelServiceAvailable || this.ChannelOutOfSync) return Task.CompletedTask;
-            return this.DispatchAsync(e, true, true);
-        }
-        catch(Exception ex)
-        {
-            throw;
-        }
+        this.BrokerOffset = e.GetSequence()!.Value;
+        if (!this.ChannelServiceAvailable || this.ChannelOutOfSync) return Task.CompletedTask;
+        return this.DispatchAsync(e, true, true);
     }
 
     /// <summary>
@@ -252,7 +245,7 @@ public class ChannelCloudEventDispatcher
         }
         do
         {
-            var e = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, (long)currentOffset.Value, this.CancellationToken).ConfigureAwait(false);
+            var e = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, (long)currentOffset!, this.CancellationToken).ConfigureAwait(false);
             if(e == null)
             {
                 await Task.Delay(50);
