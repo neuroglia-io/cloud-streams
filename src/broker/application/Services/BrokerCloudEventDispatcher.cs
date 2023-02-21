@@ -95,18 +95,22 @@ public class BrokerCloudEventDispatcher
         this.Broker = await this.Resources.MonitorAsync<Core.Data.Models.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken: this.CancellationToken);
         var desiredOffset = this.Broker.Resource.Spec.Stream?.Offset;
         var ackedOffset = this.Broker.Resource.Status?.Stream?.AckedOffset;
-        ulong? offset = null;
-        if(ackedOffset.HasValue && desiredOffset.HasValue)
+        if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
+        var offset = (ulong?)desiredOffset;
+        if (ackedOffset.HasValue && desiredOffset.HasValue)
         {
             if(this.Broker.Resource.Metadata.Generation > this.Broker.Resource.Status?.ObservedGeneration)
             {
-                if(desiredOffset.Value == CloudEventStreamPosition.EndOfStream) offset = (await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence();
-                else offset = (ulong)desiredOffset.Value;
+                offset = (ulong)desiredOffset.Value;
                 if (this.Broker.Resource.Status == null) this.Broker.Resource.Status = new() { ObservedGeneration = this.Broker.Resource.Metadata.Generation };
                 if (this.Broker.Resource.Status.Stream == null) this.Broker.Resource.Status.Stream = new();
                 this.Broker.Resource.Status.ObservedGeneration = this.Broker.Resource.Metadata.Generation;
                 this.Broker.Resource.Status.Stream.AckedOffset = offset;
                 await this.Resources.UpdateResourceStatusAsync(this.Broker.Resource, this.CancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                offset = (ulong)ackedOffset;
             }
         }
         if (!offset.HasValue) offset = 0;

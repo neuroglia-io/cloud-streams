@@ -1,4 +1,7 @@
-﻿@import "./theme/theme";
+﻿$bootstrap-icons-font-dir: '../lib/bootstrap-icons/font/fonts/';
+
+@import "../lib/bootstrap-icons/font/bootstrap-icons";
+@import "./theme/theme";
 @import "./scrollbar.scss";
 
 html, body {

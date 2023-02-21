@@ -180,6 +180,10 @@
         "scss/_variables-dark.scss",
         "scss/_variables.scss"
       ]
+    },
+    {
+      "library": "bootstrap-icons@1.10.3",
+      "destination": "wwwroot/lib/bootstrap-icons/"
     }
   ]
 }

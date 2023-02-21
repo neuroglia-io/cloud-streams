@@ -93,9 +93,8 @@ public class ChannelCloudEventDispatcher
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var desiredOffset = this.Channel.Spec.Stream?.Offset;
         var ackedOffset = this.Channel.Status?.Stream?.AckedOffset;
-        ulong? offset = null;
-        if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence();
-        offset = (ulong?)desiredOffset;
+        if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
+        var offset = (ulong?)desiredOffset;
         if (ackedOffset.HasValue)
         {
             if (this.Channel.Metadata.Generation > this.Channel.Status?.ObservedGeneration)
@@ -109,10 +108,9 @@ public class ChannelCloudEventDispatcher
             }
             else
             {
-                offset = (ulong)ackedOffset;
+                offset = (ulong)ackedOffset + 1;
             }
         }
-        if (!offset.HasValue) offset = 0;
         if (this.Channel.Status == null)
         {
             var resource = this.Channel.Clone()!;
