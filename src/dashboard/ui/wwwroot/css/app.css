@@ -54,7 +54,7 @@
   --bs-danger-text: #b02a37;
   --bs-light-text: #6c757d;
   --bs-dark-text: #495057;
-  --bs-primary-bg-subtle: #5A81F2;
+  --bs-primary-bg-subtle: #38CFC7;
   --bs-secondary-bg-subtle: #f8f9fa;
   --bs-success-bg-subtle: #d1e7dd;
   --bs-info-bg-subtle: #cff4fc;
@@ -62,7 +62,7 @@
   --bs-danger-bg-subtle: #f8d7da;
   --bs-light-bg-subtle: #fcfcfd;
   --bs-dark-bg-subtle: #ced4da;
-  --bs-primary-border-subtle: #3D6EFF;
+  --bs-primary-border-subtle: #43F9BD;
   --bs-secondary-border-subtle: #e9ecef;
   --bs-success-border-subtle: #a3cfbb;
   --bs-info-border-subtle: #9eeaf9;
@@ -152,7 +152,7 @@
   --bs-danger-text: #ea868f;
   --bs-light-text: #f8f9fa;
   --bs-dark-text: #dee2e6;
-  --bs-primary-bg-subtle: #5A81F2;
+  --bs-primary-bg-subtle: #38CFC7;
   --bs-secondary-bg-subtle: #212529;
   --bs-success-bg-subtle: #051b11;
   --bs-info-bg-subtle: #032830;
@@ -160,7 +160,7 @@
   --bs-danger-bg-subtle: #2c0b0e;
   --bs-light-bg-subtle: #343a40;
   --bs-dark-bg-subtle: #1a1d20;
-  --bs-primary-border-subtle: #3D6EFF;
+  --bs-primary-border-subtle: #43F9BD;
   --bs-secondary-border-subtle: #495057;
   --bs-success-border-subtle: #0f5132;
   --bs-info-border-subtle: #055160;
@@ -11627,6 +11627,48 @@ textarea.form-control-lg {
   --scroll-radius: 0px;
   --scroll-track: var(--bs-light);
   --scroll-thumb-color: var(--bs-primary);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-button {
+  width: 0px;
+  height: 0px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #38CFC7;
+  border: 0px none #ffffff;
+  border-radius: 0.375rem;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4DCEF3;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #4DCEF3;
+}
+
+::-webkit-scrollbar-track {
+  background: #212529;
+  border: 0px none #ffffff;
+  border-radius: 0.375rem;
+}
+
+::-webkit-scrollbar-track:hover {
+  background: #1a1d20;
+}
+
+::-webkit-scrollbar-track:active {
+  background: #1a1d20;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html, body {

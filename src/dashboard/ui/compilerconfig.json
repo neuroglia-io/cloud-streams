@@ -18,5 +18,9 @@
   {
     "outputFile": "wwwroot/css/theme.css",
     "inputFile": "wwwroot/css/theme.scss"
+  },
+  {
+    "outputFile": "Pages/CloudEvents/List/View.razor.css",
+    "inputFile": "Pages/CloudEvents/List/View.razor.scss"
   }
 ]

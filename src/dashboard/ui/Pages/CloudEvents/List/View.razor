@@ -8,32 +8,29 @@
 
 <PageTitle>Cloud Events</PageTitle>
 
-
-<div>
-    <div class="form-group mb-3">
-        <div class="input-group search-box"> 
-            <div class="input-left">
-                    <select name="partitionType" class="form-control" @onchange="e => OnSetCloudEventPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
-                    <option value="" selected="@(readOptions.Partition == null)"></option>
-                    @foreach(var value in Enum.GetValues<CloudEventPartitionType>())
-                    {
-                        <option value="@value" selected="@(readOptions.Partition?.Type == value)">@value</option>
-                    }
-                </select>
-            </div>
-            <span class="input-group-append">
-                <input type="text" class="form-control" value="@readOptions.Partition?.Id" list="partitions" autocomplete="on" @onchange="e => OnSetCloudEventPartitionId((string?)e.Value)" />
-                <datalist id="partitions">
-                    @if(readOptions.Partition != null && partitions != null)
-                    {
-                        foreach (var partition in partitions)
-                        {
-                            <option value="@partition.Id"></option>
-                        }
-                    }
-                </datalist>
-            </span>
-        </div>
+<div id="partition-filter" class="input-group mb-3">
+    <div class="form-floating">
+        <select id="partitionType" class="form-select" name="partitionType" @onchange="e => OnSetCloudEventPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
+            <option value="" selected="@(readOptions.Partition == null)"></option>
+            @foreach (var value in Enum.GetValues<CloudEventPartitionType>())
+            {
+                <option value="@value" selected="@(readOptions.Partition?.Type == value)">@value</option>
+            }
+        </select>
+        <label for="partitionType">Partition Type</label>
+    </div>
+    <div class="form-floating">
+        <input id="partitionValue" type="text" class="form-control" value="@readOptions.Partition?.Id" list="partitions" autocomplete="on" @onchange="e => OnSetCloudEventPartitionId((string?)e.Value)" />
+        <datalist id="partitions">
+            @if(readOptions.Partition != null && partitions != null)
+            {
+                foreach (var partition in partitions)
+                {
+                    <option value="@partition.Id"></option>
+                }
+            }
+        </datalist>
+        <label for="partitionValue">Value</label>
     </div>
 </div>
 
@@ -86,7 +83,7 @@
                 ValueProvider="e => e.DataContentType">
             <HeaderTemplate>Data Content Type</HeaderTemplate>
             <CellTemplate Context="context">
-                <span class="badge rounded-pill bg-primary-subtle">@context.Value</span>
+                <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@context.Value</span>
             </CellTemplate>
         </Column>
         <Column TData="CloudEvent">

@@ -15,5 +15,5 @@ nav.header.navbar {
     border-top: 1px solid;
     border-image-slice: 1;
     border-width: 1px;
-    border-image-source: linear-gradient(90deg, rgba(77,206,243,1) 0%, rgba(64,151,122,1) 100%);
+    border-image-source: linear-gradient(90deg, $primary-dark 0%, $primary-bg-subtle-dark 100%);
 }
