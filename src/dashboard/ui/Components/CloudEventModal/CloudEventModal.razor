@@ -51,7 +51,7 @@
                                 foreach (var attr in cloudEvent.ExtensionAttributes)
                                 {
                                     <tr>
-                                        <td>@attr.Key</td>
+                                        <td>@attr.Key.ToPascalCase()</td>
                                         <td><input type="text" value="@attr.Value" @onchange="args => OnCloudEventChanged(e => e.ExtensionAttributes?.Add(attr.Key, args.Value!))" title="The value of the cloud event's extension context attribute" class="form-control" /></td>
                                         @if (!readOnly)
                                         {
@@ -168,7 +168,7 @@
     {
         if (this.cloudEvent == null) this.cloudEvent = new();
         if (this.cloudEvent.ExtensionAttributes == null) this.cloudEvent.ExtensionAttributes = new Dictionary<string, object>();
-        this.cloudEvent.ExtensionAttributes[this.extensionAttribute.Name] = this.extensionAttribute.Value;
+        this.cloudEvent.ExtensionAttributes[this.extensionAttribute.Name.ToPascalCase()] = this.extensionAttribute.Value;
         this.extensionAttribute = new();
         this.StateHasChanged();
     }

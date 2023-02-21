@@ -26,6 +26,13 @@ public static class StringExtensions
     public static string ToHyphenCase(this string input) => HyphenatedNamingConvention.Instance.Apply(input);
 
     /// <summary>
+    /// Converts the specified input into a pascal-cased string
+    /// </summary>
+    /// <param name="input">The string to convert to pascal-case</param>
+    /// <returns>The pascal-cased input</returns>
+    public static string ToPascalCase(this string input) => PascalCaseNamingConvention.Instance.Apply(input);
+
+    /// <summary>
     /// Formats the string
     /// </summary>
     /// <param name="text">The string to format</param>
