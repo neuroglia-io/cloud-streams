@@ -156,7 +156,6 @@
         patch(this.cloudEvent);
     }
 
-
     void OnRemoveCloudEventExtensionAttribute(string name)
     {
         if (this.cloudEvent == null) return;
@@ -168,7 +167,7 @@
     {
         if (this.cloudEvent == null) this.cloudEvent = new();
         if (this.cloudEvent.ExtensionAttributes == null) this.cloudEvent.ExtensionAttributes = new Dictionary<string, object>();
-        this.cloudEvent.ExtensionAttributes[this.extensionAttribute.Name.ToPascalCase()] = this.extensionAttribute.Value;
+        this.cloudEvent.ExtensionAttributes[this.extensionAttribute.Name] = this.extensionAttribute.Value;
         this.extensionAttribute = new();
         this.StateHasChanged();
     }
@@ -178,7 +177,6 @@
         patch(this.extensionAttribute);
         this.StateHasChanged();
     }
-
 
     record ExtensionAttribute
     {
