@@ -1,7 +1,7 @@
 ﻿namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
-/// Represents a channel
+/// Represents a cloud event channel
 /// </summary>
 [DataContract]
 public class Channel

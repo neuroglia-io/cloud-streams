@@ -1,5 +1,12 @@
 ﻿global using CloudStreams.Core;
 global using CloudStreams.Core.Application;
 global using CloudStreams.Core.Data.Models;
+global using CloudStreams.Core.Data.Properties;
 global using CloudStreams.Core.Infrastructure.Services;
+global using CloudStreams.Gateway.Application.Configuration;
+global using CloudStreams.Gateway.Application.Services;
+global using Json.Schema;
+global using Microsoft.Extensions.Options;
 global using System.ComponentModel.DataAnnotations;
+global using System.Runtime.Serialization;
+global using System.Text.Json.Serialization;

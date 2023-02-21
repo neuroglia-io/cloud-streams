@@ -11,7 +11,7 @@ public interface IResourceMonitor<TResource>
     /// <summary>
     /// Gets the current state of the resource
     /// </summary>
-    TResource State { get; }
+    TResource Resource { get; }
 
     /// <summary>
     /// Gets a boolean indicating whether or not the <see cref="IResourceMonitor{TResource}"/> is monitoring the resource's state

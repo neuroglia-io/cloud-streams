@@ -39,6 +39,34 @@ public interface IResourceRepository
         where TResource : class, IResource, new();
 
     /// <summary>
+    /// Updates the specified <see cref="IResource"/>
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to update</typeparam>
+    /// <param name="resource">The updated <see cref="IResource"/></param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The updated <see cref="IResource"/></returns>
+    Task<TResource> UpdateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <inheritdoc/>
+    Task<TResource?> PatchResourceAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <inheritdoc/>
+    Task<TResource?> PatchResourceStatusAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <summary>
+    /// Updates the specified <see cref="IResource"/>'s status
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to update</typeparam>
+    /// <param name="resource">The updated <see cref="IResource"/></param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The updated <see cref="IResource"/></returns>
+    Task<TResource> UpdateResourceStatusAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <summary>
     /// Watches resources of the specified type
     /// </summary>
     /// <typeparam name="TResource">The type of resource to watch</typeparam>

@@ -38,11 +38,11 @@ services:
       REGISTRY_DATASOURCE_USERNAME: ${POSTGRES_USERNAME}
       REGISTRY_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - 9697:8080
+      - 9666:8080
     depends_on:
       - postgres
 
-  gateway:
+  gateway-1:
     image: ${DOCKER_REGISTRY-}cloudstreams-gateway
     build:
       context: ../../
@@ -50,10 +50,31 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
+      CLOUDSTREAMS_GATEWAY_NAME: gateway-1
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
     ports:
       - 9696:80
+    volumes:
+      - ./k8s/config:/root/.kube/config
+    depends_on:
+      - eventstore
+      - postgres
+      - apicurio
+
+  broker-1:
+    image: ${DOCKER_REGISTRY-}cloudstreams-broker
+    build:
+      context: ../../
+      dockerfile: src/broker/server/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      CLOUDSTREAMS_BROKER_NAME: broker-1
+      CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
+      CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
+    ports:
+      - 9697:80
     volumes:
       - ./k8s/config:/root/.kube/config
     depends_on:

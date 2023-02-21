@@ -1,0 +1,50 @@
+﻿apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: brokers.cloud-streams.io
+spec:
+  scope: Cluster
+  group: cloud-streams.io
+  names:
+    plural: brokers
+    singular: broker
+    kind: Broker
+    shortNames:
+    - bkr
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                network:
+                  type: string
+                stream:
+                  type: object
+                  properties:
+                    offset:
+                      type: number
+                      min: -1
+                      default: -1
+              required:
+                - network
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: number
+                stream:
+                  type: object
+                  properties:
+                    ackedOffset:
+                      type: number
+                      min: 0
+          required:
+            - spec
+      subresources:
+        status: {}

@@ -110,7 +110,7 @@ public class ESCloudEventStore
     {
         var streamName = EventStoreStreams.All;
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -136,7 +136,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
         var subject = new Subject<CloudEvent>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
@@ -153,7 +153,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
         var subject = new Subject<CloudEvent>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
@@ -183,7 +183,7 @@ public class ESCloudEventStore
         if (source == null) throw new ArgumentNullException(nameof(source));
         var streamName = EventStoreStreams.ByCloudEventSource(source);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -206,7 +206,7 @@ public class ESCloudEventStore
         if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         var streamName = EventStoreStreams.ByCloudEventType(type);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -228,7 +228,7 @@ public class ESCloudEventStore
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = EventStoreStreams.ByCorrelationId(correlationId);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.End ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {

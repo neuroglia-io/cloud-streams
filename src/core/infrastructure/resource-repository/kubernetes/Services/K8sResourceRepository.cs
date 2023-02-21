@@ -125,9 +125,38 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
+    public virtual async Task<TResource> UpdateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken)
+        where TResource : class, IResource, new()
+    {
+        if (resource == null) throw new ArgumentNullException(nameof(resource));
+        var group = resource.Type.Group;
+        var version = resource.Type.Version;
+        var plural = resource.Type.Plural;
+        JsonElement? resourceObject;
+        if (string.IsNullOrWhiteSpace(resource.Metadata.Namespace)) resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.ReplaceClusterCustomObjectAsync(resource, group, version, plural, resource.GetName(), cancellationToken: cancellationToken);
+        else resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.ReplaceNamespacedCustomObjectAsync(resource, group, version, resource.GetNamespace(), plural, resource.GetName(), cancellationToken: cancellationToken);
+        return Serializer.Json.Deserialize<TResource?>((JsonElement)resourceObject)!;
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<TResource> UpdateResourceStatusAsync<TResource>(TResource resource, CancellationToken cancellationToken)
+        where TResource : class, IResource, new()
+    {
+        if (resource == null) throw new ArgumentNullException(nameof(resource));
+        var group = resource.Type.Group;
+        var version = resource.Type.Version;
+        var plural = resource.Type.Plural;
+        JsonElement? resourceObject;
+        if (string.IsNullOrWhiteSpace(resource.Metadata.Namespace)) resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.ReplaceClusterCustomObjectStatusAsync(resource, group, version, plural, resource.GetName(), cancellationToken: cancellationToken);
+        else resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.ReplaceNamespacedCustomObjectStatusAsync(resource, group, version, resource.GetNamespace(), plural, resource.GetName(), cancellationToken: cancellationToken);
+        return Serializer.Json.Deserialize<TResource?>((JsonElement)resourceObject)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<TResource?> PatchResourceAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
+        if(patch == null) throw new ArgumentNullException(nameof(patch));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         var resource = new TResource();
         var group = resource.Type.Group;
@@ -144,6 +173,30 @@ public class K8sResourceRepository
         var k8sPatch = new V1Patch(patch.Document, k8sPatchType);
         if (string.IsNullOrWhiteSpace(@namespace)) resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.PatchClusterCustomObjectAsync(k8sPatch, group, version, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
         else resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.PatchNamespacedCustomObjectAsync(k8sPatch, group, version, @namespace, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return Serializer.Json.Deserialize<TResource>((JsonElement)resourceObject);
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<TResource?> PatchResourceStatusAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new()
+    {
+        if (patch == null) throw new ArgumentNullException(nameof(patch));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        var resource = new TResource();
+        var group = resource.Type.Group;
+        var version = resource.Type.Version;
+        var plural = resource.Type.Plural;
+        JsonElement? resourceObject;
+        var k8sPatchType = patch.Type switch
+        {
+            PatchType.JsonMergePatch => V1Patch.PatchType.MergePatch,
+            PatchType.JsonPatch => V1Patch.PatchType.JsonPatch,
+            PatchType.StrategicMergePatch => V1Patch.PatchType.StrategicMergePatch,
+            _ => throw new NotSupportedException($"The specified patch type '{patch.Type}' is not supported")
+        };
+        var k8sPatch = new V1Patch(patch.Document, k8sPatchType);
+        if (string.IsNullOrWhiteSpace(@namespace)) resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.PatchClusterCustomObjectStatusAsync(k8sPatch, group, version, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        else resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.PatchNamespacedCustomObjectStatusAsync(k8sPatch, group, version, @namespace, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
         return Serializer.Json.Deserialize<TResource>((JsonElement)resourceObject);
     }
 

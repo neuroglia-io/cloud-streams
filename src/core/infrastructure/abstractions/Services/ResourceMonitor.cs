@@ -19,7 +19,7 @@ public class ResourceMonitor<TResource>
     public ResourceMonitor(IResourceRepository resources, TResource state)
     {
         this.Resources = resources;
-        this.State = state;
+        this.Resource = state;
     }
 
     /// <summary>
@@ -30,7 +30,7 @@ public class ResourceMonitor<TResource>
     /// <summary>
     /// Gets the current state of the resource
     /// </summary>
-    public TResource State { get; protected set; }
+    public TResource Resource { get; protected set; }
 
     /// <summary>
     /// Gets the <see cref="IObservable{T}"/> used to monitor the resource's state
@@ -49,9 +49,9 @@ public class ResourceMonitor<TResource>
     public virtual async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         if (this.Running) return;
-        this.Observable = (await this.Resources.WatchResourcesAsync<TResource>(this.State.Metadata.Namespace, cancellationToken: cancellationToken).ConfigureAwait(false))
+        this.Observable = (await this.Resources.WatchResourcesAsync<TResource>(this.Resource.Metadata.Namespace, cancellationToken: cancellationToken).ConfigureAwait(false))
             .Where(e => (e.Type == ResourceWatchEventType.Updated || e.Type == ResourceWatchEventType.Deleted) 
-                && e.Resource.Metadata.Namespace == this.State.Metadata.Namespace && e.Resource.Metadata.Name == this.State.Metadata.Name)
+                && e.Resource.Metadata.Namespace == this.Resource.Metadata.Namespace && e.Resource.Metadata.Name == this.Resource.Metadata.Name)
             .TakeUntil(e => e.Type == ResourceWatchEventType.Deleted)
             .Select(e => e.Resource);
         this.Subscription = this.Observable.Subscribe(this.OnStateChanged);
@@ -82,7 +82,7 @@ public class ResourceMonitor<TResource>
     /// <param name="state">The resource's updated state</param>
     protected virtual void OnStateChanged(TResource state)
     {
-        this.State = state;
+        this.Resource = state;
     }
 
     /// <summary>

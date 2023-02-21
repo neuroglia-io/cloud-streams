@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AspNetCore.HealthChecks.EventStore.gRPC" Version="6.0.1" />
     <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="22.0.0" />
     <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" Version="22.0.0" />
     <PackageReference Include="EventStore.Client.Grpc.Streams" Version="22.0.0" />

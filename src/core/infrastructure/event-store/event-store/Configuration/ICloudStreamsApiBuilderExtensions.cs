@@ -22,6 +22,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddEventStore(EventStoreClientSettings.Create(connectionString));
         builder.Services.TryAddSingleton<ESCloudEventStore>();
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ESCloudEventStore>());
+        builder.RegisterHealthCheck(healthChecks => healthChecks.AddEventStore(connectionString, tags: new string[] { "cloud-event-store" }));
         builder.UseCloudEventStore<ESCloudEventStore>();
         return builder;
     }

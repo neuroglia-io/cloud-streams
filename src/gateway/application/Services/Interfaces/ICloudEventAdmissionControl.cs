@@ -1,4 +1,4 @@
-﻿namespace CloudStreams.Core.Infrastructure.Services;
+﻿namespace CloudStreams.Gateway.Application.Services;
 
 /// <summary>
 /// Defines the fundamentals of a service that controls <see cref="CloudEvent"/> admission

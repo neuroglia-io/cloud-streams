@@ -13,9 +13,9 @@ public interface ICloudStreamsApplicationBuilder
 {
 
     /// <summary>
-    /// Gets the current <see cref="IConfiguration"/>
+    /// Gets the current <see cref="ConfigurationManager"/>
     /// </summary>
-    IConfiguration Configuration { get; }
+    ConfigurationManager Configuration { get; }
 
     /// <summary>
     /// Gets the current <see cref="IHostEnvironment"/>
@@ -40,6 +40,13 @@ public interface ICloudStreamsApplicationBuilder
     /// <typeparam name="TMarkup">A markup type containing by the <see cref="Assembly"/> to scan</typeparam>
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     ICloudStreamsApplicationBuilder RegisterMediationAssembly<TMarkup>();
+
+    /// <summary>
+    /// Registers a new health check
+    /// </summary>
+    /// <param name="setup">An <see cref="Action{T}"/> used to setup the health check to register</param>
+    /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
+    ICloudStreamsApplicationBuilder RegisterHealthCheck(Action<IHealthChecksBuilder> setup);
 
     /// <summary>
     /// Configures Cloud Streams to use the specified <see cref="ICloudEventStore"/>

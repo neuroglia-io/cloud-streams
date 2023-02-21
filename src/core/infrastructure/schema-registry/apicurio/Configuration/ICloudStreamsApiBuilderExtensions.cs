@@ -1,6 +1,7 @@
 ﻿using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
 using CloudStreams.Core.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CloudStreams.Core.Infrastructure.Configuration;
@@ -24,10 +25,11 @@ public static class ICloudStreamsApiBuilderExtensions
         if (string.IsNullOrWhiteSpace(connectionString)) throw new Exception($"Failed to find the '{ConnectionStringName}' connection string");
         builder.Services.AddApiCurioRegistryClient(options =>
         {
-            options.ServerUri = new(connectionString, UriKind.RelativeOrAbsolute);
+            options.ServerUri = new(connectionString);
             options.LineEndingFormatMode = LineEndingFormatMode.ConvertToUnix;
         });
         builder.Services.TryAddSingleton<ApiCurioSchemaRegistry>();
+        builder.RegisterHealthCheck(healthChecks => healthChecks.AddUrlGroup(new Uri(connectionString), ConnectionStringName, tags: new string[] { "schema-registry" }));
         builder.UseSchemaRegistry<ApiCurioSchemaRegistry>();
         return builder;
     }

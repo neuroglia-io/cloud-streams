@@ -15,8 +15,8 @@ public static class Int64Extensions
     {
         return value switch
         {
-            CloudEventStreamPosition.Start => FromStream.Start,
-            CloudEventStreamPosition.End => FromStream.End,
+            CloudEventStreamPosition.StartOfStream => FromStream.Start,
+            CloudEventStreamPosition.EndOfStream => FromStream.End,
             _ => FromStream.After(StreamPosition.FromInt64(value))
         };
     }

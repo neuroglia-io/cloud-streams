@@ -30,16 +30,15 @@ public class ConsumeCloudEventCommandHandler
     : ICommandHandler<ConsumeEventCommand>
 {
 
+    readonly ICloudEventAdmissionControl _EventAdmissionControl;
+    readonly ICloudEventStore _EventStore;
+
     /// <inheritdoc/>
     public ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, ICloudEventStore eventStore)
     {
         this._EventAdmissionControl = eventAdmissionControl;
         this._EventStore = eventStore;
     }
-
-    ICloudEventAdmissionControl _EventAdmissionControl;
-
-    ICloudEventStore _EventStore;
 
     /// <inheritdoc/>
     public async Task<Response> Handle(ConsumeEventCommand command, CancellationToken cancellationToken)

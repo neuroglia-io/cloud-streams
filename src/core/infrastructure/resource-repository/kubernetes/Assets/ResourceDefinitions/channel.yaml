@@ -1,0 +1,49 @@
+﻿apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: channels.cloud-streams.io
+spec:
+  scope: Cluster
+  group: cloud-streams.io
+  names:
+    plural: channels
+    singular: channel
+    kind: Channel
+    shortNames:
+    - chan
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                serviceAddress:
+                  type: string
+                  format: url
+                stream:
+                  type: object
+                  properties:
+                    offset:
+                      type: number
+                      default: -1
+                      min: -1
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: number
+                stream:
+                  type: object
+                  properties:
+                    ackedOffset:
+                      type: number
+                      min: 0
+          required:
+            - spec
+      subresources:
+        status: {}

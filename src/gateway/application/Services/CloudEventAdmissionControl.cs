@@ -1,12 +1,12 @@
-﻿using CloudStreams.Core.Data.Properties;
+﻿using CloudStreams.Core.Infrastructure;
 
-namespace CloudStreams.Core.Infrastructure.Services;
+namespace CloudStreams.Gateway.Application.Services;
 
 /// <summary>
 /// Represents the default implementation of the <see cref="ICloudEventAdmissionControl"/> interface
 /// </summary>
 public class CloudEventAdmissionControl
-    : ICloudEventAdmissionControl, IDisposable
+    : BackgroundService, ICloudEventAdmissionControl, IDisposable
 {
 
     private bool _Disposed;
@@ -15,23 +15,30 @@ public class CloudEventAdmissionControl
     /// Initializes a new <see cref="CloudEventAdmissionControl"/>
     /// </summary>
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
+    /// <param name="gatewayOptions">The service used to access the current <see cref="Configuration.GatewayOptions"/></param>
     /// <param name="authorizationManager">The service used to manage authorization</param>
     /// <param name="schemaGenerator">The service used to generate <see cref="JsonSchema"/>s</param>
     /// <param name="schemaRegistry">The service used to manage <see cref="JsonSchema"/>s</param>
     /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
-    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IAuthorizationManager authorizationManager, ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources)
+    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IAuthorizationManager authorizationManager, ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
+        this.GatewayOptions = gatewayOptions.Value;
         this.AuthorizationManager = authorizationManager;
         this.SchemaGenerator = schemaGenerator;
         this.SchemaRegistry = schemaRegistry;
-        this.Configuration = resources.MonitorAsync<Gateway>(Environment.GetEnvironmentVariable("CLOUDSTREAMS_GATEWAY") ?? "default").GetAwaiter().GetResult();
+        this.Resources = resources;
     }
 
     /// <summary>
     /// Gets the service used to perform logging
     /// </summary>
     protected ILogger Logger { get; }
+
+    /// <summary>
+    /// gets the object used to configure a 
+    /// </summary>
+    protected GatewayOptions GatewayOptions { get; }
 
     /// <summary>
     /// Gets the service used to manage authorization
@@ -49,9 +56,20 @@ public class CloudEventAdmissionControl
     protected ISchemaRegistry SchemaRegistry { get; }
 
     /// <summary>
-    /// Gets the service used to manage the state of the current <see cref="Gateway"/>
+    /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IResourceMonitor<Gateway> Configuration { get; }
+    protected IResourceRepository Resources { get; }
+
+    /// <summary>
+    /// Gets the service used to manage the state of the current <see cref="Core.Data.Models.Gateway"/>
+    /// </summary>
+    protected IResourceMonitor<Core.Data.Models.Gateway>? Configuration { get; private set; }
+
+    /// <inheritdoc/>
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        this.Configuration = await this.Resources.MonitorAsync<Core.Data.Models.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, stoppingToken).ConfigureAwait(false);
+    }
 
     /// <inheritdoc/>
     public virtual async Task<Response> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
@@ -82,8 +100,8 @@ public class CloudEventAdmissionControl
     protected virtual async Task<Response> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
-        var policy = this.Configuration.State.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization;
-        if (policy == null) policy = this.Configuration.State.Spec.Authorization;
+        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization;
+        if (policy == null) policy = this.Configuration?.Resource.Spec.Authorization;
         if (policy == null) return Response.Ok();
         var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())
@@ -104,8 +122,8 @@ public class CloudEventAdmissionControl
     protected virtual async Task<Response> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
-        var policy = this.Configuration.State.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation;
-        if (policy == null) policy = this.Configuration.State.Spec.Validation;
+        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation;
+        if (policy == null) policy = this.Configuration?.Resource.Spec.Validation;
         if (policy == null) return Response.Ok();
         if (policy.SkipValidation)
         {
@@ -116,7 +134,7 @@ public class CloudEventAdmissionControl
         JsonSchema? schema = null;
         if (e.DataSchema == null)
         {
-            if (dataSchemaPolicy == null) dataSchemaPolicy = this.Configuration.State.Spec.Validation?.DataSchema;
+            if (dataSchemaPolicy == null) dataSchemaPolicy = this.Configuration?.Resource.Spec.Validation?.DataSchema;
             if (dataSchemaPolicy?.Required == true)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);
@@ -175,7 +193,7 @@ public class CloudEventAdmissionControl
     }
 
     /// <inheritdoc/>
-    public void Dispose()
+    public override void Dispose()
     {
         this.Dispose(disposing: true);
         GC.SuppressFinalize(this);

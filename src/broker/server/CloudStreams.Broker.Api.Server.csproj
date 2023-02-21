@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<GenerateDocumentationFile>True</GenerateDocumentationFile>
+	<DockerFileTag>cloudstreams-broker</DockerFileTag>
+	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	<DockerfileContext>..\..\..</DockerfileContext>
+	<UserSecretsId>af3f83b7-cab9-412b-9a4b-21e1921c5b0c</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Core.Infrastructure.EventSourcing.EventStore.csproj" />
+    <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Core.Infrastructure.ResourceRepository.Kubernetes.csproj" />
+    <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.csproj" />
+    <ProjectReference Include="..\api\CloudStreams.Broker.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="6.0.5" />
+	<PackageReference Include="AspNetCore.HealthChecks.Uris" Version="6.0.3" />
+	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="7.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.3" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
+</Project>

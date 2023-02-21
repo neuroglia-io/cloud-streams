@@ -17,7 +17,7 @@ public static class IServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/></returns>
     public static IServiceCollection AddKubernetesClient(this IServiceCollection services, KubernetesClientConfiguration configuration)
     {
-        services.AddSingleton(new Kubernetes(configuration));
+        services.AddSingleton(provider => new Kubernetes(configuration));
         return services;
     }
 

@@ -19,7 +19,8 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     public static ICloudStreamsApplicationBuilder UseKubernetesResourceStore(this ICloudStreamsApplicationBuilder builder)
     {
-        builder.Services.AddKubernetesClient(AppContextExtensions.RunsInKubernetes ? KubernetesClientConfiguration.InClusterConfig() : KubernetesClientConfiguration.BuildConfigFromConfigFile());
+        var configuration = AppContextExtensions.RunsInKubernetes ? KubernetesClientConfiguration.InClusterConfig() : KubernetesClientConfiguration.BuildConfigFromConfigFile();
+        builder.Services.AddKubernetesClient(configuration);
         builder.Services.TryAddSingleton<K8sResourceRepository>();
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<K8sResourceRepository>());
         builder.UseResourceRepository<K8sResourceRepository>();

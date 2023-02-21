@@ -61,19 +61,19 @@ public interface ICloudEventStore
     /// <summary>
     /// Subscribes to <see cref="CloudEvent"/>s
     /// </summary>
-    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.End"/></param>
+    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.EndOfStream"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s</returns>
-    Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default);
+    Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Subscribes to <see cref="CloudEvent"/>s
     /// </summary>
     /// <param name="partition">An object used to reference the partition to subscribe to the events of</param>
-    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.End"/></param>
+    /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.EndOfStream"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s of the specified partition</returns>
-    Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.End, CancellationToken cancellationToken = default);
+    Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Truncates stored <see cref="CloudEvent"/>s

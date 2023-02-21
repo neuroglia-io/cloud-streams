@@ -9,10 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\ResourceDefinitions\broker.yaml" />
+    <None Remove="Assets\ResourceDefinitions\channel.yaml" />
     <None Remove="Assets\ResourceDefinitions\gateway.yaml" />
+    <None Remove="Assets\ResourceDefinitions\network.yaml" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Assets\ResourceDefinitions\channel.yaml" />
+    <EmbeddedResource Include="Assets\ResourceDefinitions\network.yaml" />
+    <EmbeddedResource Include="Assets\ResourceDefinitions\broker.yaml" />
     <EmbeddedResource Include="Assets\ResourceDefinitions\gateway.yaml" />
   </ItemGroup>
 

@@ -1,7 +1,10 @@
 ﻿using CloudStreams.Core.Application.Services;
+using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Services;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.OpenApi.Models;
 using System.Reflection;
 
 namespace CloudStreams.Core.Application.Configuration;
@@ -16,10 +19,10 @@ public class CloudStreamsApplicationBuilder
     /// <summary>
     /// Initializes a new <see cref="CloudStreamsApplicationBuilder"/>
     /// </summary>
-    /// <param name="configuration">The current <see cref="IConfiguration"/></param>
+    /// <param name="configuration">The current <see cref="ConfigurationManager"/></param>
     /// <param name="environment">The current <see cref="IHostEnvironment"/></param>
     /// <param name="services">The current <see cref="IServiceCollection"/></param>
-    public CloudStreamsApplicationBuilder(IConfiguration configuration, IHostEnvironment environment, IServiceCollection services)
+    public CloudStreamsApplicationBuilder(ConfigurationManager configuration, IHostEnvironment environment, IServiceCollection services)
     {
         this.Configuration = configuration;
         this.Environment = environment;
@@ -27,7 +30,7 @@ public class CloudStreamsApplicationBuilder
     }
 
     /// <inheritdoc/>
-    public IConfiguration Configuration { get; }
+    public ConfigurationManager Configuration { get; }
 
     /// <inheritdoc/>
     public IHostEnvironment Environment { get; }
@@ -51,14 +54,19 @@ public class CloudStreamsApplicationBuilder
     protected Type? SchemaRegistryType { get; set; }
 
     /// <summary>
-    /// Gets a <see cref="List{T}"/> containing the assemblies to scan for mediation components
+    /// Gets an <see cref="HashSet{T}"/> containing the assemblies to scan for mediation components
     /// </summary>
     protected HashSet<Assembly> ApplicationParts { get; } = new();
 
     /// <summary>
-    /// Gets a <see cref="List{T}"/> containing the assemblies to scan for mediation components
+    /// Gets an <see cref="HashSet{T}"/> containing the assemblies to scan for mediation components
     /// </summary>
     protected HashSet<Assembly> MediationAssemblies { get; } = new() { typeof(CloudStreamsApplicationBuilder).Assembly };
+
+    /// <summary>
+    /// Gets a <see cref="List{T}"/> containing the <see cref="Action{T}"/>s used to setup the application health checks
+    /// </summary>
+    protected List<Action<IHealthChecksBuilder>> HealthCheckConfigurations { get; } = new();
 
     /// <inheritdoc/>
     public virtual ICloudStreamsApplicationBuilder RegisterApplicationPart<TMarkup>()
@@ -73,6 +81,14 @@ public class CloudStreamsApplicationBuilder
     {
         var assembly = typeof(TMarkup).Assembly;
         if (!this.MediationAssemblies.Contains(assembly)) this.MediationAssemblies.Add(assembly);
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public virtual ICloudStreamsApplicationBuilder RegisterHealthCheck(Action<IHealthChecksBuilder> setup)
+    {
+        if (setup == null) throw new ArgumentNullException(nameof(setup));
+        this.HealthCheckConfigurations.Add(setup);
         return this;
     }
 
@@ -121,11 +137,16 @@ public class CloudStreamsApplicationBuilder
             mvc.AddApplicationPart(applicationPart);
         }
 
+        var healthChecks = this.Services.AddHealthChecks();
+        foreach(var configureHealthChecks in this.HealthCheckConfigurations)
+        {
+            configureHealthChecks(healthChecks);
+        }
+
         this.Services.AddMediatR(options =>
         {
             options.RegisterServicesFromAssemblies(this.MediationAssemblies.ToArray());
         });
-        this.Services.AddHealthChecks();
         this.Services.AddResponseCompression(options =>
         {
             options.EnableForHttps = true;
@@ -135,11 +156,37 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddProblemDetails();
         this.Services.AddEndpointsApiExplorer();
         this.Services.TryAddSingleton<IAuthorizationManager, AuthorizationManager>();
-        this.Services.TryAddSingleton<ICloudEventAdmissionControl, CloudEventAdmissionControl>();
         this.Services.TryAddSingleton<ISchemaGenerator, SchemaGenerator>();
         this.Services.TryAddSingleton(provider => (ICloudEventStore)provider.GetRequiredService(this.CloudEventStoreType));
         this.Services.TryAddSingleton(provider => (IResourceRepository)provider.GetRequiredService(this.ResourceRepositoryType));
         this.Services.TryAddSingleton(provider => (ISchemaRegistry)provider.GetRequiredService(this.SchemaRegistryType));
+
+        this.Services.AddSwaggerGen(builder =>
+        {
+            builder.CustomOperationIds(o =>
+            {
+                var action = (ControllerActionDescriptor)o.ActionDescriptor;
+                return $"{action.ActionName}".ToCamelCase();
+            });
+            builder.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
+            builder.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Cloud Streams Gateway REST API",
+                Version = "v1",
+                Description = "The Open API documentation for the Cloud Streams Gateway REST API",
+                License = new OpenApiLicense()
+                {
+                    Name = "Apache-2.0",
+                    Url = new("https://raw.githubusercontent.com/neuroglia-io/cloud-streams/main/LICENSE")
+                },
+                Contact = new()
+                {
+                    Name = "The Cloud Streams Authors",
+                    Url = new Uri("https://github.com/neuroglia-io/cloud-streams")
+                }
+            });
+            builder.IncludeXmlComments(typeof(Channel).Assembly.Location.Replace(".dll", ".xml"));
+        });
     }
 
 }

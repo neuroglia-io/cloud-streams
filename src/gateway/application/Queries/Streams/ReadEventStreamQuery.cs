@@ -49,10 +49,10 @@ public class ReadCloudEventStreamQueryHandler
             switch (query.Options.Direction)
             {
                 case StreamReadDirection.Forwards:
-                    offset = CloudEventStreamPosition.Start;
+                    offset = CloudEventStreamPosition.StartOfStream;
                     break;
                 case StreamReadDirection.Backwards:
-                    offset = CloudEventStreamPosition.End;
+                    offset = CloudEventStreamPosition.EndOfStream;
                     break;
                 default:
                     return Task.FromResult(this.ValidationFailed(new KeyValuePair<string, string[]>[] { new(nameof(query.Options.Direction).ToLowerInvariant(), new string[] { $"The specified {nameof(StreamReadDirection)} '{query.Options.Direction}' is not supported" }) }));
