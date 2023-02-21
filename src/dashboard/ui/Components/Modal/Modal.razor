@@ -1,0 +1,50 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@inherits ModalBase
+
+<div class="modal fade @(Active ? "show d-block" : "d-none")" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered @GetModalSizeCssClass()" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Title</h5>
+                @if (ShowCloseIcon)
+                {
+                    <button type="button" class="close btn" data-dismiss="modal" aria-label="Close" @onclick="HideAsync">
+                        <small class="bi bi-x-circle"></small>
+                    </button>
+                }
+                
+            </div>
+            <div class="modal-body">
+                @Body
+            </div>
+            <div class="modal-footer btn-group d-flex">
+                @Footer
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Active)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code 
+{
+
+    /// <summary>
+    /// Gets/sets the modal's title
+    /// </summary>
+    [Parameter] public RenderFragment? Title { get; set; }
+
+    /// <summary>
+    /// Gets/sets the modal's body
+    /// </summary>
+    [Parameter] public RenderFragment? Body { get; set; }
+
+    /// <summary>
+    /// Gets/sets the modal's footer
+    /// </summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+}

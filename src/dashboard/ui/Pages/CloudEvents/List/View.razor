@@ -92,24 +92,27 @@
         <Column TData="CloudEvent">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventModalAsync(context.Item)"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
+<CloudEventModal @ref="modal" ReadOnly="true" />
 
 @code{
 
-    private CloudEventStreamReadOptions readOptions = new();
-    private List<CloudEvent>? events;
-    private List<CloudEventPartitionMetadata>? partitions;
+    CloudEventStreamReadOptions readOptions = new();
+    List<CloudEvent>? events;
+    List<CloudEventPartitionMetadata>? partitions;
+    CloudEventModal? modal;
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.ReadOptions.Subscribe(async options => await OnCloudEventStreamReadOptionsChanged(options));
-        this.Store.CloudEvents.Subscribe(async events => await OnCloudEventCollectionChanged(events));
+        this.Store.ReadOptions.Subscribe(async options => await OnCloudEventStreamReadOptionsChangedAsync(options));
+        this.Store.CloudEvents.Subscribe(async events => await OnCloudEventCollectionChangedAsync(events));
     }
 
     void OnSetCloudEventPartitionType(CloudEventPartitionType? partitionType)
@@ -136,22 +139,25 @@
         });
     }
 
-    async Task OnCloudEventStreamReadOptionsChanged(CloudEventStreamReadOptions readOptions)
+    async Task OnCloudEventStreamReadOptionsChangedAsync(CloudEventStreamReadOptions readOptions)
     {
         this.readOptions = readOptions;
         if(this.readOptions.Partition != null) this.partitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync().ConfigureAwait(false))!;
         this.StateHasChanged();
     }
 
-    async Task OnCloudEventCollectionChanged(IAsyncEnumerable<CloudEvent?>? events)
+    async Task OnCloudEventCollectionChangedAsync(IAsyncEnumerable<CloudEvent?>? events)
     {
-        if(events == null)
-        {
-            this.events = null;
-            return;
-        }
-        this.events = (await events.ToListAsync().ConfigureAwait(false))!;
+        if (events == null) this.events = null;
+        else this.events = (await events.ToListAsync().ConfigureAwait(false))!;
         this.StateHasChanged();
+    }
+
+    Task OnShowCloudEventModalAsync(CloudEvent e)
+    {
+        if (this.modal == null) return Task.CompletedTask;
+        this.modal.SetCloudEvent(e);
+        return this.modal.ShowAsync();
     }
 
 }
