@@ -1,4 +1,5 @@
 using CloudStreams.Broker.Api.Configuration;
+using CloudStreams.Core.Api.Configuration;
 using CloudStreams.Core.Application.Configuration;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -7,6 +8,7 @@ using Swashbuckle.AspNetCore.SwaggerUI;
 var builder = WebApplication.CreateBuilder(args);
 builder.UseCloudStreams(builder =>
 {
+    builder.UseCoreApi();
     builder.UseBrokerApi();
     builder.UseESCloudEventStore();
     builder.UseApicurioSchemaRegistry();

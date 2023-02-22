@@ -5,6 +5,7 @@ using CloudStreams.Gateway.Application.Commands.CloudEvents;
 using CloudStreams.Gateway.Application.Configuration;
 using CloudStreams.Gateway.Application.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.OpenApi.Models;
 
 namespace CloudStreams.Gateway.Api.Configuration;
 

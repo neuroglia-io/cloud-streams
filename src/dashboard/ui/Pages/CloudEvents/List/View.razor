@@ -4,7 +4,7 @@
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
 @inherits StatefulComponent<CloudEventListStore, CloudEventListState>
-@inject ICloudStreamsGatewayApiClient CloudStreamsGatewayApi
+@inject ICloudStreamsApiClient CloudStreamsApi
 
 <PageTitle>Cloud Events</PageTitle>
 
@@ -139,7 +139,7 @@
     async Task OnCloudEventStreamReadOptionsChangedAsync(CloudEventStreamReadOptions readOptions)
     {
         this.readOptions = readOptions;
-        if(this.readOptions.Partition != null) this.partitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync().ConfigureAwait(false))!;
+        if(this.readOptions.Partition != null) this.partitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(this.readOptions.Partition.Type)).ToListAsync().ConfigureAwait(false))!;
         this.StateHasChanged();
     }
 

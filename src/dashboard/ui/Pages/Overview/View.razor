@@ -2,7 +2,7 @@
 @page "/"
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
-@inject ICloudStreamsGatewayApiClient CloudStreamsGatewayApi
+@inject ICloudStreamsApiClient CloudStreamsApi
 
 <PageTitle>Overview</PageTitle>
 
@@ -70,10 +70,10 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        this.stream = await this.CloudStreamsGatewayApi.CloudEvents.Stream.GetStreamMetadataAsync().ConfigureAwait(false);
-        this.sourcePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
-        this.typePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
-        this.subjectPartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySubject).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.stream = await this.CloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync().ConfigureAwait(false);
+        this.sourcePartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.typePartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.subjectPartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySubject).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
     }
 
 }

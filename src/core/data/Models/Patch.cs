@@ -35,7 +35,7 @@ public class Patch
     /// Gets/sets the patch document
     /// </summary>
     [Required, JsonRequired]
-    [DataMember(Order = 1, Name = "document", IsRequired = true), JsonPropertyName("document"), YamlMember(Alias = "document")]
+    [DataMember(Order = 2, Name = "document", IsRequired = true), JsonPropertyName("document"), YamlMember(Alias = "document")]
     public virtual object Document { get; set; } = null!;
 
 }

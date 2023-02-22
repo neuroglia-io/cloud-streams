@@ -172,9 +172,9 @@ public class CloudStreamsApplicationBuilder
             builder.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
             builder.SwaggerDoc("v1", new OpenApiInfo
             {
-                Title = "Cloud Streams Gateway REST API",
+                Title = "Cloud Streams REST API",
                 Version = "v1",
-                Description = "The Open API documentation for the Cloud Streams Gateway REST API",
+                Description = "The Open API documentation for the Cloud Streams REST API",
                 License = new OpenApiLicense()
                 {
                     Name = "Apache-2.0",

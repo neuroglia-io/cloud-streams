@@ -7,6 +7,27 @@ public static class ResourceExtensions
 {
 
     /// <summary>
+    /// Gets the group the <see cref="IResource"/> belongs to
+    /// </summary>
+    /// <param name="resource">The extended <see cref="IResourceReference"/></param>
+    /// <returns>The group the <see cref="IResource"/> belongs to</returns>
+    public static string GetGroup(this IResource resource) => resource.ApiVersion.Split('/')[0];
+
+    /// <summary>
+    /// Gets the <see cref="IResource"/>'s version
+    /// </summary>
+    /// <param name="resource">The extended <see cref="IResource"/></param>
+    /// <returns>The <see cref="IResource"/>'s version</returns>
+    public static string GetVersion(this IResource resource) => resource.ApiVersion.Split('/')[1];
+
+    /// <summary>
+    /// Determines whether or not the <see cref="IResource"/> is namespaced
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to check</param>
+    /// <returns>A boolean indicating whether or not the <see cref="IResource"/> is namespaced</returns>
+    public static bool IsNamespaced(this IResource resource) => !string.IsNullOrWhiteSpace(resource.GetNamespace());
+
+    /// <summary>
     /// Gets the <see cref="IResource"/>'s name
     /// </summary>
     /// <param name="resource">The <see cref="IResource"/> to get the name of</param>

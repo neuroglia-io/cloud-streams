@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\core\api\CloudStreams.Core.Api.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Core.Infrastructure.EventSourcing.EventStore.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Core.Infrastructure.ResourceRepository.Kubernetes.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.csproj" />

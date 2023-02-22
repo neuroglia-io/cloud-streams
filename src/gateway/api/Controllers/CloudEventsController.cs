@@ -1,11 +1,12 @@
-﻿using CloudStreams.Gateway.Application.Commands.CloudEvents;
+﻿using CloudStreams.Core.Api;
+using CloudStreams.Gateway.Application.Commands.CloudEvents;
 
 namespace CloudStreams.Gateway.Api.Controllers;
 
 /// <summary>
 /// Represents the API controller used to manage events
 /// </summary>
-[Route("api/v1/cloud-events")]
+[Route("api/gateway/v1/cloud-events")]
 public class CloudEventsController
     : ApiController
 {

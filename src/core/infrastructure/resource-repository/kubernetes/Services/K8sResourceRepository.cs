@@ -221,4 +221,17 @@ public class K8sResourceRepository
         );
     }
 
+    /// <inheritdoc/>
+    public virtual async Task DeleteResourceAsync<TResource>(string name, string? @namespace = null, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new()
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        var resource = new TResource();
+        var group = resource.Type.Group;
+        var version = resource.Type.Version;
+        var plural = resource.Type.Plural;
+        if (string.IsNullOrWhiteSpace(@namespace)) await this.Kubernetes.CustomObjects.DeleteClusterCustomObjectAsync(group, version, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
+        else await this.Kubernetes.CustomObjects.DeleteNamespacedCustomObjectAsync(group, version, @namespace, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
 }
