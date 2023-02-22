@@ -143,6 +143,7 @@ public class CloudStreamsApplicationBuilder
             configureHealthChecks(healthChecks);
         }
 
+        this.Services.AddSignalR();
         this.Services.AddMediatR(options =>
         {
             options.RegisterServicesFromAssemblies(this.MediationAssemblies.ToArray());

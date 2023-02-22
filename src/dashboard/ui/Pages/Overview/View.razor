@@ -71,9 +71,9 @@
     {
         await base.OnInitializedAsync();
         this.stream = await this.CloudStreamsGatewayApi.CloudEvents.Stream.GetStreamMetadataAsync().ConfigureAwait(false);
-        this.sourcePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource).ConfigureAwait(false)).ToListAsync())!;
-        this.typePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType).ConfigureAwait(false)).ToListAsync())!;
-        this.subjectPartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySubject).ConfigureAwait(false)).ToListAsync())!;
+        this.sourcePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.typePartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.subjectPartitions = (await (await this.CloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySubject).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
     }
 
 }

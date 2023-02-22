@@ -1,5 +1,6 @@
-﻿using CloudStreams.Gateway.Api.Client;
-using CloudStreams.Dashboard;
+﻿using CloudStreams.Dashboard;
+using CloudStreams.Dashboard.StateManagement;
+using CloudStreams.Gateway.Api.Client;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -9,6 +10,13 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(provider => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-builder.Services.AddCloudStreamsGatewayApiClient();
+builder.Services.AddCloudStreamsGatewayApiClient(options => 
+{
+    options.BaseAddress = builder.HostEnvironment.BaseAddress;
+});
+builder.Services.AddFlux(flux =>
+{
+    flux.ScanMarkupTypeAssembly<App>();
+});
 
 await builder.Build().RunAsync();

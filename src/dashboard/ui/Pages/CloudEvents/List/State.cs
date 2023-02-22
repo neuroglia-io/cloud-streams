@@ -14,8 +14,8 @@ public record CloudEventListState
     public CloudEventStreamReadOptions ReadOptions { get; set; } = new();
 
     /// <summary>
-    /// Gets an <see cref="IAsyncEnumerable{T}"/> used to asynchronously enumerate current <see cref="CloudEvent"/>s
+    /// Gets a <see cref="List{T}"/> that contains all cached <see cref="CloudEvent"/>s
     /// </summary>
-    public IAsyncEnumerable<CloudEvent?>? CloudEvents { get; set; }
+    public List<CloudEvent>? CloudEvents { get; set; }
 
 }

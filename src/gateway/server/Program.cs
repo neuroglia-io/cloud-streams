@@ -41,6 +41,7 @@ app.UseSwaggerUI(builder =>
 });
 
 app.MapControllers();
+app.MapHubs();
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();

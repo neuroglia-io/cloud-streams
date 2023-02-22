@@ -29,6 +29,9 @@ public abstract class ComponentStore<TState>
     /// </summary>
     protected CancellationTokenSource CancellationTokenSource { get; }
 
+    /// <inheritdoc/>
+    public virtual Task InitializeAsync() => Task.CompletedTask;
+
     /// <summary>
     /// Sets the <see cref="ComponentStore{TState}"/>'s state
     /// </summary>

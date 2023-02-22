@@ -33,6 +33,13 @@ public abstract class StatefulComponent<TStore, TState>
         }
     }
 
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await this.Store.InitializeAsync();
+    }
+
     private bool _Disposed;
     /// <summary>
     /// Disposes of the component

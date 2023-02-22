@@ -7,6 +7,10 @@ public interface IComponentStore<TState>
     : IObservable<TState>, IDisposable
 {
 
-
+    /// <summary>
+    /// Initializes the <see cref="IComponentStore{TState}"/>
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task InitializeAsync();
 
 }

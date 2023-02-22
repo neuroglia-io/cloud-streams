@@ -224,9 +224,8 @@ public class ChannelCloudEventDispatcher
         await retryPolicy.WrapAsync(circuitBreakerPolicy)
             .ExecuteAsync(async _ => await this.DispatchAsync(e, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);
 
-        if (catchUpWhenAvailable) await this.CatchUpAsync();
-
         this.ChannelServiceAvailable = true;
+        if (catchUpWhenAvailable) await this.CatchUpAsync();
     }
 
     /// <summary>

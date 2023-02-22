@@ -1,5 +1,6 @@
 ﻿using CloudStreams.Core.Infrastructure.Configuration;
 using CloudStreams.Gateway.Api.Controllers;
+using CloudStreams.Gateway.Api.Services;
 using CloudStreams.Gateway.Application.Commands.CloudEvents;
 using CloudStreams.Gateway.Application.Configuration;
 using CloudStreams.Gateway.Application.Services;
@@ -26,6 +27,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.RegisterMediationAssembly<ConsumeEventCommand>();
         builder.Services.TryAddSingleton<CloudEventAdmissionControl>();
         builder.Services.TryAddSingleton<ICloudEventAdmissionControl>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
+        builder.Services.AddHostedService<CloudEventHubDispatcher>();
         builder.Services.AddHostedService(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
         return builder;
     }

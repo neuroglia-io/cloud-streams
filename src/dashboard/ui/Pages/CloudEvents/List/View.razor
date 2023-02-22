@@ -108,8 +108,8 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.ReadOptions.Subscribe(async options => await OnCloudEventStreamReadOptionsChangedAsync(options));
-        this.Store.CloudEvents.Subscribe(async events => await OnCloudEventCollectionChangedAsync(events));
+        this.Store.ReadOptions.SubscribeAsync(OnCloudEventStreamReadOptionsChangedAsync);
+        this.Store.CloudEvents.Subscribe(OnCloudEventCollectionChanged);
     }
 
     void OnSetCloudEventPartitionType(CloudEventPartitionType? partitionType)
@@ -143,10 +143,10 @@
         this.StateHasChanged();
     }
 
-    async Task OnCloudEventCollectionChangedAsync(IAsyncEnumerable<CloudEvent?>? events)
+    void OnCloudEventCollectionChanged(List<CloudEvent>? events)
     {
         if (events == null) this.events = null;
-        else this.events = (await events.ToListAsync().ConfigureAwait(false))!;
+        else this.events = events;
         this.StateHasChanged();
     }
 
