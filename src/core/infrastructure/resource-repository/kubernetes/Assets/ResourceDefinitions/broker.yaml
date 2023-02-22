@@ -29,7 +29,6 @@ spec:
                   properties:
                     offset:
                       type: number
-                      min: -1
                       default: -1
               required:
                 - network
@@ -43,7 +42,6 @@ spec:
                   properties:
                     ackedOffset:
                       type: number
-                      min: 0
           required:
             - spec
       subresources:

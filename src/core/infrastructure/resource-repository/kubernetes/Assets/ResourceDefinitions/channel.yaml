@@ -31,7 +31,6 @@ spec:
                     offset:
                       type: number
                       default: -1
-                      min: -1
             status:
               type: object
               properties:
@@ -42,7 +41,6 @@ spec:
                   properties:
                     ackedOffset:
                       type: number
-                      min: 0
           required:
             - spec
       subresources:
