@@ -1,4 +1,5 @@
-﻿using CloudStreams.Core.Api;
+﻿using CloudStreams.Core;
+using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.ResourceManagement.Application.Commands.Generic;
 using CloudStreams.ResourceManagement.Application.Queries.Generic;
@@ -35,6 +36,19 @@ public class BrokersController
     public async Task<IActionResult> CreateBroker([FromBody] Broker resource, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send<Response<Broker>>(new CreateResourceCommand<Broker>(resource), cancellationToken));
+    }
+
+    /// <summary>
+    /// Gets the definition of broker resources
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpGet("definition")]
+    [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
+    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetBrokerDefinition(CancellationToken cancellationToken)
+    {
+        return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Broker>(), cancellationToken));
     }
 
     /// <summary>

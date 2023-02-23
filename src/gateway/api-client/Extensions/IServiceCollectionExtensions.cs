@@ -27,7 +27,7 @@ public static class IServiceCollectionExtensions
         {
             var options = provider.GetRequiredService<IOptions<CloudStreamGatewayApiClientOptions>>().Value;
             var connection = new HubConnectionBuilder()
-                .WithUrl($"{options.BaseAddress}api/v1/ws/cloud-events")
+                .WithUrl($"{options.BaseAddress}api/gateway/v1/ws/cloud-events")
                 .WithAutomaticReconnect()
                 .Build();
             return new CloudEventHubClient(connection);

@@ -7,7 +7,7 @@ public partial class CloudStreamsGatewayApiClient
     : ICloudEventsApi
 {
 
-    private const string ApiVersionPathPrefix = "api/v1/";
+    private const string ApiVersionPathPrefix = "api/gateway/v1/";
     private const string CloudEventsApiPath = ApiVersionPathPrefix + "cloud-events/";
 
     /// <inheritdoc/>
@@ -15,8 +15,8 @@ public partial class CloudStreamsGatewayApiClient
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         var json = Serializer.Json.Serialize(e);
-        using var content = new StringContent(json, Encoding.UTF8);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{CloudEventsApiPath}pub"), cancellationToken).ConfigureAwait(false);
+        using var content = new StringContent(json, Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{CloudEventsApiPath}pub") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }
 

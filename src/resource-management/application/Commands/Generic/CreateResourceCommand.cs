@@ -48,7 +48,7 @@ public class CreateResourceCommandHandler<TResource>
 
     async Task<Response<TResource>> MediatR.IRequestHandler<CreateResourceCommand<TResource>, Response<TResource>>.Handle(CreateResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
-        var resource = await this._ResourceRepository.AddResourceAsync(command.Resource, cancellationToken).ConfigureAwait(false);
+        var resource = await this._ResourceRepository.CreateResourceAsync(command.Resource, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }
 

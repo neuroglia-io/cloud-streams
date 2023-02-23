@@ -39,21 +39,21 @@ public class Resource
     /// <summary>
     /// Gets the resource's API version
     /// </summary>
-    [Required, JsonRequired]
+    [Required, JsonRequired, JsonPropertyOrder(-1000)]
     [DataMember(Order = 1, Name = "apiVersion", IsRequired = true), JsonPropertyName("apiVersion"), YamlMember(Alias = "apiVersion")]
     public virtual string ApiVersion { get; set; } = null!;
 
     /// <summary>
     /// Gets the resource's kind
     /// </summary>
-    [Required, JsonRequired]
+    [Required, JsonRequired, JsonPropertyOrder(-999)]
     [DataMember(Order = 2, Name = "kind"), JsonPropertyName("kind"), YamlMember(Alias = "kind")]
     public virtual string Kind { get; set; } = null!;
 
     /// <summary>
     /// Gets/sets the object that describes the resource
     /// </summary>
-    [Required, JsonRequired]
+    [Required, JsonRequired, JsonPropertyOrder(-998)]
     [DataMember(Order = 3, Name = "metadata", IsRequired = true), JsonPropertyName("metadata"), YamlMember(Alias = "metadata")]
     public virtual ResourceMetadata Metadata { get; set; } = null!;
 
@@ -104,6 +104,7 @@ public class Resource<TSpec>
     /// <summary>
     /// Gets/sets the object used to define and configure the resource
     /// </summary>
+    [JsonPropertyOrder(-997)]
     [DataMember(Order = 1, Name = "spec"), JsonPropertyName("spec"), YamlMember(Alias = "spec")]
     public virtual TSpec Spec { get; set; } = null!;
 
@@ -149,6 +150,7 @@ public class Resource<TSpec, TStatus>
     /// <summary>
     /// Gets/sets an object that describes the resource's status, if any
     /// </summary>
+    [JsonPropertyOrder(-996)]
     [DataMember(Order = 1, Name = "status"), JsonPropertyName("status"), YamlMember(Alias = "status")]
     public virtual TStatus? Status { get; set; }
 

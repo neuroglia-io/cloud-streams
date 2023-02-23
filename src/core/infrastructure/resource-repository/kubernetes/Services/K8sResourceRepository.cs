@@ -72,7 +72,7 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<TResource> AddResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+    public virtual async Task<TResource> CreateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
@@ -83,6 +83,16 @@ public class K8sResourceRepository
         if(string.IsNullOrWhiteSpace(resource.Metadata.Namespace)) resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.CreateClusterCustomObjectAsync(resource, group, version, plural, cancellationToken: cancellationToken);
         else resourceObject = (JsonElement)await this.Kubernetes.CustomObjects.CreateNamespacedCustomObjectAsync(resource, group, version, resource.Metadata.Namespace, plural, cancellationToken: cancellationToken);
         return Serializer.Json.Deserialize<TResource?>((JsonElement)resourceObject)!;
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<IResourceDefinition?> GetResourceDefinitionAsync<TResource>(CancellationToken cancellationToken)
+         where TResource : class, IResource, new()
+    {
+        var resource = new TResource();
+        var definition = await this.Kubernetes.ReadCustomResourceDefinitionAsync(resource.Type.ToString(), cancellationToken: cancellationToken);
+        if(definition == null) return null;
+        return Serializer.Json.Deserialize<ResourceDefinition>(Serializer.Json.Serialize(definition));
     }
 
     /// <inheritdoc/>

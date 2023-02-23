@@ -1,4 +1,5 @@
-﻿using CloudStreams.Core.Api;
+﻿using CloudStreams.Core;
+using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.ResourceManagement.Application.Commands.Generic;
 using CloudStreams.ResourceManagement.Application.Queries.Generic;
@@ -35,6 +36,19 @@ public class GatewaysController
     public async Task<IActionResult> CreateGateway([FromBody] Gateway resource, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send<Response<Gateway>>(new CreateResourceCommand<Gateway>(resource), cancellationToken));
+    }
+
+    /// <summary>
+    /// Gets the definition of gateway resources
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpGet("definition")]
+    [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
+    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetGatewayDefinition(CancellationToken cancellationToken)
+    {
+        return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Gateway>(), cancellationToken));
     }
 
     /// <summary>

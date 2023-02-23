@@ -31,6 +31,12 @@ public static class ICloudStreamsApiBuilderExtensions
             var implementationType = typeof(CreateResourceCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
+            queryType = typeof(GetResourceDefinitionQuery<>).MakeGenericType(resource);
+            resultType = typeof(Response<IResourceDefinition>);
+            serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            implementationType = typeof(GetResourceDefinitionQueryHandler<>).MakeGenericType(resource);
+            builder.Services.AddTransient(serviceType, implementationType);
+
             queryType = typeof(GetResourceQuery<>).MakeGenericType(resource);
             resultType = typeof(Response<>).MakeGenericType(resource);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);

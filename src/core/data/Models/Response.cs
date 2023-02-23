@@ -169,7 +169,7 @@ public class Response
             Title = ProblemTitles.NotFound,
             Detail = string.IsNullOrWhiteSpace(@namespace) ?
                 StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, name)
-                : StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, @namespace, name)
+                : StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Type.Plural, @namespace, name)
         };
     }
 
@@ -187,6 +187,23 @@ public class Response
             Detail = reference.IsNamespaced() ? 
                 StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, reference.GetGroup(), reference.GetVersion(), reference.Kind, reference.Namespace!, reference.Name) 
                 : StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, reference.GetGroup(), reference.GetVersion(), reference.Kind, reference.Name)
+        };
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResourceDefinition"/> for the specified type <see cref="IResource"/> type
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> the <see cref="IResourceDefinition"/> of could not be found</typeparam>
+    /// <typeparam name="TContent">The expected type of result</typeparam>
+    /// <returns>A new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type</returns>
+    public static Response<TContent> ResourceDefinitionNotFound<TResource, TContent>()
+        where TResource : class, IResource, new()
+    {
+        var resource = new TResource();
+        return new((int)HttpStatusCode.NotFound)
+        {
+            Title = ProblemTitles.NotFound,
+            Detail = StringExtensions.Format(ProblemDetails.ResourceDefinitionNotFound, resource.GetGroup(), resource.GetVersion(), resource.Type.Plural)
         };
     }
 

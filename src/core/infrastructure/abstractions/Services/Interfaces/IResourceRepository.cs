@@ -7,13 +7,22 @@ public interface IResourceRepository
 {
 
     /// <summary>
-    /// Adds and persist the specified resource to the repository
+    /// Creates and persist the specified resource to the repository
     /// </summary>
-    /// <typeparam name="TResource">The type of resource to add</typeparam>
-    /// <param name="resource">The resource to add</param>
+    /// <typeparam name="TResource">The type of resource to create</typeparam>
+    /// <param name="resource">The resource to create</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The added resource</returns>
-    Task<TResource> AddResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+    Task<TResource> CreateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <summary>
+    /// Gets the definition of the specified resource type
+    /// </summary>
+    /// <typeparam name="TResource">The type of resource to get the definition of</typeparam>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task<IResourceDefinition?> GetResourceDefinitionAsync<TResource>(CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>

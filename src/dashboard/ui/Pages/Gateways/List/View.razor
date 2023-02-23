@@ -1,0 +1,58 @@
+﻿@namespace CloudStreams.Dashboard.Pages.Gateways.List
+@page "/gateways"
+@using System.Reactive.Linq
+@using CloudStreams.Dashboard.StateManagement
+@inherits ResourceManagementComponent<Gateway>
+@inject ICloudStreamsApiClient CloudStreamsApi
+
+<ApplicationTitle>Gateways</ApplicationTitle>
+
+<Table Items="gateways"
+    AutoGenerateColumns="false"
+    TableClass="table table-striped table-hover">
+    <Columns>
+        <Column TData="Gateway"
+            ValueProvider="c => c.Metadata.Name">
+            <HeaderTemplate>Name</HeaderTemplate>
+        </Column>
+        <Column TData="Gateway"
+                ValueProvider="c => c.Spec.Authorization == null ? null : c.Spec.Authorization.DecisionStrategy">
+            <HeaderTemplate>Authorization Strategy</HeaderTemplate>
+        </Column>
+        <Column TData="Gateway"
+                ValueProvider="c => c.Spec.Validation == null ? null : c.Spec.Validation.SkipValidation">
+            <HeaderTemplate>Skip Validation</HeaderTemplate>
+        </Column>
+        <Column TData="Gateway"
+                ValueProvider="c => c.Spec.Validation == null ? null : c.Spec.Validation.ValidationStrategy">
+            <HeaderTemplate>Validation Strategy</HeaderTemplate>
+        </Column>
+        <Column TData="Gateway">
+            <HeaderTemplate />
+            <CellTemplate Context="context">
+                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+            </CellTemplate>
+        </Column>
+    </Columns>
+</Table>
+
+@code{
+
+    List<Gateway>? gateways;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Resources.Subscribe(OnChannelCollectionChanged);
+        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+    }
+
+    void OnChannelCollectionChanged(List<Gateway>? gateways)
+    {
+        if (gateways == null) this.gateways = null;
+        else this.gateways = gateways;
+        this.StateHasChanged();
+    }
+
+}

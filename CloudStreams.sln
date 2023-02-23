@@ -111,6 +111,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api", "api", "{CC8E18D7-0C0
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.ResourceManagement.Api", "src\resource-management\api\CloudStreams.ResourceManagement.Api.csproj", "{2F63CA29-855A-4899-A887-7F68C2720677}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api-client", "api-client", "{D7AFB3DF-575A-458C-837A-9AF6CD2D8167}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.ResourceManagement.Api.Client", "src\resource-management\api-client\CloudStreams.ResourceManagement.Api.Client.csproj", "{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -201,6 +205,10 @@ Global
 		{2F63CA29-855A-4899-A887-7F68C2720677}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F63CA29-855A-4899-A887-7F68C2720677}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F63CA29-855A-4899-A887-7F68C2720677}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -255,6 +263,8 @@ Global
 		{4CEE9CDB-7297-4774-990A-40465C1A3AFE} = {6E7FAF3B-B44C-4D92-B38B-73F78C1816AB}
 		{CC8E18D7-0C03-4D27-8F48-C09071E1CCCA} = {556B2FF2-8D1D-49D2-A63C-94CA541BC594}
 		{2F63CA29-855A-4899-A887-7F68C2720677} = {CC8E18D7-0C03-4D27-8F48-C09071E1CCCA}
+		{D7AFB3DF-575A-458C-837A-9AF6CD2D8167} = {556B2FF2-8D1D-49D2-A63C-94CA541BC594}
+		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6} = {D7AFB3DF-575A-458C-837A-9AF6CD2D8167}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {13305552-A19D-453A-A26B-6E7B60F052F2}

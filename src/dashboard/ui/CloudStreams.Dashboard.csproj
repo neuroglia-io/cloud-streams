@@ -16,12 +16,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\api-client\CloudStreams.Core.Api.Client.csproj" />
     <ProjectReference Include="..\..\gateway\api-client\CloudStreams.Gateway.Api.Client.csproj" />
+    <ProjectReference Include="..\..\resource-management\api-client\CloudStreams.ResourceManagement.Api.Client.csproj" />
     <ProjectReference Include="..\state-management\CloudStreams.Dashboard.StateManagement.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Extensions\" />
-    <Folder Include="wwwroot\img\" />
     <Folder Include="wwwroot\lib\bootstrap\" />
   </ItemGroup>
 
