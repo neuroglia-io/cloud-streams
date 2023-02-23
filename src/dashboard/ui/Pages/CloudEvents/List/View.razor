@@ -62,10 +62,10 @@
                 <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@context.Value</span>
             </CellTemplate>
         </Column>
-        <Column TData="CloudEvent">
+        <Column TData="CloudEvent" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventModalAsync(context.Item)"><span class="bi bi-info-circle"></span> &nbsp; Details</button>
+                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventModalAsync(context.Item)"><span class="bi bi-info-circle"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
