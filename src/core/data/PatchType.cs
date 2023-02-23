@@ -3,20 +3,22 @@
 /// <summary>
 /// Enumerates all supported patch types
 /// </summary>
-public static class PatchType
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PatchType
 {
-
     /// <summary>
     /// Indicates a <see href="https://www.rfc-editor.org/rfc/rfc6902">Json Patch</see>
     /// </summary>
-    public const string JsonPatch = "patch";
+    [EnumMember(Value = "patch")]
+    JsonPatch,
     /// <summary>
     /// Indicates a <see href="https://www.rfc-editor.org/rfc/rfc7386">Json Merge Patch</see>
     /// </summary>
-    public const string JsonMergePatch = "merge";
+    [EnumMember(Value = "merge")]
+    JsonMergePatch,
     /// <summary>
     /// Indicates a <see href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-api-machinery/strategic-merge-patch.md">Json Strategic Merge Patch</see>
     /// </summary>
-    public const string StrategicMergePatch = "strategic";
-
+    [EnumMember(Value = "strategic")]
+    StrategicMergePatch
 }

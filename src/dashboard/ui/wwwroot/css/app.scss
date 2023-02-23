@@ -88,3 +88,16 @@ h1:focus {
 .flex-grow {
     flex-grow: 1;
 }
+
+#svg-definitions {
+    display: none;
+}
+
+.logo {
+    fill: $primary-dark;
+    height: 75px;
+}
+
+.logo-typing {
+    font-family: Comfortaa;
+}

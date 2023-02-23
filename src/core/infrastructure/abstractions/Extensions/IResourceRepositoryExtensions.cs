@@ -27,4 +27,18 @@ public static class IResourceRepositoryExtensions
         return monitor;
     }
 
+    /// <summary>
+    /// Patches the specified <see cref="IResource"/>
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to patch</typeparam>
+    /// <param name="repository">The <see cref="IResourceRepository"/> used to manage the resource to patch</param>
+    /// <param name="patch">The <see cref="ResourcePatch{TResource}"/> to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The patched <see cref="IResource"/>, if any</returns>
+    public static Task<TResource?> PatchResourceAsync<TResource>(this IResourceRepository repository, ResourcePatch<TResource> patch, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new()
+    {
+        return repository.PatchResourceAsync<TResource>(patch.Patch, patch.Resource.Name, patch.Resource.Namespace, cancellationToken);
+    }
+
 }

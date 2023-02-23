@@ -3,7 +3,7 @@
 namespace CloudStreams.Core.Infrastructure;
 
 /// <summary>
-/// Defines extensions for <see cref="CloudEventPartitionRef"/>s
+/// Defines extensions for <see cref="CloudEventPartitionReference"/>s
 /// </summary>
 public static class CloudEventPartitionRefExtensions
 {
@@ -12,8 +12,8 @@ public static class CloudEventPartitionRefExtensions
     /// Gets the EventStore stream name for the specified partition
     /// </summary>
     /// <param name="partition">A reference of the partition to get the EventStore stream name for</param>
-    /// <returns>The EventStore stream name for the specified <see cref="CloudEventPartitionRef"/></returns>
-    public static string GetStreamName(this CloudEventPartitionRef partition)
+    /// <returns>The EventStore stream name for the specified <see cref="CloudEventPartitionReference"/></returns>
+    public static string GetStreamName(this CloudEventPartitionReference partition)
     {
         return partition.Type switch
         {

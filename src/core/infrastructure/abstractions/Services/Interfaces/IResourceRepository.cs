@@ -7,13 +7,22 @@ public interface IResourceRepository
 {
 
     /// <summary>
-    /// Adds and persist the specified resource to the repository
+    /// Creates and persist the specified resource to the repository
     /// </summary>
-    /// <typeparam name="TResource">The type of resource to add</typeparam>
-    /// <param name="resource">The resource to add</param>
+    /// <typeparam name="TResource">The type of resource to create</typeparam>
+    /// <param name="resource">The resource to create</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The added resource</returns>
-    Task<TResource> AddResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+    Task<TResource> CreateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <summary>
+    /// Gets the definition of the specified resource type
+    /// </summary>
+    /// <typeparam name="TResource">The type of resource to get the definition of</typeparam>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task<IResourceDefinition?> GetResourceDefinitionAsync<TResource>(CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>
@@ -48,11 +57,27 @@ public interface IResourceRepository
     Task<TResource> UpdateResourceAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Patches the specified <see cref="IResource"/>
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to patch</typeparam>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="name">The name of the <see cref="IResource"/> to patch</param>
+    /// <param name="namespace">The namespace the <see cref="IResource"/> belongs to, if any</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The patched <see cref="IResource"/></returns>
     Task<TResource?> PatchResourceAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
-
-    /// <inheritdoc/>
+    
+    /// <summary>
+    /// Patches the specified <see cref="IResource"/>'s status
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to patch the status of</typeparam>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="name">The name of the <see cref="IResource"/> to patch</param>
+    /// <param name="namespace">The namespace the <see cref="IResource"/> belongs to, if any</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The patched <see cref="IResource"/></returns>
     Task<TResource?> PatchResourceStatusAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
@@ -64,6 +89,16 @@ public interface IResourceRepository
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The updated <see cref="IResource"/></returns>
     Task<TResource> UpdateResourceStatusAsync<TResource>(TResource resource, CancellationToken cancellationToken = default)
+        where TResource : class, IResource, new();
+
+    /// <summary>
+    /// Removes the specified <see cref="IResource"/>
+    /// </summary>
+    /// <param name="name">The name of the <see cref="IResource"/> to remove</param>
+    /// <param name="namespace">The namespace the <see cref="IResource"/> to remove belongs to</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task DeleteResourceAsync<TResource>(string name, string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
     /// <summary>

@@ -1,0 +1,56 @@
+﻿@namespace CloudStreams.Dashboard.Pages.Brokers.List
+@page "/brokers"
+@using System.Reactive.Linq
+@using CloudStreams.Dashboard.StateManagement
+@inherits ResourceManagementComponent<Broker>
+@inject ICloudStreamsApiClient CloudStreamsApi
+
+<ApplicationTitle>Brokers</ApplicationTitle>
+
+<Table Items="brokers"
+    AutoGenerateColumns="false"
+    TableClass="table table-striped table-hover">
+    <Columns>
+        <Column TData="Broker"
+                ValueProvider="b => b.Metadata.Name">
+            <HeaderTemplate>Name</HeaderTemplate>
+        </Column>
+        <Column TData="Broker"
+                ValueProvider="b => b.Spec.Stream == null ? null : b.Spec.Stream.Offset">
+            <HeaderTemplate>Desired Offset</HeaderTemplate>
+        </Column>
+        <Column TData="Broker"
+                ValueProvider="b => b.Status == null ? null : b.Status.Stream == null ? null : b.Status.Stream.AckedOffset">
+            <HeaderTemplate>Acked Offset</HeaderTemplate>
+        </Column>
+        <Column TData="Broker">
+            <HeaderTemplate />
+            <CellTemplate Context="context">
+                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+            </CellTemplate>
+        </Column>
+    </Columns>
+</Table>
+
+@code{
+
+    List<Broker>? brokers;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Resources.Subscribe(OnBrokerCollectionChanged);
+        await this.Store.FetchResourceListAsync().ConfigureAwait(false);
+
+        await this.Store.FetchResourceDefinitionAsync().ConfigureAwait(false);
+    }
+
+    void OnBrokerCollectionChanged(List<Broker>? brokers)
+    {
+        if (brokers == null) this.brokers = null;
+        else this.brokers = brokers;
+        this.StateHasChanged();
+    }
+
+}

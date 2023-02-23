@@ -1,5 +1,7 @@
+using CloudStreams.Core.Api.Configuration;
 using CloudStreams.Core.Application.Configuration;
 using CloudStreams.Gateway.Api.Configuration;
+using CloudStreams.ResourceManagement.Api.Configuration;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Swashbuckle.AspNetCore.SwaggerUI;
@@ -8,7 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.UseCloudStreams(builder =>
 {
+    builder.UseCoreApi();
     builder.UseGatewayApi();
+    builder.UseResourceManagementApi();
     builder.UseESCloudEventStore();
     builder.UseApicurioSchemaRegistry();
     builder.UseKubernetesResourceStore();

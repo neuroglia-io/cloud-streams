@@ -12,5 +12,10 @@
     <None Include=".env" />
     <None Include="docker-compose.yml" />
     <None Include=".dockerignore" />
+    <None Include="k8s\config" />
+    <None Include="k8s\config\config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="k8s\config\**" />
   </ItemGroup>
 </Project>

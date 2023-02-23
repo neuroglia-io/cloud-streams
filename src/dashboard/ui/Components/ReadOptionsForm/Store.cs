@@ -1,4 +1,5 @@
-﻿using CloudStreams.Dashboard.StateManagement;
+﻿using CloudStreams.Core.Api.Client.Services;
+using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
 using System.Reactive.Linq;
 
@@ -13,16 +14,16 @@ public class ReadOptionsFormStore
     /// <summary>
     /// The service used to interact with the Cloud Streams Gateway API
     /// </summary>
-    private ICloudStreamsGatewayApiClient cloudStreamsGatewayApi;
+    private ICloudStreamsApiClient cloudStreamsApi;
 
     /// <summary>
     /// Initializes a new <see cref="ReadOptionsFormStore"/>
     /// </summary>
-    /// <param name="cloudStreamsGatewayApi">The service used to interact with the Cloud Streams Gateway API</param>
-    public ReadOptionsFormStore(ICloudStreamsGatewayApiClient cloudStreamsGatewayApi)
+    /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
+    public ReadOptionsFormStore(ICloudStreamsApiClient cloudStreamsApi)
         : base(new())
     {
-        this.cloudStreamsGatewayApi = cloudStreamsGatewayApi;
+        this.cloudStreamsApi = cloudStreamsApi;
     }
 
     /// <summary>
@@ -65,7 +66,7 @@ public class ReadOptionsFormStore
         };
         if (state.PartitionType.HasValue)
         {
-            var partition = new CloudEventPartitionRef()
+            var partition = new CloudEventPartitionReference()
             {
                 Type = state.PartitionType.Value
             };
@@ -169,7 +170,7 @@ public class ReadOptionsFormStore
             });
             return;
         }
-        var partitions = await (await this.cloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        var partitions = await (await this.cloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
         this.Reduce(state => state with
         {
             Partitions = partitions!

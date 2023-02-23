@@ -1,0 +1,46 @@
+﻿@namespace CloudStreams.Dashboard.Pages.Subscriptions.List
+@page "/subscriptions"
+@using System.Reactive.Linq
+@using CloudStreams.Dashboard.StateManagement
+@inherits ResourceManagementComponent<Subscription>
+@inject ICloudStreamsApiClient CloudStreamsApi
+
+<ApplicationTitle>Subscriptions</ApplicationTitle>
+
+<Table Items="subscriptions"
+    AutoGenerateColumns="false"
+    TableClass="table table-striped table-hover">
+    <Columns>
+        <Column TData="Subscription"
+            ValueProvider="s => s.Metadata.Name">
+            <HeaderTemplate>Name</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription">
+            <HeaderTemplate />
+            <CellTemplate Context="context">
+                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+            </CellTemplate>
+        </Column>
+    </Columns>
+</Table>
+
+@code{
+
+    List<Subscription>? subscriptions;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Resources.Subscribe(OnChannelCollectionChanged);
+        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+    }
+
+    void OnChannelCollectionChanged(List<Subscription>? subscriptions)
+    {
+        if (subscriptions == null) this.subscriptions = null;
+        else this.subscriptions = subscriptions;
+        this.StateHasChanged();
+    }
+
+}

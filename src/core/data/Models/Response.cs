@@ -153,6 +153,60 @@ public class Response
         };
     }
 
+    /// <summary>
+    /// Creates a new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type
+    /// </summary>
+    /// <typeparam name="TResource">The expected type of result</typeparam>
+    /// <param name="name">The name of the resource that could not be found</param>
+    /// <param name="namespace">The namespace of the resource that could not be found</param>
+    /// <returns>A new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type</returns>
+    public static Response<TResource> ResourceNotFound<TResource>(string name, string? @namespace)
+        where TResource : class, IResource, new()
+    {
+        var resource = new TResource();
+        return new((int)HttpStatusCode.NotFound)
+        {
+            Title = ProblemTitles.NotFound,
+            Detail = string.IsNullOrWhiteSpace(@namespace) ?
+                StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, name)
+                : StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Type.Plural, @namespace, name)
+        };
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type
+    /// </summary>
+    /// <typeparam name="TContent">The expected type of result</typeparam>
+    /// <param name="reference">A reference to the resource that could not be found</param>
+    /// <returns>A new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type</returns>
+    public static Response<TContent> ResourceNotFound<TContent>(IResourceReference reference)
+    {
+        return new((int)HttpStatusCode.NotFound)
+        {
+            Title = ProblemTitles.NotFound,
+            Detail = reference.IsNamespaced() ? 
+                StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, reference.GetGroup(), reference.GetVersion(), reference.Kind, reference.Namespace!, reference.Name) 
+                : StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, reference.GetGroup(), reference.GetVersion(), reference.Kind, reference.Name)
+        };
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResourceDefinition"/> for the specified type <see cref="IResource"/> type
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> the <see cref="IResourceDefinition"/> of could not be found</typeparam>
+    /// <typeparam name="TContent">The expected type of result</typeparam>
+    /// <returns>A new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type</returns>
+    public static Response<TContent> ResourceDefinitionNotFound<TResource, TContent>()
+        where TResource : class, IResource, new()
+    {
+        var resource = new TResource();
+        return new((int)HttpStatusCode.NotFound)
+        {
+            Title = ProblemTitles.NotFound,
+            Detail = StringExtensions.Format(ProblemDetails.ResourceDefinitionNotFound, resource.GetGroup(), resource.GetVersion(), resource.Type.Plural)
+        };
+    }
+
 }
 
 /// <summary>

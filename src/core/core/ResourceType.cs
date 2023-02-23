@@ -67,6 +67,9 @@ public class ResourceType
         yield return this.Kind;
     }
 
+    /// <inheritdoc/>
+    public override string ToString() => $"{this.Plural}.{this.Group}";
+
 }
 
 /// <summary>

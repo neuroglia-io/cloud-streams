@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Core.Infrastructure.ResourceRepository.Kubernetes.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.csproj" />
     <ProjectReference Include="..\..\dashboard\ui\CloudStreams.Dashboard.csproj" />
+    <ProjectReference Include="..\..\resource-management\api\CloudStreams.ResourceManagement.Api.csproj" />
     <ProjectReference Include="..\api\CloudStreams.Gateway.Api.csproj" />
   </ItemGroup>
 

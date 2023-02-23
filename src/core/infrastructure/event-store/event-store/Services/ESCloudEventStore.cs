@@ -72,7 +72,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionRef partition, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionReference partition, CancellationToken cancellationToken = default)
     {
         var streamName = partition.GetStreamName();
         var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
@@ -119,7 +119,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionRef partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
+    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
     {
         switch (partition.Type)
         {
@@ -153,7 +153,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionReference partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
         var subject = new Subject<CloudEvent>();
         var subscription = await this.Streams.SubscribeToStreamAsync(

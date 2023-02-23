@@ -4,8 +4,9 @@
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
 @inherits StatefulComponent<CloudEventListStore, CloudEventListState>
+@inject ICloudStreamsApiClient CloudStreamsApi
 
-<PageTitle>Cloud Events</PageTitle>
+<ApplicationTitle>Events</ApplicationTitle>
 
 <ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions"></ReadOptionsForm>
 

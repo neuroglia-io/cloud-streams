@@ -12,14 +12,25 @@ public class CloudEventHubDispatcher
     : BackgroundService
 {
 
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventHubDispatcher"/>
+    /// </summary>
+    /// <param name="eventStore">The service used to store <see cref="CloudEvent"/>s</param>
+    /// <param name="hubContext">The current <see cref="ICloudEventHubClient"/>'s <see cref="IHubContext{THub, T}"/></param>
     public CloudEventHubDispatcher(ICloudEventStore eventStore, IHubContext<CloudEventHub, ICloudEventHubClient> hubContext)
     {
         this.EventStore = eventStore;
         this.HubContext = hubContext;
     }
 
+    /// <summary>
+    /// Gets the service used to store <see cref="CloudEvent"/>s
+    /// </summary>
     protected ICloudEventStore EventStore { get; }
 
+    /// <summary>
+    /// Gets the current <see cref="ICloudEventHubClient"/>'s <see cref="IHubContext{THub, T}"/>
+    /// </summary>
     protected IHubContext<CloudEventHub, ICloudEventHubClient> HubContext { get; }
 
     /// <inheritdoc/>

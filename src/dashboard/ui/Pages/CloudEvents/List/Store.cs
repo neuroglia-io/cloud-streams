@@ -1,4 +1,6 @@
-﻿using CloudStreams.Dashboard.StateManagement;
+﻿using CloudStreams.Core.Api.Client.Services;
+using CloudStreams.Core.Data.Models;
+using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
 using Microsoft.Extensions.Options;
 using System.Reactive.Linq;
@@ -16,21 +18,25 @@ public class CloudEventListStore
     /// </summary>
     private ICloudStreamsGatewayApiClient cloudStreamsGatewayApi;
 
-    /// <summary>
-    /// Gets the service used to observe ingested cloud events
-    /// </summary>
-    private CloudEventHubClient cloudEventHub;
+    ICloudStreamsApiClient cloudStreamsApi;
+    CloudEventStreamReadOptions readOptions;
+    List<CloudEvent>? cloudEvents;
+    IDisposable? cloudEventSubscription;
 
     /// <summary>
     /// Initializes a new <see cref="CloudEventListStore"/>
     /// </summary>
-    /// <param name="cloudStreamsGatewayApi">The service used to interact with the Cloud Streams Gateway API</param>
+    /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
     /// <param name="cloudEventHub">The service used to observe ingested cloud events</param>
-    public CloudEventListStore(ICloudStreamsGatewayApiClient cloudStreamsGatewayApi, CloudEventHubClient cloudEventHub)
+    public CloudEventListStore(ICloudStreamsApiClient cloudStreamsApi, CloudEventHubClient cloudEventHub) 
         : base(new())
-    {
-        this.cloudStreamsGatewayApi = cloudStreamsGatewayApi;
-        this.cloudEventHub = cloudEventHub;
+    { 
+        this.cloudStreamsApi = cloudStreamsApi;
+        this.ReadOptions.Subscribe(async o => await this.OnReadOptionsChangedAsync(o).ConfigureAwait(false), token: this.CancellationTokenSource.Token);
+        this.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged!, token: this.CancellationTokenSource.Token);
+        this.readOptions = new(StreamReadDirection.Backwards);
+        this.CloudEventHub = cloudEventHub;
+        this.cloudEventSubscription = this.CloudEventHub.SelectAll().Subscribe(OnCloudEventIngested);
     }
 
     /// <summary>

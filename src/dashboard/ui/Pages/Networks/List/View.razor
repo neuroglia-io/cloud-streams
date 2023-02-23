@@ -1,0 +1,46 @@
+﻿@namespace CloudStreams.Dashboard.Pages.Networks.List
+@page "/networks"
+@using System.Reactive.Linq
+@using CloudStreams.Dashboard.StateManagement
+@inherits ResourceManagementComponent<Network>
+@inject ICloudStreamsApiClient CloudStreamsApi
+
+<ApplicationTitle>Networks</ApplicationTitle>
+
+<Table Items="networks"
+    AutoGenerateColumns="false"
+    TableClass="table table-striped table-hover">
+    <Columns>
+        <Column TData="Network"
+            ValueProvider="n => n.Metadata.Name">
+            <HeaderTemplate>Name</HeaderTemplate>
+        </Column>
+        <Column TData="Network">
+            <HeaderTemplate />
+            <CellTemplate Context="context">
+                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+            </CellTemplate>
+        </Column>
+    </Columns>
+</Table>
+
+@code{
+
+    List<Network>? networks;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Resources.Subscribe(OnChannelCollectionChanged);
+        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+    }
+
+    void OnChannelCollectionChanged(List<Network>? networks)
+    {
+        if (networks == null) this.networks = null;
+        else this.networks = networks;
+        this.StateHasChanged();
+    }
+
+}

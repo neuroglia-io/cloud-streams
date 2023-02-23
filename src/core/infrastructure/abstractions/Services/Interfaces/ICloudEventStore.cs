@@ -27,7 +27,7 @@ public interface ICloudEventStore
     /// <param name="partition">An object used to reference the <see cref="CloudEvent"/> partition to get the metadata of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="CloudEventPartitionMetadata"/> used to describe the <see cref="CloudEvent"/> partition</returns>
-    Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionRef partition, CancellationToken cancellationToken = default);
+    Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionReference partition, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists the metadata of <see cref="CloudEvent"/> partitions of the specified type
@@ -56,7 +56,7 @@ public interface ICloudEventStore
     /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionRef partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Subscribes to <see cref="CloudEvent"/>s
@@ -73,7 +73,7 @@ public interface ICloudEventStore
     /// <param name="offset">The offset starting from which to receive <see cref="CloudEvent"/>s. Defaults to <see cref="CloudEventStreamPosition.EndOfStream"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s of the specified partition</returns>
-    Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionRef partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default);
+    Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionReference partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Truncates stored <see cref="CloudEvent"/>s
