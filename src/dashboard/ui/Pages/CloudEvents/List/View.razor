@@ -111,26 +111,23 @@
 
     void OnPartitionChanged(CloudEventPartitionRef? partition)
     {
-        if (this.partition != partition) {
-            this.partition = partition;
-            this.StateHasChanged();
-        }
+        if (this.partition == partition) return;
+        this.partition = partition;
+        this.StateHasChanged();
     }
 
     void OnCloudEventCollectionChanged(List<CloudEvent>? events)
     {
-        if (this.events != events) {
-            this.events = events;
-            this.StateHasChanged();
-        }
+        if (this.events == events) return;
+        this.events = events;
+        this.StateHasChanged();
     }
 
     void OnPartitionsChanged(List<CloudEventPartitionMetadata>? partitions)
     {
-        if (this.partitions != partitions) {
-            this.partitions = partitions;
-            this.StateHasChanged();
-        }
+        if (this.partitions == partitions) return;
+        this.partitions = partitions;
+        this.StateHasChanged();
     }
 
     Task OnShowCloudEventModalAsync(CloudEvent e)

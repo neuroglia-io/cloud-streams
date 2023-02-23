@@ -36,17 +36,17 @@ public class CloudEventListStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/>-related changes
     /// </summary>
-    public IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(s => s.ReadOptions).DistinctUntilChanged();
+    public IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(state => state.ReadOptions).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/>-related changes
     /// </summary>
-    public IObservable<List<CloudEvent>?> CloudEvents => this.Select(s => s.CloudEvents).DistinctUntilChanged();
+    public IObservable<List<CloudEvent>?> CloudEvents => this.Select(state => state.CloudEvents).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Partitions"/>-related changes
     /// </summary>
-    public IObservable<List<CloudEventPartitionMetadata>?> Partitions => this.Select(options => options.Partitions).DistinctUntilChanged();
+    public IObservable<List<CloudEventPartitionMetadata>?> Partitions => this.Select(state => state.Partitions).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe a sanitized version of the <see cref="CloudEventListState.ReadOptions"/>
@@ -76,8 +76,8 @@ public class CloudEventListStore
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        this.SanitizedReadOptions.Subscribe(async options => await this.SetCloudEventsAsync(options).ConfigureAwait(false), token: this.CancellationTokenSource.Token);
-        this.PartitionType.Subscribe(async partitionType => await this.SetPartitionsAsync(partitionType).ConfigureAwait(false), token: this.CancellationTokenSource.Token);
+        this.SanitizedReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.PartitionType.SubscribeAsync(this.SetPartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
         this.cloudEventHub.SelectAll().Subscribe(OnCloudEventIngested, token: this.CancellationTokenSource.Token);
         await this.cloudEventHub.StartAsync();
     }
@@ -121,12 +121,9 @@ public class CloudEventListStore
     {
         if (readOptions == null) return;
         var cloudEvents = await (await this.cloudStreamsGatewayApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-        this.Reduce(state =>
+        this.Reduce(state => state with
         {
-            return state with
-            {
-                CloudEvents = cloudEvents!
-            };
+            CloudEvents = cloudEvents!
         });
     }
 
@@ -146,12 +143,9 @@ public class CloudEventListStore
             return;
         }
         var partitions = await (await this.cloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-        this.Reduce(state =>
+        this.Reduce(state => state with
         {
-            return state with
-            {
-                Partitions = partitions!
-            };
+            Partitions = partitions!
         });
     }
 

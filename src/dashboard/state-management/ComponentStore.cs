@@ -1,4 +1,5 @@
-﻿using System.Reactive.Subjects;
+﻿using System.Reactive.Linq;
+using System.Reactive.Subjects;
 
 namespace CloudStreams.Dashboard.StateManagement;
 
@@ -70,7 +71,7 @@ public abstract class ComponentStore<TState>
     }
 
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Subscribe(observer);
+    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Throttle(TimeSpan.FromMicroseconds(1)).Subscribe(observer);
 
     /// <summary>
     /// Disposes of the <see cref="ComponentStore{TState}"/>
