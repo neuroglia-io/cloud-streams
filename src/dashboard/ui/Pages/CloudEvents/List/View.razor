@@ -4,11 +4,10 @@
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
 @inherits StatefulComponent<CloudEventListStore, CloudEventListState>
-@implements IDisposable
 
 <PageTitle>Cloud Events</PageTitle>
 
-<PartitionFilter Partitions="partitions" Partition="partition" OnChange="(e) => OnSetCloudEventPartition(e)"></PartitionFilter>
+<ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions"></ReadOptionsForm>
 
 <Table Items="events"
     AutoGenerateColumns="false"
@@ -75,84 +74,36 @@
 
 @code{
 
-    List<CloudEvent>? events;
-    List<CloudEventPartitionMetadata>? partitions;
-    CloudEventPartitionRef? partition;
-    CloudEventModal? modal;
+    private List<CloudEvent>? events;
+    private CloudEventModal? modal;
+    private ReadOptionsForm? readOptionForm;
 
-    private bool _Disposed;
-
-    /// <summary>
-    /// Gets the <see cref="ComponentStore{TState}"/>'s <see cref="System.Threading.CancellationTokenSource"/>
-    /// </summary>
-    protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+    private bool disposed;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Partition.Subscribe(partition => OnPartitionChanged(partition), token: this.CancellationTokenSource.Token);
-        this.Store.CloudEvents.Subscribe(events => OnCloudEventCollectionChanged(events), token: this.CancellationTokenSource.Token);
-        this.Store.Partitions.Subscribe(partitions => OnPartitionsChanged(partitions), token: this.CancellationTokenSource.Token); 
+        this.Store.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged, token: this.CancellationTokenSource.Token);
     }
 
-    void OnSetCloudEventPartition(CloudEventPartitionRef? partition)
+    private void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
     {
-        this.Store.ReduceStreamReadOptions(options => options with 
-        {
-            Partition = partition
-        });
+        if (this.readOptionForm != null) this.readOptionForm.SetPartition(type, id);
     }
 
-    void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
-    {
-        this.OnSetCloudEventPartition(new CloudEventPartitionRef() { Type = type, Id = id });
-    }
-
-    void OnPartitionChanged(CloudEventPartitionRef? partition)
-    {
-        if (this.partition == partition) return;
-        this.partition = partition;
-        this.StateHasChanged();
-    }
-
-    void OnCloudEventCollectionChanged(List<CloudEvent>? events)
+    private void OnCloudEventCollectionChanged(List<CloudEvent>? events)
     {
         if (this.events == events) return;
         this.events = events;
         this.StateHasChanged();
     }
 
-    void OnPartitionsChanged(List<CloudEventPartitionMetadata>? partitions)
-    {
-        if (this.partitions == partitions) return;
-        this.partitions = partitions;
-        this.StateHasChanged();
-    }
-
-    Task OnShowCloudEventModalAsync(CloudEvent e)
+    private Task OnShowCloudEventModalAsync(CloudEvent e)
     {
         if (this.modal == null) return Task.CompletedTask;
         this.modal.SetCloudEvent(e);
         return this.modal.ShowAsync();
-    }
-
-    /// <summary>
-    /// Disposes of the <see cref="ComponentStore{TState}"/>
-    /// </summary>
-    /// <param name="disposing">A boolean indicating whether or not the <see cref="ComponentStore{TState}"/> is being disposed of</param>
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing) return;
-        if (!this._Disposed)
-        {
-            if (disposing)
-            {
-                this.CancellationTokenSource.Dispose();
-            }
-            this._Disposed = true;
-        }
-        base.Dispose(disposing);
     }
 
 }

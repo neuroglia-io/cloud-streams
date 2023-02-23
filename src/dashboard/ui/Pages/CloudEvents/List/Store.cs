@@ -1,12 +1,12 @@
-﻿using CloudStreams.Core.Data.Models;
-using CloudStreams.Dashboard.StateManagement;
+﻿using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
+using Microsoft.Extensions.Options;
 using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
 /// <summary>
-/// Reoresents the Cloud Event List's <see cref="ComponentStore{TState}"/>
+/// Represents the Cloud Event List's <see cref="ComponentStore{TState}"/>
 /// </summary>
 public class CloudEventListStore
     : ComponentStore<CloudEventListState>
@@ -34,63 +34,42 @@ public class CloudEventListStore
     }
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/>-related changes
-    /// </summary>
-    public IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(state => state.ReadOptions).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/>-related changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/> changes
     /// </summary>
     public IObservable<List<CloudEvent>?> CloudEvents => this.Select(state => state.CloudEvents).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Partitions"/>-related changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
     /// </summary>
-    public IObservable<List<CloudEventPartitionMetadata>?> Partitions => this.Select(state => state.Partitions).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe a sanitized version of the <see cref="CloudEventListState.ReadOptions"/>
-    /// </summary>
-    public IObservable<CloudEventStreamReadOptions> SanitizedReadOptions => this.ReadOptions.Select(options => {
-        if (options.Partition?.Type != null && options.Partition?.Id == null)
+    private IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(state => {
+        if (state.ReadOptions.Partition?.Type != null && state.ReadOptions.Partition?.Id != null)
         {
-            options = options with
-            {
-                Partition = null
-            };
+            return state.ReadOptions;
         }
-        return options;
+        return state.ReadOptions with
+        {
+            Partition = null
+        };
     }).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventPartitionRef"/> of the current <see cref="CloudEventListState.ReadOptions"/>
-    /// </summary>
-    public IObservable<CloudEventPartitionRef?> Partition => this.ReadOptions.Select(options => options.Partition).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventPartitionType"/> of the current <see cref="CloudEventPartitionRef"/>
-    /// </summary>
-    public IObservable<CloudEventPartitionType?> PartitionType => this.Partition.Select(partition => partition?.Type).DistinctUntilChanged();
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        this.SanitizedReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
-        this.PartitionType.SubscribeAsync(this.SetPartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.ReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
         this.cloudEventHub.SelectAll().Subscribe(OnCloudEventIngested, token: this.CancellationTokenSource.Token);
         await this.cloudEventHub.StartAsync();
     }
 
     /// <summary>
-    /// Sets the current <see cref="CloudEventStreamReadOptions"/>
+    /// Sets the <see cref="CloudEventStreamReadOptions"/>
     /// </summary>
-    /// <param name="reducer">A <see cref="Func{T, TResult}"/> used to reduce the current <see cref="CloudEventStreamReadOptions"/></param>
-    public void ReduceStreamReadOptions(Func<CloudEventStreamReadOptions, CloudEventStreamReadOptions> reducer)
+    /// <param name="readOptions">The new <see cref="CloudEventStreamReadOptions"/></param>
+    public void SetReadOptions(CloudEventStreamReadOptions readOptions)
     {
         this.Reduce(state => state with
         {
-            ReadOptions = reducer(state.ReadOptions)
+            ReadOptions = readOptions
         });
     }
 
@@ -124,28 +103,6 @@ public class CloudEventListStore
         this.Reduce(state => state with
         {
             CloudEvents = cloudEvents!
-        });
-    }
-
-    /// <summary>
-    /// Gathers and sets the <see cref="CloudEventListState.Partitions"/> based on the provided <see cref="CloudEventPartitionType"/>
-    /// </summary>
-    /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="CloudEventListState.Partitions"/> with</param>
-    /// <returns></returns>
-    protected async Task SetPartitionsAsync(CloudEventPartitionType? partitionType)
-    {
-        if (!partitionType.HasValue)
-        {
-            this.Reduce(state => state with
-            {
-                Partitions = null
-            });
-            return;
-        }
-        var partitions = await (await this.cloudStreamsGatewayApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-        this.Reduce(state => state with
-        {
-            Partitions = partitions!
         });
     }
 
