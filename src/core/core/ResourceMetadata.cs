@@ -22,15 +22,21 @@ public class ResourceMetadata
     public virtual string? Namespace { get; set; }
 
     /// <summary>
+    /// Gets/sets the date and time at which the described resource has been created
+    /// </summary>
+    [DataMember(Order = 3, Name = "creationTimestamp"), JsonPropertyName("creationTimestamp"), YamlMember(Alias = "creationTimestamp")]
+    public virtual DateTime? CreationTimestamp { get; set; }
+
+    /// <summary>
     /// Gets/sets the resource's generation, which represents the resource's spec version
     /// </summary>
-    [DataMember(Order = 3, Name = "generation"), JsonPropertyName("generation"), YamlMember(Alias = "generation")]
+    [DataMember(Order = 4, Name = "generation"), JsonPropertyName("generation"), YamlMember(Alias = "generation")]
     public virtual ulong Generation { get; set; }
 
     /// <summary>
     /// Gets/sets the resource's version, which changes everytime the resource is written to, including potential subresources (status, ...)
     /// </summary>
-    [DataMember(Order = 4, Name = "resourceVersion"), JsonPropertyName("resourceVersion"), YamlMember(Alias = "resourceVersion")]
+    [DataMember(Order = 5, Name = "resourceVersion"), JsonPropertyName("resourceVersion"), YamlMember(Alias = "resourceVersion")]
     public virtual string? ResourceVersion { get; set; }
 
 }
