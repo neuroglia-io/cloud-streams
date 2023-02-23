@@ -13,11 +13,11 @@
         <label for="direction">Direction</label>
     </div>
     <div class="form-floating">
-        <input id="offset" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset((long?)e.Value)" />
+        <input id="offset" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset(string.IsNullOrWhiteSpace((string?)e.Value) ? null : long.Parse((string?)e.Value!))" />
         <label for="offset">Offset</label>
     </div>
     <div class="form-floating">
-        <input id="length" type="number" nim="0" class="form-control" value="@length" @onchange="e => Store.SetLenght((ulong?)e.Value)" />
+        <input id="length" type="number" nim="0" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
         <label for="length">length</label>
     </div>
     <div class="form-floating">

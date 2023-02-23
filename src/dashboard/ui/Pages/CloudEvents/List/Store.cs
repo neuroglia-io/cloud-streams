@@ -1,8 +1,6 @@
 ﻿using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Core.Data.Models;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
-using Microsoft.Extensions.Options;
 using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
@@ -13,30 +11,17 @@ namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 public class CloudEventListStore
     : ComponentStore<CloudEventListState>
 {
-    /// <summary>
-    /// The service used to interact with the Cloud Streams Gateway API
-    /// </summary>
-    private ICloudStreamsGatewayApiClient cloudStreamsGatewayApi;
 
     ICloudStreamsApiClient cloudStreamsApi;
-    CloudEventStreamReadOptions readOptions;
-    List<CloudEvent>? cloudEvents;
-    IDisposable? cloudEventSubscription;
 
     /// <summary>
     /// Initializes a new <see cref="CloudEventListStore"/>
     /// </summary>
     /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
-    /// <param name="cloudEventHub">The service used to observe ingested cloud events</param>
-    public CloudEventListStore(ICloudStreamsApiClient cloudStreamsApi, CloudEventHubClient cloudEventHub) 
+    public CloudEventListStore(ICloudStreamsApiClient cloudStreamsApi) 
         : base(new())
     { 
         this.cloudStreamsApi = cloudStreamsApi;
-        this.ReadOptions.Subscribe(async o => await this.OnReadOptionsChangedAsync(o).ConfigureAwait(false), token: this.CancellationTokenSource.Token);
-        this.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged!, token: this.CancellationTokenSource.Token);
-        this.readOptions = new(StreamReadDirection.Backwards);
-        this.CloudEventHub = cloudEventHub;
-        this.cloudEventSubscription = this.CloudEventHub.SelectAll().Subscribe(OnCloudEventIngested);
     }
 
     /// <summary>
@@ -63,8 +48,6 @@ public class CloudEventListStore
     {
         await base.InitializeAsync();
         this.ReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
-        this.cloudEventHub.SelectAll().Subscribe(OnCloudEventIngested, token: this.CancellationTokenSource.Token);
-        await this.cloudEventHub.StartAsync();
     }
 
     /// <summary>
@@ -105,7 +88,7 @@ public class CloudEventListStore
     protected async Task SetCloudEventsAsync(CloudEventStreamReadOptions readOptions)
     {
         if (readOptions == null) return;
-        var cloudEvents = await (await this.cloudStreamsGatewayApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
         this.Reduce(state => state with
         {
             CloudEvents = cloudEvents!
