@@ -2,16 +2,21 @@
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
+using Microsoft.Extensions.Options;
 using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
 /// <summary>
-/// Reoresents the Cloud Event List's <see cref="ComponentStore{TState}"/>
+/// Represents the Cloud Event List's <see cref="ComponentStore{TState}"/>
 /// </summary>
 public class CloudEventListStore
     : ComponentStore<CloudEventListState>
 {
+    /// <summary>
+    /// The service used to interact with the Cloud Streams Gateway API
+    /// </summary>
+    private ICloudStreamsGatewayApiClient cloudStreamsGatewayApi;
 
     ICloudStreamsApiClient cloudStreamsApi;
     CloudEventStreamReadOptions readOptions;
@@ -35,84 +40,76 @@ public class CloudEventListStore
     }
 
     /// <summary>
-    /// Gets the service used to observe ingested cloud events
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/> changes
     /// </summary>
-    protected CloudEventHubClient CloudEventHub { get; }
+    public IObservable<List<CloudEvent>?> CloudEvents => this.Select(state => state.CloudEvents).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/>-related changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
     /// </summary>
-    public IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(s => s.ReadOptions).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/>-related changes
-    /// </summary>
-    public IObservable<List<CloudEvent>?> CloudEvents => this.Select(s => s.CloudEvents);
+    private IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(state => {
+        if (state.ReadOptions.Partition?.Type != null && state.ReadOptions.Partition?.Id != null)
+        {
+            return state.ReadOptions;
+        }
+        return state.ReadOptions with
+        {
+            Partition = null
+        };
+    }).DistinctUntilChanged();
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        await this.CloudEventHub.StartAsync();
-        this.Reduce(state => state with { ReadOptions = this.readOptions });
+        this.ReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.cloudEventHub.SelectAll().Subscribe(OnCloudEventIngested, token: this.CancellationTokenSource.Token);
+        await this.cloudEventHub.StartAsync();
     }
 
     /// <summary>
-    /// Sets the current <see cref="CloudEventStreamReadOptions"/>
+    /// Sets the <see cref="CloudEventStreamReadOptions"/>
     /// </summary>
-    /// <param name="reducer">A <see cref="Func{T, TResult}"/> used to reduce the current <see cref="CloudEventStreamReadOptions"/></param>
-    public void ReduceStreamReadOptions(Func<CloudEventStreamReadOptions, CloudEventStreamReadOptions> reducer)
+    /// <param name="readOptions">The new <see cref="CloudEventStreamReadOptions"/></param>
+    public void SetReadOptions(CloudEventStreamReadOptions readOptions)
     {
         this.Reduce(state => state with
         {
-            ReadOptions = reducer(state.ReadOptions)
+            ReadOptions = readOptions
         });
     }
 
-    async Task ReadStreamAsync()
+    /// <summary>
+    /// Updates the <see cref="CloudEventListState.CloudEvents"/> when the <see cref="CloudEventHubClient"/> emits a new values
+    /// </summary>
+    /// <param name="e"></param>
+    protected void OnCloudEventIngested(CloudEvent e)
     {
-        var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(this.readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        List<CloudEvent> cloudEvents = new(this.Get(state => state.CloudEvents) ?? new());
+        if (this.Get(state => state.ReadOptions).Direction == StreamReadDirection.Backwards) cloudEvents.Insert(0, e);
+        else cloudEvents.Add(e);
         this.Reduce(state =>
         {
             return state with
             {
-                CloudEvents = cloudEvents!
+                CloudEvents = cloudEvents
             };
         });
     }
 
-    void OnCloudEventIngested(CloudEvent e)
+    /// <summary>
+    /// Gathers and sets the <see cref="CloudEventListState.CloudEvents"/> based on the provided <see cref="CloudEventStreamReadOptions"/>
+    /// </summary>
+    /// <param name="readOptions">The <see cref="CloudEventStreamReadOptions"/> to gather the <see cref="CloudEventListState.CloudEvents"/> with</param>
+    /// <returns></returns>
+    protected async Task SetCloudEventsAsync(CloudEventStreamReadOptions readOptions)
     {
-        if (this.cloudEvents == null) this.cloudEvents = new();
-        if(this.readOptions.Direction == StreamReadDirection.Backwards) this.cloudEvents.Insert(0, e);
-        else this.cloudEvents.Add(e);
-        this.Reduce(state =>
+        if (readOptions == null) return;
+        var cloudEvents = await (await this.cloudStreamsGatewayApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        this.Reduce(state => state with
         {
-            return state with
-            {
-                CloudEvents = this.cloudEvents
-            };
+            CloudEvents = cloudEvents!
         });
-    }
-
-    Task OnReadOptionsChangedAsync(CloudEventStreamReadOptions readOptions)
-    {
-        this.readOptions = readOptions;
-        if (this.readOptions.Partition != null && string.IsNullOrWhiteSpace(this.readOptions.Partition.Id)) return Task.CompletedTask;
-        return this.ReadStreamAsync();
-    }
-
-    void OnCloudEventCollectionChanged(List<CloudEvent>? cloudEvents)
-    {
-        this.cloudEvents = cloudEvents;
-    }
-
-    /// <inheritdoc/>
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing) return;
-        this.cloudEventSubscription?.Dispose();
-        base.Dispose(disposing);
     }
 
 }

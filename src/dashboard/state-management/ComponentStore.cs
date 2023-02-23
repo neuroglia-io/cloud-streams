@@ -1,4 +1,5 @@
-﻿using System.Reactive.Subjects;
+﻿using System.Reactive.Linq;
+using System.Reactive.Subjects;
 
 namespace CloudStreams.Dashboard.StateManagement;
 
@@ -9,9 +10,9 @@ namespace CloudStreams.Dashboard.StateManagement;
 public abstract class ComponentStore<TState>
     : IComponentStore<TState>
 {
-    Subject<TState> _Subject;
-    TState _State;
-    bool _Disposed;
+    private BehaviorSubject<TState> _Subject;
+    private TState _State;
+    private bool _Disposed;
 
     /// <summary>
     /// Initializes a new <see cref="ComponentStore{TState}"/>
@@ -20,8 +21,8 @@ public abstract class ComponentStore<TState>
     protected ComponentStore(TState state)
     {
         this.CancellationTokenSource = new CancellationTokenSource();
-        this._Subject = new();
         this._State = state;
+        this._Subject = new(state);
     }
 
     /// <summary>
@@ -51,8 +52,26 @@ public abstract class ComponentStore<TState>
         this.Set(reducer(this._State));
     }
 
+    /// <summary>
+    /// Get the <see cref="ComponentStore{TState}"/>'s state
+    /// </summary>
+    /// <returns></returns>
+    protected virtual TState Get()
+    {
+        return this._State;
+    }
+
+    /// <summary>
+    /// Get a <see cref="ComponentStore{TState}"/>'s state slice for the provided projection
+    /// </summary>
+    /// <returns></returns>
+    protected virtual T Get<T>(Func<TState, T> project)
+    {
+        return project(this._State);
+    }
+
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Subscribe(observer);
+    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Throttle(TimeSpan.FromMicroseconds(1)).Subscribe(observer);
 
     /// <summary>
     /// Disposes of the <see cref="ComponentStore{TState}"/>

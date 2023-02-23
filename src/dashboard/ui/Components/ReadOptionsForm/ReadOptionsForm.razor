@@ -1,0 +1,125 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@using CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement
+@inherits StatefulComponent<ReadOptionsFormStore, ReadOptionsFormState>
+
+<div id="read-options-form" class="input-group mb-3">
+    <div class="form-floating">
+        <select id="direction" class="form-select" name="direction" @onchange="e => Store.SetDirection(Enum.Parse<StreamReadDirection>((string)e.Value!))">
+            @foreach (var value in Enum.GetValues<StreamReadDirection>())
+            {
+                    <option value="@value" selected="@(direction == value)">@value</option>
+            }
+        </select>
+        <label for="direction">Direction</label>
+    </div>
+    <div class="form-floating">
+        <input id="offset" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset((long?)e.Value)" />
+        <label for="offset">Offset</label>
+    </div>
+    <div class="form-floating">
+        <input id="length" type="number" nim="0" class="form-control" value="@length" @onchange="e => Store.SetLenght((ulong?)e.Value)" />
+        <label for="length">length</label>
+    </div>
+    <div class="form-floating">
+        <select id="partitionType" class="form-select" name="partitionType" @onchange="e => Store.SetPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
+            <option value="" selected="@(partitionType == null)"></option>
+            @foreach (var value in Enum.GetValues<CloudEventPartitionType>())
+            {
+                    <option value="@value" selected="@(partitionType == value)">@value</option>
+            }
+        </select>
+        <label for="partitionType">Partition Type</label>
+    </div>
+    <div class="form-floating">
+        <input id="partitionId" type="text" class="form-control" value="@partitionId" list="partitions" autocomplete="on" @onchange="e => Store.SetPartitionId((string?)e.Value)" />
+        <datalist id="partitions">
+            @if (partitions != null)
+            {
+                foreach (var partition in partitions)
+                {
+                            <option value="@partition.Id"></option>
+                }
+            }
+        </datalist>
+        <label for="partitionId">Partition Id</label>
+    </div>
+    <button class="btn btn-outline-secondary" type="button" @onclick="Reset"><span class="bi bi-x-circle"></span></button>
+</div>
+
+@code {
+    /// <summary>
+    /// The <see cref="CloudEventStreamReadOptions"/> emitted by the form
+    /// </summary>
+    [Parameter] public EventCallback<CloudEventStreamReadOptions> OnChange { get; set; }
+
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.PartitionType"/>
+    /// </summary>
+    private CloudEventPartitionType? partitionType = null;
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.PartitionId"/>
+    /// </summary>
+    private string? partitionId = null;
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.Direction"/>
+    /// </summary>
+    private StreamReadDirection direction;
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.Offset"/>
+    /// </summary>
+    private long? offset = null;
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.Length"/>
+    /// </summary>
+    private ulong? length;
+    /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.Partitions"/>
+    /// </summary>
+    private List<CloudEventPartitionMetadata>? partitions = null;
+    /// <summary>
+    /// Defines if the component has been disposed yet
+    /// </summary>
+    private bool disposed;
+    /// <summary>
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.PartitionType.Subscribe(partitionType => this.OnStateChanged(state => state.partitionType = partitionType), token: this.CancellationTokenSource.Token);
+        this.Store.PartitionId.Subscribe(partitionId => this.OnStateChanged(state => state.partitionId = partitionId), token: this.CancellationTokenSource.Token);
+        this.Store.Direction.Subscribe(direction => this.OnStateChanged(state => state.direction = direction), token: this.CancellationTokenSource.Token);
+        this.Store.Offset.Subscribe(offset => this.OnStateChanged(state => state.offset = offset), token: this.CancellationTokenSource.Token);
+        this.Store.Length.Subscribe(length => this.OnStateChanged(state => state.length = length), token: this.CancellationTokenSource.Token);
+        this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(state => state.partitions = partitions), token: this.CancellationTokenSource.Token);
+        this.Store.ReadOptions.SubscribeAsync(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
+    }
+
+    public void SetPartition(CloudEventPartitionType type, string id)
+    {
+        this.Store.SetPartitionType(type);
+        this.Store.SetPartitionId(id);
+    }
+
+    /// <summary>
+    /// Patches the <see cref="ReadOptionsForm"/>'s fields after a <see cref="ReadOptionsFormStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<ReadOptionsForm> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Resets the <see cref="ReadOptionsForm"/>
+    /// </summary>
+    private void Reset()
+    {
+        this.Store.SetPartitionType(null);
+        this.Store.SetPartitionId(null);
+        this.Store.SetDirection(StreamReadDirection.Backwards);
+        this.Store.SetOffset(null);
+        this.Store.SetLenght(null);
+    }
+}
