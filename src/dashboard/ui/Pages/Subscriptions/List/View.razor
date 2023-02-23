@@ -18,7 +18,8 @@
         <Column TData="Subscription">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Deletes subscription '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -33,7 +34,7 @@
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Resources.Subscribe(OnChannelCollectionChanged);
-        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
     }
 
     void OnChannelCollectionChanged(List<Subscription>? subscriptions)
@@ -41,6 +42,11 @@
         if (subscriptions == null) this.subscriptions = null;
         else this.subscriptions = subscriptions;
         this.StateHasChanged();
+    }
+
+    async Task OnDeleteSubscription(Subscription subscription)
+    {
+        await this.Store.DeleteResourceAsync(subscription).ConfigureAwait(false);
     }
 
 }

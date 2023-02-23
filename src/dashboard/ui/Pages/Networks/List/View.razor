@@ -18,7 +18,8 @@
         <Column TData="Network">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Deletes network '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteNetwork(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -33,7 +34,7 @@
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Resources.Subscribe(OnChannelCollectionChanged);
-        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
     }
 
     void OnChannelCollectionChanged(List<Network>? networks)
@@ -41,6 +42,11 @@
         if (networks == null) this.networks = null;
         else this.networks = networks;
         this.StateHasChanged();
+    }
+
+    async Task OnDeleteNetwork(Network network)
+    {
+        await this.Store.DeleteResourceAsync(network).ConfigureAwait(false);
     }
 
 }

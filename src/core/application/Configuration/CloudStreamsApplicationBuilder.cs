@@ -1,6 +1,7 @@
 ﻿using CloudStreams.Core.Application.Services;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Services;
+using MediatR;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -147,6 +148,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddMediatR(options =>
         {
             options.RegisterServicesFromAssemblies(this.MediationAssemblies.ToArray());
+            options.BehaviorsToRegister.Add(new(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingPipelineBehavior<,>), ServiceLifetime.Transient));
         });
         this.Services.AddResponseCompression(options =>
         {

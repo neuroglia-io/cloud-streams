@@ -1,5 +1,6 @@
 ﻿using CloudStreams.Core.Infrastructure.Services;
 using k8s;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -23,6 +24,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddKubernetesClient(configuration);
         builder.Services.TryAddSingleton<K8sResourceRepository>();
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<K8sResourceRepository>());
+        builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(K8sAutorestExceptionHandlingPipelineBehavior<,>));
         builder.UseResourceRepository<K8sResourceRepository>();
         return builder;
     }

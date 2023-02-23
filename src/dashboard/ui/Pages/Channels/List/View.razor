@@ -19,14 +19,11 @@
                 ValueProvider="c => c.Spec.Stream == null ? null : c.Spec.Stream.Offset">
             <HeaderTemplate>Desired Offset</HeaderTemplate>
         </Column>
-        <Column TData="Channel"
-                ValueProvider="c => c.Status == null ? null : c.Status.Stream == null ? null : c.Status.Stream.AckedOffset">
-            <HeaderTemplate>Acked Offset</HeaderTemplate>
-        </Column>
         <Column TData="Channel">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Deletes channel '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteChannel(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -41,7 +38,7 @@
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Resources.Subscribe(OnChannelCollectionChanged);
-        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
     }
 
     void OnChannelCollectionChanged(List<Channel>? channels)
@@ -49,6 +46,11 @@
         if (channels == null) this.channels = null;
         else this.channels = channels;
         this.StateHasChanged();
+    }
+
+    async Task OnDeleteChannel(Channel channel)
+    {
+        await this.Store.DeleteResourceAsync(channel).ConfigureAwait(false);
     }
 
 }

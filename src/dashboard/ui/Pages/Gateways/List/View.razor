@@ -23,14 +23,11 @@
                 ValueProvider="c => c.Spec.Validation == null ? null : c.Spec.Validation.SkipValidation">
             <HeaderTemplate>Skip Validation</HeaderTemplate>
         </Column>
-        <Column TData="Gateway"
-                ValueProvider="c => c.Spec.Validation == null ? null : c.Spec.Validation.ValidationStrategy">
-            <HeaderTemplate>Validation Strategy</HeaderTemplate>
-        </Column>
         <Column TData="Gateway">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Deletes gateway '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteGateway(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -45,7 +42,7 @@
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Resources.Subscribe(OnChannelCollectionChanged);
-        await this.Store.FetchResourceListAsync().ConfigureAwait(false); ;
+        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
     }
 
     void OnChannelCollectionChanged(List<Gateway>? gateways)
@@ -53,6 +50,11 @@
         if (gateways == null) this.gateways = null;
         else this.gateways = gateways;
         this.StateHasChanged();
+    }
+
+    async Task OnDeleteGateway(Gateway gateway)
+    {
+        await this.Store.DeleteResourceAsync(gateway).ConfigureAwait(false);
     }
 
 }

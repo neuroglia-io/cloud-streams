@@ -19,14 +19,11 @@
                 ValueProvider="b => b.Spec.Stream == null ? null : b.Spec.Stream.Offset">
             <HeaderTemplate>Desired Offset</HeaderTemplate>
         </Column>
-        <Column TData="Broker"
-                ValueProvider="b => b.Status == null ? null : b.Status.Stream == null ? null : b.Status.Stream.AckedOffset">
-            <HeaderTemplate>Acked Offset</HeaderTemplate>
-        </Column>
         <Column TData="Broker">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><small class="bi bi-info-circle"></small><span class="btn-label">Details</span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Deletes broker '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteBroker(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -41,9 +38,7 @@
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Resources.Subscribe(OnBrokerCollectionChanged);
-        await this.Store.FetchResourceListAsync().ConfigureAwait(false);
-
-        await this.Store.FetchResourceDefinitionAsync().ConfigureAwait(false);
+        await this.Store.ListResourcesAsync().ConfigureAwait(false);
     }
 
     void OnBrokerCollectionChanged(List<Broker>? brokers)
@@ -51,6 +46,11 @@
         if (brokers == null) this.brokers = null;
         else this.brokers = brokers;
         this.StateHasChanged();
+    }
+
+    async Task OnDeleteBroker(Broker broker)
+    {
+        await this.Store.DeleteResourceAsync(broker).ConfigureAwait(false);
     }
 
 }

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc.Formatters;
+using System.Net.NetworkInformation;
 using System.Text;
 
 namespace CloudStreams.Core.Application.Services;
