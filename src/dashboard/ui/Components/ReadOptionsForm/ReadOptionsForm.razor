@@ -1,7 +1,6 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement
 @inherits StatefulComponent<ReadOptionsFormStore, ReadOptionsFormState>
-@implements IDisposable
 
 <div id="read-options-form" class="input-group mb-3">
     <div class="form-floating">
@@ -82,9 +81,6 @@
     /// </summary>
     private bool disposed;
     /// <summary>
-    /// Gets the <see cref="ReadOptionsForm"/>'s <see cref="CancellationTokenSource"/>
-    /// </summary>
-    protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -125,20 +121,5 @@
         this.Store.SetDirection(StreamReadDirection.Backwards);
         this.Store.SetOffset(null);
         this.Store.SetLenght(null);
-    }
-
-    /// <inheritdoc/>
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing) return;
-        if (!this.disposed)
-        {
-            if (disposing)
-            {
-                this.CancellationTokenSource.Dispose();
-            }
-            this.disposed = true;
-        }
-        base.Dispose(disposing);
     }
 }

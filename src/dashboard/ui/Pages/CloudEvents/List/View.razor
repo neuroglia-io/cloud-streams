@@ -4,7 +4,6 @@
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
 @inherits StatefulComponent<CloudEventListStore, CloudEventListState>
-@implements IDisposable
 
 <PageTitle>Cloud Events</PageTitle>
 
@@ -77,15 +76,9 @@
 
     private List<CloudEvent>? events;
     private CloudEventModal? modal;
-    //private CloudEventPartitionRef? partition;
     private ReadOptionsForm? readOptionForm;
 
     private bool disposed;
-
-    /// <summary>
-    /// Gets the <see cref="View"/>'s <see cref="System.Threading.CancellationTokenSource"/>
-    /// </summary>
-    protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -111,21 +104,6 @@
         if (this.modal == null) return Task.CompletedTask;
         this.modal.SetCloudEvent(e);
         return this.modal.ShowAsync();
-    }
-
-    /// <inheritdoc/>
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing) return;
-        if (!this.disposed)
-        {
-            if (disposing)
-            {
-                this.CancellationTokenSource.Dispose();
-            }
-            this.disposed = true;
-        }
-        base.Dispose(disposing);
     }
 
 }

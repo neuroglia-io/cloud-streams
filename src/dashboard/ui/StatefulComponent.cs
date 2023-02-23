@@ -19,6 +19,11 @@ public abstract class StatefulComponent<TStore, TState>
     [Inject]
     protected IServiceProvider ServiceProvider { get; set; } = null!;
 
+    /// <summary>
+    /// Gets the <see cref="StatefulComponent{TStore, TState}"/>'s <see cref="System.Threading.CancellationTokenSource"/>
+    /// </summary>
+    protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+
     private TStore _store = null!;
     /// <summary>
     /// Gets the component's store
@@ -52,6 +57,7 @@ public abstract class StatefulComponent<TStore, TState>
             if (disposing)
             {
                 this._store.Dispose();
+                this.CancellationTokenSource.Dispose();
             }
             this._Disposed = true;
         }
