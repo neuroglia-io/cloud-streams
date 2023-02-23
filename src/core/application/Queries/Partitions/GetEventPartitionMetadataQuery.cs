@@ -11,7 +11,7 @@ public class GetEventPartitionMetadataQuery
     /// Initializes a new <see cref="GetEventPartitionMetadataQuery"/>
     /// </summary>
     /// <param name="partition">The cloud event partition to get metadata for</param>
-    public GetEventPartitionMetadataQuery(CloudEventPartitionRef partition)
+    public GetEventPartitionMetadataQuery(CloudEventPartitionReference partition)
     {
         this.Partition = partition;
     }
@@ -20,7 +20,7 @@ public class GetEventPartitionMetadataQuery
     /// Gets the cloud event partition to get metadata for
     /// </summary>
     [Required]
-    public virtual CloudEventPartitionRef Partition { get; protected set; }
+    public virtual CloudEventPartitionReference Partition { get; protected set; }
 
 }
 

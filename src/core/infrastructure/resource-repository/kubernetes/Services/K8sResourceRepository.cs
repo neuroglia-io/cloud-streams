@@ -156,7 +156,7 @@ public class K8sResourceRepository
     public virtual async Task<TResource?> PatchResourceAsync<TResource>(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
-        if(patch == null) throw new ArgumentNullException(nameof(patch));
+        if (patch == null) throw new ArgumentNullException(nameof(patch));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         var resource = new TResource();
         var group = resource.Type.Group;

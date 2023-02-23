@@ -17,19 +17,17 @@ public class Patch
     /// </summary>
     /// <param name="type">The type of patch to apply</param>
     /// <param name="document">The patch document</param>
-    public Patch(string type, object document)
+    public Patch(PatchType type, object document)
     {
         this.Type = type;
         this.Document = document;
     }
 
     /// <summary>
-    /// Gets/sets the patch's type<para></para>
-    /// See <see cref="PatchType"/>s
+    /// Gets/sets the patch's type
     /// </summary>
-    [Required, JsonRequired, MinLength(1)]
-    [DataMember(Order = 1, Name = "type", IsRequired = true), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual string Type { get; set; } = null!;
+    [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
+    public virtual PatchType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the patch document
