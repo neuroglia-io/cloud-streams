@@ -16,6 +16,10 @@
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
         <Column TData="Gateway"
+                ValueProvider="s => s.Metadata.CreationTimestamp">
+            <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
+        <Column TData="Gateway"
                 ValueProvider="c => c.Spec.Authorization == null ? null : c.Spec.Authorization.DecisionStrategy">
             <HeaderTemplate>Authorization Strategy</HeaderTemplate>
         </Column>

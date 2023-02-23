@@ -16,6 +16,10 @@
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
         <Column TData="Broker"
+                ValueProvider="s => s.Metadata.CreationTimestamp">
+            <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
+        <Column TData="Broker"
                 ValueProvider="b => b.Spec.Stream == null ? null : b.Spec.Stream.Offset">
             <HeaderTemplate>Desired Offset</HeaderTemplate>
         </Column>

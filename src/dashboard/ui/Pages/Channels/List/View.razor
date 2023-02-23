@@ -16,6 +16,10 @@
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
         <Column TData="Channel"
+                ValueProvider="s => s.Metadata.CreationTimestamp">
+            <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
+        <Column TData="Channel"
                 ValueProvider="c => c.Spec.Stream == null ? null : c.Spec.Stream.Offset">
             <HeaderTemplate>Desired Offset</HeaderTemplate>
         </Column>

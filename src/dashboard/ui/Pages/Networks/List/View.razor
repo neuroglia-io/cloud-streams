@@ -15,6 +15,10 @@
             ValueProvider="n => n.Metadata.Name">
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
+        <Column TData="Network"
+            ValueProvider="s => s.Metadata.CreationTimestamp">
+            <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
         <Column TData="Network" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
