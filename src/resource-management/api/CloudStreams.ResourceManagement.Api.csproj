@@ -22,6 +22,7 @@
 	
   <ItemGroup>
     <ProjectReference Include="..\..\core\api\CloudStreams.Core.Api.csproj" />
+    <ProjectReference Include="..\api-client\CloudStreams.ResourceManagement.Api.Client.csproj" />
     <ProjectReference Include="..\application\CloudStreams.ResourceManagement.Application.csproj" />
   </ItemGroup>
 

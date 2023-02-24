@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using System.Reflection;
 
 namespace CloudStreams.Core.Application.Configuration;
@@ -158,6 +160,21 @@ public class CloudStreamsApplicationBuilder
             configureHealthChecks(healthChecks);
         }
 
+        var serviceName = "test"; var serviceVersion = "0.1.0"; //todo: URGENT: replace with config
+        Tracing.ActivitySource = new(serviceName, serviceVersion);
+        var telemetry = this.Services.AddOpenTelemetry();
+        telemetry = telemetry.WithTracing(builder =>
+        {
+            builder
+                .AddSource(serviceName)
+                .SetResourceBuilder(
+                    ResourceBuilder.CreateDefault()
+                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter();
+        });
+
         this.Services.AddSignalR();
         this.Services.AddMediatR(options =>
         {
@@ -178,7 +195,6 @@ public class CloudStreamsApplicationBuilder
         this.Services.TryAddSingleton(provider => (ICloudEventStore)provider.GetRequiredService(this.CloudEventStoreType));
         this.Services.TryAddSingleton(provider => (IResourceRepository)provider.GetRequiredService(this.ResourceRepositoryType));
         this.Services.TryAddSingleton(provider => (ISchemaRegistry)provider.GetRequiredService(this.SchemaRegistryType));
-
         this.Services.AddSwaggerGen(builder =>
         {
             builder.CustomOperationIds(o =>

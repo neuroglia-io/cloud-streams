@@ -20,7 +20,7 @@ public class ResourceEventHubClient
     public ResourceEventHubClient(HubConnection connection)
     {
         this.Connection = connection;
-        this.Connection.On<CloudEvent>(nameof(IResourceEventHubClient.StreamEvent), this.Subject.OnNext);
+        this.Connection.On<CloudEvent>(nameof(IResourceEventWatchHubClient.ResourceWatchEvent), this.Subject.OnNext);
     }
 
     /// <summary>

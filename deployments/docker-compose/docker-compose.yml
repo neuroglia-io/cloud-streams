@@ -42,6 +42,13 @@ services:
     depends_on:
       - postgres
 
+  jaeger:
+    image: jaegertracing/opentelemetry-all-in-one
+    ports:
+      - 13133:13133
+      - 16686:16686
+      - 4317:4317
+
   gateway-1:
     image: ${DOCKER_REGISTRY-}cloudstreams-gateway
     build:
@@ -50,9 +57,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
-      CLOUDSTREAMS_GATEWAY_NAME: gateway-1
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     ports:
       - 9696:80
     volumes:
@@ -61,6 +68,7 @@ services:
       - eventstore
       - postgres
       - apicurio
+      - jaeger
 
   broker-1:
     image: ${DOCKER_REGISTRY-}cloudstreams-broker
