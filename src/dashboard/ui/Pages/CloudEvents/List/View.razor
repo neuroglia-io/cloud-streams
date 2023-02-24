@@ -65,18 +65,18 @@
         <Column TData="CloudEvent" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventModalAsync(context.Item)"><span class="bi bi-info-circle"></span></button>
+                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventOffcanvasAsync(context.Item)"><span class="bi bi-info-circle"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
-<CloudEventModal @ref="modal" ReadOnly="true" />
+<CloudEventOffcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" />
 
 @code{
 
     private List<CloudEvent>? events;
-    private CloudEventModal? modal;
+    private CloudEventOffcanvas? offcanvas;
     private ReadOptionsForm? readOptionForm;
 
     private bool disposed;
@@ -100,11 +100,11 @@
         this.StateHasChanged();
     }
 
-    private Task OnShowCloudEventModalAsync(CloudEvent e)
+    private Task OnShowCloudEventOffcanvasAsync(CloudEvent e)
     {
-        if (this.modal == null) return Task.CompletedTask;
-        this.modal.SetCloudEvent(e);
-        return this.modal.ShowAsync();
+        if (this.offcanvas == null) return Task.CompletedTask; ;
+        this.offcanvas.SetCloudEvent(e);
+        return this.offcanvas.ShowAsync();
     }
 
 }

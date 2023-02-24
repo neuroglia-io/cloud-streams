@@ -1,87 +1,81 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using System.Text.Json;
 
-<Modal @ref="modal" Size="ModalSize.ExtraLarge">
-    <Title>Cloud Event Details</Title>
-    <Body>
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col-6">
-                    <h5>Context Attributes</h5>
-                    <table class="table table-striped mb-3">
-                        <tbody>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-6">
+            <h5>Context Attributes</h5>
+            <table class="table table-striped mb-3">
+                <tbody>
+                    <tr>
+                        <td>Id</td>
+                        <td><input type="text" readonly="@readOnly" value="@cloudEvent?.Id" required @onchange="args => OnCloudEventChanged(e => e.Id = args.Value == null ? e.Id = null : (string)args.Value!)" placeholder="e8be1dab-0f23-484d-b3be-6603d0b83be0" title="The event's unique identifier" class="form-control" /></td>
+                    </tr>
+                    @if(readOnly)
+                    {
+                        <tr>
+                            <td>Time</td>
+                            <td><input type="text" readonly value="@cloudEvent?.Time" title="The date and time at which the event has been published" class="form-control" /></td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>Source</td>
+                        <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.Source" required @onchange="args => OnCloudEventChanged(e => e.Source = args.Value == null ? e.Source = null : new Uri((string)args.Value!))" placeholder="https://myservice.com" title="The absolute uri of the Cloud Event's source" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Type</td>
+                        <td><input type="text" readonly="@readOnly"  value="@cloudEvent?.Type" required @onchange="args => OnCloudEventChanged(e => e.Type = (string)args.Value!)" placeholder="com.myservice/events/myevent" title="The Cloud Event's type, which should ideally be a reverse DNS" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Subject</td>
+                        <td><input type="text" readonly="@readOnly"  value="@cloudEvent?.Subject" required @onchange="args => OnCloudEventChanged(e => e.Subject = (string)args.Value!)" placeholder="e3fbf8f9-077a-4141-9f20-53aa924e11ed" title="The subject of the event in the context of the event producer" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Data Schema</td>
+                        <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.DataSchema" @onchange="args => OnCloudEventChanged(e => e.DataSchema = string.IsNullOrWhiteSpace((string)args.Value!) ? null : new((string)args.Value))" placeholder="https://myservice.com/schemas/events/myevent.json" title="The Cloud Event's schema" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Data Content Type</td>
+                        <td><input type="text" readonly="@readOnly" value="@cloudEvent?.DataContentType" @onchange="args => OnCloudEventChanged(e => e.DataContentType = (string)args.Value!)" placeholder="application/json" title="The Cloud Event's data content type" class="form-control" /></td>
+                    </tr>
+                </tbody>
+            </table>
+            <h5>Extension Attributes</h5>
+            <table class="table table-striped mb-3">
+                <tbody>
+                    @if (cloudEvent != null && cloudEvent.ExtensionAttributes != null)
+                    {
+                        foreach (var attr in cloudEvent.ExtensionAttributes)
+                        {
                             <tr>
-                                <td>Id</td>
-                                <td><input type="text" readonly="@readOnly" value="@cloudEvent?.Id" required @onchange="args => OnCloudEventChanged(e => e.Id = args.Value == null ? e.Id = null : (string)args.Value!)" placeholder="e8be1dab-0f23-484d-b3be-6603d0b83be0" title="The event's unique identifier" class="form-control" /></td>
-                            </tr>
-                            @if(readOnly)
-                            {
-                                <tr>
-                                    <td>Time</td>
-                                    <td><input type="text" readonly value="@cloudEvent?.Time" title="The date and time at which the event has been published" class="form-control" /></td>
-                                </tr>
-                            }
-                            <tr>
-                                <td>Source</td>
-                                <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.Source" required @onchange="args => OnCloudEventChanged(e => e.Source = args.Value == null ? e.Source = null : new Uri((string)args.Value!))" placeholder="https://myservice.com" title="The absolute uri of the Cloud Event's source" class="form-control" /></td>
-                            </tr>
-                            <tr>
-                                <td>Type</td>
-                                <td><input type="text" readonly="@readOnly"  value="@cloudEvent?.Type" required @onchange="args => OnCloudEventChanged(e => e.Type = (string)args.Value!)" placeholder="com.myservice/events/myevent" title="The Cloud Event's type, which should ideally be a reverse DNS" class="form-control" /></td>
-                            </tr>
-                            <tr>
-                                <td>Subject</td>
-                                <td><input type="text" readonly="@readOnly"  value="@cloudEvent?.Subject" required @onchange="args => OnCloudEventChanged(e => e.Subject = (string)args.Value!)" placeholder="e3fbf8f9-077a-4141-9f20-53aa924e11ed" title="The subject of the event in the context of the event producer" class="form-control" /></td>
-                            </tr>
-                            <tr>
-                                <td>Data Schema</td>
-                                <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.DataSchema" @onchange="args => OnCloudEventChanged(e => e.DataSchema = string.IsNullOrWhiteSpace((string)args.Value!) ? null : new((string)args.Value))" placeholder="https://myservice.com/schemas/events/myevent.json" title="The Cloud Event's schema" class="form-control" /></td>
-                            </tr>
-                            <tr>
-                                <td>Data Content Type</td>
-                                <td><input type="text" readonly="@readOnly" value="@cloudEvent?.DataContentType" @onchange="args => OnCloudEventChanged(e => e.DataContentType = (string)args.Value!)" placeholder="application/json" title="The Cloud Event's data content type" class="form-control" /></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <h5>Extension Attributes</h5>
-                    <table class="table table-striped mb-3">
-                        <tbody>
-                            @if (cloudEvent != null && cloudEvent.ExtensionAttributes != null)
-                            {
-                                foreach (var attr in cloudEvent.ExtensionAttributes)
+                                <td>@attr.Key.ToPascalCase()</td>
+                                <td><input type="text" value="@attr.Value" @onchange="args => OnCloudEventChanged(e => e.ExtensionAttributes?.Add(attr.Key, args.Value!))" title="The value of the cloud event's extension context attribute" class="form-control" /></td>
+                                @if (!readOnly)
                                 {
-                                    <tr>
-                                        <td>@attr.Key.ToPascalCase()</td>
-                                        <td><input type="text" value="@attr.Value" @onchange="args => OnCloudEventChanged(e => e.ExtensionAttributes?.Add(attr.Key, args.Value!))" title="The value of the cloud event's extension context attribute" class="form-control" /></td>
-                                        @if (!readOnly)
-                                        {
-                                            <td><button title="Removes the extension context attribute" @onclick="e => OnRemoveCloudEventExtensionAttribute(attr.Key)" class="btn btn-outline-dark"><span class="bi bi-trash-fill"></span></button></td>
-                                        }
-                                    </tr>
+                                    <td><button title="Removes the extension context attribute" @onclick="e => OnRemoveCloudEventExtensionAttribute(attr.Key)" class="btn btn-outline-dark"><span class="bi bi-trash-fill"></span></button></td>
                                 }
-                            }
-                            @if (!readOnly)
-                            {
-                                <tr>
-                                    <td><input type="text" value="@extensionAttribute.Name" @onchange="e => OnNewExtensionAttributeChanged(a => a.Name = (string)e.Value!)" placeholder="Name" class="form-control" /></td>
-                                    <td><input type="text" value="@extensionAttribute.Value" @onchange="e => OnNewExtensionAttributeChanged(a => a.Value = (string)e.Value!)" placeholder="Value" class="form-control" /></td>
-                                    <td><button title="Adds new extension context attribute" @onclick="OnAddCloudEventExtensionAttribute" class="btn btn-secondary"><span class="bi bi-plus"></span></button></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-                <div class="col-6">
-                    <textArea readonly="@readOnly" @onchange="args => OnCloudEventChanged(e => e.Data = args.Value == null ? e.Data = null : Serializer.Json.Deserialize<object>((string)args.Value!))" class="form-control h-100">@(JsonSerializer.Serialize(cloudEvent?.Data, new JsonSerializerOptions() { WriteIndented = true }))</textArea>
-                </div>
-            </div>
+                            </tr>
+                        }
+                    }
+                    @if (!readOnly)
+                    {
+                        <tr>
+                            <td><input type="text" value="@extensionAttribute.Name" @onchange="e => OnNewExtensionAttributeChanged(a => a.Name = (string)e.Value!)" placeholder="Name" class="form-control" /></td>
+                            <td><input type="text" value="@extensionAttribute.Value" @onchange="e => OnNewExtensionAttributeChanged(a => a.Value = (string)e.Value!)" placeholder="Value" class="form-control" /></td>
+                            <td><button title="Adds new extension context attribute" @onclick="OnAddCloudEventExtensionAttribute" class="btn btn-secondary"><span class="bi bi-plus"></span></button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
-    </Body>
-</Modal>
+        <div class="col-6">
+            <textArea readonly="@readOnly" @onchange="args => OnCloudEventChanged(e => e.Data = args.Value == null ? e.Data = null : Serializer.Json.Deserialize<object>((string)args.Value!))" class="form-control h-100">@(JsonSerializer.Serialize(cloudEvent?.Data, new JsonSerializerOptions() { WriteIndented = true }))</textArea>
+        </div>
+    </div>
+</div>
 
 @code {
 
-    Modal? modal;
     ExtensionAttribute extensionAttribute = new();
 
     CloudEvent? cloudEvent;
@@ -118,36 +112,6 @@
         }
         if (stateHasChanged) this.StateHasChanged();
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Sets the cloud event to display/edit
-    /// </summary>
-    /// <param name="e">The cloud event to set</param>
-    public void SetCloudEvent(CloudEvent e)
-    {
-        this.cloudEvent = e;
-        this.StateHasChanged();
-    }
-
-    /// <summary>
-    /// Shows the cloud event modal
-    /// </summary>
-    /// <returns>A new awaitable task</returns>
-    public Task ShowAsync()
-    {
-        if (this.modal == null) return Task.CompletedTask;
-        return this.modal.ShowAsync();
-    }
-
-    /// <summary>
-    /// Hides the cloud event modal
-    /// </summary>
-    /// <returns>A new awaitable task</returns>
-    public Task HideAsync()
-    {
-        if (this.modal == null) return Task.CompletedTask;
-        return this.modal.HideAsync();
     }
 
     void OnCloudEventChanged(Action<CloudEvent> patch)

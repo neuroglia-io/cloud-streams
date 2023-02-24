@@ -1,4 +1,5 @@
-﻿using CloudStreams.Core.Api.Client;
+﻿using BlazorBootstrap;
+using CloudStreams.Core.Api.Client;
 using CloudStreams.Dashboard;
 using CloudStreams.Dashboard.Components;
 using CloudStreams.Dashboard.StateManagement;
@@ -27,5 +28,6 @@ builder.Services.AddFlux(flux =>
     flux.ScanMarkupTypeAssembly<App>();
 });
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
+builder.Services.AddBlazorBootstrap();
 
 await builder.Build().RunAsync();
