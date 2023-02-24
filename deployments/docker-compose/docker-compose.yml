@@ -57,6 +57,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
+      CLOUDSTREAMS_GATEWAY_NAME: gateway-1
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
