@@ -1,6 +1,7 @@
 ﻿using CloudStreams.Core.Application.Services;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Services;
+using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -65,6 +66,11 @@ public class CloudStreamsApplicationBuilder
     protected HashSet<Assembly> MediationAssemblies { get; } = new() { typeof(CloudStreamsApplicationBuilder).Assembly };
 
     /// <summary>
+    /// Gets an <see cref="HashSet{T}"/> containing the assemblies to scan for fluent validators
+    /// </summary>
+    protected HashSet<Assembly> ValidationAssemblies { get; } = new() {  };
+
+    /// <summary>
     /// Gets a <see cref="List{T}"/> containing the <see cref="Action{T}"/>s used to setup the application health checks
     /// </summary>
     protected List<Action<IHealthChecksBuilder>> HealthCheckConfigurations { get; } = new();
@@ -82,6 +88,14 @@ public class CloudStreamsApplicationBuilder
     {
         var assembly = typeof(TMarkup).Assembly;
         if (!this.MediationAssemblies.Contains(assembly)) this.MediationAssemblies.Add(assembly);
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public virtual ICloudStreamsApplicationBuilder RegisterValidationAssembly<TMarkup>()
+    {
+        var assembly = typeof(TMarkup).Assembly;
+        if (!this.ValidationAssemblies.Contains(assembly)) this.ValidationAssemblies.Add(assembly);
         return this;
     }
 
@@ -150,6 +164,7 @@ public class CloudStreamsApplicationBuilder
             options.RegisterServicesFromAssemblies(this.MediationAssemblies.ToArray());
             options.BehaviorsToRegister.Add(new(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingPipelineBehavior<,>), ServiceLifetime.Transient));
         });
+        this.Services.AddValidatorsFromAssemblies(this.ValidationAssemblies, ServiceLifetime.Transient);
         this.Services.AddResponseCompression(options =>
         {
             options.EnableForHttps = true;

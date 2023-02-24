@@ -61,6 +61,15 @@ namespace CloudStreams.Core.Data.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Cloud event context attribute names must be formed by lower case, alphanumeric characters only.
+        /// </summary>
+        public static string CloudEventAttributeNameMustBeAlphanumeric {
+            get {
+                return ResourceManager.GetString("CloudEventAttributeNameMustBeAlphanumeric", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to A cluster resource cannot define a namespace.
         /// </summary>
         public static string ClusterResourceCannotDefineNamespace {

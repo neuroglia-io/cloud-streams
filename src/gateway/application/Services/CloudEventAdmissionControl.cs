@@ -1,4 +1,6 @@
 ﻿using CloudStreams.Core.Infrastructure;
+using FluentValidation;
+using System.Net;
 
 namespace CloudStreams.Gateway.Application.Services;
 
@@ -20,7 +22,9 @@ public class CloudEventAdmissionControl
     /// <param name="schemaGenerator">The service used to generate <see cref="JsonSchema"/>s</param>
     /// <param name="schemaRegistry">The service used to manage <see cref="JsonSchema"/>s</param>
     /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
-    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IAuthorizationManager authorizationManager, ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources)
+    /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
+    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IAuthorizationManager authorizationManager, 
+        ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources, IEnumerable<IValidator<CloudEvent>> validators)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.GatewayOptions = gatewayOptions.Value;
@@ -28,6 +32,7 @@ public class CloudEventAdmissionControl
         this.SchemaGenerator = schemaGenerator;
         this.SchemaRegistry = schemaRegistry;
         this.Resources = resources;
+        this.Validators = validators;
     }
 
     /// <summary>
@@ -61,6 +66,11 @@ public class CloudEventAdmissionControl
     protected IResourceRepository Resources { get; }
 
     /// <summary>
+    /// Gets an <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s
+    /// </summary>
+    protected IEnumerable<IValidator<CloudEvent>> Validators { get; }
+
+    /// <summary>
     /// Gets the service used to manage the state of the current <see cref="Core.Data.Models.Gateway"/>
     /// </summary>
     protected IResourceMonitor<Core.Data.Models.Gateway>? Configuration { get; private set; }
@@ -74,6 +84,21 @@ public class CloudEventAdmissionControl
     /// <inheritdoc/>
     public virtual async Task<Response> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
+        var validationResults = new List<FluentValidation.Results.ValidationResult>(this.Validators.Count());
+        foreach (var validator in this.Validators)
+        {
+            validationResults.Add(await validator.ValidateAsync(e, cancellationToken).ConfigureAwait(false));
+        }
+        if (!validationResults.All(r => r.IsValid)) return new()
+        {
+            Status = (int)HttpStatusCode.BadRequest,
+            Title = ProblemTitles.ValidationFailed,
+            Errors = validationResults
+                .Where(r => !r.IsValid)
+                .SelectMany(r => r.Errors)
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
+        };
         this.Logger.LogDebug("Started admission evaluation for cloud event with id '{eventId}'...", e.Id);
         var result = await this.AuthorizeAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())

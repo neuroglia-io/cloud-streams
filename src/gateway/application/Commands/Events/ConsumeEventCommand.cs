@@ -19,6 +19,7 @@ public class ConsumeEventCommand
     /// <summary>
     /// Gets the <see cref="Core.Data.Models.CloudEvent"/> to consume
     /// </summary>
+    [Required]
     public CloudEvent CloudEvent { get; }
 
 }

@@ -25,6 +25,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.Configure<GatewayOptions>(builder.Configuration);
         builder.RegisterApplicationPart<CloudEventsController>();
         builder.RegisterMediationAssembly<ConsumeEventCommand>();
+        builder.RegisterValidationAssembly<ConsumeEventCommand>();
         builder.Services.TryAddSingleton<CloudEventAdmissionControl>();
         builder.Services.TryAddSingleton<ICloudEventAdmissionControl>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
         builder.Services.AddHostedService<CloudEventHubDispatcher>();
