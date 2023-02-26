@@ -1,12 +1,12 @@
 ﻿fromStream('cloud-events')
     .when({
-        $init: function () {
+        $init: () => {
             return {
                 keys: [],
                 values: {}
             }
         },
-        $any: function (stream, evt) {
+        $any: (stream, evt) => {
             if (!evt || !evt.metadataRaw || !evt.metadataRaw) return;
             const metadata = JSON.parse(evt.metadataRaw);
             const created = metadata.time;
