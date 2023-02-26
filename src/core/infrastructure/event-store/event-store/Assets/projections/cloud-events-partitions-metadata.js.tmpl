@@ -1,0 +1,32 @@
+﻿fromStream('cloud-events')
+    .when({
+        $init: function () {
+            return {
+                keys: [],
+                values: {}
+            }
+        },
+        $any: function (stream, evt) {
+            if (!evt || !evt.metadataRaw || !evt.metadataRaw) return;
+            const metadata = JSON.parse(evt.metadataRaw);
+            const created = metadata.time;
+            const id = metadata.##metadataProperty##;
+            const type = '##partitionType##';
+            if (!id || !id.length) {
+                return;
+            }
+            if (stream.keys.includes(id)) {
+                stream.values[id].lastEvent = created;
+                stream.values[id].length++;
+                return;
+            }
+            stream.keys.push(id);
+            stream.values[id] = {
+                id,
+                type,
+                firstEvent: created,
+                lastEvent: created,
+                length: 1
+            };
+        }
+    });

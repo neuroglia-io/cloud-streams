@@ -1,16 +1,24 @@
-﻿using System.Text.Json.Serialization;
+﻿using CloudStreams.Core.Data.Models;
+using System.Text.Json.Serialization;
 
 namespace CloudStreams.Core.Infrastructure.Models;
 
 /// <summary>
-/// Represents the results of the <see cref="EventStoreProjections.CloudEventPartitionsMetadata"/> projection result
+/// Represents the results of the partition of a <see cref="CloudEventPartitionType"/> metadata projection
 /// </summary>
 internal class PartitionsMetadataProjectionResult
 {
+
     /// <summary>
-    /// Gets/Sets the <see cref="PartitionTypeMetadata"/> entries
+    /// Gets/Sets existing ids of a <see cref="CloudEventPartitionType"/>
     /// </summary>
-    [JsonPropertyName("entries")]
-    public Dictionary<string, PartitionTypeMetadata> Entries { get; set; } = null!;
+    [JsonPropertyName("keys")]
+    public List<string> Keys { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/Sets the metadata entries of a <see cref="CloudEventPartitionType"/>
+    /// </summary>
+    [JsonPropertyName("values")]
+    public Dictionary<string, CloudEventPartitionMetadata> Values { get; set; } = null!;
 
 }

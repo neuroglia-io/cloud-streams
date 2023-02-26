@@ -75,44 +75,28 @@ public class ESCloudEventStore
     public virtual async Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionReference partition, CancellationToken cancellationToken = default)
     {
         var typeName = partition.Type.ToString();
-        var partitionsMetadata = await this.Projections.GetResultAsync<PartitionsMetadataProjectionResult>(EventStoreProjections.CloudEventPartitionsMetadata, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var partitionsMetadata = await this.Projections.GetResultAsync<PartitionsMetadataProjectionResult>(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (partitionsMetadata == null)
         {
             throw new NullReferenceException(nameof(partitionsMetadata));
         }
-        if (partitionsMetadata.Entries == null)
-        {
-            throw new NullReferenceException(nameof(partitionsMetadata.Entries));
-        }
-        if (!partitionsMetadata.Entries.ContainsKey(typeName))
-        {
-            throw new IndexOutOfRangeException(typeName);
-        }
-        if (!partitionsMetadata.Entries[typeName].Values.ContainsKey(partition.Id))
+        if (!partitionsMetadata.Values.ContainsKey(partition.Id))
         {
             throw new IndexOutOfRangeException(partition.Id);
         }
-        return partitionsMetadata.Entries[typeName].Values[partition.Id];
+        return partitionsMetadata.Values[partition.Id];
     }
 
     /// <inheritdoc/>
     public virtual async IAsyncEnumerable<CloudEventPartitionMetadata> ListPartitionsMetadataAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var typeName = partitionType.ToString();
-        var partitionsMetadata = await this.Projections.GetResultAsync<PartitionsMetadataProjectionResult>(EventStoreProjections.CloudEventPartitionsMetadata, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var partitionsMetadata = await this.Projections.GetResultAsync<PartitionsMetadataProjectionResult>(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, cancellationToken: cancellationToken).ConfigureAwait(false);
         if (partitionsMetadata == null)
         {
             throw new NullReferenceException(nameof(partitionsMetadata));
         }
-        if (partitionsMetadata.Entries == null)
-        {
-            throw new NullReferenceException(nameof(partitionsMetadata.Entries));
-        }
-        if (!partitionsMetadata.Entries.ContainsKey(typeName))
-        {
-            throw new IndexOutOfRangeException(typeName);
-        }
-        await foreach(var kvp in partitionsMetadata.Entries[typeName].Values.ToAsyncEnumerable())
+        await foreach(var kvp in partitionsMetadata.Values.ToAsyncEnumerable())
         {
             yield return kvp.Value;
         }
@@ -297,11 +281,16 @@ public class ESCloudEventStore
         streamReader.Dispose();
         await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionBySource, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-partitions-metadata.js"))!;
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-partitions-metadata.js.tmpl"))!;
         streamReader = new StreamReader(stream);
         query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         streamReader.Dispose();
-        await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadata, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        foreach (var value in Enum.GetValues<CloudEventPartitionType>())
+        {
+            var typeName = value.ToString();
+            var propertyName = typeName.Replace("By", "").ToLower();
+            await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataProperty##", propertyName).Replace("##partitionType##", typeName), true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
