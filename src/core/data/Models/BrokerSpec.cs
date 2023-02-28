@@ -29,10 +29,4 @@ public class BrokerSpec
     [DataMember(Order = 1, Name = "network", IsRequired = true), JsonPropertyName("network"), YamlMember(Alias = "network")]
     public virtual string Network { get; set; } = null!;
 
-    /// <summary>
-    /// Gets/sets an object used to configure the broker's cloud event stream
-    /// </summary>
-    [DataMember(Order = 2, Name = "stream"), JsonPropertyName("stream"), YamlMember(Alias = "stream")]
-    public virtual CloudEventStream? Stream { get; set; }
-
 }

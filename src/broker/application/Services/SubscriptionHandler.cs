@@ -10,10 +10,38 @@ using System.Text.RegularExpressions;
 namespace CloudStreams.Broker.Application.Services;
 
 /// <summary>
-/// Represents a service used to handle a <see cref="Subscription"/>
+/// Represents a service used to handle a <see cref="Core.Data.Models.Subscription"/>
 /// </summary>
 public class SubscriptionHandler
+    : IDisposable
 {
+
+    private bool _Disposed;
+
+    /// <summary>
+    /// Initializes a new <see cref="SubscriptionHandler"/>
+    /// </summary>
+    /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
+    /// <param name="eventStore">The service used to store <see cref="CloudEvent"/>s</param>
+    /// <param name="resourceRepository">The service used to manage <see cref="IResource"/>s</param>
+    /// <param name="subscriptionController">The service used to control <see cref="Core.Data.Models.Subscription"/> resources</param>
+    /// <param name="expressionEvaluator">The service used to evaluate runtime expressions</param>
+    /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
+    /// <param name="httpClient">The service used to perform HTTP requests</param>
+    /// <param name="subscription">The <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
+    public SubscriptionHandler(ILoggerFactory loggerFactory, ICloudEventStore eventStore, IResourceRepository resourceRepository, 
+        IResourceController<Subscription> subscriptionController, IExpressionEvaluator expressionEvaluator, 
+        IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
+    {
+        this.Logger = loggerFactory.CreateLogger(this.GetType());
+        this.EventStore = eventStore;
+        this.ResourceRepository = resourceRepository;
+        this.SubscriptionController = subscriptionController;
+        this.ExpressionEvaluator = expressionEvaluator;
+        this.CloudEventValidators = cloudEventValidators;
+        this.HttpClient = httpClient;
+        this.Subscription = subscription;
+    }
 
     /// <summary>
     /// Gets the service used to perform logging
@@ -29,6 +57,11 @@ public class SubscriptionHandler
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
     protected IResourceRepository ResourceRepository { get; }
+
+    /// <summary>
+    /// Gets the service used to control <see cref="Core.Data.Models.Subscription"/> resources
+    /// </summary>
+    protected IResourceController<Subscription> SubscriptionController { get; }
 
     /// <summary>
     /// Gets the service used to evaluate runtime expressions
@@ -97,6 +130,7 @@ public class SubscriptionHandler
     public virtual Task InitializeAsync(CancellationToken cancellationToken)
     {
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Updated).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionUpdatedAsync, this.CancellationToken);
         return this.InitializeCloudEventStreamAsync();
     }
 
@@ -175,11 +209,10 @@ public class SubscriptionHandler
         if(this.Subscription.Spec.Mutation == null) return e.Clone()!;
         var mutated = this.Subscription.Spec.Mutation.Strategy switch
         {
-            CloudEventMutationStrategy.Expression => await this.PerformExpressionBasedMutationAsync(this.Subscription.Spec.Mutation, e).ConfigureAwait(false),
-            CloudEventMutationStrategy.Webhook => await this.PerformWebhookBasedMutationAsync(this.Subscription.Spec.Mutation, e).ConfigureAwait(false),
+            CloudEventMutationStrategy.Expression => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Expression!).ConfigureAwait(false),
+            CloudEventMutationStrategy.Webhook => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Webhook!).ConfigureAwait(false),
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventMutationStrategy)} '{EnumHelper.Stringify(this.Subscription.Spec.Mutation.Strategy)}' is not supported"),
-        };
-        if (mutated == null) throw new NullReferenceException($"Failed to mutate the specified cloud event"); //todo: better feeback
+        } ?? throw new NullReferenceException("Failed to mutate the specified cloud event");
         await this.ValidateAsync(mutated).ConfigureAwait(false);
         return mutated;
     }
@@ -187,33 +220,29 @@ public class SubscriptionHandler
     /// <summary>
     /// Performs a runtime expression based mutation on the specified <see cref="CloudEvent"/>
     /// </summary>
-    /// <param name="mutation">An object used to configure the mutation to perform</param>
     /// <param name="e">The <see cref="CloudEvent"/> to mutate</param>
+    /// <param name="mutation">An object used to configure the mutation to perform</param>
     /// <returns>The mutated <see cref="CloudEvent"/></returns>
-    protected virtual Task<CloudEvent?> PerformExpressionBasedMutationAsync(CloudEventMutation mutation, CloudEvent e)
+    protected virtual Task<CloudEvent?> MutateAsync(CloudEvent e, object mutation)
     {
-        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
         if (e == null) throw new ArgumentNullException(nameof(e));
-        if (mutation.Strategy != CloudEventMutationStrategy.Expression) throw new FormatException(nameof(mutation.Strategy));
-        if (mutation.Expression == null) throw new FormatException(nameof(mutation.Expression));
-        if (mutation.Expression is string expression) return Task.FromResult(this.ExpressionEvaluator.Evaluate<CloudEvent>(expression, e));
-        else return Task.FromResult(this.ExpressionEvaluator.Mutate<CloudEvent>(mutation.Expression, e));
+        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+        if (mutation is string expression) return Task.FromResult(this.ExpressionEvaluator.Evaluate<CloudEvent>(expression, e));
+        else return Task.FromResult(this.ExpressionEvaluator.Mutate<CloudEvent>(mutation, e));
     }
 
     /// <summary>
     /// Performs a webhook based mutation on the specified <see cref="CloudEvent"/>
     /// </summary>
-    /// <param name="mutation">An object used to configure the mutation to perform</param>
     /// <param name="e">The <see cref="CloudEvent"/> to mutate</param>
+    /// <param name="webhook">An object used to configure the webhook to invoke</param>
     /// <returns>The mutated <see cref="CloudEvent"/></returns>
-    protected virtual async Task<CloudEvent?> PerformWebhookBasedMutationAsync(CloudEventMutation mutation, CloudEvent e)
+    protected virtual async Task<CloudEvent?> MutateAsync(CloudEvent e, Webhook webhook)
     {
-        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
         if (e == null) throw new ArgumentNullException(nameof(e));
-        if (mutation.Strategy != CloudEventMutationStrategy.Webhook) throw new FormatException(nameof(mutation.Strategy));
-        if (mutation.Webhook == null) throw new FormatException(nameof(mutation.Webhook));
+        if (webhook == null) throw new ArgumentNullException(nameof(webhook));
         using var requestContent = e.ToHttpContent();
-        using var request = new HttpRequestMessage(HttpMethod.Post, mutation.Webhook.ServiceUri) { Content = requestContent };
+        using var request = new HttpRequestMessage(HttpMethod.Post, webhook.ServiceUri) { Content = requestContent };
         request.Headers.Accept.Add(new(MediaTypeNames.Application.Json));
         using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
         var responseContent = await response.Content.ReadAsStringAsync(this.CancellationToken).ConfigureAwait(false);
@@ -246,29 +275,15 @@ public class SubscriptionHandler
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         var offset = e.GetSequence()!.Value;
-        try
+        using var requestContent = e.ToHttpContent();
+        using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.ServiceUri) { Content = requestContent };
+        using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
+        if (retryIfUnavailable && response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
-            using var requestContent = e.ToHttpContent();
-            using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.ServiceUri) { Content = requestContent };
-            using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
-            if (retryIfUnavailable)
-            {
-                if (response.IsSuccessStatusCode) return;
-                if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
-                {
-                    _ = this.RetryDispatchAsync(e, catchUpWhenAvailable);
-                    return;
-                }
-            }
-            else
-            {
-                response.EnsureSuccessStatusCode();
-            }
+            _ = this.RetryDispatchAsync(e, catchUpWhenAvailable);
+            return;
         }
-        catch(Exception ex)
-        {
-
-        }
+        response.EnsureSuccessStatusCode();
         await this.CommitOffsetAsync(offset).ConfigureAwait(false);
     }
 
@@ -344,11 +359,23 @@ public class SubscriptionHandler
     /// </summary>
     /// <param name="subscription">The updated <see cref="Core.Data.Models.Subscription"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task OnSubscriptionChangedAsync(Subscription subscription)
+    protected virtual async Task OnSubscriptionUpdatedAsync(Subscription subscription)
     {
         try
         {
-
+            if (subscription == null) throw new ArgumentNullException(nameof(subscription));
+            if (this.Subscription.Metadata.ResourceVersion == subscription.Metadata.ResourceVersion) return;
+            var previousState = this.Subscription;
+            this.Subscription = subscription;
+            if (previousState.Metadata.Generation == subscription.Metadata.Generation) return;
+            if (previousState.Spec.Stream?.Offset != this.Subscription.Spec.Stream?.Offset
+                && (ulong?)this.Subscription.Spec.Stream?.Offset < this.StreamOffset)
+            {
+                var offset = this.Subscription.GetOffset();
+                if (offset == StreamPosition.EndOfStream) offset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence()!;
+                await this.CommitOffsetAsync((ulong)offset).ConfigureAwait(false);
+                await this.CatchUpAsync().ConfigureAwait(false);
+            }
         }
         catch(Exception ex)
         {
@@ -382,12 +409,35 @@ public class SubscriptionHandler
     /// Handles the specified unhandled <see cref="Exception"/>s that has been thrown during the streaming of filtered <see cref="CloudEvent"/>s
     /// </summary>
     /// <param name="ex">The unhandled <see cref="Exception"/> to handle</param>
-    /// <returns>A new awaitable <see cref="Task"/>/returns>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual Task OnCloudEventStreamingError(Exception ex)
     {
         this.Logger.LogError("An error occured while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription, ex);
         this.SubscriptionFaulted = true;
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Disposes of the <see cref="SubscriptionHandler"/>
+    /// </summary>
+    /// <param name="disposing">A boolean indicating whether or not the <see cref="SubscriptionHandler"/> is being disposed of</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!this._Disposed)
+        {
+            if (disposing)
+            {
+                this.CancellationTokenSource.Dispose();
+            }
+            this._Disposed = true;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        this.Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 
 }

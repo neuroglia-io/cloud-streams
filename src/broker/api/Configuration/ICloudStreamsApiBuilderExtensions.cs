@@ -20,10 +20,9 @@ public static class ICloudStreamsApiBuilderExtensions
     {
         builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariablePrefix);
         builder.Services.Configure<BrokerOptions>(builder.Configuration);
-        //builder.RegisterApplicationPart<CloudEventsController>();
-        builder.Services.AddResourceController<Channel>();
-        builder.Services.TryAddSingleton<CloudEventDispatcher>();
-        builder.Services.AddHostedService(provider => provider.GetRequiredService<CloudEventDispatcher>());
+        builder.Services.AddResourceController<Subscription>();
+        builder.Services.TryAddSingleton<SubscriptionManager>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
         return builder;
     }
 
