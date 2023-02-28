@@ -100,12 +100,10 @@ h1:focus {
 
 .logo-typing {
     font-family: Comfortaa;
-    /*
-        color: $primary-dark;
-        background-image: -webkit-linear-gradient(0deg, $primary-dark 0%, $primary-bg-subtle-dark 100%);
-        background-clip: text;
-        -webkit-background-clip: text;
-        text-fill-color: transparent;
-        -webkit-text-fill-color: transparent;
-    */
+    color: $primary-dark;
+    background-image: -webkit-linear-gradient(0deg, $primary-dark 0%, $primary-bg-subtle-dark 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    text-fill-color: transparent;
+    -webkit-text-fill-color: transparent;
 }
