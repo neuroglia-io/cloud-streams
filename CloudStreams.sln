@@ -115,6 +115,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "api-client", "api-client", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.ResourceManagement.Api.Client", "src\resource-management\api-client\CloudStreams.ResourceManagement.Api.Client.csproj", "{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "channel", "channel", "{B5357060-62A6-4D3B-9F70-EFB545B79318}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "application", "application", "{F5AD209A-8430-474B-A202-9C776AA31D9E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Channel.Application", "src\channel\application\CloudStreams.Channel.Application.csproj", "{E343A210-8F5B-4000-8FB9-C387354C75E5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -209,6 +215,10 @@ Global
 		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E343A210-8F5B-4000-8FB9-C387354C75E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E343A210-8F5B-4000-8FB9-C387354C75E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E343A210-8F5B-4000-8FB9-C387354C75E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E343A210-8F5B-4000-8FB9-C387354C75E5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -265,6 +275,9 @@ Global
 		{2F63CA29-855A-4899-A887-7F68C2720677} = {CC8E18D7-0C03-4D27-8F48-C09071E1CCCA}
 		{D7AFB3DF-575A-458C-837A-9AF6CD2D8167} = {556B2FF2-8D1D-49D2-A63C-94CA541BC594}
 		{A407C350-56F4-4BA5-A0BA-2ACF12ED66D6} = {D7AFB3DF-575A-458C-837A-9AF6CD2D8167}
+		{B5357060-62A6-4D3B-9F70-EFB545B79318} = {D24210B9-42D1-4B5A-866B-D1FBF5B25D47}
+		{F5AD209A-8430-474B-A202-9C776AA31D9E} = {B5357060-62A6-4D3B-9F70-EFB545B79318}
+		{E343A210-8F5B-4000-8FB9-C387354C75E5} = {F5AD209A-8430-474B-A202-9C776AA31D9E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {13305552-A19D-453A-A26B-6E7B60F052F2}

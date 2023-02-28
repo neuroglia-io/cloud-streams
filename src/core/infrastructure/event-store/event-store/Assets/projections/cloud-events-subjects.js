@@ -1,4 +1,4 @@
-﻿fromAll()
+﻿fromStream('cloud-events')
     .when({
         $init: function () {
             return {

@@ -7,8 +7,10 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 
 namespace CloudStreams.Core.Application.Configuration;
@@ -162,14 +164,22 @@ public class CloudStreamsApplicationBuilder
 
         var serviceName = "test"; var serviceVersion = "0.1.0"; //todo: URGENT: replace with config
         Tracing.ActivitySource = new(serviceName, serviceVersion);
+        var telemetryResourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName: serviceName, serviceVersion: serviceVersion);
         var telemetry = this.Services.AddOpenTelemetry();
         telemetry = telemetry.WithTracing(builder =>
         {
             builder
                 .AddSource(serviceName)
-                .SetResourceBuilder(
-                    ResourceBuilder.CreateDefault()
-                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+                .SetResourceBuilder(telemetryResourceBuilder)
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddGrpcClientInstrumentation()
+                .AddOtlpExporter();
+        });
+        telemetry = telemetry.WithMetrics(builder =>
+        {
+            builder
+                .SetResourceBuilder(telemetryResourceBuilder)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddOtlpExporter();

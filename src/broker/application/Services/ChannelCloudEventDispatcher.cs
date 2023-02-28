@@ -95,40 +95,7 @@ public class ChannelCloudEventDispatcher
         var ackedOffset = this.Channel.Status?.Stream?.AckedOffset;
         if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
         var offset = (ulong?)desiredOffset;
-        if (ackedOffset.HasValue)
-        {
-            if (this.Channel.Metadata.Generation > this.Channel.Status?.ObservedGeneration)
-            {
-                var resource = this.Channel.Clone()!;
-                resource.Status ??= new() { ObservedGeneration = resource.Metadata.Generation };
-                if (resource.Status.Stream == null) resource.Status.Stream = new();
-                resource.Status.ObservedGeneration = resource.Metadata.Generation;
-                resource.Status.Stream.AckedOffset = offset;
-                await this.ResourceRepository.UpdateResourceStatusAsync(resource, this.CancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                offset = (ulong)ackedOffset + 1;
-            }
-        }
-        if (this.Channel.Status == null)
-        {
-            var resource = this.Channel.Clone()!;
-            resource.Status = new() { ObservedGeneration = resource.Metadata.Generation, Stream = new() { AckedOffset = offset } };
-            await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
-        }
-        else if (this.Channel.Status.Stream == null)
-        {
-            var resource = this.Channel.Clone()!;
-            resource.Status!.Stream = new() { AckedOffset = offset };
-            await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
-        }
-        else if (!this.Channel.Status.Stream.AckedOffset.HasValue)
-        {
-            var resource = this.Channel.Clone()!;
-            resource.Status!.Stream!.AckedOffset = offset;
-            await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
-        }
+        if (ackedOffset.HasValue) offset = (ulong)ackedOffset + 1;
         if (offset < this.BrokerOffset) await this.CatchUpAsync().ConfigureAwait(false);
     }
 
@@ -143,14 +110,7 @@ public class ChannelCloudEventDispatcher
         var previousState = this.Channel;
         this.Channel = channel;
         if (previousState.Metadata.Generation == channel.Metadata.Generation) return;
-        if (previousState.Spec.Stream?.Offset != this.Channel.Spec.Stream?.Offset 
-            && (ulong?)this.Channel.Spec.Stream?.Offset < this.BrokerOffset)
-        {
-            var resource = this.Channel.Clone()!;
-            resource.Status = new() { Stream = new() { AckedOffset = (ulong?)this.Channel.Spec.Stream?.Offset } };
-            this.Channel = await this.ResourceRepository.UpdateResourceStatusAsync(resource, this.CancellationToken).ConfigureAwait(false);
-            await this.CatchUpAsync().ConfigureAwait(false);
-        }
+        if (previousState.Spec.Stream?.Offset != this.Channel.Spec.Stream?.Offset && (ulong?)this.Channel.Spec.Stream?.Offset < this.BrokerOffset) await this.CatchUpAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -193,9 +153,6 @@ public class ChannelCloudEventDispatcher
             {
                 response.EnsureSuccessStatusCode();
             }
-            var resource = this.Channel.Clone()!;
-            resource.Status ??= new();
-            if (resource.Status.Stream == null) resource.Status.Stream = new();
         }
         catch(Exception ex) when (ex is not HttpRequestException)
         {
