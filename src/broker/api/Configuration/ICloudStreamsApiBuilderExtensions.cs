@@ -22,8 +22,8 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.Configure<BrokerOptions>(builder.Configuration);
         //builder.RegisterApplicationPart<CloudEventsController>();
         builder.Services.AddResourceController<Channel>();
-        builder.Services.TryAddSingleton<BrokerCloudEventDispatcher>();
-        builder.Services.AddHostedService(provider => provider.GetRequiredService<BrokerCloudEventDispatcher>());
+        builder.Services.TryAddSingleton<CloudEventDispatcher>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<CloudEventDispatcher>());
         return builder;
     }
 

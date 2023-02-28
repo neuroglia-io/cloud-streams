@@ -6,30 +6,30 @@ using System.Net;
 namespace CloudStreams.Broker.Application.Services;
 
 /// <summary>
-/// Represents a service used to dispatch <see cref="CloudEvent"/>s to a <see cref="Core.Data.Models.Channel"/>
+/// Represents a service used to dispatch <see cref="CloudEvent"/>s to a <see cref="Core.Data.Models.Subscription"/>
 /// </summary>
-public class ChannelCloudEventDispatcher
+public class CloudEventSubscriptionDispatcher
     : IDisposable
 {
 
     private bool _Disposed;
 
     /// <summary>
-    /// Initializes a new <see cref="ChannelCloudEventDispatcher"/>
+    /// Initializes a new <see cref="CloudEventSubscriptionDispatcher"/>
     /// </summary>
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
     /// <param name="eventStore">The service used to store <see cref="CloudEvent"/>s</param>
     /// <param name="resourceRepository">The service used to manage <see cref="IResource"/>s</param>
     /// <param name="httpClientFactory">The service used to create <see cref="System.Net.Http.HttpClient"/>s</param>
-    /// <param name="channel">The <see cref="Core.Data.Models.Channel"/> to dispatch <see cref="CloudEvent"/>s to</param>
+    /// <param name="subscription">The <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
     /// <param name="brokerOffset">The broker's offset</param>
-    public ChannelCloudEventDispatcher(ILoggerFactory loggerFactory, ICloudEventStore eventStore, IResourceRepository resourceRepository, IHttpClientFactory httpClientFactory, Channel channel, ulong brokerOffset)
+    public CloudEventSubscriptionDispatcher(ILoggerFactory loggerFactory, ICloudEventStore eventStore, IResourceRepository resourceRepository, IHttpClientFactory httpClientFactory, Subscription subscription, ulong brokerOffset)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.EventStore = eventStore;
         this.ResourceRepository = resourceRepository;
         this.HttpClient = httpClientFactory.CreateClient();
-        this.Channel = channel;
+        this.Subscription = subscription;
         this.BrokerOffset = brokerOffset;
     }
 
@@ -54,29 +54,29 @@ public class ChannelCloudEventDispatcher
     protected HttpClient HttpClient { get; }
 
     /// <summary>
-    /// Gets the <see cref="Core.Data.Models.Channel"/> to dispatch <see cref="CloudEvent"/>s to
+    /// Gets the <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to
     /// </summary>
-    protected Channel Channel { get; private set; }
+    protected Subscription Subscription { get; private set; }
 
     /// <summary>
-    /// Gets the <see cref="ChannelCloudEventDispatcher"/>'s <see cref="System.Threading.CancellationTokenSource"/>
+    /// Gets the <see cref="CloudEventSubscriptionDispatcher"/>'s <see cref="System.Threading.CancellationTokenSource"/>
     /// </summary>
     protected CancellationTokenSource CancellationTokenSource { get; private set; } = null!;
 
     /// <summary>
-    /// Gets the <see cref="ChannelCloudEventDispatcher"/>'s <see cref="System.Threading.CancellationToken"/>
+    /// Gets the <see cref="CloudEventSubscriptionDispatcher"/>'s <see cref="System.Threading.CancellationToken"/>
     /// </summary>
     protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
     /// <summary>
-    /// Gets a boolean indicating whether or not the channel service is online
+    /// Gets a boolean indicating whether or not the subscription service is online
     /// </summary>
-    protected bool ChannelServiceAvailable { get; set; } = true;
+    protected bool SubscriptionServiceAvailable { get; set; } = true;
 
     /// <summary>
-    /// Gets a boolean indicating whether or not the channel is out of sync with the broker
+    /// Gets a boolean indicating whether or not the subscription is out of sync with the broker
     /// </summary>
-    protected bool ChannelOutOfSync { get; set; }
+    protected bool SubscriptionOutOfSync { get; set; }
 
     /// <summary>
     /// Gets the offset of the broker
@@ -84,22 +84,22 @@ public class ChannelCloudEventDispatcher
     protected ulong BrokerOffset { get; set; }
 
     /// <summary>
-    /// Initializes the <see cref="ChannelCloudEventDispatcher"/>
+    /// Initializes the <see cref="CloudEventSubscriptionDispatcher"/>
     /// </summary>
-    /// <param name="stoppingToken">A <see cref="System.Threading.CancellationToken"/> used to shutdown the <see cref="ChannelCloudEventDispatcher"/></param>
+    /// <param name="stoppingToken">A <see cref="System.Threading.CancellationToken"/> used to shutdown the <see cref="CloudEventSubscriptionDispatcher"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task InitializeAsync(CancellationToken stoppingToken)
     {
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        var desiredOffset = this.Channel.Spec.Stream?.Offset;
-        var ackedOffset = this.Channel.Status?.Stream?.AckedOffset;
-        if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
+        var desiredOffset = this.Subscription.Spec.Stream?.Offset;
+        var ackedOffset = this.Subscription.Status?.Stream?.AckedOffset;
+        if (!desiredOffset.HasValue || desiredOffset.Value == StreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
         var offset = (ulong?)desiredOffset;
         if (ackedOffset.HasValue)
         {
-            if (this.Channel.Metadata.Generation > this.Channel.Status?.ObservedGeneration)
+            if (this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration)
             {
-                var resource = this.Channel.Clone()!;
+                var resource = this.Subscription.Clone()!;
                 resource.Status ??= new() { ObservedGeneration = resource.Metadata.Generation };
                 if (resource.Status.Stream == null) resource.Status.Stream = new();
                 resource.Status.ObservedGeneration = resource.Metadata.Generation;
@@ -111,21 +111,21 @@ public class ChannelCloudEventDispatcher
                 offset = (ulong)ackedOffset + 1;
             }
         }
-        if (this.Channel.Status == null)
+        if (this.Subscription.Status == null)
         {
-            var resource = this.Channel.Clone()!;
+            var resource = this.Subscription.Clone()!;
             resource.Status = new() { ObservedGeneration = resource.Metadata.Generation, Stream = new() { AckedOffset = offset } };
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
-        else if (this.Channel.Status.Stream == null)
+        else if (this.Subscription.Status.Stream == null)
         {
-            var resource = this.Channel.Clone()!;
+            var resource = this.Subscription.Clone()!;
             resource.Status!.Stream = new() { AckedOffset = offset };
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
-        else if (!this.Channel.Status.Stream.AckedOffset.HasValue)
+        else if (!this.Subscription.Status.Stream.AckedOffset.HasValue)
         {
-            var resource = this.Channel.Clone()!;
+            var resource = this.Subscription.Clone()!;
             resource.Status!.Stream!.AckedOffset = offset;
             await this.ResourceRepository.UpdateResourceStatusAsync(resource, stoppingToken).ConfigureAwait(false);
         }
@@ -133,22 +133,22 @@ public class ChannelCloudEventDispatcher
     }
 
     /// <summary>
-    /// Sets the <see cref="Core.Data.Models.Channel"/> to dispatch <see cref="CloudEvent"/>s to
+    /// Sets the <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to
     /// </summary>
-    /// <param name="channel">The <see cref="Core.Data.Models.Channel"/> to dispatch <see cref="CloudEvent"/>s to</param>
-    public virtual async Task SetChannelAsync(Channel channel)
+    /// <param name="subscription">The <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
+    public virtual async Task SetSubscriptionAsync(Subscription subscription)
     {
-        if(channel == null) throw new ArgumentNullException(nameof(channel));
-        if (this.Channel.Metadata.ResourceVersion == channel.Metadata.ResourceVersion) return;
-        var previousState = this.Channel;
-        this.Channel = channel;
-        if (previousState.Metadata.Generation == channel.Metadata.Generation) return;
-        if (previousState.Spec.Stream?.Offset != this.Channel.Spec.Stream?.Offset 
-            && (ulong?)this.Channel.Spec.Stream?.Offset < this.BrokerOffset)
+        if(subscription == null) throw new ArgumentNullException(nameof(subscription));
+        if (this.Subscription.Metadata.ResourceVersion == subscription.Metadata.ResourceVersion) return;
+        var previousState = this.Subscription;
+        this.Subscription = subscription;
+        if (previousState.Metadata.Generation == subscription.Metadata.Generation) return;
+        if (previousState.Spec.Stream?.Offset != this.Subscription.Spec.Stream?.Offset 
+            && (ulong?)this.Subscription.Spec.Stream?.Offset < this.BrokerOffset)
         {
-            var resource = this.Channel.Clone()!;
-            resource.Status = new() { Stream = new() { AckedOffset = (ulong?)this.Channel.Spec.Stream?.Offset } };
-            this.Channel = await this.ResourceRepository.UpdateResourceStatusAsync(resource, this.CancellationToken).ConfigureAwait(false);
+            var resource = this.Subscription.Clone()!;
+            resource.Status = new() { Stream = new() { AckedOffset = (ulong?)this.Subscription.Spec.Stream?.Offset } };
+            this.Subscription = await this.ResourceRepository.UpdateResourceStatusAsync(resource, this.CancellationToken).ConfigureAwait(false);
             await this.CatchUpAsync().ConfigureAwait(false);
         }
     }
@@ -162,7 +162,7 @@ public class ChannelCloudEventDispatcher
     public virtual Task DispatchAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         this.BrokerOffset = e.GetSequence()!.Value;
-        if (!this.ChannelServiceAvailable || this.ChannelOutOfSync) return Task.CompletedTask;
+        if (!this.SubscriptionServiceAvailable || this.SubscriptionOutOfSync) return Task.CompletedTask;
         return this.DispatchAsync(e, true, true);
     }
 
@@ -178,7 +178,7 @@ public class ChannelCloudEventDispatcher
         try
         {
             using var content = e.ToHttpContent();
-            using var request = new HttpRequestMessage(HttpMethod.Post, this.Channel.Spec.ServiceAddress) { Content = content };
+            using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.ServiceUri) { Content = content };
             using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
             if (retryIfUnavailable)
             {
@@ -193,7 +193,7 @@ public class ChannelCloudEventDispatcher
             {
                 response.EnsureSuccessStatusCode();
             }
-            var resource = this.Channel.Clone()!;
+            var resource = this.Subscription.Clone()!;
             resource.Status ??= new();
             if (resource.Status.Stream == null) resource.Status.Stream = new();
         }
@@ -212,19 +212,19 @@ public class ChannelCloudEventDispatcher
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task RetryDispatchAsync(CloudEvent e, bool catchUpWhenAvailable)
     {
-        this.ChannelServiceAvailable = false;
-        this.ChannelOutOfSync = true;
+        this.SubscriptionServiceAvailable = false;
+        this.SubscriptionOutOfSync = true;
 
         var circuitBreakerPolicy = Policy.Handle<HttpRequestException>()
             .CircuitBreakerAsync(5, TimeSpan.FromSeconds(10));
 
-        var retryPolicy = Policy.Handle<HttpRequestException>()
+        var retryPolicy = Policy.Handle<HttpRequestException>(ex => ex.StatusCode == HttpStatusCode.ServiceUnavailable)
             .RetryForeverAsync();
 
         await retryPolicy.WrapAsync(circuitBreakerPolicy)
             .ExecuteAsync(async _ => await this.DispatchAsync(e, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);
 
-        this.ChannelServiceAvailable = true;
+        this.SubscriptionServiceAvailable = true;
         if (catchUpWhenAvailable) await this.CatchUpAsync();
     }
 
@@ -234,12 +234,12 @@ public class ChannelCloudEventDispatcher
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task CatchUpAsync()
     {
-        this.ChannelOutOfSync = true;
-        ulong? currentOffset = this.Channel.Status?.Stream?.AckedOffset;
+        this.SubscriptionOutOfSync = true;
+        ulong? currentOffset = this.Subscription.Status?.Stream?.AckedOffset;
         if (!currentOffset.HasValue)
         {
-            var desiredOffset = this.Channel.Spec.Stream?.Offset;
-            if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence();
+            var desiredOffset = this.Subscription.Spec.Stream?.Offset;
+            if (!desiredOffset.HasValue || desiredOffset.Value == StreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence();
             currentOffset = (ulong?)desiredOffset;
         }
         do
@@ -254,13 +254,13 @@ public class ChannelCloudEventDispatcher
             currentOffset++;
         }
         while (!this.CancellationToken.IsCancellationRequested && currentOffset < (ulong)this.BrokerOffset);
-        this.ChannelOutOfSync = false;
+        this.SubscriptionOutOfSync = false;
     }
 
     /// <summary>
-    /// Disposes of the <see cref="BrokerCloudEventDispatcher"/>
+    /// Disposes of the <see cref="CloudEventDispatcher"/>
     /// </summary>
-    /// <param name="disposing">A boolean indicating whether or not the <see cref="BrokerCloudEventDispatcher"/> is being disposed of</param>
+    /// <param name="disposing">A boolean indicating whether or not the <see cref="CloudEventDispatcher"/> is being disposed of</param>
     protected virtual void Dispose(bool disposing)
     {
         if (!this._Disposed)

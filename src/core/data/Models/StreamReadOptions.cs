@@ -4,7 +4,7 @@
 /// Represents an object used to configure the options of a query used to read a cloud event stream
 /// </summary>
 [DataContract]
-public record CloudEventStreamReadOptions
+public record StreamReadOptions
 {
 
     /// <summary>
@@ -13,18 +13,18 @@ public record CloudEventStreamReadOptions
     public const long MaxLength = 100;
 
     /// <summary>
-    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// Initializes a new <see cref="StreamReadOptions"/>
     /// </summary>
-    public CloudEventStreamReadOptions() { }
+    public StreamReadOptions() { }
 
     /// <summary>
-    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// Initializes a new <see cref="StreamReadOptions"/>
     /// </summary>
     /// <param name="partition">A reference to the cloud event partition to read</param>
     /// <param name="direction">The direction in which to read the stream of cloud events</param>
     /// <param name="offset">The offset starting from which to read the stream</param>
     /// <param name="length">The amount of events to read from the stream</param>
-    public CloudEventStreamReadOptions(CloudEventPartitionReference partition, StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength)
+    public StreamReadOptions(PartitionReference partition, StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength)
     {
         this.Partition = partition;
         this.Direction = direction;
@@ -33,18 +33,18 @@ public record CloudEventStreamReadOptions
     }
 
     /// <summary>
-    /// Initializes a new <see cref="CloudEventStreamReadOptions"/>
+    /// Initializes a new <see cref="StreamReadOptions"/>
     /// </summary>
     /// <param name="direction">The direction in which to read the stream of cloud events</param>
     /// <param name="offset">The offset starting from which to read the stream</param>
     /// <param name="length">The amount of events to read from the stream</param>
-    public CloudEventStreamReadOptions(StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength) : this(null!, direction, offset, length) { }
+    public StreamReadOptions(StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength) : this(null!, direction, offset, length) { }
 
     /// <summary>
     /// Gets/sets a reference to the cloud event partition to read, if any
     /// </summary>
     [DataMember(Order = 1, Name = "partition"), JsonPropertyName("partition"), YamlMember(Alias = "partition")]
-    public virtual CloudEventPartitionReference? Partition { get; set; }
+    public virtual PartitionReference? Partition { get; set; }
 
     /// <summary>
     /// Gets/sets the direction in which to read the stream of cloud events

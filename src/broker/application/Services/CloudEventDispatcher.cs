@@ -8,29 +8,29 @@ using System.Reactive.Linq;
 namespace CloudStreams.Broker.Application.Services;
 
 /// <summary>
-/// Represents the service used to dispatch consumed <see cref="CloudEvent"/>s to controlled <see cref="Channel"/>s
+/// Represents the service used to dispatch consumed <see cref="CloudEvent"/>s to controlled <see cref="Subscription"/>s
 /// </summary>
-public class BrokerCloudEventDispatcher
+public class CloudEventDispatcher
     : BackgroundService
 {
 
     /// <summary>
-    /// Initializes a new <see cref="BrokerCloudEventDispatcher"/>
+    /// Initializes a new <see cref="CloudEventDispatcher"/>
     /// </summary>
     /// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
     /// <param name="brokerOptions">The service used to access the current <see cref="Configuration.BrokerOptions"/></param>
     /// <param name="eventStore">The service used to store <see cref="CloudEvent"/>s</param>
     /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
-    /// <param name="channelController">The service used to control <see cref="Channel"/> resources</param>
-    public BrokerCloudEventDispatcher(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<BrokerOptions> brokerOptions, ICloudEventStore eventStore, IResourceRepository resources, IResourceController<Channel> channelController)
+    /// <param name="subscriptionController">The service used to control <see cref="Subscription"/> resources</param>
+    public CloudEventDispatcher(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<BrokerOptions> brokerOptions, ICloudEventStore eventStore, IResourceRepository resources, IResourceController<Subscription> subscriptionController)
     {
         this.ServiceProvider = serviceProvider;
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.BrokerOptions = brokerOptions.Value;
         this.EventStore = eventStore;
         this.Resources = resources;
-        this.ChannelController = channelController;
+        this.SubscriptionController = subscriptionController;
     }
 
     /// <summary>
@@ -59,9 +59,9 @@ public class BrokerCloudEventDispatcher
     protected IResourceRepository Resources { get; }
 
     /// <summary>
-    /// Gets the service used to control <see cref="Channel"/> resources
+    /// Gets the service used to control <see cref="Subscription"/> resources
     /// </summary>
-    protected IResourceController<Channel> ChannelController { get; }
+    protected IResourceController<Subscription> SubscriptionController { get; }
 
     /// <summary>
     /// Gets the service used to monitor the broker's configuration
@@ -69,22 +69,22 @@ public class BrokerCloudEventDispatcher
     protected IResourceMonitor<Core.Data.Models.Broker> Broker { get; private set; } = null!;
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s consumed by the <see cref="BrokerCloudEventDispatcher"/>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEvent"/>s consumed by the <see cref="CloudEventDispatcher"/>
     /// </summary>
     protected IObservable<CloudEvent> EventStream { get; private set; } = null!;
 
     /// <summary>
-    /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> used to cache active <see cref="Channel"/>s
+    /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> used to cache active <see cref="Subscription"/>s
     /// </summary>
-    protected ConcurrentDictionary<string, ChannelCloudEventDispatcher> Channels { get; } = new();
+    protected ConcurrentDictionary<string, CloudEventSubscriptionDispatcher> Subscriptions { get; } = new();
 
     /// <summary>
-    /// Gets the <see cref="BrokerCloudEventDispatcher"/>'s <see cref="System.Threading.CancellationTokenSource"/>
+    /// Gets the <see cref="CloudEventDispatcher"/>'s <see cref="System.Threading.CancellationTokenSource"/>
     /// </summary>
     protected CancellationTokenSource CancellationTokenSource { get; private set; } = null!;
 
     /// <summary>
-    /// Gets the <see cref="BrokerCloudEventDispatcher"/>'s <see cref="System.Threading.CancellationToken"/>
+    /// Gets the <see cref="CloudEventDispatcher"/>'s <see cref="System.Threading.CancellationToken"/>
     /// </summary>
     protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
@@ -95,7 +95,7 @@ public class BrokerCloudEventDispatcher
         this.Broker = await this.Resources.MonitorAsync<Core.Data.Models.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken: this.CancellationToken);
         var desiredOffset = this.Broker.Resource.Spec.Stream?.Offset;
         var ackedOffset = this.Broker.Resource.Status?.Stream?.AckedOffset;
-        if (!desiredOffset.HasValue || desiredOffset.Value == CloudEventStreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, CloudEventStreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
+        if (!desiredOffset.HasValue || desiredOffset.Value == StreamPosition.EndOfStream) desiredOffset = (long?)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false))?.GetSequence() + 1;
         var offset = (ulong?)desiredOffset;
         if (ackedOffset.HasValue && desiredOffset.HasValue)
         {
@@ -129,16 +129,16 @@ public class BrokerCloudEventDispatcher
             this.Broker.Resource.Status!.Stream!.AckedOffset = offset.Value;
             await this.Resources.UpdateResourceStatusAsync(this.Broker.Resource, stoppingToken).ConfigureAwait(false);
         }
-        foreach (var channel in this.ChannelController.Resources.ToList())
+        foreach (var subscription in this.SubscriptionController.Resources.ToList())
         {
-            await this.OnChannelCreatedAsync(channel).ConfigureAwait(false);
+            await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
         }
         this.EventStream = await this.EventStore.SubscribeAsync((long)offset.Value, cancellationToken: this.CancellationToken).ConfigureAwait(false);
         this.EventStream.SubscribeAsync(OnCloudEventAsync, this.CancellationToken);
         await Task.Delay(50, stoppingToken);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnChannelCreatedAsync, stoppingToken);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Updated).Select(e => e.Resource).SubscribeAsync(this.OnChannelUpdatedAsync, stoppingToken);
-        this.ChannelController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnChannelDeletedAsync, stoppingToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionCreatedAsync, stoppingToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Updated).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionUpdatedAsync, stoppingToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionDeletedAsync, stoppingToken);
     }
 
     /// <summary>
@@ -150,33 +150,33 @@ public class BrokerCloudEventDispatcher
     protected virtual string GetResourceCacheKey(string name, string? @namespace) => string.IsNullOrWhiteSpace(@namespace) ? name : $"{@namespace}.{name}";
 
     /// <summary>
-    /// Handles the creation of a new <see cref="Channel"/>
+    /// Handles the creation of a new <see cref="Subscription"/>
     /// </summary>
-    /// <param name="channel">The newly created <see cref="Channel"/></param>
-    protected virtual async Task OnChannelCreatedAsync(Channel channel)
+    /// <param name="subscription">The newly created <see cref="Subscription"/></param>
+    protected virtual async Task OnSubscriptionCreatedAsync(Subscription subscription)
     {
         var brokerOffset = this.Broker.Resource.Status!.Stream!.AckedOffset!.Value;
-        var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
-        var dispatcher = ActivatorUtilities.CreateInstance<ChannelCloudEventDispatcher>(this.ServiceProvider, channel, brokerOffset);
+        var key = this.GetResourceCacheKey(subscription.GetName(), subscription.GetNamespace());
+        var dispatcher = ActivatorUtilities.CreateInstance<CloudEventSubscriptionDispatcher>(this.ServiceProvider, subscription, brokerOffset);
         await dispatcher.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
-        this.Channels.AddOrUpdate(key, dispatcher, (_, _) => dispatcher);
+        this.Subscriptions.AddOrUpdate(key, dispatcher, (_, _) => dispatcher);
     }
 
     /// <summary>
-    /// Handles the update of an existing <see cref="Channel"/>
+    /// Handles the update of an existing <see cref="Subscription"/>
     /// </summary>
-    /// <param name="channel">The newly updated <see cref="Channel"/></param>
-    protected virtual async Task OnChannelUpdatedAsync(Channel channel)
+    /// <param name="subscription">The newly updated <see cref="Subscription"/></param>
+    protected virtual async Task OnSubscriptionUpdatedAsync(Subscription subscription)
     {
         var brokerOffset = this.Broker.Resource.Status!.Stream!.AckedOffset!.Value;
-        var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
-        if (this.Channels.TryGetValue(key, out var dispatcher) && dispatcher != null)
+        var key = this.GetResourceCacheKey(subscription.GetName(), subscription.GetNamespace());
+        if (this.Subscriptions.TryGetValue(key, out var dispatcher) && dispatcher != null)
         {
-            await dispatcher.SetChannelAsync(channel).ConfigureAwait(false);
+            await dispatcher.SetSubscriptionAsync(subscription).ConfigureAwait(false);
             return;
         }
-        dispatcher = ActivatorUtilities.CreateInstance<ChannelCloudEventDispatcher>(this.ServiceProvider, channel, brokerOffset);
-        this.Channels.AddOrUpdate(key, dispatcher, (_, existing) =>
+        dispatcher = ActivatorUtilities.CreateInstance<CloudEventSubscriptionDispatcher>(this.ServiceProvider, subscription, brokerOffset);
+        this.Subscriptions.AddOrUpdate(key, dispatcher, (_, existing) =>
         {
             existing.Dispose();
             return dispatcher;
@@ -184,13 +184,13 @@ public class BrokerCloudEventDispatcher
     }
 
     /// <summary>
-    /// Handles the deletion of a new <see cref="Channel"/>
+    /// Handles the deletion of a new <see cref="Subscription"/>
     /// </summary>
-    /// <param name="channel">The newly deleted <see cref="Channel"/></param>
-    protected virtual Task OnChannelDeletedAsync(Channel channel)
+    /// <param name="subscription">The newly deleted <see cref="Subscription"/></param>
+    protected virtual Task OnSubscriptionDeletedAsync(Subscription subscription)
     {
-        var key = this.GetResourceCacheKey(channel.GetName(), channel.GetNamespace());
-        if (this.Channels.Remove(key, out var dispatcher) && dispatcher != null) dispatcher.Dispose();
+        var key = this.GetResourceCacheKey(subscription.GetName(), subscription.GetNamespace());
+        if (this.Subscriptions.Remove(key, out var dispatcher) && dispatcher != null) dispatcher.Dispose();
         return Task.CompletedTask;
     }
 
@@ -201,8 +201,8 @@ public class BrokerCloudEventDispatcher
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task OnCloudEventAsync(CloudEvent e)
     {
-        var tasks = new List<Task>(this.ChannelController.Resources.Count);
-        foreach(var kvp in this.Channels)
+        var tasks = new List<Task>(this.SubscriptionController.Resources.Count);
+        foreach(var kvp in this.Subscriptions)
         {
             tasks.Add(kvp.Value.DispatchAsync(e));
         }

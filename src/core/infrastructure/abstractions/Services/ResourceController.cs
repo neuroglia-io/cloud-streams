@@ -59,6 +59,8 @@ public class ResourceController<TResource>
 
     List<TResource> IResourceController<TResource>.Resources => this.Resources.Values.ToList();
 
+    bool Initialized;
+
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -66,6 +68,7 @@ public class ResourceController<TResource>
         this.ResourceWatcher = await this.ResourceRepository.WatchResourcesAsync<TResource>(this.Options.ResourceNamespace, cancellationToken: stoppingToken).ConfigureAwait(false);
         this.ResourceWatcher.SubscribeAsync(async e => await this.OnResourceChangedAsync(e, stoppingToken).ConfigureAwait(false), cancellationToken: stoppingToken);
         this.ReconciliationTimer = new(async _ => await this.ReconcileAsync(stoppingToken).ConfigureAwait(false), null, this.Options.Reconciliation.Interval, this.Options.Reconciliation.Interval);
+        this.Initialized = true;
     }
 
     /// <summary>
@@ -105,7 +108,11 @@ public class ResourceController<TResource>
     protected virtual string GetResourceCacheKey(string name, string? @namespace) => string.IsNullOrWhiteSpace(@namespace) ? name : $"{@namespace}.{name}";
 
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<IResourceWatchEvent<TResource>> observer) => this.ResourceWatcher== null ? throw new Exception("The resource controller has not been properly initialized") : this.ResourceWatcher.Subscribe(observer);
+    public virtual IDisposable Subscribe(IObserver<IResourceWatchEvent<TResource>> observer)
+    {
+        while (!this.Initialized) { Task.Delay(50).GetAwaiter().GetResult(); }
+        return this.ResourceWatcher!.Subscribe(observer);
+    }
 
     /// <summary>
     /// Handles the specified <see cref="IResource"/>'s change

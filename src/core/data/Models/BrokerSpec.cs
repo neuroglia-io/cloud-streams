@@ -33,6 +33,6 @@ public class BrokerSpec
     /// Gets/sets an object used to configure the broker's cloud event stream
     /// </summary>
     [DataMember(Order = 2, Name = "stream"), JsonPropertyName("stream"), YamlMember(Alias = "stream")]
-    public virtual CloudEventStreamSpec? Stream { get; set; }
+    public virtual CloudEventStream? Stream { get; set; }
 
 }

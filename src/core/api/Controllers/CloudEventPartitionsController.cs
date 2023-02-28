@@ -20,7 +20,7 @@ public class CloudEventPartitionsController
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}")]
-    [ProducesResponseType(typeof(IEnumerable<CloudEventStreamMetadata>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(IEnumerable<PartitionMetadata>), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> ListPartitionsByType(CloudEventPartitionType type, CancellationToken cancellationToken)
     {
@@ -36,7 +36,7 @@ public class CloudEventPartitionsController
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}/{id}")]
-    [ProducesResponseType(typeof(IEnumerable<CloudEventStreamMetadata>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(IEnumerable<PartitionMetadata>), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> GetPartitionMetadata(CloudEventPartitionType type, string id, CancellationToken cancellationToken)
     {

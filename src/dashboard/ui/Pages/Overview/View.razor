@@ -62,10 +62,10 @@
 
 @code{
 
-    CloudEventStreamMetadata? stream;
-    List<CloudEventPartitionMetadata>? sourcePartitions;
-    List<CloudEventPartitionMetadata>? typePartitions;
-    List<CloudEventPartitionMetadata>? subjectPartitions;
+    StreamMetadata? stream;
+    List<PartitionMetadata>? sourcePartitions;
+    List<PartitionMetadata>? typePartitions;
+    List<PartitionMetadata>? subjectPartitions;
 
     protected override async Task OnInitializedAsync()
     {

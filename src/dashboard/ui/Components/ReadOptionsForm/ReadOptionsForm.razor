@@ -48,9 +48,9 @@
 
 @code {
     /// <summary>
-    /// The <see cref="CloudEventStreamReadOptions"/> emitted by the form
+    /// The <see cref="StreamReadOptions"/> emitted by the form
     /// </summary>
-    [Parameter] public EventCallback<CloudEventStreamReadOptions> OnChange { get; set; }
+    [Parameter] public EventCallback<StreamReadOptions> OnChange { get; set; }
 
     /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.PartitionType"/>
@@ -75,7 +75,7 @@
     /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.Partitions"/>
     /// </summary>
-    private List<CloudEventPartitionMetadata>? partitions = null;
+    private List<PartitionMetadata>? partitions = null;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()

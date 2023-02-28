@@ -4,7 +4,7 @@
 /// Represents the <see cref="IQuery{TResult}"/> used to list the metadata of event partitions
 /// </summary>
 public class ListEventPartitionsMetadataQuery
-    : IQuery<IAsyncEnumerable<CloudEventPartitionMetadata>>
+    : IQuery<IAsyncEnumerable<PartitionMetadata>>
 {
 
     /// <summary>
@@ -28,7 +28,7 @@ public class ListEventPartitionsMetadataQuery
 /// Represents the service used to handle <see cref="ListEventPartitionsMetadataQuery"/> instances
 /// </summary>
 public class ListEventPartitionsMetadataQueryHandler
-    : IQueryHandler<ListEventPartitionsMetadataQuery, IAsyncEnumerable<CloudEventPartitionMetadata>>
+    : IQueryHandler<ListEventPartitionsMetadataQuery, IAsyncEnumerable<PartitionMetadata>>
 {
 
     /// <inheritdoc/>
@@ -39,7 +39,7 @@ public class ListEventPartitionsMetadataQueryHandler
 
     ICloudEventStore _CloudEvents;
 
-    Task<Response<IAsyncEnumerable<CloudEventPartitionMetadata>>> MediatR.IRequestHandler<ListEventPartitionsMetadataQuery, Response<IAsyncEnumerable<CloudEventPartitionMetadata>>>.Handle(ListEventPartitionsMetadataQuery query, CancellationToken cancellationToken)
+    Task<Response<IAsyncEnumerable<PartitionMetadata>>> MediatR.IRequestHandler<ListEventPartitionsMetadataQuery, Response<IAsyncEnumerable<PartitionMetadata>>>.Handle(ListEventPartitionsMetadataQuery query, CancellationToken cancellationToken)
     {
         return Task.FromResult(this.Ok(this._CloudEvents.ListPartitionsMetadataAsync(query.PartitionType, cancellationToken)));
     }
