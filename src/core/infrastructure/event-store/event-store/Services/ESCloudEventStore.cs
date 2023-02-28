@@ -61,8 +61,8 @@ public class ESCloudEventStore
     /// <inheritdoc/>
     public virtual async Task<Data.Models.StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
     {
-        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreStreams.All, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, EventStoreStreams.All, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreStreams.All, EventStore.Client.StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, EventStoreStreams.All, EventStore.Client.StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
         return new()
         {
             FirstEvent = firstEvent.OriginalEvent.Created,
@@ -75,8 +75,8 @@ public class ESCloudEventStore
     public virtual async Task<PartitionMetadata> GetPartitionMetadataAsync(PartitionReference partition, CancellationToken cancellationToken = default)
     {
         var streamName = partition.GetStreamName();
-        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, streamName, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, EventStore.Client.StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, streamName, EventStore.Client.StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
         return new()
         {
             Id = partition.Id,
@@ -92,7 +92,7 @@ public class ESCloudEventStore
     {
         var partitions = partitionType switch
         {
-            CloudEventPartitionType.BySource => this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreProjections.BuiltInProjections.Streams, StreamPosition.Start, resolveLinkTos: true, cancellationToken: cancellationToken)
+            CloudEventPartitionType.BySource => this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreProjections.BuiltInProjections.Streams, EventStore.Client.StreamPosition.Start, resolveLinkTos: true, cancellationToken: cancellationToken)
                 .Where(e => !e.Event.EventStreamId.StartsWith('$') && e.Event.EventStreamId.StartsWith(EventStoreStreams.ByCloudEventSourcePrefix) && EventStoreStreams.IsPartition(e.Event.EventStreamId, partitionType))
                 .Select(e => EventStoreStreams.ExtractPartitionIdFrom(e.Event.EventStreamId, partitionType)),
             CloudEventPartitionType.ByType => (await this.Projections.GetResultAsync<ListCloudEventTypesQueryResult>(EventStoreProjections.ListCloudEventTypes, cancellationToken: cancellationToken)).Types.ToAsyncEnumerable(),
@@ -319,8 +319,7 @@ public class ESCloudEventStore
     protected virtual Task<CloudEvent> DeserializeAsync(ResolvedEvent e, CancellationToken cancellationToken)
     {
         var dataObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Data.Span);
-        var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span);
-        if (eventObject == null) throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
+        var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span) ?? throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
         if (dataObject != null) eventObject["data"] = dataObject;
         var rawEvent = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(eventObject));
         using var stream = new MemoryStream(rawEvent);

@@ -20,8 +20,8 @@ public static class AsyncObservableExtensions
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     public static void SubscribeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Func<Exception, Task>? onErrorAsync = null, Func<Task>? onCompletedAsync = null, CancellationToken cancellationToken = default)
     {
-        if (onErrorAsync == null) onErrorAsync = _ => Task.CompletedTask;
-        if (onCompletedAsync == null) onCompletedAsync = () => Task.CompletedTask;
+        onErrorAsync ??= _ => Task.CompletedTask;
+        onCompletedAsync ??= () => Task.CompletedTask;
         source
             .Select(number => Observable.FromAsync(() => onNextAsync(number)))
             .Concat()

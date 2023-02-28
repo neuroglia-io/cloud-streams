@@ -219,7 +219,7 @@ public class CloudStreamsApplicationBuilder
                     Url = new Uri("https://github.com/neuroglia-io/cloud-streams")
                 }
             });
-            builder.IncludeXmlComments(typeof(Channel).Assembly.Location.Replace(".dll", ".xml"));
+            builder.IncludeXmlComments(typeof(Subscription).Assembly.Location.Replace(".dll", ".xml"));
         });
     }
 

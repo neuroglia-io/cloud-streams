@@ -20,7 +20,7 @@
                             <tbody>
                                 <tr>
                                     <td>Id</td>
-                                    <td><input type="text" readonly="@readOnly" value="@cloudEvent?.Id" required @onchange="args => OnCloudEventChanged(e => e.Id = args.Value == null ? e.Id = null : (string)args.Value!)" placeholder="e8be1dab-0f23-484d-b3be-6603d0b83be0" title="The event's unique identifier" class="form-control" /></td>
+                                    <td><input type="text" readonly="@readOnly" value="@cloudEvent?.Id" required @onchange="args => OnCloudEventChanged(e => e.Id = args.Value == null ? e.Id = null! : (string)args.Value!)" placeholder="e8be1dab-0f23-484d-b3be-6603d0b83be0" title="The event's unique identifier" class="form-control" /></td>
                                 </tr>
                                 @if (readOnly)
                                 {
@@ -31,7 +31,7 @@
                                 }
                                 <tr>
                                     <td>Source</td>
-                                    <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.Source" required @onchange="args => OnCloudEventChanged(e => e.Source = args.Value == null ? e.Source = null : new Uri((string)args.Value!))" placeholder="https://myservice.com" title="The absolute uri of the Cloud Event's source" class="form-control" /></td>
+                                    <td><input type="url" readonly="@readOnly"  value="@cloudEvent?.Source" required @onchange="args => OnCloudEventChanged(e => e.Source = args.Value == null ? e.Source = null! : new Uri((string)args.Value!))" placeholder="https://myservice.com" title="The absolute uri of the Cloud Event's source" class="form-control" /></td>
                                 </tr>
                                 <tr>
                                     <td>Type</td>

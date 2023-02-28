@@ -125,8 +125,7 @@ public class CloudEventAdmissionControl
     protected virtual async Task<Response> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
-        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization;
-        if (policy == null) policy = this.Configuration?.Resource.Spec.Authorization;
+        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? this.Configuration?.Resource.Spec.Authorization;
         if (policy == null) return Response.Ok();
         var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())
@@ -147,8 +146,7 @@ public class CloudEventAdmissionControl
     protected virtual async Task<Response> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
-        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation;
-        if (policy == null) policy = this.Configuration?.Resource.Spec.Validation;
+        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? this.Configuration?.Resource.Spec.Validation;
         if (policy == null) return Response.Ok();
         if (policy.SkipValidation)
         {
@@ -159,7 +157,7 @@ public class CloudEventAdmissionControl
         JsonSchema? schema = null;
         if (e.DataSchema == null)
         {
-            if (dataSchemaPolicy == null) dataSchemaPolicy = this.Configuration?.Resource.Spec.Validation?.DataSchema;
+            dataSchemaPolicy ??= this.Configuration?.Resource.Spec.Validation?.DataSchema;
             if (dataSchemaPolicy?.Required == true)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);

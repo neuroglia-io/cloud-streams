@@ -19,13 +19,13 @@ public interface ICloudStreamsResourceManagementApiClient
     public IResourceManagementApi<Broker> Brokers { get; }
 
     /// <summary>
-    /// Gets the API used to manage <see cref="Channel"/>s
-    /// </summary>
-    public IResourceManagementApi<Channel> Channels { get; }
-
-    /// <summary>
     /// Gets the API used to manage <see cref="Network"/>s
     /// </summary>
     public IResourceManagementApi<Network> Networks { get; }
+
+    /// <summary>
+    /// Gets the API used to manage <see cref="Subscription"/>s
+    /// </summary>
+    public IResourceManagementApi<Subscription> Subscriptions { get; }
 
 }
