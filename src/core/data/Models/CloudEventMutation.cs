@@ -10,8 +10,8 @@ public class CloudEventMutation
     /// <summary>
     /// Gets/sets the mutation strategy to use
     /// </summary>
-    [DataMember(Order = 1, Name = "strategy"), JsonPropertyName("strategy"), YamlMember(Alias = "strategy")]
-    public virtual CloudEventMutationStrategy Strategy { get; set; }
+    [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
+    public virtual CloudEventMutationType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the runtime expression string or object used to mutate consumed cloud events. 

@@ -3,10 +3,10 @@
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported mutation strategies for consumed cloud events
+/// Enumerates all types of cloud event mutations
 /// </summary>
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum CloudEventMutationStrategy
+public enum CloudEventMutationType
 {
     /// <summary>
     /// Indicates an expression-based mutation

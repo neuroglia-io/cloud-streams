@@ -11,7 +11,7 @@ public class Subscriber
     /// Gets/sets the address of the dispatch consumed cloud events to
     /// </summary>
     [Required, JsonRequired]
-    [DataMember(Order = 1, Name = "serviceUri", IsRequired = true), JsonPropertyName("serviceUri"), YamlMember(Alias = "serviceUri")]
-    public virtual Uri ServiceUri { get; set; } = null!;
+    [DataMember(Order = 1, Name = "uri", IsRequired = true), JsonPropertyName("uri"), YamlMember(Alias = "uri")]
+    public virtual Uri Uri { get; set; } = null!;
 
 }

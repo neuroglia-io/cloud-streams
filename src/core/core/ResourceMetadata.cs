@@ -39,4 +39,10 @@ public class ResourceMetadata
     [DataMember(Order = 5, Name = "resourceVersion"), JsonPropertyName("resourceVersion"), YamlMember(Alias = "resourceVersion")]
     public virtual string? ResourceVersion { get; set; }
 
+    /// <summary>
+    /// Gets/sets a key/value mappings of the described resource's labels, if any
+    /// </summary>
+    [DataMember(Order = 6, Name = "labels"), JsonPropertyName("labels"), YamlMember(Alias = "labels")]
+    public virtual IDictionary<string, string>? Labels { get; set; }
+
 }

@@ -3,18 +3,18 @@
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported filtering strategies for consumed cloud events
+/// Enumerates all cloud event filter types
 /// </summary>
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum CloudEventFilteringStrategy
+public enum CloudEventFilterType
 {
     /// <summary>
-    /// Indicates a context attributes based filtering
+    /// Indicates a context attributes based filter
     /// </summary>
     [EnumMember(Value = "attributes")]
     Attributes,
     /// <summary>
-    /// Indicates an expression-based filtering
+    /// Indicates an expression-based filter
     /// </summary>
     [EnumMember(Value = "expression")]
     Expression

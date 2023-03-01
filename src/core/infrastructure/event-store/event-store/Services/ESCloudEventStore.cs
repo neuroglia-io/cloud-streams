@@ -305,6 +305,7 @@ public class ESCloudEventStore
         var type = e.Type!;
         var metadataObject = (JsonObject)Serializer.Json.SerializeToNode(e)!;
         metadataObject.Remove("data", out var dataObject);
+        if (!string.IsNullOrWhiteSpace(e.Subject)) metadataObject.Add("$correlationId", e.Subject);
         var data = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(dataObject));
         var metadata = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(metadataObject));
         return Task.FromResult(new EventData(id, type, data, metadata, MediaTypeNames.Application.Json));
@@ -320,6 +321,7 @@ public class ESCloudEventStore
     {
         var dataObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Data.Span);
         var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span) ?? throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
+        eventObject.Remove("$correlationId");
         if (dataObject != null) eventObject["data"] = dataObject;
         var rawEvent = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(eventObject));
         using var stream = new MemoryStream(rawEvent);

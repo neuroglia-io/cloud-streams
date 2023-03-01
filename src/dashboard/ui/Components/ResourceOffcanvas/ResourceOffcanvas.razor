@@ -1,0 +1,105 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@using System.Text.Json
+@typeparam TResource where TResource : class, IResource, new()
+@inherits Offcanvas
+
+<CascadingValue Value="@this" IsFixed="true">
+    <div @ref="@ElementRef" id="@ElementId" class="@ClassNames" style="@StyleNames" @attributes="@Attributes">
+        <div class="offcanvas-header @HeaderCssClass">
+            <h5>@typeof(TResource).Name details</h5>
+            @if (ShowCloseButton)
+            {
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            }
+        </div>
+        <div class="offcanvas-body @BodyCssClass">
+            <div class="container-fluid">
+                <div class="row">
+                    <table class="table table-striped mb-3">
+                        <tbody>
+                            <tr>
+                                <td>API Version</td>
+                                <td><input type="text" readonly="@readOnly" value="@resource?.ApiVersion" required title="The resource's API version" class="form-control" /></td>
+                            </tr>
+                            <tr>
+                                <td>Kind</td>
+                                <td><input type="text" readonly="@readOnly" value="@resource?.Kind" required title="The resource's kind" class="form-control" /></td>
+                            </tr>
+                            <tr>
+                                <td>Name</td>
+                                <td><input type="text" readonly="@readOnly" value="@resource?.GetName()" required title="The resource's name" class="form-control" /></td>
+                            </tr>
+                            @if (resource?.IsNamespaced() == true)
+                            {
+                                <tr>
+                                    <td>Namespace</td>
+                                    <td><input type="text" readonly="@readOnly" value="@resource?.GetNamespace()" required title="The resource's namespace" class="form-control" /></td>
+                                </tr>
+                            }
+                            <tr>
+                                <td>Created At</td>
+                                <td><input type="text" readonly="@readOnly" value="@resource?.Metadata.CreationTimestamp?.ToString("R")" required title="The date and time at which the resource has been created" class="form-control" /></td>
+                            </tr>
+                            <tr>
+                                <td>Generation</td>
+                                <td><input type="text" readonly="@readOnly" value="@resource?.Metadata.Generation" required title="The resource's spec version" class="form-control" /></td>
+                            </tr>
+                            @if (resource?.Metadata.Labels?.Any() == true)
+                            {
+                                <tr>
+                                    <td>Labels</td>
+                                    <td>
+                                        @foreach(var label in resource.Metadata.Labels)
+                                        {
+                                            <span class="badge bg-primary text-dark m-1">@label.Key: @label.Value</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+
+    TResource? resource;
+    /// <summary>
+    /// Gets/sets the cloud event to display details about
+    /// </summary>
+    [Parameter] public TResource? Resource { get; set; }
+
+    bool readOnly;
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not the modal is in read-only mode
+    /// </summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <inheritdoc/>
+    protected override Task OnParametersSetAsync()
+    {
+        if(this.resource != this.Resource) this.resource = this.Resource;
+        if(this.readOnly != this.ReadOnly) this.readOnly = this.ReadOnly;
+        return base.OnParametersSetAsync();
+    }
+
+    /// <summary>
+    /// Sets the resource to display/edit
+    /// </summary>
+    /// <param name="resource">The resource to set</param>
+    public void SetResource(TResource resource)
+    {
+        this.Resource = resource;
+        this.StateHasChanged();
+    }
+
+    void OnResourceChanged(Action<TResource> patch)
+    {
+        if (this.resource == null) this.resource = new();
+        patch(this.resource);
+    }
+
+}

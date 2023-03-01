@@ -21,7 +21,11 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     public static ICloudStreamsApplicationBuilder UseGatewayApi(this ICloudStreamsApplicationBuilder builder)
     {
+        var options = new GatewayOptions();
         builder.Configuration.AddEnvironmentVariables(GatewayOptions.EnvironmentVariablePrefix);
+        builder.Configuration.Bind(options);
+
+        builder.WithServiceName(options.Name);
         builder.Services.Configure<GatewayOptions>(builder.Configuration);
         builder.RegisterApplicationPart<CloudEventsController>();
         builder.RegisterMediationAssembly<ConsumeEventCommand>();

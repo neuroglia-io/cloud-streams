@@ -13,6 +13,9 @@
 <Table Items="events"
     AutoGenerateColumns="false"
     TableClass="table table-striped table-hover">
+    <RowTemplate>
+        <Row RenderContext="context" OnClick="async _ => await OnShowCloudEventOffcanvasAsync(context.Item)" />
+    </RowTemplate>
     <Columns>
         <Column TData="CloudEvent" 
             ValueProvider="e => e.ExtensionAttributes == null ? null : e.ExtensionAttributes[CloudEventExtensionAttributes.Sequence]">
@@ -62,22 +65,16 @@
                 <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@context.Value</span>
             </CellTemplate>
         </Column>
-        <Column TData="CloudEvent" CssClass="text-end">
-            <HeaderTemplate />
-            <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm" @onclick="async e => await OnShowCloudEventOffcanvasAsync(context.Item)"><span class="bi bi-info-circle"></span></button>
-            </CellTemplate>
-        </Column>
     </Columns>
 </Table>
 
-<CloudEventOffcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" />
+<CloudEventOffcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
 
 @code{
 
-    private List<CloudEvent>? events;
-    private CloudEventOffcanvas? offcanvas;
-    private ReadOptionsForm? readOptionForm;
+    List<CloudEvent>? events;
+    CloudEventOffcanvas? offcanvas;
+    ReadOptionsForm? readOptionForm;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -86,21 +83,21 @@
         this.Store.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged, token: this.CancellationTokenSource.Token);
     }
 
-    private void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
+    void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
     {
         if (this.readOptionForm != null) this.readOptionForm.SetPartition(type, id);
     }
 
-    private void OnCloudEventCollectionChanged(List<CloudEvent>? events)
+    void OnCloudEventCollectionChanged(List<CloudEvent>? events)
     {
         if (this.events == events) return;
         this.events = events;
         this.StateHasChanged();
     }
 
-    private Task OnShowCloudEventOffcanvasAsync(CloudEvent e)
+    Task OnShowCloudEventOffcanvasAsync(CloudEvent e)
     {
-        if (this.offcanvas == null) return Task.CompletedTask; ;
+        if (this.offcanvas == null) return Task.CompletedTask;
         this.offcanvas.SetCloudEvent(e);
         return this.offcanvas.ShowAsync();
     }

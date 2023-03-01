@@ -16,7 +16,7 @@ public static class IWebApplicationBuilderExtensions
     {
         if (app == null) throw new ArgumentNullException(nameof(app));
         if (setup == null) throw new ArgumentNullException(nameof(setup));
-        var builder = new CloudStreamsApplicationBuilder(app.Configuration, app.Environment, app.Services);
+        var builder = new CloudStreamsApplicationBuilder(app.Configuration, app.Environment, app.Services, app.Logging);
         setup(builder);
         builder.Build();
         return app;

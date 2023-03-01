@@ -23,7 +23,7 @@
             <HeaderTemplate />
             <CellTemplate Context="context">
                 <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
-                <button class="btn btn-outline-light btn-sm" title="Deletes network '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteNetwork(context.Item)"><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteNetwork(context.Item)"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>

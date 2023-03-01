@@ -14,6 +14,8 @@ public class ResourceController<TResource>
     where TResource : class, IResource, new()
 {
 
+    private TaskCompletionSource? _InitializationCompletionSource;
+
     /// <summary>
     /// Initializes a new <see cref="ResourceController{TResource}"/>
     /// </summary>
@@ -48,7 +50,7 @@ public class ResourceController<TResource>
     protected IObservable<IResourceWatchEvent<TResource>>? ResourceWatcher { get; private set; }
 
     /// <summary>
-    /// Gets the <see cref="System.Threading.Timer"/> used by the reconciliation loop
+    /// Gets the <see cref="Timer"/> used by the reconciliation loop
     /// </summary>
     protected Timer? ReconciliationTimer { get; private set; }
 
@@ -59,16 +61,21 @@ public class ResourceController<TResource>
 
     List<TResource> IResourceController<TResource>.Resources => this.Resources.Values.ToList();
 
-    bool Initialized;
+    /// <summary>
+    /// Gets a boolean indicating whether or not the <see cref="ResourceController{TResource}"/> has been initialized
+    /// </summary>
+    protected bool Initialized { get; private set; }
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        this._InitializationCompletionSource = new();
         await this.ReconcileAsync(stoppingToken).ConfigureAwait(false);
         this.ResourceWatcher = await this.ResourceRepository.WatchResourcesAsync<TResource>(this.Options.ResourceNamespace, cancellationToken: stoppingToken).ConfigureAwait(false);
         this.ResourceWatcher.SubscribeAsync(async e => await this.OnResourceChangedAsync(e, stoppingToken).ConfigureAwait(false), cancellationToken: stoppingToken);
         this.ReconciliationTimer = new(async _ => await this.ReconcileAsync(stoppingToken).ConfigureAwait(false), null, this.Options.Reconciliation.Interval, this.Options.Reconciliation.Interval);
         this.Initialized = true;
+        this._InitializationCompletionSource.SetResult();
     }
 
     /// <summary>
@@ -177,6 +184,14 @@ public class ResourceController<TResource>
         this.ReconciliationTimer = null;
         base.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task WaitUntilInitializedAsync()
+    {
+        if (this.Initialized) return;
+        if (this._InitializationCompletionSource == null) await Task.Delay(TimeSpan.FromMilliseconds(25)).ConfigureAwait(false);
+        if (this._InitializationCompletionSource != null) await this._InitializationCompletionSource!.Task.ConfigureAwait(false);
     }
 
 }

@@ -1,6 +1,7 @@
 ﻿using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
 using FluentValidation;
+using Json.Patch;
 using Polly;
 using System.Net;
 using System.Net.Mime;
@@ -16,6 +17,7 @@ public class SubscriptionHandler
     : IDisposable
 {
 
+    private IDisposable? _Subscription;
     private bool _Disposed;
 
     /// <summary>
@@ -140,11 +142,21 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task InitializeCloudEventStreamAsync()
     {
+        this._Subscription?.Dispose();
         var offset = this.Subscription.GetOffset();
         this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
-        if (this.Subscription.Spec.Partition == null) this.CloudEventStream = await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false);
-        else this.CloudEventStream = await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false);
-        this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, cancellationToken: this.CancellationToken);
+        if (this.Subscription.Spec.Partition == null)
+        {
+            this.CloudEventStream = await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false);
+            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length - 1;
+        }
+        else
+        {
+            this.CloudEventStream = await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false);
+            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length - 1;
+        }
+        this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, null);
+        if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) await this.CatchUpAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -156,11 +168,11 @@ public class SubscriptionHandler
     {
         if(e == null) throw new ArgumentNullException(nameof(e));
         if (this.Subscription.Spec.Filter == null) return true;
-        return this.Subscription.Spec.Filter.Strategy switch
+        return this.Subscription.Spec.Filter.Type switch
         {
-            CloudEventFilteringStrategy.Attributes => this.Filters(e, this.Subscription.Spec.Filter.Attributes!),
-            CloudEventFilteringStrategy.Expression => this.ExpressionEvaluator.EvaluateCondition(this.Subscription.Spec.Filter.Expression!, e),
-            _ => throw new NotSupportedException($"The specified {nameof(CloudEventFilteringStrategy)} '{EnumHelper.Stringify(this.Subscription.Spec.Filter.Strategy)}' is not supported")
+            CloudEventFilterType.Attributes => this.Filters(e, this.Subscription.Spec.Filter.Attributes!),
+            CloudEventFilterType.Expression => this.ExpressionEvaluator.EvaluateCondition(this.Subscription.Spec.Filter.Expression!, e),
+            _ => throw new NotSupportedException($"The specified {nameof(CloudEventFilterType)} '{EnumHelper.Stringify(this.Subscription.Spec.Filter.Type)}' is not supported")
         };
     }
 
@@ -207,11 +219,11 @@ public class SubscriptionHandler
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         if(this.Subscription.Spec.Mutation == null) return e.Clone()!;
-        var mutated = this.Subscription.Spec.Mutation.Strategy switch
+        var mutated = this.Subscription.Spec.Mutation.Type switch
         {
-            CloudEventMutationStrategy.Expression => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Expression!).ConfigureAwait(false),
-            CloudEventMutationStrategy.Webhook => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Webhook!).ConfigureAwait(false),
-            _ => throw new NotSupportedException($"The specified {nameof(CloudEventMutationStrategy)} '{EnumHelper.Stringify(this.Subscription.Spec.Mutation.Strategy)}' is not supported"),
+            CloudEventMutationType.Expression => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Expression!).ConfigureAwait(false),
+            CloudEventMutationType.Webhook => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Webhook!).ConfigureAwait(false),
+            _ => throw new NotSupportedException($"The specified {nameof(CloudEventMutationType)} '{EnumHelper.Stringify(this.Subscription.Spec.Mutation.Type)}' is not supported"),
         } ?? throw new NullReferenceException("Failed to mutate the specified cloud event");
         await this.ValidateAsync(mutated).ConfigureAwait(false);
         return mutated;
@@ -276,9 +288,9 @@ public class SubscriptionHandler
         if (e == null) throw new ArgumentNullException(nameof(e));
         var offset = e.GetSequence()!.Value;
         using var requestContent = e.ToHttpContent();
-        using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.ServiceUri) { Content = requestContent };
+        using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
         using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
-        if (retryIfUnavailable && response.StatusCode == HttpStatusCode.ServiceUnavailable)
+        if (retryIfUnavailable && (response.StatusCode == HttpStatusCode.ServiceUnavailable || response.StatusCode == HttpStatusCode.TooManyRequests))
         {
             _ = this.RetryDispatchAsync(e, catchUpWhenAvailable);
             return;
@@ -298,10 +310,12 @@ public class SubscriptionHandler
         this.SubscriberAvailable = false;
         this.SubscriptionOutOfSync = true;
 
-        var circuitBreakerPolicy = Policy.Handle<HttpRequestException>()
+        var expectionFilter = (HttpRequestException ex) => ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable;
+
+        var circuitBreakerPolicy = Policy.Handle(expectionFilter)
             .CircuitBreakerAsync(5, TimeSpan.FromSeconds(10));
 
-        var retryPolicy = Policy.Handle<HttpRequestException>(ex => ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+        var retryPolicy = Policy.Handle(expectionFilter)
             .RetryForeverAsync();
 
         await retryPolicy.WrapAsync(circuitBreakerPolicy)
@@ -318,16 +332,11 @@ public class SubscriptionHandler
     protected virtual async Task CatchUpAsync()
     {
         this.SubscriptionOutOfSync = true;
-        var currentOffset = this.AckedOffset;
-        if (!currentOffset.HasValue)
-        {
-            var desiredOffset = this.Subscription.GetOffset();
-            if (desiredOffset == StreamPosition.EndOfStream) desiredOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence()!.Value!;
-            currentOffset = (ulong?)desiredOffset;
-        }
+        var currentOffset = this.Subscription.GetOffset();
+        if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence()!.Value!;
         do
         {
-            var e = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, (long)currentOffset!, this.CancellationToken).ConfigureAwait(false);
+            var e = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.CancellationToken).ConfigureAwait(false);
             if (e == null)
             {
                 await Task.Delay(50);
@@ -336,7 +345,7 @@ public class SubscriptionHandler
             await this.DispatchAsync(e, true, false).ConfigureAwait(false);
             currentOffset++;
         }
-        while (!this.CancellationToken.IsCancellationRequested && currentOffset < (ulong)this.StreamOffset);
+        while (!this.CancellationToken.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
         this.SubscriptionOutOfSync = false;
     }
 
@@ -351,7 +360,9 @@ public class SubscriptionHandler
         if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
         if (resource.Status.Stream == null) resource.Status.Stream = new();
         resource.Status.Stream.AckedOffset = offset;
-        await this.ResourceRepository.UpdateResourceStatusAsync(resource, this.CancellationToken).ConfigureAwait(false);
+        resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
+        var patch = this.Subscription.CreatePatch(resource);
+        await this.ResourceRepository.PatchResourceStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -371,10 +382,7 @@ public class SubscriptionHandler
             if (previousState.Spec.Stream?.Offset != this.Subscription.Spec.Stream?.Offset
                 && (ulong?)this.Subscription.Spec.Stream?.Offset < this.StreamOffset)
             {
-                var offset = this.Subscription.GetOffset();
-                if (offset == StreamPosition.EndOfStream) offset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence()!;
-                await this.CommitOffsetAsync((ulong)offset).ConfigureAwait(false);
-                await this.CatchUpAsync().ConfigureAwait(false);
+                await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
             }
         }
         catch(Exception ex)
@@ -427,6 +435,7 @@ public class SubscriptionHandler
         {
             if (disposing)
             {
+                this._Subscription?.Dispose();
                 this.CancellationTokenSource.Dispose();
             }
             this._Disposed = true;

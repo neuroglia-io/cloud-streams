@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using System.Reflection;
@@ -26,11 +28,13 @@ public class CloudStreamsApplicationBuilder
     /// <param name="configuration">The current <see cref="ConfigurationManager"/></param>
     /// <param name="environment">The current <see cref="IHostEnvironment"/></param>
     /// <param name="services">The current <see cref="IServiceCollection"/></param>
-    public CloudStreamsApplicationBuilder(ConfigurationManager configuration, IHostEnvironment environment, IServiceCollection services)
+    /// <param name="logging">The service used to configure and build logging</param>
+    public CloudStreamsApplicationBuilder(ConfigurationManager configuration, IHostEnvironment environment, IServiceCollection services, ILoggingBuilder logging)
     {
         this.Configuration = configuration;
         this.Environment = environment;
         this.Services = services;
+        this.Logging = logging;
     }
 
     /// <inheritdoc/>
@@ -40,7 +44,20 @@ public class CloudStreamsApplicationBuilder
     public IHostEnvironment Environment { get; }
 
     /// <inheritdoc/>
+    public ILoggingBuilder Logging { get; }
+
+    /// <inheritdoc/>
     public IServiceCollection Services { get; }
+
+    /// <summary>
+    /// Gets the Cloud Streams application service name
+    /// </summary>
+    protected string ServiceName { get; set; } = "cloud-streams";
+
+    /// <summary>
+    /// Gets the Cloud Streams application service version
+    /// </summary>
+    protected string? ServiceVersion { get; set; }
 
     /// <summary>
     /// Gets the type of <see cref="ICloudEventStore"/> to use
@@ -76,6 +93,15 @@ public class CloudStreamsApplicationBuilder
     /// Gets a <see cref="List{T}"/> containing the <see cref="Action{T}"/>s used to setup the application health checks
     /// </summary>
     protected List<Action<IHealthChecksBuilder>> HealthCheckConfigurations { get; } = new();
+
+    /// <inheritdoc/>
+    public virtual ICloudStreamsApplicationBuilder WithServiceName(string name, string? version = null)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        this.ServiceName = name;
+        this.ServiceVersion = version;
+        return this;
+    }
 
     /// <inheritdoc/>
     public virtual ICloudStreamsApplicationBuilder RegisterApplicationPart<TMarkup>()
@@ -160,16 +186,32 @@ public class CloudStreamsApplicationBuilder
             configureHealthChecks(healthChecks);
         }
 
-        var serviceName = "test"; var serviceVersion = "0.1.0"; //todo: URGENT: replace with config
-        Tracing.ActivitySource = new(serviceName, serviceVersion);
+        var resourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName: this.ServiceName, serviceVersion: this.ServiceVersion);
+        Tracing.ActivitySource = new(this.ServiceName, this.ServiceVersion);
+
+        this.Logging.AddOpenTelemetry(builder =>
+        {
+            builder.SetResourceBuilder(resourceBuilder);
+            builder.IncludeFormattedMessage = true;
+            builder.IncludeScopes = true;
+            builder.ParseStateValues = true;
+            builder.AddOtlpExporter();
+        });
+
         var telemetry = this.Services.AddOpenTelemetry();
         telemetry = telemetry.WithTracing(builder =>
         {
             builder
-                .AddSource(serviceName)
-                .SetResourceBuilder(
-                    ResourceBuilder.CreateDefault()
-                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+                .AddSource(this.ServiceName)
+                .SetResourceBuilder(resourceBuilder)
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddOtlpExporter();
+        });
+        telemetry = telemetry.WithMetrics(builder =>
+        {
+            builder
+                .SetResourceBuilder(resourceBuilder)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddOtlpExporter();

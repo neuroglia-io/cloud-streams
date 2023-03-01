@@ -1,0 +1,4 @@
+scrape_configs:
+  - job_name: 'otl-collector'
+    static_configs:
+      - targets: ['otl-collector:8889']

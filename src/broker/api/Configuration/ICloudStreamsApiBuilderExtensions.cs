@@ -18,7 +18,11 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     public static ICloudStreamsApplicationBuilder UseBrokerApi(this ICloudStreamsApplicationBuilder builder)
     {
+        var options = new BrokerOptions();
         builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariablePrefix);
+        builder.Configuration.Bind(options);
+
+        builder.WithServiceName(options.Name);
         builder.Services.Configure<BrokerOptions>(builder.Configuration);
         builder.Services.AddResourceController<Subscription>();
         builder.Services.TryAddSingleton<SubscriptionManager>();

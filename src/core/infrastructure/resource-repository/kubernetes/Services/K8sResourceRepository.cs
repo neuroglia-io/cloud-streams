@@ -18,6 +18,8 @@ public class K8sResourceRepository
     : BackgroundService, IResourceRepository
 {
 
+    private TaskCompletionSource? _InitializationCompletionSource;
+
     /// <summary>
     /// Initializes a new <see cref="K8sResourceRepository"/>
     /// </summary>
@@ -39,9 +41,15 @@ public class K8sResourceRepository
     /// </summary>
     protected Kubernetes Kubernetes { get; }
 
+    /// <summary>
+    /// Gets a boolean indicating whether or not the <see cref="K8sResourceRepository"/> has been initialized
+    /// </summary>
+    protected bool Initialized { get; private set; }
+
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        this._InitializationCompletionSource = new();
         IList<Gateway>? gateways = null;
         try
         {
@@ -49,6 +57,9 @@ public class K8sResourceRepository
         }
         catch { }
         if(gateways == null || !gateways.Any()) await this.SeedAsync(stoppingToken).ConfigureAwait(false);
+        this.Initialized = true;
+        this._InitializationCompletionSource.SetResult();
+        this._InitializationCompletionSource = null;
     }
 
     /// <summary>
@@ -76,6 +87,7 @@ public class K8sResourceRepository
         where TResource : class, IResource, new()
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
+        await this.WaitUntilInitializedAsync();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
@@ -89,6 +101,7 @@ public class K8sResourceRepository
     public virtual async Task<IResourceDefinition?> GetResourceDefinitionAsync<TResource>(CancellationToken cancellationToken)
          where TResource : class, IResource, new()
     {
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var definition = await this.Kubernetes.ReadCustomResourceDefinitionAsync(resource.Type.ToString(), cancellationToken: cancellationToken);
         if(definition == null) return null;
@@ -100,6 +113,7 @@ public class K8sResourceRepository
         where TResource : class, IResource, new()
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
@@ -122,6 +136,7 @@ public class K8sResourceRepository
     public virtual async Task<IAsyncEnumerable<TResource>?> ListResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
@@ -139,6 +154,7 @@ public class K8sResourceRepository
         where TResource : class, IResource, new()
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
+        await this.WaitUntilInitializedAsync();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
@@ -153,6 +169,7 @@ public class K8sResourceRepository
         where TResource : class, IResource, new()
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
+        await this.WaitUntilInitializedAsync();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
@@ -168,6 +185,7 @@ public class K8sResourceRepository
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
@@ -192,6 +210,7 @@ public class K8sResourceRepository
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
@@ -214,6 +233,7 @@ public class K8sResourceRepository
     public virtual async Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
@@ -236,12 +256,24 @@ public class K8sResourceRepository
         where TResource : class, IResource, new()
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        await this.WaitUntilInitializedAsync();
         var resource = new TResource();
         var group = resource.Type.Group;
         var version = resource.Type.Version;
         var plural = resource.Type.Plural;
         if (string.IsNullOrWhiteSpace(@namespace)) await this.Kubernetes.CustomObjects.DeleteClusterCustomObjectAsync(group, version, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
         else await this.Kubernetes.CustomObjects.DeleteNamespacedCustomObjectAsync(group, version, @namespace, plural, name, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Waits for the <see cref="K8sResourceRepository"/> to be initialized
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task WaitUntilInitializedAsync()
+    {
+        if (this.Initialized) return;
+        if (this._InitializationCompletionSource == null) await Task.Delay(TimeSpan.FromMilliseconds(25)).ConfigureAwait(false);
+        if (this._InitializationCompletionSource != null) await this._InitializationCompletionSource!.Task.ConfigureAwait(false);
     }
 
 }

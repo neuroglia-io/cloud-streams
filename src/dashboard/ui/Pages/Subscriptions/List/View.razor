@@ -10,28 +10,51 @@
 <Table Items="subscriptions"
     AutoGenerateColumns="false"
     TableClass="table table-striped table-hover">
+    <RowTemplate>
+        <Row RenderContext="context" OnClick="async _ => await OnShowResourceOffcanvasAsync(context.Item)" />
+    </RowTemplate>
     <Columns>
         <Column TData="Subscription"
-            ValueProvider="s => s.Metadata.Name">
+                ValueProvider="s => s.Metadata.Name">
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
         <Column TData="Subscription"
-            ValueProvider="s => s.Metadata.CreationTimestamp">
+                ValueProvider="s => s.Metadata.CreationTimestamp"
+                Format="R">
             <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Filter == null ? "no" : "yes")">
+            <HeaderTemplate>Filter</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Mutation == null ? "no" : "yes")">
+            <HeaderTemplate>Mutation</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Stream == null ? "-" : s.Spec.Stream.Offset)">
+            <HeaderTemplate>Desired Offset</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="s => s.Status == null || s.Status.Stream == null ? null : s.Status.Stream.AckedOffset">
+            <HeaderTemplate>Acked Offset</HeaderTemplate>
         </Column>
         <Column TData="Subscription" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
-                <button class="btn btn-outline-light btn-sm" title="Deletes subscription '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)"><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil" @onclick:preventDefault="true" @onclick:stopPropagation="true"></span></button>
+                <button class="btn btn-outline-light btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)" @onclick:preventDefault="true" @onclick:stopPropagation="true"><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
+<ResourceOffcanvas TResource="Subscription" @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+
 @code{
 
     List<Subscription>? subscriptions;
+    ResourceOffcanvas<Subscription>? offcanvas;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -48,9 +71,13 @@
         this.StateHasChanged();
     }
 
-    async Task OnDeleteSubscription(Subscription subscription)
+    Task OnDeleteSubscription(Subscription subscription) => this.Store.DeleteResourceAsync(subscription);
+
+    Task OnShowResourceOffcanvasAsync(Subscription subscription)
     {
-        await this.Store.DeleteResourceAsync(subscription).ConfigureAwait(false);
+        if (this.offcanvas == null) return Task.CompletedTask;
+        this.offcanvas.SetResource(subscription);
+        return this.offcanvas.ShowAsync();
     }
 
 }

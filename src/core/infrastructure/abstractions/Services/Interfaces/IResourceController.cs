@@ -14,4 +14,10 @@ public interface IResourceController<TResource>
     /// </summary>
     List<TResource> Resources { get; }
 
+    /// <summary>
+    /// Waits for the <see cref="IResourceController{TResource}"/> to be initialized
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task WaitUntilInitializedAsync();
+
 }

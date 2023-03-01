@@ -19064,7 +19064,7 @@ textarea.form-control-lg {
   --scroll-radius: 0px;
   --scroll-track: var(--bs-light);
   --scroll-thumb-color: var(--bs-primary);
-  --bb-offcanvas-horizontal-width-lg: 90vw !important;
+  --bb-offcanvas-horizontal-width-lg: 40vw !important;
 }
 
 ::-webkit-scrollbar {
@@ -19211,4 +19211,8 @@ h1:focus, .h1:focus {
   -webkit-background-clip: text;
   text-fill-color: transparent;
   -webkit-text-fill-color: transparent;
+}
+
+.vh-30 {
+  height: 30vh !important;
 }

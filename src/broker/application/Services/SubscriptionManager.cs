@@ -50,12 +50,16 @@ public class SubscriptionManager
     protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
     /// <inheritdoc/>
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        await this.SubscriptionController.WaitUntilInitializedAsync().ConfigureAwait(false);
+        foreach (var subscription in this.SubscriptionController.Resources.ToList())
+        {
+            await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
+        }
         this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionCreatedAsync, stoppingToken);
         this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionDeletedAsync, stoppingToken);
-        return Task.CompletedTask;
     }
 
     /// <summary>

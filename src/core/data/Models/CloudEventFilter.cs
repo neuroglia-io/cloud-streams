@@ -8,10 +8,10 @@ public class CloudEventFilter
 {
 
     /// <summary>
-    /// Gets/sets the filtering strategy to use
+    /// Gets/sets the filte's type
     /// </summary>
-    [DataMember(Order = 1, Name = "strategy"), JsonPropertyName("strategy"), YamlMember(Alias = "strategy")]
-    public virtual CloudEventFilteringStrategy Strategy { get; set; }
+    [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
+    public virtual CloudEventFilterType Type { get; set; }
 
     /// <summary>
     /// Gets/sets a key/value mapping of the context attributes by which to filter consumed cloud events.
