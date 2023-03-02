@@ -11,6 +11,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 
 namespace CloudStreams.Core.Application.Configuration;
@@ -187,7 +188,7 @@ public class CloudStreamsApplicationBuilder
         }
 
         var resourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName: this.ServiceName, serviceVersion: this.ServiceVersion);
-        Tracing.ActivitySource = new(this.ServiceName, this.ServiceVersion);
+        CloudStreamsTelemetry.ActivitySource = new(this.ServiceName, this.ServiceVersion);
 
         this.Logging.AddOpenTelemetry(builder =>
         {
@@ -211,6 +212,7 @@ public class CloudStreamsApplicationBuilder
         telemetry = telemetry.WithMetrics(builder =>
         {
             builder
+                .AddMeter(this.ServiceName)
                 .SetResourceBuilder(resourceBuilder)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()

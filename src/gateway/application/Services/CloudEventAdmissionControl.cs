@@ -11,23 +11,26 @@ public class CloudEventAdmissionControl
     : BackgroundService, ICloudEventAdmissionControl, IDisposable
 {
 
-    private bool _Disposed;
+    readonly IGatewayMetrics _Metrics;
+    bool _Disposed;
 
     /// <summary>
     /// Initializes a new <see cref="CloudEventAdmissionControl"/>
     /// </summary>
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
     /// <param name="gatewayOptions">The service used to access the current <see cref="Configuration.GatewayOptions"/></param>
+    /// <param name="metrics">The service used to manage Cloud Streams gateway related metrics</param>
     /// <param name="authorizationManager">The service used to manage authorization</param>
     /// <param name="schemaGenerator">The service used to generate <see cref="JsonSchema"/>s</param>
     /// <param name="schemaRegistry">The service used to manage <see cref="JsonSchema"/>s</param>
     /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
     /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
-    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IAuthorizationManager authorizationManager, 
+    public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IGatewayMetrics metrics, IAuthorizationManager authorizationManager, 
         ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources, IEnumerable<IValidator<CloudEvent>> validators)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.GatewayOptions = gatewayOptions.Value;
+        this._Metrics = metrics;
         this.AuthorizationManager = authorizationManager;
         this.SchemaGenerator = schemaGenerator;
         this.SchemaRegistry = schemaRegistry;
@@ -104,12 +107,14 @@ public class CloudEventAdmissionControl
         if (!result.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
+            this._Metrics.IncrementTotalRejectedEvents();
             return result;
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
+            this._Metrics.IncrementTotalInvalidEvents();
             return result;
         }
         this.Logger.LogDebug("Admission evaluation for cloud event with id '{eventId}' completed successfully", e.Id);

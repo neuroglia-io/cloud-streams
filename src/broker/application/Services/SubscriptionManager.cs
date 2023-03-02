@@ -89,7 +89,7 @@ public class SubscriptionManager
     protected virtual Task OnSubscriptionDeletedAsync(Subscription subscription)
     {
         var key = this.GetResourceCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (this.Subscriptions.Remove(key, out var dispatcher) && dispatcher != null) dispatcher.Dispose();
+        if (this.Subscriptions.Remove(key, out var handler) && handler != null) handler.Dispose();
         return Task.CompletedTask;
     }
 

@@ -34,6 +34,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.TryAddSingleton<ICloudEventAdmissionControl>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
         builder.Services.AddHostedService<CloudEventHubDispatcher>();
         builder.Services.AddHostedService(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
+        builder.Services.AddSingleton<IGatewayMetrics, GatewayMetrics>();
         return builder;
     }
 
