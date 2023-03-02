@@ -292,11 +292,14 @@ public class SubscriptionHandler
         using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
         if (retryIfUnavailable && (response.StatusCode == HttpStatusCode.ServiceUnavailable || response.StatusCode == HttpStatusCode.TooManyRequests))
         {
-            _ = this.RetryDispatchAsync(e, catchUpWhenAvailable);
-            return;
+            await this.RetryDispatchAsync(e, catchUpWhenAvailable);
         }
-        response.EnsureSuccessStatusCode();
-        await this.CommitOffsetAsync(offset).ConfigureAwait(false);
+        else
+        {
+            response.EnsureSuccessStatusCode();
+            await this.CommitOffsetAsync(offset).ConfigureAwait(false);
+            if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value));
+        }
     }
 
     /// <summary>
@@ -313,10 +316,10 @@ public class SubscriptionHandler
         var expectionFilter = (HttpRequestException ex) => ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable;
 
         var circuitBreakerPolicy = Policy.Handle(expectionFilter)
-            .CircuitBreakerAsync(5, TimeSpan.FromSeconds(10));
+            .CircuitBreakerAsync(5, TimeSpan.FromSeconds(5));
 
         var retryPolicy = Policy.Handle(expectionFilter)
-            .RetryForeverAsync();
+            .WaitAndRetryForeverAsync(retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
         await retryPolicy.WrapAsync(circuitBreakerPolicy)
             .ExecuteAsync(async _ => await this.DispatchAsync(e, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);

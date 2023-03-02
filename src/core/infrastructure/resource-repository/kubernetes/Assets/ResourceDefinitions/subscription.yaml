@@ -99,6 +99,8 @@ spec:
                     uri:
                       type: string
                       format: url
+                    rateLimit:
+                      type: number
                   required:
                     - uri
               required:
