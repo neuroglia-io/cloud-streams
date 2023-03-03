@@ -9,7 +9,11 @@
 
 <Table Items="brokers"
     AutoGenerateColumns="false"
-    TableClass="table table-striped table-hover">
+    TableClass="table table-striped table-hover"
+    RowClass="cursor-pointer">
+    <RowTemplate>
+        <Row RenderContext="context" OnClick="async _ => await OnShowResourceOffcanvasAsync(context.Item)" />
+    </RowTemplate>
     <Columns>
         <Column TData="Broker"
                 ValueProvider="b => b.Metadata.Name">
@@ -22,22 +26,27 @@
         <Column TData="Broker" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
-                <button class="btn btn-outline-light btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteBroker(context.Item)"><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteBroker(context.Item)" @onclick:preventDefault @onclick:stopPropagation><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
+<ResourceOffcanvas TResource="Broker" @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+
+<ConfirmDialog @ref="dialog" />
+
 @code{
 
     List<Broker>? brokers;
+    ResourceOffcanvas<Broker>? offcanvas;
+    ConfirmDialog? dialog;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Resources.Subscribe(OnBrokerCollectionChanged);
+        this.Store.Resources.Subscribe(OnBrokerCollectionChanged, token: this.CancellationTokenSource.Token);
         await this.Store.ListResourcesAsync().ConfigureAwait(false);
     }
 
@@ -50,7 +59,26 @@
 
     async Task OnDeleteBroker(Broker broker)
     {
+        if (this.dialog == null) return;
+        var confirmation = await this.dialog.ShowAsync(
+            title: $"Are you sure you want to delete '{broker.Metadata.Name}'?",
+            message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
+            confirmDialogOptions: new ConfirmDialogOptions()
+                {
+                    YesButtonColor = ButtonColor.Danger,
+                    YesButtonText = "Delete",
+                    NoButtonText = "Abort"
+                }
+        );
+        if (!confirmation) return;
         await this.Store.DeleteResourceAsync(broker).ConfigureAwait(false);
+    }
+
+    Task OnShowResourceOffcanvasAsync(Broker broker)
+    {
+        if (this.offcanvas == null) return Task.CompletedTask;
+        this.offcanvas.SetResource(broker);
+        return this.offcanvas.ShowAsync();
     }
 
 }
