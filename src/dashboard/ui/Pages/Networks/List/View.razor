@@ -63,10 +63,12 @@
         var confirmation = await this.dialog.ShowAsync(
             title: $"Are you sure you want to delete '{network.Metadata.Name}'?",
             message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
-            confirmDialogOptions: new ConfirmDialogOptions() {
+            confirmDialogOptions: new ConfirmDialogOptions() 
+            {
                 YesButtonColor = ButtonColor.Danger,
                 YesButtonText = "Delete",
-                NoButtonText = "Abort"
+                NoButtonText = "Abort",
+                IsVerticallyCentered = true
             }
         );
         if (!confirmation) return;
