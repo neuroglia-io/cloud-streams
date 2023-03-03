@@ -12,7 +12,8 @@
 
 <Table Items="events"
     AutoGenerateColumns="false"
-    TableClass="table table-striped table-hover">
+    TableClass="table table-striped table-hover"
+    RowClass="cursor-pointer">
     <RowTemplate>
         <Row RenderContext="context" OnClick="async _ => await OnShowCloudEventOffcanvasAsync(context.Item)" />
     </RowTemplate>
@@ -34,21 +35,21 @@
                 ValueProvider="e => e.Source">
             <HeaderTemplate>Source</HeaderTemplate>
             <CellTemplate Context="context">
-                <a href="#by-source" @onclick:preventDefault="true" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, context.Value!.ToString()!)">@context.Value</a>
+                <a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, context.Value!.ToString()!)">@context.Value</a>
             </CellTemplate>
         </Column>
         <Column TData="CloudEvent"
                 ValueProvider="e => e.Type">
             <HeaderTemplate>Type</HeaderTemplate>
             <CellTemplate Context="context">
-                <a href="#by-type" @onclick:preventDefault="true" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, context.Value!.ToString()!)">@context.Value</a>
+                <a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, context.Value!.ToString()!)">@context.Value</a>
             </CellTemplate>
         </Column>
         <Column TData="CloudEvent"
                 ValueProvider="e => e.Subject">
             <HeaderTemplate>Subject</HeaderTemplate>
             <CellTemplate Context="context">
-                <a href="#by-subject" @onclick:preventDefault="true" @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, context.Value!.ToString()!)">@context.Value</a>
+                <a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, context.Value!.ToString()!)">@context.Value</a>
             </CellTemplate>
         </Column>
         <Column TData="CloudEvent"
