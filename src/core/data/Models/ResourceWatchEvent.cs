@@ -19,7 +19,7 @@ public class ResourceWatchEvent
     /// <param name="type">The <see cref="ResourceWatchEvent"/>'s type</param>
     /// <param name="resource">The resource that has produced the <see cref="ResourceWatchEvent"/></param>
     /// <exception cref="ArgumentNullException"></exception>
-    public ResourceWatchEvent(ResourceWatchEventType type, IResource resource)
+    public ResourceWatchEvent(ResourceWatchEventType type, Resource resource)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         this.Type = type;
@@ -37,7 +37,9 @@ public class ResourceWatchEvent
     /// Gets/sets the resource that has produced the event
     /// </summary>
     [DataMember(Order = 2, Name = "resource"), JsonPropertyName("resource"), YamlMember(Alias = "resource")]
-    public virtual IResource Resource { get; set; } = null!;
+    public virtual Resource Resource { get; set; } = null!;
+
+    IResource IResourceWatchEvent.Resource => this.Resource;
 
 }
 

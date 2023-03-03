@@ -12,8 +12,7 @@ public class ResourceManagementComponentStore<TResource>
     : ComponentStore<ResourceManagementComponentState<TResource>>
     where TResource : class, IResource, new()
 {
-
-    ICloudStreamsResourceManagementApiClient resourceManagementApi;
+    readonly ICloudStreamsResourceManagementApiClient resourceManagementApi;
     ResourceDefinition? definition;
     List<TResource>? resources;
 
@@ -21,10 +20,12 @@ public class ResourceManagementComponentStore<TResource>
     /// Initializes a new <see cref="ResourceManagementComponentStore{TResource}"/>
     /// </summary>
     /// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
-    public ResourceManagementComponentStore(ICloudStreamsResourceManagementApiClient resourceManagementApi)
+    /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
+    public ResourceManagementComponentStore(ICloudStreamsResourceManagementApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
         : base(new())
     {
         this.resourceManagementApi = resourceManagementApi;
+        this.ResourceEventHub = resourceEventHub;
     }
 
     /// <summary>
@@ -32,8 +33,29 @@ public class ResourceManagementComponentStore<TResource>
     /// </summary>
     public IObservable<List<TResource>?> Resources => this.Select(s => s.Resources);
 
+    /// <summary>
+    /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
+    /// </summary>
+    protected ResourceWatchEventHubClient ResourceEventHub { get; }
+
+    /// <summary>
+    /// Gets the service used to monitor resources of the specified type
+    /// </summary>
+    protected ResourceWatch<TResource> ResourceWatch { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets an <see cref="IDisposable"/> that represents the store's <see cref="ResourceWatch"/> subscription
+    /// </summary>
+    protected IDisposable ResourceWatchSubscription { get; private set; } = null!;
+
     /// <inheritdoc/>
-    public override Task InitializeAsync() => base.InitializeAsync();
+    public override async Task InitializeAsync()
+    {
+        await this.ResourceEventHub.StartAsync().ConfigureAwait(false);
+        this.ResourceWatch = await this.ResourceEventHub.WatchAsync<TResource>().ConfigureAwait(false);
+        this.ResourceWatch.SubscribeAsync(OnResourceWatchEventAsync, onErrorAsync: ex => Task.Run(() => Console.WriteLine(ex)));
+        await base.InitializeAsync();
+    }
 
     /// <summary>
     /// Fetches the definition of the managed <see cref="IResource"/> type
@@ -83,10 +105,75 @@ public class ResourceManagementComponentStore<TResource>
         });
     }
 
+    /// <summary>
+    /// Handles the specified <see cref="IResourceWatchEvent"/>
+    /// </summary>
+    /// <param name="e">The <see cref="IResourceWatchEvent"/> to handle</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual Task OnResourceWatchEventAsync(IResourceWatchEvent<TResource> e)
+    {
+        Console.WriteLine($"EVENT RECEIVED: {e.Type}");
+        switch (e.Type)
+        {
+            case ResourceWatchEventType.Created:
+                this.Reduce(state =>
+                {
+                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    resources.Add(e.Resource);
+                    return state with
+                    {
+                        Resources = resources
+                    };
+                });
+                break;
+            case ResourceWatchEventType.Updated:
+                this.Reduce(state =>
+                {
+                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
+                    if (resource == null) return state;
+                    var index = resources.IndexOf(resource);
+                    resources.Remove(resource);
+                    resources.Insert(index, e.Resource);
+                    return state with
+                    {
+                        Resources = resources
+                    };
+                });
+                break;
+            case ResourceWatchEventType.Deleted:
+                this.Reduce(state =>
+                {
+                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
+                    if (resource == null) return state;
+                    resources.Remove(resource);
+                    return state with
+                    {
+                        Resources = resources
+                    };
+                });
+                break;
+            default:
+                throw new NotSupportedException($"The specified {nameof(ResourceWatchEventType)} '{e.Type}' is not supported");
+        }
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc/>
     protected override void Dispose(bool disposing)
     {
         if (!disposing) return;
+        this.ResourceWatchSubscription?.Dispose();
+        base.Dispose(disposing);
+    }
+
+    /// <inheritdoc/>
+    protected override async ValueTask DisposeAsync(bool disposing)
+    {
+        if (!disposing) return;
+        await this.ResourceWatch.DisposeAsync().ConfigureAwait(false);
+        this.ResourceWatchSubscription.Dispose();
         base.Dispose(disposing);
     }
 

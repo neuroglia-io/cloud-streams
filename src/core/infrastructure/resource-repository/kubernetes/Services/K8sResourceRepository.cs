@@ -230,7 +230,23 @@ public class K8sResourceRepository
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IResourceWatcher> WatchResourcesAsync(string group, string version, string plural, string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(group)) throw new ArgumentNullException(nameof(group));
+        if (string.IsNullOrWhiteSpace(version)) throw new ArgumentNullException(nameof(version));
+        if (string.IsNullOrWhiteSpace(plural)) throw new ArgumentNullException(nameof(plural));
+        await this.WaitUntilInitializedAsync();
+        var labelSelector = labelSelectors?.Select(l => l.ToString()).Join(',');
+        HttpOperationResponse<object> response;
+        if (string.IsNullOrWhiteSpace(@namespace)) response = await this.Kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(group, version, plural, watch: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        else response = await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, @namespace, plural, watch: true, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var subject = new Subject<IResourceWatchEvent>();
+        var watch = response.Watch((WatchEventType watchEventType, Resource resource) => subject.OnNext(new ResourceWatchEvent(watchEventType.ToCloudStreamsEventType(), resource)));
+        return new K8sResourceWatcher(subject, watch);
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<IResourceWatcher<TResource>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new()
     {
         await this.WaitUntilInitializedAsync();
@@ -244,11 +260,7 @@ public class K8sResourceRepository
         else response = await this.Kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, @namespace, plural, watch: true, labelSelector: labelSelector, cancellationToken: cancellationToken).ConfigureAwait(false);
         var subject = new Subject<IResourceWatchEvent<TResource>>();
         var watch = response.Watch((WatchEventType watchEventType, TResource resource) => subject.OnNext(new ResourceWatchEvent<TResource>(watchEventType.ToCloudStreamsEventType(), resource)));
-        return Observable.Using
-        (
-            () => watch, 
-            watch => subject
-        );
+        return new K8sResourceWatcher<TResource>(subject, watch);
     }
 
     /// <inheritdoc/>
