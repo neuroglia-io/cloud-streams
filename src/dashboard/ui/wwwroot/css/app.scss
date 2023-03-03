@@ -119,3 +119,9 @@ h1:focus {
 .cursor-pointer {
     cursor: pointer;
 }
+
+.modal-confirmation {
+    .modal-footer {
+        border-top: var(--bs-modal-header-border-width) solid var(--bs-modal-header-border-color) !important;
+    }
+}

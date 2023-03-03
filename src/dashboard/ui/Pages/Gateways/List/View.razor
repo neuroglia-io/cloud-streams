@@ -72,11 +72,12 @@
             title: $"Are you sure you want to delete '{gateway.Metadata.Name}'?",
             message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
             confirmDialogOptions: new ConfirmDialogOptions()
-                {
-                    YesButtonColor = ButtonColor.Danger,
-                    YesButtonText = "Delete",
-                    NoButtonText = "Abort"
-                }
+            {
+                YesButtonColor = ButtonColor.Danger,
+                YesButtonText = "Delete",
+                NoButtonText = "Abort",
+                IsVerticallyCentered = true
+            }
         );
         if (!confirmation) return;
         await this.Store.DeleteResourceAsync(gateway).ConfigureAwait(false);
