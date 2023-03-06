@@ -19,6 +19,6 @@ internal class PartitionsMetadataProjectionResult
     /// Gets/Sets the metadata entries of a <see cref="CloudEventPartitionType"/>
     /// </summary>
     [JsonPropertyName("values")]
-    public Dictionary<string, CloudEventPartitionMetadata> Values { get; set; } = null!;
+    public Dictionary<string, PartitionMetadata> Values { get; set; } = null!;
 
 }
