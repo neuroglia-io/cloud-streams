@@ -118,6 +118,7 @@ services:
       - eventstore
       - postgres
       - apicurio
+      - gateway-1 # prevents concurrency the first time the stack is launched
 
 volumes:
   eventstore-data:

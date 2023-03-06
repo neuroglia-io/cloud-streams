@@ -88,20 +88,17 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<PartitionMetadata> ListPartitionsMetadataAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public virtual async IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var partitions = partitionType switch
+        var typeName = partitionType.ToString();
+        var partitionsIds = await this.Projections.GetResultAsync<List<string>>(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (partitionsIds == null)
         {
-            CloudEventPartitionType.BySource => this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreProjections.BuiltInProjections.Streams, EventStore.Client.StreamPosition.Start, resolveLinkTos: true, cancellationToken: cancellationToken)
-                .Where(e => !e.Event.EventStreamId.StartsWith('$') && e.Event.EventStreamId.StartsWith(EventStoreStreams.ByCloudEventSourcePrefix) && EventStoreStreams.IsPartition(e.Event.EventStreamId, partitionType))
-                .Select(e => EventStoreStreams.ExtractPartitionIdFrom(e.Event.EventStreamId, partitionType)),
-            CloudEventPartitionType.ByType => (await this.Projections.GetResultAsync<ListCloudEventTypesQueryResult>(EventStoreProjections.ListCloudEventTypes, cancellationToken: cancellationToken)).Types.ToAsyncEnumerable(),
-            CloudEventPartitionType.BySubject => (await this.Projections.GetResultAsync<ListCloudEventSubjectsQueryResult>(EventStoreProjections.ListCloudEventSubjects, cancellationToken: cancellationToken)).Subjects.ToAsyncEnumerable(),
-            _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
-        };
-        await foreach (var partitionId in partitions.Distinct())
+            throw new NullReferenceException(nameof(partitionsIds));
+        }
+        await foreach(var id in partitionsIds.ToAsyncEnumerable())
         {
-            yield return await this.GetPartitionMetadataAsync(new(partitionType, partitionId), cancellationToken);
+            yield return id;
         }
     }
 
@@ -266,30 +263,34 @@ public class ESCloudEventStore
         await this.Projections.AbortAsync(EventStoreProjections.BuiltInProjections.StreamByCategory, cancellationToken: cancellationToken);
         await this.Projections.DisableAsync(EventStoreProjections.BuiltInProjections.StreamByCategory, cancellationToken: cancellationToken);
 
-        //todo: the following code does not configure the stream as expected, because handler 'js' does not seem to perform the same operations than built in handler
-        //var stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "by_correlation_id.json"))!;
-        //var streamReader = new StreamReader(stream);
-        //var query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        //streamReader.Dispose();
-        //await this.Projections.UpdateAsync(EventStoreProjections.BuiltInProjections.PartitionByCorrelationId, query, cancellationToken: cancellationToken);
+        Stream stream;
+        StreamReader streamReader;
+        string query;
 
-        var stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-by_source.js"))!;
-        var streamReader = new StreamReader(stream);
-        var query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        //todo: the following code does not configure the stream as expected, because handler 'js' does not seem to perform the same operations than built in handler
+        // -> issue opened: https://github.com/EventStore/EventStore-Client-Dotnet/issues/243
+        //stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "by_correlation_id.json"))!;
+        //streamReader = new StreamReader(stream);
+        //query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        //streamReader.Dispose();
+        //await this.Projections.UpdateAsync(EventStoreProjections.BuiltInProjections.PartitionByCorrelationId, query, true, cancellationToken: cancellationToken);
+
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-by_source.js"))!;
+        streamReader = new StreamReader(stream);
+        query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         streamReader.Dispose();
         await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionBySource, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-types.js"))!;
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-partition-ids.js.tmpl"))!;
         streamReader = new StreamReader(stream);
         query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         streamReader.Dispose();
-        await this.Projections.CreateContinuousAsync(EventStoreProjections.ListCloudEventTypes, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "projections", "cloud-events-subjects.js"))!;
-        streamReader = new StreamReader(stream);
-        query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        streamReader.Dispose();
-        await this.Projections.CreateContinuousAsync(EventStoreProjections.ListCloudEventSubjects, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        foreach (var value in Enum.GetValues<CloudEventPartitionType>())
+        {
+            var typeName = value.ToString();
+            var propertyName = typeName.Replace("By", "").ToLower();
+            await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##propertyName##", propertyName), true, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

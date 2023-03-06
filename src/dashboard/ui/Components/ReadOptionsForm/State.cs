@@ -32,5 +32,5 @@ public record ReadOptionsFormState
     /// <summary>
     /// Gets the <see cref="List{T}"/> of suggested <see cref="PartitionReference"/>s
     /// </summary>
-    public List<PartitionMetadata>? Partitions { get; set; } = new();
+    public List<string>? Partitions { get; set; } = new();
 }
