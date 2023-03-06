@@ -30,7 +30,7 @@ public static partial class Serializer
             {
                 if (_DefaultOptions != null) return _DefaultOptions;
                 _DefaultOptions = new JsonSerializerOptions();
-                if (DefaultOptionsConfiguration != null) DefaultOptionsConfiguration(_DefaultOptions);
+                DefaultOptionsConfiguration?.Invoke(_DefaultOptions);
                 return _DefaultOptions;
             }
         }
@@ -58,6 +58,14 @@ public static partial class Serializer
         /// <param name="graph">The object to serialize</param>
         /// <returns>A new <see cref="JsonElement"/></returns>
         public static JsonElement? SerializeToElement<T>(T graph) => JsonSerializer.SerializeToElement(graph, DefaultOptions);
+
+        /// <summary>
+        /// Deserializes the specified JSON input
+        /// </summary>
+        /// <param name="json">The JSON input to deserialize</param>
+        /// <param name="returnType">The type to deserialize the JSON into</param>
+        /// <returns>An object that results from the specified JSON input's deserialization</returns>
+        public static object? Deserialize(string json, Type returnType) => JsonSerializer.Deserialize(json, returnType); 
 
         /// <summary>
         /// Deserializes the specified <see cref="JsonElement"/>
