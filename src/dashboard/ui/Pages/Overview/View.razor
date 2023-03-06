@@ -46,7 +46,7 @@
                                     {
                                         @foreach(var partition in this.sourcePartitions)
                                         {
-                                            <option>@partition.Id</option>
+                                            <option>@partition</option>
                                         }
                                     }
                                 </select>
@@ -63,9 +63,9 @@
 @code{
 
     CloudEventStreamMetadata? stream;
-    List<CloudEventPartitionMetadata>? sourcePartitions;
-    List<CloudEventPartitionMetadata>? typePartitions;
-    List<CloudEventPartitionMetadata>? subjectPartitions;
+    List<string>? sourcePartitions;
+    List<string>? typePartitions;
+    List<string>? subjectPartitions;
 
     protected override async Task OnInitializedAsync()
     {

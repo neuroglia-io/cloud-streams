@@ -30,12 +30,12 @@ public interface ICloudEventStore
     Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionReference partition, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists the metadata of <see cref="CloudEvent"/> partitions of the specified type
+    /// Lists the <see cref="CloudEvent"/> partition ids of the specified type
     /// </summary>
     /// <param name="partitionType">The type of partition to list</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> that contains metadata that describes the partitions of the specified type</returns>
-    IAsyncEnumerable<CloudEventPartitionMetadata> ListPartitionsMetadataAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> that contains ids of the partitions of the specified type</returns>
+    IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads stored <see cref="CloudEvent"/>s

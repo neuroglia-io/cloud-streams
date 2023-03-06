@@ -18,11 +18,11 @@ public interface ICloudEventPartitionsApi
     Task<CloudEventPartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists the metadata of all partitions of the specified type
+    /// Lists the id of all partitions of the specified type
     /// </summary>
-    /// <param name="type">The type of the partitions to list the metadata of</param>
+    /// <param name="type">The type of the partitions to list the ids of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> used to enumerate the metadata of all partitions of the specified type</returns>
-    Task<IAsyncEnumerable<CloudEventPartitionMetadata?>> ListPartitionsByTypeAsync(CloudEventPartitionType type, CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> used to enumerate the id of all partitions of the specified type</returns>
+    Task<IAsyncEnumerable<string?>> ListPartitionsByTypeAsync(CloudEventPartitionType type, CancellationToken cancellationToken = default);
 
 }

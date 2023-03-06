@@ -32,5 +32,5 @@ public record ReadOptionsFormState
     /// <summary>
     /// Gets the <see cref="List{T}"/> of suggested <see cref="CloudEventPartitionRef"/>s
     /// </summary>
-    public List<CloudEventPartitionMetadata>? Partitions { get; set; } = new();
+    public List<string>? Partitions { get; set; } = new();
 }
