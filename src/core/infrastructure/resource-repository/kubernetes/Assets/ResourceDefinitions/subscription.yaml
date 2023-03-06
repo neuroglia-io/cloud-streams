@@ -40,11 +40,13 @@ spec:
                   type: object
                   properties:
                     type:
-                      type: string
+                      enum:
+                        - attributes
+                        - expression
                     attributes:
                       type: object
                     expression:
-                      type: object
+                      type: string
                   oneOf:
                     - properties:
                         type:
@@ -64,7 +66,9 @@ spec:
                   type: object
                   properties:
                     type:
-                      type: string
+                      enum:
+                        - expression
+                        - webhook
                     expression:
                       type: string
                     webhook:
