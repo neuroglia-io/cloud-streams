@@ -54,7 +54,7 @@ public class ReadOptionsFormStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.Partitions"/> changes
     /// </summary>
-    public IObservable<List<CloudEventPartitionMetadata>?> Partitions => this.Select(state => state.Partitions).DistinctUntilChanged();
+    public IObservable<List<string>?> Partitions => this.Select(state => state.Partitions).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the resulting <see cref="CloudEventStreamReadOptions"/>

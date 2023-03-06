@@ -37,7 +37,7 @@
             {
                 foreach (var partition in partitions)
                 {
-                            <option value="@partition.Id"></option>
+                            <option value="@partition"></option>
                 }
             }
         </datalist>
@@ -75,7 +75,12 @@
     /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.Partitions"/>
     /// </summary>
-    private List<CloudEventPartitionMetadata>? partitions = null;
+    private List<string>? partitions = null;
+    /// <summary>
+    /// Defines if the component has been disposed yet
+    /// </summary>
+    private bool disposed;
+    /// <summary>
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()

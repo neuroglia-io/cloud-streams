@@ -14,12 +14,12 @@ public partial class CloudStreamsApiClient
     ICloudEventStreamApi ICloudEventsApi.Stream => this;
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<CloudEventPartitionMetadata?>> ListPartitionsByTypeAsync(CloudEventPartitionType type, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<string?>> ListPartitionsByTypeAsync(CloudEventPartitionType type, CancellationToken cancellationToken = default)
     {
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}"), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return Serializer.Json.DeserializeAsyncEnumerable<CloudEventPartitionMetadata>(responseStream, cancellationToken: cancellationToken);
+        return Serializer.Json.DeserializeAsyncEnumerable<string>(responseStream, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>

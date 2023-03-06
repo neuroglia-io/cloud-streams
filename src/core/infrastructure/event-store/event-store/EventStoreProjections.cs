@@ -13,13 +13,9 @@ public static class EventStoreProjections
     /// </summary>
     public const string PartitionBySource = "cloud-events-by_source";
     /// <summary>
-    /// Gets the name of the projection used to list all <see cref="CloudEvent"/> types
+    /// Gets the prefix of name of the projection used to gather all <see cref="CloudEvent"/>'s partitions ids
     /// </summary>
-    public const string ListCloudEventTypes = "cloud-events-types";
-    /// <summary>
-    /// Gets the name of the projection used to list all <see cref="CloudEvent"/> subjects
-    /// </summary>
-    public const string ListCloudEventSubjects = "cloud-events-subjects";
+    public const string CloudEventPartitionsMetadataPrefix = "cloud-events-partition-ids-";
 
     /// <summary>
     /// Exposes constants about EventStore built-in projections

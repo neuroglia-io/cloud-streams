@@ -9,17 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Assets\projections\by_correlation_id.js" />
+    <None Remove="Assets\projections\by_correlation_id.json" />
     <None Remove="Assets\projections\cloud-events-by_source.js" />
-    <None Remove="Assets\projections\cloud-events-subjects.js" />
-    <None Remove="Assets\projections\cloud-events-types.js" />
+    <None Remove="Assets\projections\cloud-events-partition-ids.js.tmpl" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\projections\cloud-events-by_source.js" />
-    <EmbeddedResource Include="Assets\projections\cloud-events-subjects.js" />
-    <EmbeddedResource Include="Assets\projections\by_correlation_id.js" />
-    <EmbeddedResource Include="Assets\projections\cloud-events-types.js" />
+    <EmbeddedResource Include="Assets\projections\by_correlation_id.json" />
+    <EmbeddedResource Include="Assets\projections\cloud-events-partition-ids.js.tmpl" />
   </ItemGroup>
 
   <ItemGroup>
