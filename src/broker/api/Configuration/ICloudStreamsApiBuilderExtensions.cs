@@ -18,12 +18,15 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     public static ICloudStreamsApplicationBuilder UseBrokerApi(this ICloudStreamsApplicationBuilder builder)
     {
+        var options = new BrokerOptions();
         builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariablePrefix);
+        builder.Configuration.Bind(options);
+
+        builder.WithServiceName(options.Name);
         builder.Services.Configure<BrokerOptions>(builder.Configuration);
-        //builder.RegisterApplicationPart<CloudEventsController>();
-        builder.Services.AddResourceController<Channel>();
-        builder.Services.TryAddSingleton<BrokerCloudEventDispatcher>();
-        builder.Services.AddHostedService(provider => provider.GetRequiredService<BrokerCloudEventDispatcher>());
+        builder.Services.AddResourceController<Subscription>();
+        builder.Services.TryAddSingleton<SubscriptionManager>();
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
         return builder;
     }
 

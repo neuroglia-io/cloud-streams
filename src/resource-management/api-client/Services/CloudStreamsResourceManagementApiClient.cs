@@ -55,10 +55,10 @@ public partial class CloudStreamsResourceManagementApiClient
     public IResourceManagementApi<Broker> Brokers { get; private set; } = null!;
 
     /// <inheritdoc/>
-    public IResourceManagementApi<Channel> Channels { get; private set; } = null!;
+    public IResourceManagementApi<Network> Networks { get; private set; } = null!;
 
     /// <inheritdoc/>
-    public IResourceManagementApi<Network> Networks { get; private set; } = null!;
+    public IResourceManagementApi<Subscription> Subscriptions { get; private set; } = null!;
 
     /// <summary>
     /// Processes the specified <see cref="HttpRequestMessage"/> before sending it

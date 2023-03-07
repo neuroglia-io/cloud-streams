@@ -42,12 +42,41 @@ services:
     depends_on:
       - postgres
 
-  jaeger:
-    image: jaegertracing/opentelemetry-all-in-one
+  otl-collector:
+    image: otel/opentelemetry-collector-contrib
+    command: [ "--config=/etc/collector.yaml" ]
+    volumes:
+      - ./otel/collector/config.yaml:/etc/collector.yaml
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/config.yaml:/etc/prometheus/prometheus.yml
+
+  tempo:
+    image: grafana/tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo.yaml
+
+  loki:
+    image: grafana/loki
+    command: [ "-config.file=/etc/loki/local-config.yaml" ]
+
+  grafana:
+    image: grafana/grafana
     ports:
-      - 13133:13133
-      - 16686:16686
-      - 4317:4317
+      - "3000:3000"
+    volumes:
+      - ./grafana/data-sources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
 
   gateway-1:
     image: ${DOCKER_REGISTRY-}cloudstreams-gateway
@@ -60,7 +89,7 @@ services:
       CLOUDSTREAMS_GATEWAY_NAME: gateway-1
       CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
       CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otl-collector:4317
     ports:
       - 9696:80
     volumes:
@@ -69,7 +98,6 @@ services:
       - eventstore
       - postgres
       - apicurio
-      - jaeger
 
   broker-1:
     image: ${DOCKER_REGISTRY-}cloudstreams-broker
@@ -90,6 +118,7 @@ services:
       - eventstore
       - postgres
       - apicurio
+      - gateway-1 # prevents concurrency the first time the stack is launched
 
 volumes:
   eventstore-data:

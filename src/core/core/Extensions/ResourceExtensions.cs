@@ -42,6 +42,13 @@ public static class ResourceExtensions
     public static string? GetNamespace(this IResource resource) => resource.Metadata.Namespace;
 
     /// <summary>
+    /// Gets the <see cref="IResource"/>'s qualified name
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to get the qualified name of</param>
+    /// <returns>The <see cref="IResource"/>'s qualified name</returns>
+    public static string GetQualifiedName(this IResource resource) => string.IsNullOrWhiteSpace(resource.GetNamespace()) ? resource.GetName() : $"{resource.GetName()}.{resource.GetNamespace()}";
+
+    /// <summary>
     /// Determines whether or not the <see cref="IResource"/> is the specified type
     /// </summary>
     /// <param name="resource">The <see cref="IResource"/> to check</param>

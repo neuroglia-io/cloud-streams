@@ -11,7 +11,7 @@ public class ReadEventStreamQuery
     /// Initializes a new <see cref="ReadEventStreamQuery"/>
     /// </summary>
     /// <param name="options">The object used to configure the query to perform</param>
-    public ReadEventStreamQuery(CloudEventStreamReadOptions options)
+    public ReadEventStreamQuery(StreamReadOptions options)
     {
         Options = options;
     }
@@ -19,7 +19,7 @@ public class ReadEventStreamQuery
     /// <summary>
     /// Gets the object used to configure the query to perform
     /// </summary>
-    public CloudEventStreamReadOptions Options { get; }
+    public StreamReadOptions Options { get; }
 
 }
 
@@ -41,7 +41,7 @@ public class ReadCloudEventStreamQueryHandler
     /// <inheritdoc/>
     public Task<Response<IAsyncEnumerable<CloudEvent>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
     {
-        var length = query.Options.Length > CloudEventStreamReadOptions.MaxLength ? CloudEventStreamReadOptions.MaxLength : query.Options.Length;
+        var length = query.Options.Length > StreamReadOptions.MaxLength ? StreamReadOptions.MaxLength : query.Options.Length;
         if (length < 1) length = 1;
         var offset = query.Options.Offset;
         if (!offset.HasValue)
@@ -49,10 +49,10 @@ public class ReadCloudEventStreamQueryHandler
             switch (query.Options.Direction)
             {
                 case StreamReadDirection.Forwards:
-                    offset = CloudEventStreamPosition.StartOfStream;
+                    offset = StreamPosition.StartOfStream;
                     break;
                 case StreamReadDirection.Backwards:
-                    offset = CloudEventStreamPosition.EndOfStream;
+                    offset = StreamPosition.EndOfStream;
                     break;
                 default:
                     return Task.FromResult(this.ValidationFailed(new KeyValuePair<string, string[]>[] { new(nameof(query.Options.Direction).ToLowerInvariant(), new string[] { $"The specified {nameof(StreamReadDirection)} '{query.Options.Direction}' is not supported" }) }));

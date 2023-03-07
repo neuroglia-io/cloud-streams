@@ -11,17 +11,15 @@ public interface IResourceEventWatchHub
     /// </summary>
     /// <param name="type">The type of resources to watch</param>
     /// <param name="namespace">The namespace the resources to watch belong to, if any</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    Task Subscribe(string type, string? @namespace = null, CancellationToken cancellationToken = default);
+    Task Watch(ResourceType type, string? @namespace = null);
 
     /// <summary>
     /// Unsubscribes from events produced by resources of the specified type
     /// </summary>
-    /// <param name="type">The type of resources to watch</param>
-    /// <param name="namespace">The namespace the resources to watch belong to, if any</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <param name="type">The type of resources to stop watching</param>
+    /// <param name="namespace">The namespace the resources to stop watching belong to, if any</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    Task Unsubscribe(string type, string? @namespace = null, CancellationToken cancellationToken = default);
+    Task StopWatching(ResourceType type, string? @namespace = null);
 
 }

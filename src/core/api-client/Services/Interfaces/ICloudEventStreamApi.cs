@@ -14,13 +14,13 @@ public interface ICloudEventStreamApi
     /// <param name="options">An object used to configure the read options</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing all the <see cref="CloudEvent"/>s read from the gateway's stream</returns>
-    Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(CloudEventStreamReadOptions? options = null, CancellationToken cancellationToken = default);
+    Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the metadata used to describe the gateway's <see cref="CloudEvent"/> stream
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="CloudEventStreamMetadata"/> used to describe the gateway's <see cref="CloudEvent"/> stream</returns>
-    Task<CloudEventStreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="StreamMetadata"/> used to describe the gateway's <see cref="CloudEvent"/> stream</returns>
+    Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default);
 
 }

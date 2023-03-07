@@ -25,6 +25,6 @@ public class CloudEventValidationPolicy
     /// Gets/sets an object used to configure the JSON schema based validation of incoming cloud events
     /// </summary>
     [DataMember(Order = 3, Name = "dataSchema"), JsonPropertyName("dataSchema"), YamlMember(Alias = "dataSchema")]
-    public virtual CloudEventDataSchemaValidationPolicy? DataSchema { get; set; }
+    public virtual DataSchemaValidationPolicy? DataSchema { get; set; }
 
 }

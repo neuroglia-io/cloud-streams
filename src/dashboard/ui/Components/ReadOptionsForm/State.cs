@@ -1,7 +1,7 @@
 ﻿namespace CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement;
 
 /// <summary>
-/// Represents the state of the form used to manipulate <see cref="CloudEventStreamReadOptions"/>
+/// Represents the state of the form used to manipulate <see cref="StreamReadOptions"/>
 /// </summary>
 public record ReadOptionsFormState
 {
@@ -30,7 +30,7 @@ public record ReadOptionsFormState
     public ulong? Length { get; set; } = null;
 
     /// <summary>
-    /// Gets the <see cref="List{T}"/> of suggested <see cref="CloudEventPartitionRef"/>s
+    /// Gets the <see cref="List{T}"/> of suggested <see cref="PartitionReference"/>s
     /// </summary>
-    public List<CloudEventPartitionMetadata>? Partitions { get; set; } = new();
+    public List<string>? Partitions { get; set; } = new();
 }

@@ -32,7 +32,7 @@ public class CloudEventListStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
     /// </summary>
-    private IObservable<CloudEventStreamReadOptions> ReadOptions => this.Select(state => {
+    private IObservable<StreamReadOptions> ReadOptions => this.Select(state => {
         if (state.ReadOptions.Partition?.Type != null && state.ReadOptions.Partition?.Id != null)
         {
             return state.ReadOptions;
@@ -51,10 +51,10 @@ public class CloudEventListStore
     }
 
     /// <summary>
-    /// Sets the <see cref="CloudEventStreamReadOptions"/>
+    /// Sets the <see cref="StreamReadOptions"/>
     /// </summary>
-    /// <param name="readOptions">The new <see cref="CloudEventStreamReadOptions"/></param>
-    public void SetReadOptions(CloudEventStreamReadOptions readOptions)
+    /// <param name="readOptions">The new <see cref="StreamReadOptions"/></param>
+    public void SetReadOptions(StreamReadOptions readOptions)
     {
         this.Reduce(state => state with
         {
@@ -81,11 +81,11 @@ public class CloudEventListStore
     }
 
     /// <summary>
-    /// Gathers and sets the <see cref="CloudEventListState.CloudEvents"/> based on the provided <see cref="CloudEventStreamReadOptions"/>
+    /// Gathers and sets the <see cref="CloudEventListState.CloudEvents"/> based on the provided <see cref="StreamReadOptions"/>
     /// </summary>
-    /// <param name="readOptions">The <see cref="CloudEventStreamReadOptions"/> to gather the <see cref="CloudEventListState.CloudEvents"/> with</param>
+    /// <param name="readOptions">The <see cref="StreamReadOptions"/> to gather the <see cref="CloudEventListState.CloudEvents"/> with</param>
     /// <returns></returns>
-    protected async Task SetCloudEventsAsync(CloudEventStreamReadOptions readOptions)
+    protected async Task SetCloudEventsAsync(StreamReadOptions readOptions)
     {
         if (readOptions == null) return;
         var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);

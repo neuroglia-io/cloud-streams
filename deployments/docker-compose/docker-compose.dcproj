@@ -12,8 +12,12 @@
     <None Include=".env" />
     <None Include="docker-compose.yml" />
     <None Include=".dockerignore" />
+    <None Include="grafana\data-sources.yaml" />
     <None Include="k8s\config" />
     <None Include="k8s\config\config" />
+    <None Include="otel\collector\config.yaml" />
+    <None Include="prometheus\config.yaml" />
+    <None Include="tempo\config.yaml" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="k8s\config\**" />

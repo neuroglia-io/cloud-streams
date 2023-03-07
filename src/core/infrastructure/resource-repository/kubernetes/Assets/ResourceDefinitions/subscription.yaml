@@ -1,0 +1,125 @@
+﻿apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: subscriptions.cloud-streams.io
+spec:
+  scope: Cluster
+  group: cloud-streams.io
+  names:
+    plural: subscriptions
+    singular: subscription
+    kind: Subscription
+    shortNames:
+    - sub
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                partition:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - by-source
+                        - by-type
+                        - by-subject
+                    id:
+                      type: string
+                  required:
+                    - type
+                    - id
+                filter:
+                  type: object
+                  properties:
+                    type:
+                      enum:
+                        - attributes
+                        - expression
+                    attributes:
+                      type: object
+                    expression:
+                      type: string
+                  oneOf:
+                    - properties:
+                        type:
+                          enum: 
+                            - attributes
+                      required:
+                        - type
+                        - attributes
+                    - properties:
+                        type:
+                          enum: 
+                            - expression
+                      required:
+                        - type
+                        - expression
+                mutation:
+                  type: object
+                  properties:
+                    type:
+                      enum:
+                        - expression
+                        - webhook
+                    expression:
+                      type: string
+                    webhook:
+                      type: object
+                      properties:
+                        serviceUri:
+                          type: string
+                          format: url
+                  oneOf:
+                    - properties:
+                        type:
+                          enum: 
+                            - expression
+                      required:
+                        - type
+                        - expression
+                    - properties:
+                        type:
+                          enum: 
+                            - webhook
+                      required:
+                        - type
+                        - webhook
+                stream:
+                  type: object
+                  properties:
+                    offset:
+                      type: number
+                subscriber:
+                  type: object
+                  properties:
+                    uri:
+                      type: string
+                      format: url
+                    rateLimit:
+                      type: number
+                  required:
+                    - uri
+              required:
+                - subscriber
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: number
+                stream:
+                  type: object
+                  properties:
+                    ackedOffset:
+                      type: number
+          required:
+            - spec
+      subresources:
+        status: {}

@@ -37,20 +37,20 @@
             {
                 foreach (var partition in partitions)
                 {
-                            <option value="@partition.Id"></option>
+                            <option value="@partition"></option>
                 }
             }
         </datalist>
         <label for="partitionId">Partition Id</label>
     </div>
-    <button class="btn btn-outline-secondary" type="button" @onclick="Reset"><span class="bi bi-x-circle"></span></button>
+    <button class="btn btn-outline-danger" type="button" @onclick="Reset"><span class="bi bi-x-circle"></span></button>
 </div>
 
 @code {
     /// <summary>
-    /// The <see cref="CloudEventStreamReadOptions"/> emitted by the form
+    /// The <see cref="StreamReadOptions"/> emitted by the form
     /// </summary>
-    [Parameter] public EventCallback<CloudEventStreamReadOptions> OnChange { get; set; }
+    [Parameter] public EventCallback<StreamReadOptions> OnChange { get; set; }
 
     /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.PartitionType"/>
@@ -75,7 +75,12 @@
     /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.Partitions"/>
     /// </summary>
-    private List<CloudEventPartitionMetadata>? partitions = null;
+    private List<string>? partitions = null;
+    /// <summary>
+    /// Defines if the component has been disposed yet
+    /// </summary>
+    private bool disposed;
+    /// <summary>
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()

@@ -22,5 +22,9 @@
   {
     "outputFile": "Pages/CloudEvents/List/View.razor.css",
     "inputFile": "Pages/CloudEvents/List/View.razor.scss"
+  },
+  {
+    "outputFile": "Components/CloudEventOffcanvas/CloudEventOffcanvas.razor.css",
+    "inputFile": "Components/CloudEventOffcanvas/CloudEventOffcanvas.razor.scss"
   }
 ]

@@ -27,10 +27,10 @@ public static class IServiceCollectionExtensions
         {
             var options = provider.GetRequiredService<IOptions<CloudStreamResourceManagementApiClientOptions>>().Value;
             var connection = new HubConnectionBuilder()
-                .WithUrl($"{options.BaseAddress}api/resource-management/v1/ws/cloud-events")
+                .WithUrl($"{options.BaseAddress}api/resource-management/v1/ws/watch")
                 .WithAutomaticReconnect()
                 .Build();
-            return new ResourceEventHubClient(connection);
+            return new ResourceWatchEventHubClient(connection);
         });
         return services;
     }

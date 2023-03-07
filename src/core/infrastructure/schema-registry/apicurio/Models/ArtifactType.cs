@@ -1,4 +1,6 @@
-﻿using System.Runtime.Serialization;
+﻿using CloudStreams.Core.Serialization.Json.Converters;
+using System.ComponentModel;
+using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
 namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
@@ -6,7 +8,8 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 /// <summary>
 /// Enumerates all supported artifact types
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[TypeConverter(typeof(EnumMemberConverter))]
+[JsonConverter(typeof(StringEnumConverterFactory))]
 
 public enum ArtifactType
 {

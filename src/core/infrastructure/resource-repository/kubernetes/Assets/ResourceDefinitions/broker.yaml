@@ -24,24 +24,10 @@ spec:
               properties:
                 network:
                   type: string
-                stream:
-                  type: object
-                  properties:
-                    offset:
-                      type: number
-                      default: -1
               required:
                 - network
             status:
               type: object
-              properties:
-                observedGeneration:
-                  type: number
-                stream:
-                  type: object
-                  properties:
-                    ackedOffset:
-                      type: number
           required:
             - spec
       subresources:

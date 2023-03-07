@@ -32,12 +32,14 @@ public class ConsumeCloudEventCommandHandler
 {
 
     readonly ICloudEventAdmissionControl _EventAdmissionControl;
+    readonly IGatewayMetrics _Metrics;
     readonly ICloudEventStore _EventStore;
 
     /// <inheritdoc/>
-    public ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, ICloudEventStore eventStore)
+    public ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, IGatewayMetrics metrics, ICloudEventStore eventStore)
     {
         this._EventAdmissionControl = eventAdmissionControl;
+        this._Metrics = metrics;
         this._EventStore = eventStore;
     }
 
@@ -49,6 +51,7 @@ public class ConsumeCloudEventCommandHandler
         if (!admissionResult.IsSuccessStatusCode()) return admissionResult;
         if(!e.Time.HasValue) e.Time = DateTimeOffset.Now;
         await this._EventStore.AppendAsync(e, cancellationToken).ConfigureAwait(false);
+        this._Metrics.IncrementTotalIngestedEvents();
         return this.Accepted();
     }
 

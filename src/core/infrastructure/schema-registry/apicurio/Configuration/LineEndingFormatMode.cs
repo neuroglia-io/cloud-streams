@@ -1,4 +1,6 @@
-﻿using System.Runtime.Serialization;
+﻿using CloudStreams.Core.Serialization.Json.Converters;
+using System.ComponentModel;
+using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
 namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration;
@@ -6,7 +8,8 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration
 /// <summary>
 /// Enumerates all supported line ending formats
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[TypeConverter(typeof(EnumMemberConverter))]
+[JsonConverter(typeof(StringEnumConverterFactory))]
 
 public enum LineEndingFormatMode
 {
