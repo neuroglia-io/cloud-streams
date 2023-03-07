@@ -3,9 +3,9 @@
 namespace CloudStreams.Core.Application;
 
 /// <summary>
-/// Exposes constants about Cloud Streams application tracing
+/// Exposes constants about Cloud Streams application telemetry
 /// </summary>
-internal static class Tracing
+public static class CloudStreamsTelemetry
 {
 
     /// <summary>

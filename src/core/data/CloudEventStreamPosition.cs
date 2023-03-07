@@ -3,7 +3,7 @@
 /// <summary>
 /// Provides mechanisms to handle positioning/offsetting in cloud event streams
 /// </summary>
-public static class CloudEventStreamPosition
+public static class StreamPosition
 {
 
     /// <summary>

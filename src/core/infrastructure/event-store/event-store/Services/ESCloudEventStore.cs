@@ -59,10 +59,10 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventStreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<Data.Models.StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
     {
-        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreStreams.All, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, EventStoreStreams.All, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, EventStoreStreams.All, EventStore.Client.StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, EventStoreStreams.All, EventStore.Client.StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
         return new()
         {
             FirstEvent = firstEvent.OriginalEvent.Created,
@@ -72,11 +72,11 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventPartitionMetadata> GetPartitionMetadataAsync(CloudEventPartitionReference partition, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionMetadata> GetPartitionMetadataAsync(PartitionReference partition, CancellationToken cancellationToken = default)
     {
         var streamName = partition.GetStreamName();
-        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, streamName, StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var firstEvent = (await this.Streams.ReadStreamAsync(Direction.Forwards, streamName, EventStore.Client.StreamPosition.Start, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+        var lastEvent = (await this.Streams.ReadStreamAsync(Direction.Backwards, streamName, EventStore.Client.StreamPosition.End, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
         return new()
         {
             Id = partition.Id,
@@ -107,7 +107,7 @@ public class ESCloudEventStore
     {
         var streamName = EventStoreStreams.All;
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -116,7 +116,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(CloudEventPartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
+    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
     {
         switch (partition.Type)
         {
@@ -133,7 +133,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
         var subject = new Subject<CloudEvent>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
@@ -150,7 +150,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(CloudEventPartitionReference partition, long offset = CloudEventStreamPosition.EndOfStream, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(PartitionReference partition, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
         var subject = new Subject<CloudEvent>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
@@ -180,7 +180,7 @@ public class ESCloudEventStore
         if (source == null) throw new ArgumentNullException(nameof(source));
         var streamName = EventStoreStreams.ByCloudEventSource(source);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -203,7 +203,7 @@ public class ESCloudEventStore
         if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         var streamName = EventStoreStreams.ByCloudEventType(type);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -225,7 +225,7 @@ public class ESCloudEventStore
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = EventStoreStreams.ByCorrelationId(correlationId);
         var resolveLinkTos = true;
-        var position = offset == CloudEventStreamPosition.EndOfStream ? StreamPosition.End : StreamPosition.FromInt64(offset);
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
@@ -237,7 +237,7 @@ public class ESCloudEventStore
     public virtual async Task TruncateAsync(long beforeVersion, CancellationToken cancellationToken = default)
     {
         var streamName = EventStoreStreams.All;
-        await this.Streams.SetStreamMetadataAsync(streamName, StreamState.Any, new StreamMetadata(truncateBefore: StreamPosition.FromInt64(beforeVersion)), cancellationToken: cancellationToken);
+        await this.Streams.SetStreamMetadataAsync(streamName, StreamState.Any, new EventStore.Client.StreamMetadata(truncateBefore: EventStore.Client.StreamPosition.FromInt64(beforeVersion)), cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -306,6 +306,7 @@ public class ESCloudEventStore
         var type = e.Type!;
         var metadataObject = (JsonObject)Serializer.Json.SerializeToNode(e)!;
         metadataObject.Remove("data", out var dataObject);
+        if (!string.IsNullOrWhiteSpace(e.Subject)) metadataObject.Add("$correlationId", e.Subject);
         var data = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(dataObject));
         var metadata = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(metadataObject));
         return Task.FromResult(new EventData(id, type, data, metadata, MediaTypeNames.Application.Json));
@@ -320,8 +321,8 @@ public class ESCloudEventStore
     protected virtual Task<CloudEvent> DeserializeAsync(ResolvedEvent e, CancellationToken cancellationToken)
     {
         var dataObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Data.Span);
-        var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span);
-        if (eventObject == null) throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
+        var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span) ?? throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
+        eventObject.Remove("$correlationId");
         if (dataObject != null) eventObject["data"] = dataObject;
         var rawEvent = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(eventObject));
         using var stream = new MemoryStream(rawEvent);

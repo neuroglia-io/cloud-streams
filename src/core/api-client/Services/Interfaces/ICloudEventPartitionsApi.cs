@@ -14,8 +14,8 @@ public interface ICloudEventPartitionsApi
     /// <param name="type">The type of the <see cref="CloudEvent"/> partition to get the metadata of</param>
     /// <param name="id">The id of the <see cref="CloudEvent"/> partition to get the metadata of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="CloudEventPartitionMetadata"/> used to describe the specified <see cref="CloudEvent"/> partition</returns>
-    Task<CloudEventPartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default);
+    /// <returns>A new <see cref="PartitionMetadata"/> used to describe the specified <see cref="CloudEvent"/> partition</returns>
+    Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists the id of all partitions of the specified type

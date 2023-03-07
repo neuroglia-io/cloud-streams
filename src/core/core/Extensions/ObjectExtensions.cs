@@ -28,4 +28,11 @@ public static class ObjectExtensions
     /// <returns>A new <see cref="Dictionary{TKey, TValue}"/></returns>
     public static Dictionary<string, object>? ToDictionary(this object? obj) => Serializer.Json.Deserialize<Dictionary<string, object>>(Serializer.Json.Serialize(obj));
 
+    /// <summary>
+    /// Converts the object into a new <see cref="Dictionary{TKey, TValue}"/>
+    /// </summary>
+    /// <param name="obj">The object to convert</param>
+    /// <returns>A new <see cref="Dictionary{TKey, TValue}"/></returns>
+    public static Dictionary<string, TValue>? ToDictionary<TValue>(this object? obj) => Serializer.Json.Deserialize<Dictionary<string, TValue>>(Serializer.Json.Serialize(obj));
+
 }

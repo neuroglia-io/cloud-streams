@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace CloudStreams.Core.Infrastructure.Configuration;
@@ -26,6 +27,19 @@ public interface ICloudStreamsApplicationBuilder
     /// Gets the current <see cref="IServiceCollection"/>
     /// </summary>
     IServiceCollection Services { get; }
+
+    /// <summary>
+    /// Gets the service used to configure and build logging
+    /// </summary>
+    ILoggingBuilder Logging { get; }
+
+    /// <summary>
+    /// Configures the Cloud Streams application to use the specified service name and version
+    /// </summary>
+    /// <param name="name">The name of the Cloud Streams application service</param>
+    /// <param name="version">The version of the Cloud Streams application service</param>
+    /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
+    ICloudStreamsApplicationBuilder WithServiceName(string name, string? version = null);
 
     /// <summary>
     /// Registers an <see cref="Assembly"/> application part

@@ -1,4 +1,6 @@
-﻿namespace CloudStreams.Core.Data.Models;
+﻿using System.Diagnostics;
+
+namespace CloudStreams.Core.Data.Models;
 
 /// <summary>
 /// Represents a reference to a resource
@@ -7,6 +9,27 @@
 public class ResourceReference
     : IResourceReference
 {
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceReference"/>
+    /// </summary>
+    public ResourceReference() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceReference"/>
+    /// </summary>
+    /// <param name="apiVersion">The referenced resource's API version</param>
+    /// <param name="kind">The referenced resource's kind</param>
+    /// <param name="name">The name of the referenced resource</param>
+    /// <param name="namespace">The namespace the referenced resource belongs to, if any</param>
+    public ResourceReference(string apiVersion, string kind, string name, string? @namespace)
+    {
+        if (string.IsNullOrWhiteSpace(apiVersion)) throw new ArgumentNullException(nameof(apiVersion));
+        if (string.IsNullOrWhiteSpace(kind)) throw new ArgumentNullException(nameof(kind));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        this.Name = name;
+        this.Namespace = @namespace;
+    }
 
     /// <inheritdoc/>
     [Required, JsonRequired]
@@ -27,6 +50,16 @@ public class ResourceReference
     [DataMember(Order = 4), JsonPropertyName("namespace"), YamlMember(Alias = "namespace")]
     public virtual string? Namespace { get; set; }
 
+    /// <summary>
+    /// Creates a new <see cref="ResourceReference"/> for the specified <see cref="IResource"/>
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to get a reference to</param>
+    public static implicit operator ResourceReference?(Resource? resource)
+    {
+        if (resource == null) return null;
+        return new(resource.ApiVersion, resource.Kind, resource.GetName(), resource.GetNamespace());
+    }
+
 }
 
 /// <summary>
@@ -45,6 +78,23 @@ public class ResourceReference<TResource>
 
     string IResourceReference.Kind => Resource.Kind;
 
+    /// <summary>
+    /// Initializes a new <see cref="ResourceReference{TResource}"/>
+    /// </summary>
+    public ResourceReference() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceReference{TResource}"/>
+    /// </summary>
+    /// <param name="name">The name of the referenced resource</param>
+    /// <param name="namespace">The namespace the referenced resource belongs to, if any</param>
+    public ResourceReference(string name, string? @namespace)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        this.Name = name;
+        this.Namespace = @namespace;
+    }
+
     /// <inheritdoc/>
     [Required, JsonRequired]
     [DataMember(Order = 1, Name = "name", IsRequired = true), JsonPropertyName("name"), YamlMember(Alias = "name")]
@@ -54,6 +104,14 @@ public class ResourceReference<TResource>
     [DataMember(Order = 2), JsonPropertyName("namespace"), YamlMember(Alias = "namespace")]
     public virtual string? Namespace { get; set; }
 
-
+    /// <summary>
+    /// Creates a new <see cref="ResourceReference"/> for the specified <see cref="IResource"/>
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to get a reference to</param>
+    public static implicit operator ResourceReference<TResource>?(TResource? resource)
+    {
+        if (resource == null) return null;
+        return new(resource.GetName(), resource.GetNamespace());
+    }
 
 }

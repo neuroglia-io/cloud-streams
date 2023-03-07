@@ -31,20 +31,44 @@
     private IEnumerable<TData>? items;
     private Column<TData>? draggedColumn;
 
+    /// <summary>
+    /// Gets/sets the table's CSS class
+    /// </summary>
     [Parameter] public string? TableClass { get; set; } = "table table-stripped table-hover";
 
+    /// <summary>
+    /// Gets/sets the header row's CSS class
+    /// </summary>
     [Parameter] public string? HeaderRowClass { get; set; }
 
+    /// <summary>
+    /// Gets/sets headers CSS class
+    /// </summary>
     [Parameter] public string? HeaderClass { get; set; }
 
+    /// <summary>
+    /// Gets/sets rows CSS class
+    /// </summary>
     [Parameter] public string? RowClass { get; set; }
 
+    /// <summary>
+    /// Gets/sets cells CSS class
+    /// </summary>
     [Parameter] public string? CellClass { get; set; }
 
+    /// <summary>
+    /// Gets/sets the table's columns
+    /// </summary>
     [Parameter] public RenderFragment Columns { get; set; } = null!;
 
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not to auto generate columns
+    /// </summary>
     [Parameter] public bool AutoGenerateColumns { get; set; } = true;
 
+    /// <summary>
+    /// Gets/sets the default header template
+    /// </summary>
     [Parameter]
     public RenderFragment<ColumnHeaderRenderingContext<TData>> DefaultHeaderTemplate { get; set; } = context => __builder =>
     {
@@ -53,6 +77,9 @@
         __builder.CloseComponent();
     };
 
+    /// <summary>
+    /// Gets/sets the default row template
+    /// </summary>
     [Parameter]
     public RenderFragment<RowRenderingContext<TData>> RowTemplate { get; set; } = context => __builder =>
     {
@@ -61,6 +88,9 @@
         __builder.CloseComponent();
     };
 
+    /// <summary>
+    /// Gets/sets the default cell template
+    /// </summary>
     [Parameter]
     public RenderFragment<CellRenderingContext<TData>> DefaultCellTemplate { get; set; } = context => __builder =>
     {
@@ -69,16 +99,30 @@
         __builder.CloseComponent();
     };
 
+    /// <summary>
+    /// Gets/sets the items to display
+    /// </summary>
     [Parameter] public IEnumerable<TData>? Items { get; set; }
 
+    /// <summary>
+    /// Gets/sets the callback to invoke when ordering item by a specific column
+    /// </summary>
     [Parameter] public EventCallback<Column<TData>> OnOrderBy { get; set; }
 
+    /// <summary>
+    /// Adds the specifed <see cref="Column{TData}"/>
+    /// </summary>
+    /// <param name="column">The <see cref="Column{TData}"/> to add</param>
     public void AddColumn(Column<TData> column)
     {
         this.columns.Add(column);
         this.StateHasChanged();
     }
 
+    /// <summary>
+    /// Revmoes the specifed <see cref="Column{TData}"/>
+    /// </summary>
+    /// <param name="column">The <see cref="Column{TData}"/> to remove</param>
     public bool RemoveColumn(Column<TData> column)
     {
         var removed = this.columns.Remove(column);
@@ -86,6 +130,7 @@
         return removed;
     }
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
@@ -100,6 +145,7 @@
         }
     }
 
+    /// <inheritdoc/>
     protected override async Task OnParametersSetAsync()
     {
         if (this.Items is IAsyncEnumerable<TData> asyncEnumerable) this.items = await asyncEnumerable.ToListAsync();

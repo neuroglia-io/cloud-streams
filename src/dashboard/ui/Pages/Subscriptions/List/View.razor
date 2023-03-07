@@ -9,48 +9,94 @@
 
 <Table Items="subscriptions"
     AutoGenerateColumns="false"
-    TableClass="table table-striped table-hover">
+    TableClass="table table-striped table-hover"
+    RowClass="cursor-pointer">
+    <RowTemplate>
+        <Row RenderContext="context" OnClick="async _ => await OnShowResourceOffcanvasAsync(context.Item)" />
+    </RowTemplate>
     <Columns>
         <Column TData="Subscription"
-            ValueProvider="s => s.Metadata.Name">
+                ValueProvider="s => s.Metadata.Name">
             <HeaderTemplate>Name</HeaderTemplate>
         </Column>
         <Column TData="Subscription"
-            ValueProvider="s => s.Metadata.CreationTimestamp">
+                ValueProvider="s => s.Metadata.CreationTimestamp"
+                Format="R">
             <HeaderTemplate>Created At</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Filter == null ? "no" : "yes")">
+            <HeaderTemplate>Filter</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Mutation == null ? "no" : "yes")">
+            <HeaderTemplate>Mutation</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="@(s => s.Spec.Stream == null ? "-" : s.Spec.Stream.Offset)">
+            <HeaderTemplate>Desired Offset</HeaderTemplate>
+        </Column>
+        <Column TData="Subscription"
+                ValueProvider="s => s.Status == null || s.Status.Stream == null ? null : s.Status.Stream.AckedOffset">
+            <HeaderTemplate>Acked Offset</HeaderTemplate>
         </Column>
         <Column TData="Subscription" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-light btn-sm"><span class="bi bi-pencil"></span></button>
-                <button class="btn btn-outline-light btn-sm" title="Deletes subscription '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)"><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)" @onclick:preventDefault @onclick:stopPropagation><span class="bi bi-trash"></span></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
+<ResourceOffcanvas TResource="Subscription" @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+
+<ConfirmDialog @ref="dialog" />
+
 @code{
 
     List<Subscription>? subscriptions;
+    ResourceOffcanvas<Subscription>? offcanvas;
+    ConfirmDialog? dialog;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Resources.Subscribe(OnChannelCollectionChanged);
+        this.Store.Resources.Subscribe(OnSubscriptionCollectionChanged, token: this.CancellationTokenSource.Token);
         await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
     }
 
-    void OnChannelCollectionChanged(List<Subscription>? subscriptions)
+    void OnSubscriptionCollectionChanged(List<Subscription>? subscriptions)
     {
         if (subscriptions == null) this.subscriptions = null;
         else this.subscriptions = subscriptions;
         this.StateHasChanged();
     }
 
-    async Task OnDeleteSubscription(Subscription subscription)
+    async Task OnDeleteSubscription(Subscription subscription) 
     {
-        await this.Store.DeleteResourceAsync(subscription).ConfigureAwait(false);
+        if (this.dialog == null) return;
+        var confirmation = await this.dialog.ShowAsync(
+            title: $"Are you sure you want to delete '{subscription.Metadata.Name}'?",
+            message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
+            confirmDialogOptions: new ConfirmDialogOptions()
+            {
+                YesButtonColor = ButtonColor.Danger,
+                YesButtonText = "Delete",
+                NoButtonText = "Abort",
+                IsVerticallyCentered = true
+            }
+        );
+        if (!confirmation) return;
+        await this.Store.DeleteResourceAsync(subscription);
+    }
+
+    Task OnShowResourceOffcanvasAsync(Subscription subscription)
+    {
+        if (this.offcanvas == null) return Task.CompletedTask;
+        this.offcanvas.SetResource(subscription);
+        return this.offcanvas.ShowAsync();
     }
 
 }

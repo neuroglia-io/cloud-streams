@@ -107,3 +107,21 @@ h1:focus {
     text-fill-color: transparent;
     -webkit-text-fill-color: transparent;
 }
+
+.vh-30{
+    height: 30vh!important;
+}
+
+.offcanvas {
+    margin-top: 1px;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.modal-confirmation {
+    .modal-footer {
+        border-top: var(--bs-modal-header-border-width) solid var(--bs-modal-header-border-color) !important;
+    }
+}

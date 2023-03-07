@@ -24,7 +24,7 @@ public class JQExpressionEvaluator
         var startInfo = new ProcessStartInfo()
         {
             FileName = "jq",
-            UseShellExecute = true,
+            UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true

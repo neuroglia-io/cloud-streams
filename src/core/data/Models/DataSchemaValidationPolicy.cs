@@ -4,7 +4,7 @@
 /// Represents an object used to configure schema-based validation of incoming cloud events' data
 /// </summary>
 [DataContract]
-public class CloudEventDataSchemaValidationPolicy
+public class DataSchemaValidationPolicy
 {
 
     /// <summary>

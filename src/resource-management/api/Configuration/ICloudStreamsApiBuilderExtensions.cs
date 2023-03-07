@@ -2,6 +2,7 @@
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Configuration;
 using CloudStreams.ResourceManagement.Api.Controllers;
+using CloudStreams.ResourceManagement.Api.Services;
 using CloudStreams.ResourceManagement.Application.Commands.Generic;
 using CloudStreams.ResourceManagement.Application.Queries.Generic;
 using MediatR;
@@ -23,7 +24,9 @@ public static class ICloudStreamsApiBuilderExtensions
     {
         builder.RegisterApplicationPart<GatewaysController>();
         builder.RegisterMediationAssembly<CreateResourceCommand<Gateway>>();
-        foreach(var resource in TypeCacheUtil.FindFilteredTypes("cs:resources", t => t.IsClass && !t.IsAbstract && !t.IsInterface && typeof(IResource).IsAssignableFrom(t)))
+        builder.Services.AddSingleton<ResourceWatchEventHubController>();
+        builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ResourceWatchEventHubController>());
+        foreach (var resource in TypeCacheUtil.FindFilteredTypes("cs:resources", t => t.IsClass && !t.IsAbstract && !t.IsInterface && typeof(IResource).IsAssignableFrom(t)))
         {
             var queryType = typeof(CreateResourceCommand<>).MakeGenericType(resource);
             var resultType = typeof(Response<>).MakeGenericType(resource);

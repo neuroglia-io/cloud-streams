@@ -7,9 +7,9 @@ public record CloudEventListState
 {
 
     /// <summary>
-    /// Gets the current <see cref="CloudEventStreamReadOptions"/>, used to configure the read query to perform
+    /// Gets the current <see cref="StreamReadOptions"/>, used to configure the read query to perform
     /// </summary>
-    public CloudEventStreamReadOptions ReadOptions { get; set; } = new(StreamReadDirection.Backwards);
+    public StreamReadOptions ReadOptions { get; set; } = new(StreamReadDirection.Backwards);
 
     /// <summary>
     /// Gets a <see cref="List{T}"/> that contains all cached <see cref="CloudEvent"/>s

@@ -104,12 +104,24 @@ public interface IResourceRepository
     /// <summary>
     /// Watches resources of the specified type
     /// </summary>
+    /// <param name="group">The group the resources to watch belong to</param>
+    /// <param name="version">The version of the resources to watch</param>
+    /// <param name="plural">The plural name of the type of resource to watch</param>
+    /// <param name="namespace">The namespace the resources to watch belong to, if any</param>
+    /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing all label-based selectors to filter resources to watch by</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IObservable{T}"/></returns>
+    Task<IResourceWatcher> WatchResourcesAsync(string group, string version, string plural, string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Watches resources of the specified type
+    /// </summary>
     /// <typeparam name="TResource">The type of resource to watch</typeparam>
     /// <param name="namespace">The namespace the resources to watch belong to, if any</param>
     /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing all label-based selectors to filter resources to watch by</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IObservable{T}"/></returns>
-    Task<IObservable<IResourceWatchEvent<TResource>>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    Task<IResourceWatcher<TResource>> WatchResourcesAsync<TResource>(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
         where TResource : class, IResource, new();
 
 }

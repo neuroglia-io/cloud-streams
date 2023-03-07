@@ -4,7 +4,7 @@
 /// Represents an object used to describe a cloud event partition
 /// </summary>
 [DataContract]
-public class CloudEventPartitionMetadata
+public class PartitionMetadata
 {
 
     /// <summary>

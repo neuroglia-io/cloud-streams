@@ -97,4 +97,30 @@ public abstract class ComponentStore<TState>
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Disposes of the <see cref="ComponentStore{TState}"/>
+    /// </summary>
+    /// <param name="disposing">A boolean indicating whether or not the <see cref="ComponentStore{TState}"/> is being disposed of</param>
+    /// <returns>A new awaitable <see cref="ValueTask"/></returns>
+    protected virtual ValueTask DisposeAsync(bool disposing)
+    {
+        if (!this._Disposed)
+        {
+            if (disposing)
+            {
+                this.CancellationTokenSource.Dispose();
+                this._Subject.Dispose();
+            }
+            this._Disposed = true;
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public async ValueTask DisposeAsync()
+    {
+        await this.DisposeAsync(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
 }

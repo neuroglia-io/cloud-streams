@@ -4,7 +4,7 @@
 /// Represents an object used to configure a cloud event stream
 /// </summary>
 [DataContract]
-public class CloudEventStreamSpec
+public class CloudEventStream
 {
 
     /// <summary>

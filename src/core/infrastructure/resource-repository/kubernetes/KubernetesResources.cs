@@ -20,10 +20,6 @@ public static class KubernetesResources
         /// </summary>
         public static readonly V1CustomResourceDefinition Broker = LoadCustomResourceDefinition(nameof(Broker));
         /// <summary>
-        /// Gets the <see cref="V1CustomResourceDefinition"/> for <see cref="Data.Models.Channel"/>s
-        /// </summary>
-        public static readonly V1CustomResourceDefinition Channel = LoadCustomResourceDefinition(nameof(Channel));
-        /// <summary>
         /// Gets the <see cref="V1CustomResourceDefinition"/> for <see cref="Data.Models.Gateway"/>s
         /// </summary>
         public static readonly V1CustomResourceDefinition Gateway = LoadCustomResourceDefinition(nameof(Gateway));
@@ -31,6 +27,10 @@ public static class KubernetesResources
         /// Gets the <see cref="V1CustomResourceDefinition"/> for <see cref="Data.Models.Broker"/>s
         /// </summary>
         public static readonly V1CustomResourceDefinition Network = LoadCustomResourceDefinition(nameof(Network));
+        /// <summary>
+        /// Gets the <see cref="V1CustomResourceDefinition"/> for <see cref="Data.Models.Subscription"/>s
+        /// </summary>
+        public static readonly V1CustomResourceDefinition Subscription = LoadCustomResourceDefinition(nameof(Subscription));
 
         /// <summary>
         /// Gets an <see cref="IEnumerable{T}"/> containing the <see cref="V1CustomResourceDefinition"/>s required by Cloud Streams
@@ -39,9 +39,9 @@ public static class KubernetesResources
         public static IEnumerable<V1CustomResourceDefinition> AsEnumerable()
         {
             yield return Broker;
-            yield return Channel;
             yield return Gateway;
             yield return Network;
+            yield return Subscription;
         }
 
         static V1CustomResourceDefinition LoadCustomResourceDefinition(string name)

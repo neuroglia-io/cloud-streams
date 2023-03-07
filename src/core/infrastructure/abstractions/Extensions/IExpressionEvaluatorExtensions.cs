@@ -1,4 +1,5 @@
 ﻿using CloudStreams.Core.Infrastructure.Services;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace CloudStreams.Core.Infrastructure;
@@ -54,6 +55,8 @@ public static class IExpressionEvaluatorExtensions
         if (mutation == null) throw new ArgumentNullException(nameof(mutation));
         if (input == null) throw new ArgumentNullException(nameof(input));
         if (expectedType == null) expectedType= typeof(object);
+        if (mutation is string mutationExpression) return evaluator.Evaluate(mutationExpression, input, arguments, expectedType);
+        else if(mutation is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.String) return evaluator.Evaluate(Serializer.Json.Deserialize<string>(jsonElement)!, input, arguments, expectedType);
         var json = Serializer.Json.Serialize(mutation);
         foreach (Match match in Regex.Matches(json, @"""\$\{.+?\}""", RegexOptions.Compiled))
         {

@@ -63,8 +63,9 @@ public class Resource
     [IgnoreDataMember, JsonIgnore, YamlIgnore]
     public virtual ResourceType Type { get; } = null!;
 
-    [DataMember(Order = 2, Name = "extensionData"), JsonExtensionData]
-    IDictionary<string, object>? IExtensible.ExtensionData => throw new NotImplementedException();
+    /// <inheritdoc/>
+    [DataMember(Order = 999, Name = "extensionData"), JsonExtensionData]
+    public IDictionary<string, object>? ExtensionData { get; set; }
 
 }
 

@@ -6,7 +6,7 @@ using System.Reactive.Linq;
 namespace CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement;
 
 /// <summary>
-/// Represents a <see cref="CloudEventStreamReadOptions"/>'s form <see cref="ComponentStore{TState}"/>
+/// Represents a <see cref="StreamReadOptions"/>'s form <see cref="ComponentStore{TState}"/>
 /// </summary>
 public class ReadOptionsFormStore
     : ComponentStore<ReadOptionsFormState>
@@ -57,16 +57,16 @@ public class ReadOptionsFormStore
     public IObservable<List<string>?> Partitions => this.Select(state => state.Partitions).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the resulting <see cref="CloudEventStreamReadOptions"/>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the resulting <see cref="StreamReadOptions"/>
     /// </summary>
-    public IObservable<CloudEventStreamReadOptions?> ReadOptions => this.Select(state =>
+    public IObservable<StreamReadOptions?> ReadOptions => this.Select(state =>
     {
-        var options = new CloudEventStreamReadOptions() {
+        var options = new StreamReadOptions() {
             Direction = state.Direction
         };
         if (state.PartitionType.HasValue)
         {
-            var partition = new CloudEventPartitionReference()
+            var partition = new PartitionReference()
             {
                 Type = state.PartitionType.Value
             };

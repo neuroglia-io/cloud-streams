@@ -4,7 +4,7 @@
 /// Represents the <see cref="IQuery{TResult}"/> used to get the metadata of the application's cloud event stream
 /// </summary>
 public class GetEventStreamMetadataQuery
-    : IQuery<CloudEventStreamMetadata>
+    : IQuery<StreamMetadata>
 {
 
 
@@ -15,7 +15,7 @@ public class GetEventStreamMetadataQuery
 /// Represents the service used to handle <see cref="GetEventStreamMetadataQuery"/> instances
 /// </summary>
 public class GetEventPartitionMetadataQueryHandler
-    : IQueryHandler<GetEventStreamMetadataQuery, CloudEventStreamMetadata>
+    : IQueryHandler<GetEventStreamMetadataQuery, StreamMetadata>
 {
 
     /// <inheritdoc/>
@@ -26,7 +26,7 @@ public class GetEventPartitionMetadataQueryHandler
 
     ICloudEventStore _CloudEvents;
 
-    async Task<Response<CloudEventStreamMetadata>> MediatR.IRequestHandler<GetEventStreamMetadataQuery, Response<CloudEventStreamMetadata>>.Handle(GetEventStreamMetadataQuery request, CancellationToken cancellationToken)
+    async Task<Response<StreamMetadata>> MediatR.IRequestHandler<GetEventStreamMetadataQuery, Response<StreamMetadata>>.Handle(GetEventStreamMetadataQuery request, CancellationToken cancellationToken)
     {
         return this.Ok(await this._CloudEvents.GetStreamMetadataAsync(cancellationToken));
     }

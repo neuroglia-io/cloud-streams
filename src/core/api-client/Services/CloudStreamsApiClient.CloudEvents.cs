@@ -23,26 +23,26 @@ public partial class CloudStreamsApiClient
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventPartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}{id}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<CloudEventPartitionMetadata>(json);
+        return Serializer.Json.Deserialize<PartitionMetadata>(json);
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventStreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
     {
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, CloudEventStreamApiPath), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<CloudEventStreamMetadata>(json)!;
+        return Serializer.Json.Deserialize<StreamMetadata>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(CloudEventStreamReadOptions? options = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (options == null) options = new();
         var uri = $"{CloudEventStreamApiPath}read";

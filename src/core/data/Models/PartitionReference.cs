@@ -4,20 +4,20 @@
 /// Represents an object used to reference a cloud event partition
 /// </summary>
 [DataContract]
-public class CloudEventPartitionReference
+public class PartitionReference
 {
 
     /// <summary>
-    /// Initializes a new <see cref="CloudEventPartitionReference"/>
+    /// Initializes a new <see cref="PartitionReference"/>
     /// </summary>
-    public CloudEventPartitionReference() { }
+    public PartitionReference() { }
 
     /// <summary>
-    /// Initializes a new <see cref="CloudEventPartitionReference"/>
+    /// Initializes a new <see cref="PartitionReference"/>
     /// </summary>
     /// <param name="type">The referenced stream partition's type</param>
     /// <param name="id">The referenced stream partition's id</param>
-    public CloudEventPartitionReference(CloudEventPartitionType type, string id)
+    public PartitionReference(CloudEventPartitionType type, string id)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
         this.Type = type;
