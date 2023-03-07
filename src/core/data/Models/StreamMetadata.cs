@@ -23,6 +23,6 @@ public class StreamMetadata
     /// Gets/sets the described stream's length
     /// </summary>
     [DataMember(Order = 3, Name = "length", IsRequired = true), JsonPropertyName("length"), YamlMember(Alias = "length")]
-    public virtual ulong Length { get; set; }
+    public virtual ulong? Length { get; set; }
 
 }

@@ -9,6 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\Projections\cloud-events-by_source.js" />
+    <None Remove="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Projections\cloud-events-by_source.js" />
+    <EmbeddedResource Include="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.EventStore.gRPC" Version="6.0.1" />
     <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="22.0.0" />
     <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" Version="22.0.0" />
@@ -18,10 +28,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\abstractions\CloudStreams.Core.Infrastructure.Abstractions.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Assets\" />
   </ItemGroup>
 
 </Project>

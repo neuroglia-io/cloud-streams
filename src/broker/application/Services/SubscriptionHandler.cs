@@ -118,7 +118,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the offset of the last filtered <see cref="CloudEvent"/> in the stream
     /// </summary>
-    protected ulong StreamOffset { get; private set; }
+    protected ulong? StreamOffset { get; private set; }
 
     /// <summary>
     /// Gets a boolean indicating whether or not the subscription is out of sync with the stream's last offset
@@ -148,12 +148,12 @@ public class SubscriptionHandler
         if (this.Subscription.Spec.Partition == null)
         {
             this.CloudEventStream = await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false);
-            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length - 1;
+            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length;
         }
         else
         {
             this.CloudEventStream = await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false);
-            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length - 1;
+            this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition).ConfigureAwait(false)).Length;
         }
         this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, null);
         if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) await this.CatchUpAsync().ConfigureAwait(false);
@@ -286,7 +286,7 @@ public class SubscriptionHandler
     protected virtual async Task DispatchAsync(CloudEvent e, bool retryIfUnavailable, bool catchUpWhenAvailable)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
-        var offset = e.GetSequence()!.Value;
+        var offset = e.GetSequence()!.Value + 1;
         using var requestContent = e.ToHttpContent();
         using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
         using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
