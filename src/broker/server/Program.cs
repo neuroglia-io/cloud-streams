@@ -36,7 +36,7 @@ app.UseSwagger(builder =>
 app.UseSwaggerUI(builder =>
 {
     builder.DocExpansion(DocExpansion.None);
-    builder.SwaggerEndpoint("/api/v1/doc/oas.json", "Synapse API v1");
+    builder.SwaggerEndpoint("/api/v1/doc/oas.json", "Cloud Streams Broker API v1");
     builder.RoutePrefix = "api/doc";
     builder.DisplayOperationId();
 });

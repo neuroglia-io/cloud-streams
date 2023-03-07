@@ -17,7 +17,7 @@ public static class JsonSchemaExtensions
     public static JsonSchema? GetProperty(this JsonSchema schema, string propertyName)
     {
         var properties = schema.Keywords?.OfType<PropertiesKeyword>().SingleOrDefault()?.Properties;
-        if (properties == null) properties = schema.Keywords?.OfType<ItemsKeyword>().SingleOrDefault()?.SingleSchema?.Keywords?.OfType<PropertiesKeyword>().SingleOrDefault()?.Properties;
+        properties ??= schema.Keywords?.OfType<ItemsKeyword>().SingleOrDefault()?.SingleSchema?.Keywords?.OfType<PropertiesKeyword>().SingleOrDefault()?.Properties;
         if (properties == null || !properties.TryGetValue(propertyName, out var propertySchema)) return null;
         var items = propertySchema?.Keywords?.OfType<ItemsKeyword>().SingleOrDefault();
         if (items?.SingleSchema != null) propertySchema = items.SingleSchema;
