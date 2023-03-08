@@ -30,7 +30,6 @@ builder.Services.AddFlux(flux =>
 });
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
 builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
-builder.Services.AddSingleton<IYamlConverter, YamlConverter>();
 builder.Services.AddBlazorBootstrap();
 
 await builder.Build().RunAsync();

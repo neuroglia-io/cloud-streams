@@ -176,8 +176,8 @@ public class ResourceDetailsStore<TResource>
         try
         {
             string text = language == PreferedLanguage.YAML ?
-                this.yamlConverter.JsonToYaml(textEditorValue) :
-                this.yamlConverter.YamlToJson(textEditorValue);
+                Serializer.Yaml.ConvertFromJson(textEditorValue) :
+                Serializer.Yaml.ConvertToJson(textEditorValue);
             this.SetEditorValue(text);
         }
         catch (Exception ex)
