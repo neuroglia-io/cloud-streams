@@ -1,6 +1,8 @@
 ﻿using CloudStreams.Dashboard.StateManagement;
 using System.Reactive.Linq;
 using CloudStreams.ResourceManagement.Api.Client.Services;
+using JsonCons.Utilities;
+using System.Text.Json;
 
 namespace CloudStreams.Dashboard.Components.ResourceDetailsStateManagement;
 
@@ -177,6 +179,27 @@ public class ResourceDetailsStore<TResource>
             Console.WriteLine(ex.ToString());
             await monacoEditorHelper.ChangePreferedLanguageAsync(language == PreferedLanguage.YAML ? PreferedLanguage.JSON : PreferedLanguage.YAML);
         }
+    }
+
+    /// <summary>
+    /// Updates the current resource using the text editor value
+    /// </summary>
+    /// <returns></returns>
+    public async Task UpdateResourceAsync()
+    {
+        TResource? resource = this.Get(state => state.Resource);
+        if (resource == null)
+        {
+            return;
+        }
+        string textEditorValue = this.Get(state => state.TextEditorValue);
+        if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
+        {
+            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
+        }
+        JsonDocument jsonPatch = JsonPatch.FromDiff(Serializer.Json.SerializeToElement(resource)!.Value, Serializer.Json.SerializeToElement(Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
+        Json.Patch.JsonPatch patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
+        await Task.CompletedTask;
     }
 
 }
