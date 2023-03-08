@@ -35,13 +35,30 @@ public static partial class Serializer
             }
         }
 
+        static JsonSerializerOptions? _DefaultIndentedOptions;
+        /// <summary>
+        /// Gets/sets the default indented <see cref="JsonSerializerOptions"/>
+        /// </summary>
+        public static JsonSerializerOptions DefaultIndentedOptions
+        {
+            get
+            {
+                if (_DefaultIndentedOptions != null) return _DefaultIndentedOptions;
+                _DefaultIndentedOptions = new JsonSerializerOptions();
+                DefaultOptionsConfiguration?.Invoke(_DefaultIndentedOptions);
+                _DefaultIndentedOptions.WriteIndented = true;
+                return _DefaultIndentedOptions;
+            }
+        }
+
         /// <summary>
         /// Serializes the specified object to JSON
         /// </summary>
         /// <typeparam name="T">The type of object to serialize</typeparam>
         /// <param name="graph">The object to serialized</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
         /// <returns>The JSON of the serialized object</returns>
-        public static string Serialize<T>(T graph) => JsonSerializer.Serialize(graph, DefaultOptions);
+        public static string Serialize<T>(T graph, bool indented = false) => indented ? JsonSerializer.Serialize(graph, DefaultIndentedOptions) : JsonSerializer.Serialize(graph, DefaultOptions);
 
         /// <summary>
         /// Serializes the specified object into a new <see cref="JsonNode"/>
@@ -112,12 +129,13 @@ public static partial class Serializer
         /// Converts the specified YAML input into JSON
         /// </summary>
         /// <param name="yaml">The YAML input to convert</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
         /// <returns>The YAML input converted into JSON</returns>
-        public static string ConvertFromYaml(string yaml)
+        public static string ConvertFromYaml(string yaml, bool indented = false)
         {
             if (string.IsNullOrWhiteSpace(yaml)) return null!;
             var graph = Yaml.Deserialize<object>(yaml);
-            return Serialize(graph);
+            return Serialize(graph, indented);
         }
 
         /// <summary>

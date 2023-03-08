@@ -79,7 +79,7 @@ public class ResourceDetailsStore<TResource>
         }
         else
         {
-            this.SetEditorValue(Serializer.Json.Serialize(resource));
+            this.SetEditorValue(Serializer.Json.Serialize(resource, true));
         }
     }
 
@@ -169,7 +169,7 @@ public class ResourceDetailsStore<TResource>
         {
             string text = language == PreferedLanguage.YAML ?
                 Serializer.Yaml.ConvertFromJson(textEditorValue) :
-                Serializer.Yaml.ConvertToJson(textEditorValue);
+                Serializer.Yaml.ConvertToJson(textEditorValue, true);
             this.SetEditorValue(text);
         }
         catch (Exception ex)

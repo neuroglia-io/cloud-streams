@@ -99,12 +99,13 @@ public static partial class Serializer
         /// Converts the specified YAML input into JSON
         /// </summary>
         /// <param name="yaml">The YAML input to convert</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
         /// <returns>The YAML input converted into JSON</returns>
-        public static string ConvertToJson(string yaml)
+        public static string ConvertToJson(string yaml, bool indented = false)
         {
             if (string.IsNullOrWhiteSpace(yaml)) return null!;
             var graph = Deserialize<object>(yaml);
-            return Json.Serialize(graph);
+            return Json.Serialize(graph, indented);
         }
 
     }
