@@ -29,6 +29,11 @@ public class ResourceManagementComponentStore<TResource>
     }
 
     /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
+    /// </summary>
+    public IObservable<ResourceDefinition?> Definition => this.Select(s => s.Definition);
+
+    /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
     /// </summary>
     public IObservable<List<TResource>?> Resources => this.Select(s => s.Resources);

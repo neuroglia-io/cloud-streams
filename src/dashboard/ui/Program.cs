@@ -2,6 +2,7 @@
 using CloudStreams.Core.Api.Client;
 using CloudStreams.Dashboard;
 using CloudStreams.Dashboard.Components;
+using CloudStreams.Dashboard.Services;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client;
 using CloudStreams.ResourceManagement.Api.Client;
@@ -28,6 +29,8 @@ builder.Services.AddFlux(flux =>
     flux.ScanMarkupTypeAssembly<App>();
 });
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
+builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
+builder.Services.AddSingleton<IYamlConverter, YamlConverter>();
 builder.Services.AddBlazorBootstrap();
 
 await builder.Build().RunAsync();

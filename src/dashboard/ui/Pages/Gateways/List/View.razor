@@ -40,22 +40,25 @@
     </Columns>
 </Table>
 
-<ResourceOffcanvas TResource="Gateway" @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+<Offcanvas @ref="offcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />
 
 <ConfirmDialog @ref="dialog" />
 
 @code{
 
     List<Gateway>? gateways;
-    ResourceOffcanvas<Gateway>? offcanvas;
+    Offcanvas? offcanvas;
     ConfirmDialog? dialog;
+    ResourceDefinition? definition;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Definition.Subscribe(definition => this.definition = definition, token: this.CancellationTokenSource.Token);
         this.Store.Resources.Subscribe(OnGatewayCollectionChanged, token: this.CancellationTokenSource.Token);
-        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
+        await this.Store.GetResourceDefinitionAsync().ConfigureAwait(false);
+        await this.Store.ListResourcesAsync().ConfigureAwait(false);
     }
 
     void OnGatewayCollectionChanged(List<Gateway>? gateways)
@@ -86,8 +89,11 @@
     Task OnShowResourceOffcanvasAsync(Gateway gateway)
     {
         if (this.offcanvas == null) return Task.CompletedTask;
-        this.offcanvas.SetResource(gateway);
-        return this.offcanvas.ShowAsync();
+        var parameters = new Dictionary<string, object>();
+        parameters.Add("ReadOnly", true);
+        parameters.Add("Resource", gateway);
+        parameters.Add("Definition", this.definition!);
+        return this.offcanvas.ShowAsync<ResourceDetails<Gateway>>(title: "Gateway details", parameters: parameters);
     }
 
 }

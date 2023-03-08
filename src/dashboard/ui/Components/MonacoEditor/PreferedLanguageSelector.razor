@@ -1,0 +1,53 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@inject IMonacoEditorHelper MonacoEditorHelper
+@implements IDisposable
+
+<div class="form-check form-switch">
+    <input class="form-check-input" type="checkbox" role="switch" id="toggle-language" checked="@isJsonSelected" @onchange="ToggleLanguage">
+    <label class="form-check-label" for="toggle-language">@this.MonacoEditorHelper.PreferedLanguage</label>
+</div>
+
+@code {
+
+    [Parameter] public EventCallback<string> PreferedLanguageChange { get; set; }
+
+    protected bool isJsonSelected { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        this.isJsonSelected = this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON;
+    }
+
+    protected virtual async Task ToggleLanguage(ChangeEventArgs e)
+    {
+        if (this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON) {
+            await this.MonacoEditorHelper.ChangePreferedLanguageAsync(PreferedLanguage.YAML);
+        }
+        else
+        {
+            await this.MonacoEditorHelper.ChangePreferedLanguageAsync(PreferedLanguage.JSON);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        this.MonacoEditorHelper.PreferedLanguageChanged += this.HandlePreferedLanguageChangeAsync;
+    }
+
+    protected async Task HandlePreferedLanguageChangeAsync(string language)
+    {
+        this.isJsonSelected = this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON;
+        await this.PreferedLanguageChange.InvokeAsync(language);
+        this.StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        if (this.MonacoEditorHelper != null) {
+            this.MonacoEditorHelper.PreferedLanguageChanged -= this.HandlePreferedLanguageChangeAsync;
+        }
+        GC.SuppressFinalize(this);
+    }
+}

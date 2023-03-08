@@ -1,0 +1,230 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@using System.Text.Json
+@using CloudStreams.Dashboard.Components.ResourceDetailsStateManagement
+@using System.Reactive.Linq;
+@using System.Reactive.Subjects;
+@typeparam TResource where TResource : class, IResource, new()
+@inherits StatefulComponent<ResourceDetailsStore<TResource>, ResourceDetailsState<TResource>>
+@inject IMonacoEditorHelper MonacoEditorHelper
+
+<div class="form-check form-switch">
+    <input class="form-check-input" type="checkbox" role="switch" id="toggle-language" checked="@(!readOnly)" @onchange="Store.ToggleReadOnly">
+    <label class="form-check-label" for="toggle-language">Toggle edition</label>
+</div>
+@if (readOnly)
+{
+    <div class="container-fluid">
+        <div class="row">
+            <table class="table table-striped mb-3">
+                <tbody>
+                    <tr>
+                        <td>API Version</td>
+                        <td><input type="text" readonly="@readOnly" value="@resource?.ApiVersion" required title="The resource's API version" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Kind</td>
+                        <td><input type="text" readonly="@readOnly" value="@resource?.Kind" required title="The resource's kind" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Name</td>
+                        <td><input type="text" readonly="@readOnly" value="@resource?.GetName()" required title="The resource's name" class="form-control" /></td>
+                    </tr>
+                    @if (resource?.IsNamespaced() == true)
+                    {
+                        <tr>
+                            <td>Namespace</td>
+                            <td><input type="text" readonly="@readOnly" value="@resource?.GetNamespace()" required title="The resource's namespace" class="form-control" /></td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>Created At</td>
+                        <td><input type="text" readonly="@readOnly" value="@resource?.Metadata.CreationTimestamp?.ToString("R")" required title="The date and time at which the resource has been created" class="form-control" /></td>
+                    </tr>
+                    <tr>
+                        <td>Generation</td>
+                        <td><input type="text" readonly="@readOnly" value="@resource?.Metadata.Generation" required title="The resource's spec version" class="form-control" /></td>
+                    </tr>
+                    @if (resource?.Metadata.Labels?.Any() == true)
+                    {
+                        <tr>
+                            <td>Labels</td>
+                            <td>
+                                @foreach(var label in resource.Metadata.Labels)
+                                {
+                                    <span class="badge bg-primary text-dark m-1">@label.Key: @label.Value</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container-fluid d-flex flex-grow">
+        <div class="row">
+            <PreferedLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
+            <StandaloneCodeEditor @ref="textBasedEditor"
+                ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions()"
+                OnDidInit="OnTextBasedEditorInit"
+                OnDidChangeModelContent="OnTextBasedValueChanged"
+            />
+        </div>
+    </div>
+}
+
+@code {
+
+    TResource? resource;
+    /// <summary>
+    /// Gets/sets the resource to display details about
+    /// </summary>
+    [Parameter] public TResource? Resource { get; set; }
+
+    ResourceDefinition? definition;
+    /// <summary>
+    /// Gets the definition of the resource
+    /// </summary>
+    [Parameter] public ResourceDefinition? Definition { get; set; }
+
+    bool readOnly;
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not the component is in read-only mode
+    /// </summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>
+    /// The reference of the <see cref="StandaloneCodeEditor" />
+    /// </summary>
+    private StandaloneCodeEditor? textBasedEditor;
+
+    /// <summary>
+    /// The <see cref="Subject" /> used to observe and debounce the input of the text editor
+    /// </summary>
+    private Subject<string> textEditorInput = new Subject<string>();
+
+    /// <summary>
+    /// Gets/sets the content of the text editor
+    /// </summary>
+    private string textEditorValue = string.Empty;
+
+    /// <summary>
+    ///  Gets/sets a boolean indicating if the text editor is being updated
+    /// </summary>
+    private bool updating = false;
+
+    /// <summary>
+    ///  Gets/sets a boolean indicating if the resource is being saved
+    /// </summary>
+    private bool saving = false;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Resource.Subscribe(resource => this.OnStateChanged(state => state.resource = resource), token: this.CancellationTokenSource.Token);
+        this.Store.Definition.Subscribe(definition => this.OnStateChanged(state => state.definition = definition), token: this.CancellationTokenSource.Token);
+        this.Store.ReadOnly.Subscribe(readOnly => this.OnStateChanged(state => state.readOnly = readOnly), token: this.CancellationTokenSource.Token);
+        this.Store.Updating.Subscribe(updating => this.OnStateChanged(state => state.updating = updating), token: this.CancellationTokenSource.Token);
+        this.Store.Saving.Subscribe(saving => this.OnStateChanged(state => state.saving = saving), token: this.CancellationTokenSource.Token);
+        this.textEditorInput
+            .Throttle(TimeSpan.FromMilliseconds(300))
+            .DistinctUntilChanged()
+            .Subscribe(text => this.Store.SetEditorValue(text));
+        this.Store.TextEditorValue.SubscribeAsync(async textEditorValue =>
+        {
+            this.textEditorValue = textEditorValue;
+            if (this.textBasedEditor != null)
+            {
+                string editorText = await this.textBasedEditor.GetValue();
+                if (textEditorValue != editorText)
+                {
+                    await this.textBasedEditor.SetValue(textEditorValue);
+                }
+            }
+        }, cancellationToken: this.CancellationTokenSource.Token);
+    }
+
+    /// <inheritdoc/>
+    protected override Task OnParametersSetAsync()
+    {
+        if(this.resource != this.Resource)
+        {
+            this.Store.SetResource(this.Resource);
+        }
+        if (this.definition != this.Definition)
+        {
+            this.Store.SetDefinition(this.Definition);
+        }
+        if (this.readOnly != this.ReadOnly)
+        {
+            this.Store.SetReadOnly(this.ReadOnly);
+        }
+        return base.OnParametersSetAsync();
+    }
+
+    /// <summary>
+    /// Patches the <see cref="ResourceDetails{TResource}"/>'s fields after a <see cref="ResourceDetailsStore{TResource}"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<ResourceDetails<TResource>> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Handles the <see cref="Editor.OnDidInit" /> event
+    /// </summary>
+    /// <returns></returns>
+    private async Task OnTextBasedEditorInit()
+    {
+        await this.SetTextBasedEditorLanguageAsync();
+        await this.textBasedEditor!.SetValue(this.textEditorValue);
+    }
+
+    /// <summary>
+    /// Handles the <see cref="CodeEditor.OnDidChangeModelContent" /> event
+    /// </summary>
+    /// <param name="e">The source <see cref="ModelContentChangedEvent" /></param>
+    /// <returns></returns>
+    private async Task OnTextBasedValueChanged(ModelContentChangedEvent e)
+    {
+        if (!this.updating && this.textBasedEditor != null && this.textEditorInput != null)
+        {
+            string text = await this.textBasedEditor.GetValue();
+            this.textEditorInput.OnNext(text);
+        }
+    }
+
+    /// <summary>
+    /// Changes the editor's language
+    /// </summary>
+    /// <returns></returns>
+    private async Task SetTextBasedEditorLanguageAsync()
+    {
+        TextModel model = await this.textBasedEditor!.GetModel();
+        await Global.SetModelLanguage(model, this.MonacoEditorHelper.PreferedLanguage);
+        /*if (this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON)
+            await model.jsRuntime.InvokeVoidAsync("enableJsonValidation08", model.Uri);*/
+    }
+
+    /// <summary>
+    /// Changes the editor language
+    /// </summary>
+    /// <param name="language"></param>
+    /// <returns></returns>
+    protected virtual async Task ToggleTextBasedEditorLanguageAsync(string language)
+    {
+
+        TextModel model = await this.textBasedEditor!.GetModel();
+        string editorLanguage = await model.GetLanguageId();
+        if (editorLanguage != language) {
+            await this.Store.ChangeTextEditorLanguageAsync(language);
+            await this.SetTextBasedEditorLanguageAsync();
+        }
+    }
+
+}

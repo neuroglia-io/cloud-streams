@@ -10,11 +10,11 @@ kind: Gateway
 metadata:
   name: gateway-1
 spec:
-  validation:
+  validation: #optional
     dataSchema:
       required: false
       autoGenerate: true
-  sources:
+  sources: #optional
     - uri: https://mozart-dev.ccie.cisco.com/sys-admin
       authorization:
         rules:
@@ -34,12 +34,17 @@ spec:
 ---
 
 apiVersion: cloud-streams.io/v1
-kind: Channel
+kind: Subscription
 metadata:
-  name: channel-1
-  labels:
-    io.cloud-streams.network: network-1
+  name: webhook-site
+  labels: #optional for now
+    cloud-streams.io/network-id: network-1
 spec:
-  serviceAddress: https://webhook.site/04cec4fc-b213-428e-b7ba-12e4b7732b5f
-  stream:
-    offset: -1
+  subscriber: #required
+    uri: https://pubhook.certs.cloud/56cbc1f7-6452-4e8d-b529-a6418402557b #required
+    rateLimit: 30
+  stream: #optional
+    offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
+  mutation: #optional
+    type: expression
+    expression: .data["formQualifiedName"] = .data.formqualifiedname | del(.data.formqualifiedname)
