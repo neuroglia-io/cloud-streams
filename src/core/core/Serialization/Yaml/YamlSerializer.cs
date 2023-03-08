@@ -81,6 +81,30 @@ public static partial class Serializer
         /// <returns>The deserialized value</returns>
         public static object? Deserialize(TextReader reader, Type type) => Deserializer.Deserialize(reader, type);
 
+        /// <summary>
+        /// Converts the specified JSON input into YAML
+        /// </summary>
+        /// <param name="json">The JSON input to convert</param>
+        /// <returns>The JSON input converted into YAML</returns>
+        public static string ConvertFromJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null!;
+            var graph = Json.Deserialize<object>(json);
+            return Serialize(graph);
+        }
+
+        /// <summary>
+        /// Converts the specified YAML input into JSON
+        /// </summary>
+        /// <param name="yaml">The YAML input to convert</param>
+        /// <returns>The YAML input converted into JSON</returns>
+        public static string ConvertToJson(string yaml)
+        {
+            if (string.IsNullOrWhiteSpace(yaml)) return null!;
+            var graph = Deserialize<object>(yaml);
+            return Json.Serialize(graph);
+        }
+
     }
 
 }

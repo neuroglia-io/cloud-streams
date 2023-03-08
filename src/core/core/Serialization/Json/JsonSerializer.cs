@@ -108,6 +108,30 @@ public static partial class Serializer
         /// <returns>A new <see cref="IAsyncEnumerable{T}"/></returns>
         public static IAsyncEnumerable<T?> DeserializeAsyncEnumerable<T>(Stream stream, CancellationToken cancellationToken = default) => JsonSerializer.DeserializeAsyncEnumerable<T>(stream, DefaultOptions, cancellationToken);
 
+        /// <summary>
+        /// Converts the specified YAML input into JSON
+        /// </summary>
+        /// <param name="yaml">The YAML input to convert</param>
+        /// <returns>The YAML input converted into JSON</returns>
+        public static string ConvertFromYaml(string yaml)
+        {
+            if (string.IsNullOrWhiteSpace(yaml)) return null!;
+            var graph = Yaml.Deserialize<object>(yaml);
+            return Serialize(graph);
+        }
+
+        /// <summary>
+        /// Converts the specified JSON input into YAML
+        /// </summary>
+        /// <param name="json">The JSON input to convert</param>
+        /// <returns>The JSON input converted into YAML</returns>
+        public static string ConvertToYaml(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null!;
+            var graph = Deserialize<object>(json);
+            return Yaml.Serialize(graph);
+        }
+
     }
 
 }
