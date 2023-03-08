@@ -1,6 +1,5 @@
 ﻿using CloudStreams.Dashboard.StateManagement;
 using System.Reactive.Linq;
-using CloudStreams.Dashboard.Services;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 
 namespace CloudStreams.Dashboard.Components.ResourceDetailsStateManagement;
@@ -23,22 +22,15 @@ public class ResourceDetailsStore<TResource>
     private IMonacoEditorHelper monacoEditorHelper;
 
     /// <summary>
-    /// The service used to convert YAML to JSON and JSON to YAML
-    /// </summary>
-    private IYamlConverter yamlConverter;
-
-    /// <summary>
     /// Initializes a new <see cref="ResourceDetailsStore{TResource}"/>
     /// </summary>
     /// <param name="cloudStreamsResourceManagementApi">The service used to interact with a Cloud Streams gateway's API</param>
     /// <param name="monacoEditorHelper">The service used to facilitate the Monaco editor interactions</param>
-    /// <param name="yamlConverter">The service used to convert YAML to JSON and JSON to YAM</param>
-    public ResourceDetailsStore(ICloudStreamsResourceManagementApiClient cloudStreamsResourceManagementApi, IMonacoEditorHelper monacoEditorHelper, IYamlConverter yamlConverter)
+    public ResourceDetailsStore(ICloudStreamsResourceManagementApiClient cloudStreamsResourceManagementApi, IMonacoEditorHelper monacoEditorHelper)
         : base(new())
     {
         this.cloudStreamsResourceManagementApi = cloudStreamsResourceManagementApi;
         this.monacoEditorHelper = monacoEditorHelper;
-        this.yamlConverter = yamlConverter;
     }
 
     /// <summary>
