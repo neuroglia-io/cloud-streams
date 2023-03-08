@@ -1,6 +1,6 @@
 ﻿using CloudStreams.Core.Serialization.Yaml;
-using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.NodeDeserializers;
 
 namespace CloudStreams.Core;
@@ -27,6 +27,8 @@ public static partial class Serializer
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithTypeConverter(new JsonNodeTypeConverter())
                 .WithTypeConverter(new JsonSchemaTypeConverter())
+                .WithTypeConverter(new UriTypeSerializer())
+                .WithTypeConverter(new StringEnumSerializer())
                 .Build();
             Deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
