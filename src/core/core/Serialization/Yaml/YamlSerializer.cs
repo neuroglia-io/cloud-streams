@@ -32,6 +32,7 @@ public static partial class Serializer
                 .WithTypeConverter(new StringEnumSerializer())
                 .Build();
             Deserializer = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithNodeTypeResolver(new InferTypeResolver())
                 .WithNodeDeserializer(
