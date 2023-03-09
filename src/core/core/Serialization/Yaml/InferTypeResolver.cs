@@ -16,6 +16,11 @@ public class InferTypeResolver
         var scalar = nodeEvent as Scalar;
         if (scalar != null)
         {
+            if(scalar.IsQuotedImplicit)
+            {
+                currentType = typeof(string);
+                return true;
+            }
             if (bool.TryParse(scalar.Value, out _))
             {
                 currentType = typeof(bool);
