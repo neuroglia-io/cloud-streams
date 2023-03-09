@@ -24,6 +24,7 @@ public static partial class Serializer
         {
             Serializer = new SerializerBuilder()
                 .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults | DefaultValuesHandling.OmitEmptyCollections)
+                .WithQuotingNecessaryStrings()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithTypeConverter(new JsonNodeTypeConverter())
                 .WithTypeConverter(new JsonSchemaTypeConverter())

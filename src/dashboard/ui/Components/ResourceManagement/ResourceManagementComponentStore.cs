@@ -117,7 +117,6 @@ public class ResourceManagementComponentStore<TResource>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual Task OnResourceWatchEventAsync(IResourceWatchEvent<TResource> e)
     {
-        Console.WriteLine($"EVENT RECEIVED: {e.Type}");
         switch (e.Type)
         {
             case ResourceWatchEventType.Created:
