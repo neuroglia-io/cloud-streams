@@ -169,12 +169,12 @@ public class CloudEventAdmissionControl
                 return Response.ValidationFailed(StringExtensions.Format(ProblemDetails.MissingDataSchema, e.Source!));
             }
             var schemaUri = await this.SchemaRegistry.GetSchemaUriByIdAsync(e.Type, cancellationToken).ConfigureAwait(false);
-            if(schemaUri != null)
+            if (schemaUri != null)
             {
                 schema = await this.SchemaRegistry.GetSchemaAsync(schemaUri, cancellationToken).ConfigureAwait(false);
                 e.DataSchema = schemaUri;
             }
-            else if(dataSchemaPolicy?.AutoGenerate == true && e.Data != null) 
+            else if (dataSchemaPolicy?.AutoGenerate == true && e.Data != null)
             {
                 schema = await this.SchemaGenerator.GenerateAsync(e.Data, new() { Id = e.Type }, cancellationToken).ConfigureAwait(false);
                 schemaUri = await this.SchemaRegistry.RegisterSchemaAsync(schema!, cancellationToken).ConfigureAwait(false);
@@ -190,13 +190,13 @@ public class CloudEventAdmissionControl
                 return Response.ValidationFailed(StringExtensions.Format(ProblemDetails.DataSchemaNotFound, e.DataSchema));
             }
         }
-        if(schema != null)
+        if (schema != null)
         {
-            var validationOptions = new ValidationOptions() { OutputFormat = OutputFormat.Detailed };
-            var validationResults = schema.Validate(Serializer.Json.SerializeToNode(e.Data), validationOptions);
+            var validationOptions = new EvaluationOptions() {  OutputFormat = OutputFormat.Hierarchical };
+            var validationResults = schema.Evaluate(Serializer.Json.SerializeToNode(e.Data), validationOptions);
             if (!validationResults.IsValid)
             {
-                this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {detail}", e.Id, validationResults.GetErrorMessage());
+                this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {detail}", e.Id, validationResults);
                 return Response.ValidationFailed(validationResults);
             }
         }

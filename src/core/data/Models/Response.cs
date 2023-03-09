@@ -26,7 +26,7 @@ public class Response
     /// <param name="instance">An URI reference that identifies the specific occurrence of the response. It may or may not yield further information if dereferenced.</param>
     /// <param name="content">The <see cref="Response"/>'s content, if any</param>
     /// <param name="errors">An <see cref="IDictionary{TKey, TValue}"/> containing they code/message mappings of the errors that have occured during the request's execution</param>
-    public Response(int status, Uri? type = null, string? title = null, string? detail = null, Uri? instance = null, object? content = null, IDictionary<string, string[]>? errors = null)
+    public Response(int status, Uri? type = null, string? title = null, string? detail = null, Uri? instance = null, object? content = null, IEnumerable<KeyValuePair<string, string[]>>? errors = null)
     {
         this.Status = status;
         this.Type = type;
@@ -63,7 +63,7 @@ public class Response
 
     /// <inheritdoc/>
     [DataMember(Name = "errors", Order = 7), JsonPropertyName("errors"), YamlMember(Alias = "errors")]
-    public virtual IDictionary<string, string[]>? Errors { get; set; }
+    public virtual IEnumerable<KeyValuePair<string, string[]>>? Errors { get; set; }
 
     /// <inheritdoc/>
     [DataMember(Name = "extensions", Order = 8), JsonExtensionData]
@@ -126,15 +126,14 @@ public class Response
     /// <summary>
     /// Creates a new <see cref="Response"/> to inform about a validation failure
     /// </summary>
-    /// <param name="validationResults">An object that represents the validation results</param>
+    /// <param name="evaluationResults">An object that represents the validation results</param>
     /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed(ValidationResults validationResults)
+    public static Response ValidationFailed(EvaluationResults evaluationResults)
     {
         return new((int)HttpStatusCode.BadRequest)
         {
             Title = ProblemTitles.ValidationFailed,
-            Detail = $"{validationResults.SchemaLocation}: {validationResults.GetErrorMessage()}",
-            Errors = validationResults?.NestedResults?.Any() == true ? validationResults?.NestedResults?.ToDictionary(r => r.InstanceLocation.ToString(), r => r.GetErrorMessages().ToArray()) : null
+            Errors = evaluationResults.ToErrorList()
         };
     }
 
