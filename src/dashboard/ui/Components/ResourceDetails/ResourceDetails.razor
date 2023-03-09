@@ -63,13 +63,26 @@
 }
 else
 {
-    <div class="container-fluid d-flex flex-grow">
-        <div class="row">
+    <div class="container-fluid d-flex flex-grow flex-column">
+        <div class="row flex-grow">
             <PreferedLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
             <StandaloneCodeEditor @ref="textBasedEditor"
                 ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions()"
                 OnDidInit="OnTextBasedEditorInit"
                 OnDidChangeModelContent="OnTextBasedValueChanged" />
+            @if (errors != null && errors.Any())
+            {
+                foreach(KeyValuePair<string, string[]> errorContainer in errors)
+                {
+                    <Callout Type="CalloutType.Danger" Heading="@errorContainer.Key">
+                        <ul>
+                            @foreach(string error in errorContainer.Value) {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </Callout>
+                }
+            }
             <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.UpdateResourceAsync()">Update</Button>
         </div>
     </div>
@@ -106,19 +119,24 @@ else
     private Subject<string> textEditorInput = new Subject<string>();
 
     /// <summary>
-    /// Gets/sets the content of the text editor
+    /// The content of the text editor
     /// </summary>
     private string textEditorValue = string.Empty;
 
     /// <summary>
-    ///  Gets/sets a boolean indicating if the text editor is being updated
+    /// A boolean indicating if the text editor is being updated
     /// </summary>
     private bool updating = false;
 
     /// <summary>
-    ///  Gets/sets a boolean indicating if the resource is being saved
+    /// A boolean indicating if the resource is being saved
     /// </summary>
     private bool saving = false;
+
+    /// <summary>
+    ///The list of errors that occured when trying to save the resource, if any
+    /// </summary>
+    private IDictionary<string, string[]> errors = new Dictionary<string, string[]>();
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -129,6 +147,7 @@ else
         this.Store.ReadOnly.Subscribe(readOnly => this.OnStateChanged(state => state.readOnly = readOnly), token: this.CancellationTokenSource.Token);
         this.Store.Updating.Subscribe(updating => this.OnStateChanged(state => state.updating = updating), token: this.CancellationTokenSource.Token);
         this.Store.Saving.Subscribe(saving => this.OnStateChanged(state => state.saving = saving), token: this.CancellationTokenSource.Token);
+        this.Store.Errors.Subscribe(errors => this.OnStateChanged(state => state.errors = errors), token: this.CancellationTokenSource.Token);
         this.textEditorInput
             .Throttle(TimeSpan.FromMilliseconds(300))
             .DistinctUntilChanged()
@@ -152,14 +171,17 @@ else
     {
         if(this.resource != this.Resource)
         {
+            this.resource = this.Resource;
             this.Store.SetResource(this.Resource);
         }
         if (this.definition != this.Definition)
         {
+            this.definition = this.Definition;
             this.Store.SetDefinition(this.Definition);
         }
         if (this.readOnly != this.ReadOnly)
         {
+            this.readOnly = this.ReadOnly;
             this.Store.SetReadOnly(this.ReadOnly);
         }
         return base.OnParametersSetAsync();

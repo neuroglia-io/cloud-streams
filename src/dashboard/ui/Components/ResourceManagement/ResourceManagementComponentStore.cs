@@ -133,7 +133,11 @@ public class ResourceManagementComponentStore<TResource>
             case ResourceWatchEventType.Updated:
                 this.Reduce(state =>
                 {
-                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    if (state.Resources == null)
+                    {
+                        return state;
+                    }
+                    List<TResource> resources = new(state.Resources);
                     var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
                     if (resource == null) return state;
                     var index = resources.IndexOf(resource);
@@ -148,7 +152,11 @@ public class ResourceManagementComponentStore<TResource>
             case ResourceWatchEventType.Deleted:
                 this.Reduce(state =>
                 {
-                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    if (state.Resources == null)
+                    {
+                        return state;
+                    }
+                    List<TResource> resources = new(state.Resources);
                     var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
                     if (resource == null) return state;
                     resources.Remove(resource);

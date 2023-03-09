@@ -16,7 +16,7 @@ public class ResourceDetailsStore<TResource>
     /// <summary>
     /// The service used to interact with a Cloud Streams gateway's API
     /// </summary>
-    private ICloudStreamsResourceManagementApiClient cloudStreamsResourceManagementApi;
+    private ICloudStreamsResourceManagementApiClient resourceManagementApi;
 
     /// <summary>
     /// The service used to facilitate the Monaco editor interactions
@@ -26,12 +26,12 @@ public class ResourceDetailsStore<TResource>
     /// <summary>
     /// Initializes a new <see cref="ResourceDetailsStore{TResource}"/>
     /// </summary>
-    /// <param name="cloudStreamsResourceManagementApi">The service used to interact with a Cloud Streams gateway's API</param>
+    /// <param name="resourceManagementApi">The service used to interact with a Cloud Streams gateway's API</param>
     /// <param name="monacoEditorHelper">The service used to facilitate the Monaco editor interactions</param>
-    public ResourceDetailsStore(ICloudStreamsResourceManagementApiClient cloudStreamsResourceManagementApi, IMonacoEditorHelper monacoEditorHelper)
+    public ResourceDetailsStore(ICloudStreamsResourceManagementApiClient resourceManagementApi, IMonacoEditorHelper monacoEditorHelper)
         : base(new())
     {
-        this.cloudStreamsResourceManagementApi = cloudStreamsResourceManagementApi;
+        this.resourceManagementApi = resourceManagementApi;
         this.monacoEditorHelper = monacoEditorHelper;
     }
 
@@ -64,6 +64,11 @@ public class ResourceDetailsStore<TResource>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDetailsState{TResource}.Saving"/> changes
     /// </summary>
     public IObservable<bool> Saving => this.Select(state => state.Saving).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDetailsState{TResource}.Errors"/> changes
+    /// </summary>
+    public IObservable<IDictionary<string, string[]>> Errors => this.Select(state => state.Errors).DistinctUntilChanged();
 
     /// <summary>
     /// Sets the state's <see cref="ResourceDetailsState{TResource}.Resource"/>
@@ -160,6 +165,18 @@ public class ResourceDetailsStore<TResource>
     }
 
     /// <summary>
+    /// Sets the state's <see cref="ResourceDetailsState{TResource}.Errors"/>
+    /// </summary>
+    /// <param name="errors">The new <see cref="ResourceDetailsState{TResource}.Errors"/> value</param>
+    public void SetErrors(IDictionary<string, string[]> errors)
+    {
+        this.Reduce(state => state with
+        {
+            Errors = errors
+        });
+    }
+
+    /// <summary>
     /// Changes the editor language
     /// </summary>
     /// <param name="language">The new editor's language</param>
@@ -187,6 +204,8 @@ public class ResourceDetailsStore<TResource>
     /// <returns></returns>
     public async Task UpdateResourceAsync()
     {
+        this.SetErrors(new Dictionary<string, string[]>());
+        this.SetSaving(true);
         TResource? resource = this.Get(state => state.Resource);
         if (resource == null)
         {
@@ -198,8 +217,28 @@ public class ResourceDetailsStore<TResource>
             textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
         }
         JsonDocument jsonPatch = JsonPatch.FromDiff(Serializer.Json.SerializeToElement(resource)!.Value, Serializer.Json.SerializeToElement(Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
-        Json.Patch.JsonPatch patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
-        await Task.CompletedTask;
+        Json.Patch.JsonPatch? patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
+        if (patch != null)
+        {
+            var resourcePatch = new ResourcePatch<TResource>(resource!, new Patch(PatchType.JsonPatch, jsonPatch));
+            try
+            {
+                resource = await this.resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, this.CancellationTokenSource.Token);
+                this.SetResource(resource);
+            }
+            catch(CloudStreamsException ex)
+            {
+                if (ex.ProblemDetails?.Errors != null && ex.ProblemDetails.Errors.Any())
+                {
+                    this.SetErrors(ex.ProblemDetails.Errors);
+                }
+            }
+            catch (Exception ex)
+            {
+
+            }
+        }
+        this.SetSaving(false);
     }
 
 }

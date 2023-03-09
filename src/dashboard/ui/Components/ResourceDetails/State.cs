@@ -21,7 +21,7 @@ public record ResourceDetailsState<TResource>
     /// <summary>
     /// Gets/sets a boolean indicating whether or not the component is in read-only mode
     /// </summary>
-    public bool ReadOnly { get; set; } = true;
+    public bool ReadOnly { get; set; } = false;
 
     /// <summary>
     /// Gets/sets the content of the text editor
@@ -29,12 +29,17 @@ public record ResourceDetailsState<TResource>
     public string TextEditorValue { get; set; } = string.Empty;
 
     /// <summary>
-    ///  Gets/sets a boolean indicating if the text editor is being updated
+    /// Gets/sets a boolean indicating if the text editor is being updated
     /// </summary>
     public bool Updating { get; set; } = false;
 
     /// <summary>
-    ///  Gets/sets a boolean indicating if the resource is being saved
+    /// Gets/sets a boolean indicating if the resource is being saved
     /// </summary>
     public bool Saving { get; set; } = false;
+
+    /// <summary>
+    /// Gets/sets the list of errors that occured when trying to save the resource, if any
+    /// </summary>
+    public IDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
 }
