@@ -10,15 +10,15 @@ public class CloudStreamsException
     /// <summary>
     /// Initializes a new <see cref="CloudStreamsException"/>
     /// </summary>
-    /// <param name="problem">An object used to describe a problem that has occured on the CloudStreams API</param>
-    public CloudStreamsException(Core.Data.Models.ProblemDetails? problem = null)
+    /// <param name="problemDetails">An object used to describe a problem that has occured on the CloudStreams API</param>
+    public CloudStreamsException(Core.Data.Models.ProblemDetails? problemDetails = null)
     {
-        this.Problem = problem;
+        this.ProblemDetails = problemDetails;
     }
 
     /// <summary>
     /// Gets an object used to describe a problem that has occured on the CloudStreams API
     /// </summary>
-    public Core.Data.Models.ProblemDetails? Problem { get; }
+    public Core.Data.Models.ProblemDetails? ProblemDetails { get; }
 
 }
