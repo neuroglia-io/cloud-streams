@@ -169,13 +169,14 @@ public class Response
     /// </summary>
     /// <typeparam name="TResource">The expected type of result</typeparam>
     /// <param name="name">The name of the resource that could not be found</param>
+    /// <param name="namespace">The namespace the resource that could not be found belongs to</param>
     /// <returns>A new <see cref="Response{TContent}"/> that describes the failure to find an <see cref="IResource"/> of the specified type</returns>
-    public static Response<TResource> ResourceNotFound<TResource>(string name)
+    public static Response<TResource> ResourceNotFound<TResource>(string name, string? @namespace = null)
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
-        if (resource.IsNamespaced()) return new(ProblemTypes.ResourceNotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, StringExtensions.Format(Properties.ProblemDetails.NamespacedResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, resource.GetNamespace()!, name));
-        else return new(ProblemTypes.ResourceNotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, StringExtensions.Format(Properties.ProblemDetails.ClusterResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, name));
+        if (string.IsNullOrWhiteSpace(@namespace)) return new(ProblemTypes.ResourceNotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, StringExtensions.Format(Properties.ProblemDetails.ClusterResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, name));
+        else return new(ProblemTypes.ResourceNotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, StringExtensions.Format(Properties.ProblemDetails.NamespacedResourceNotFound, resource.GetGroup(), resource.GetVersion(), resource.Kind, resource.GetNamespace()!, name));
     }
 
     /// <summary>

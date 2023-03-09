@@ -38,8 +38,8 @@ public class ApplicationException
     {
         var resource = new TResource();
         var details = string.IsNullOrWhiteSpace(@namespace) ? 
-            StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, name) 
-            : StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, @namespace, name);
+            StringExtensions.Format(Core.Data.Properties.ProblemDetails.ClusterResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, name) 
+            : StringExtensions.Format(Core.Data.Properties.ProblemDetails.NamespacedResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, @namespace, name);
         return new(ProblemTitles.NotFound, details);
     }
 
