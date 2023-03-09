@@ -32,7 +32,7 @@ public class BrokersController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost]
     [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.Created)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateBroker([FromBody] Broker resource, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send<Response<Broker>>(new CreateResourceCommand<Broker>(resource), cancellationToken));
@@ -45,7 +45,7 @@ public class BrokersController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetBrokerDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Broker>(), cancellationToken));
@@ -59,7 +59,7 @@ public class BrokersController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetBroker(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceQuery<Broker>(name), cancellationToken));
@@ -72,7 +72,7 @@ public class BrokersController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListBrokers(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new ListResourceQuery<Broker>(), cancellationToken));
@@ -87,7 +87,7 @@ public class BrokersController
     [HttpPatch]
     [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PatchBroker([FromBody] ResourcePatch<Broker> patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -103,7 +103,7 @@ public class BrokersController
     [HttpPut]
     [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutBroker([FromBody] Broker resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -118,8 +118,8 @@ public class BrokersController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteBroker(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Broker>(name), cancellationToken));

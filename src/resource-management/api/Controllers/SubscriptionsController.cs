@@ -32,7 +32,7 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.Created)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateSubscription([FromBody] Subscription resource, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send<Response<Subscription>>(new CreateResourceCommand<Subscription>(resource), cancellationToken));
@@ -45,7 +45,7 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetSubscriptionDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Subscription>(), cancellationToken));
@@ -59,7 +59,7 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetSubscription(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceQuery<Subscription>(name), cancellationToken));
@@ -72,7 +72,7 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListSubscriptions(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new ListResourceQuery<Subscription>(), cancellationToken));
@@ -87,7 +87,7 @@ public class SubscriptionsController
     [HttpPatch]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PatchSubscription([FromBody] ResourcePatch<Subscription> patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -102,8 +102,8 @@ public class SubscriptionsController
     /// <returns>A new awaitable <see cref="Task"/></returns>
     [HttpPut]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutSubscription([FromBody] Subscription resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -118,8 +118,8 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteSubscription(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Subscription>(name), cancellationToken));

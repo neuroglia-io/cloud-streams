@@ -32,7 +32,7 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.Created)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateNetwork([FromBody] Network resource, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send<Response<Network>>(new CreateResourceCommand<Network>(resource), cancellationToken));
@@ -45,7 +45,7 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetNetworkDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Network>(), cancellationToken));
@@ -59,7 +59,7 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetNetwork(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceQuery<Network>(name), cancellationToken));
@@ -72,7 +72,7 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListNetworks(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new ListResourceQuery<Network>(), cancellationToken));
@@ -86,8 +86,8 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPatch]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PatchNetwork([FromBody] ResourcePatch<Network> patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -102,8 +102,8 @@ public class NetworksController
     /// <returns>A new awaitable <see cref="Task"/></returns>
     [HttpPut]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutNetwork([FromBody] Network resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -118,8 +118,8 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType((int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteNetwork(string name, CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Network>(name), cancellationToken));
