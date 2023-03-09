@@ -69,8 +69,8 @@ else
             <StandaloneCodeEditor @ref="textBasedEditor"
                 ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions()"
                 OnDidInit="OnTextBasedEditorInit"
-                OnDidChangeModelContent="OnTextBasedValueChanged"
-            />
+                OnDidChangeModelContent="OnTextBasedValueChanged" />
+            <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.UpdateResourceAsync()">Update</Button>
         </div>
     </div>
 }
