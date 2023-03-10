@@ -1,11 +1,11 @@
 ﻿using Microsoft.AspNetCore.Components;
 
-namespace CloudStreams.Dashboard.Components.ResourceDetailsStateManagement;
+namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
 /// <summary>
-/// Represents the state of the <see cref="ResourceDetails{TResource}"/>'s component
+/// Represents the state of the <see cref="ResourceEditor{TResource}"/>'s component
 /// </summary>
-public record ResourceDetailsState<TResource>
+public record ResourceEditorState<TResource>
     where TResource : class, IResource, new()
 {
     /// <summary>
@@ -17,11 +17,6 @@ public record ResourceDetailsState<TResource>
     /// Gets/sets the definition of the displayed resource
     /// </summary>
     public ResourceDefinition? Definition { get; set; } = null;
-
-    /// <summary>
-    /// Gets/sets a boolean indicating whether or not the component is in read-only mode
-    /// </summary>
-    public bool ReadOnly { get; set; } = false;
 
     /// <summary>
     /// Gets/sets the content of the text editor

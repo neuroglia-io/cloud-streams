@@ -1,6 +1,4 @@
-﻿using BlazorMonaco;
-
-namespace CloudStreams.Dashboard.Components;
+﻿namespace CloudStreams.Dashboard.Components;
 
 /// <inheritdoc />
 public class MonacoEditorHelper
@@ -21,7 +19,8 @@ public class MonacoEditorHelper
             Minimap = new EditorMinimapOptions { Enabled = false },
             Language = language,
             ReadOnly = readOnly,
-            Value = value
+            Value = value,
+            TabSize = 2
         };
     }
 
