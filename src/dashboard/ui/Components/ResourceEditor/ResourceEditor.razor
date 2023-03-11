@@ -9,7 +9,7 @@
     <div class="row flex-grow">
         <PreferedLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
         <StandaloneCodeEditor @ref="textBasedEditor"
-            ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions()"
+            ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(this.textEditorValue, false, this.MonacoEditorHelper.PreferedLanguage)"
             OnDidInit="OnTextBasedEditorInit"
             OnDidChangeModelContent="OnTextBasedValueChanged" />
         @if (errors != null && errors.Any())
@@ -37,9 +37,6 @@
     /// Gets/sets the resource to display details about
     /// </summary>
     [Parameter] public TResource? Resource { get; set; }
-
-
-    [Parameter] public ResourceDefinition Definition { get; set; }
 
     /// <summary>
     /// The reference of the <see cref="StandaloneCodeEditor" />
@@ -122,12 +119,12 @@
     /// <returns>A <see cref="Task"/></returns>
     private async Task OnTextBasedEditorInit()
     {
-        string resourceUri = $"inmemory://{typeof(TResource).Name}";
-        TextModel? model = await Global.GetModel(resourceUri);
-        if (model == null)
+        string resourceUri = $"inmemory://{typeof(TResource).Name.ToLower()}";
+        this.textEditorModel = await Global.GetModel(resourceUri);
+        if (this.textEditorModel == null)
         {
-            model = await Global.CreateModel(this.textEditorValue, this.MonacoEditorHelper.PreferedLanguage, resourceUri);
-            await this.textBasedEditor!.SetModel(model);
+            this.textEditorModel = await Global.CreateModel(this.textEditorValue, this.MonacoEditorHelper.PreferedLanguage, resourceUri);
+            await this.textBasedEditor!.SetModel(this.textEditorModel);
         }
         else
         {
@@ -173,18 +170,18 @@
     /// <returns>A <see cref="Task"/></returns>
     private async Task SetTextBasedEditorLanguageAsync()
     {
-        if (this.textBasedEditor != null)
+        if (this.textBasedEditor != null && this.textEditorModel != null)
         {
-            TextModel model = await this.textBasedEditor!.GetModel();
-            await Global.SetModelLanguage(model, this.MonacoEditorHelper.PreferedLanguage);
+            //TextModel model = await this.textBasedEditor!.GetModel();
+            await Global.SetModelLanguage(this.textEditorModel, this.MonacoEditorHelper.PreferedLanguage);
         }
     }
 
     /// <summary>
     /// Changes the editor language
     /// </summary>
-    /// <param name="language"></param>
-    /// <returns></returns>
+    /// <param name="language">The new editor's language</param>
+    /// <returns>A <see cref="Task"/></returns>
     private async Task ToggleTextBasedEditorLanguageAsync(string language)
     {
 
@@ -194,6 +191,38 @@
         {
             await this.Store.ChangeTextEditorLanguageAsync(language);
             await this.SetTextBasedEditorLanguageAsync();
+        }
+    }
+
+    private bool _Disposed;
+    /// <summary>
+    /// Disposes of the component
+    /// </summary>
+    /// <param name="disposing">A boolean indicating whether or not the dispose of the component</param>
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!this._Disposed)
+        {
+            if (disposing)
+            {
+                if (this.textEditorInput != null)
+                {
+                    this.textEditorInput.Dispose();
+                    this.textEditorInput = null;
+                }
+                if (this.textEditorModel != null)
+                {
+                    this.textEditorModel.DisposeModel();
+                    this.textEditorModel = null;
+                }
+                if (this.textBasedEditor != null)
+                {
+                    this.textBasedEditor.Dispose();
+                    this.textBasedEditor = null;
+                }
+            }
+            this._Disposed = true;
         }
     }
 

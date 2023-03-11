@@ -76,7 +76,7 @@
                 this.definition = definition;
                 if (this.definition != null)
                 {
-                    await this.MonacoInterop.AddValidationSchemaAsync("json", Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), "https://cloud-streams.io/schemas/subscription", "subscription").ConfigureAwait(false);
+                    await this.MonacoInterop.AddValidationSchemaAsync("json", Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(Subscription).Name.ToLower()}.json", $"{typeof(Subscription).Name.ToLower()}").ConfigureAwait(false);
                 }
             }
         }, cancellationToken: this.CancellationTokenSource.Token);
