@@ -27,15 +27,14 @@ public class MonacoInterop
     /// <summary>
     /// Adds the provided schema to monaco editor's diagnostics options
     /// </summary>
-    /// <param name="language">The targeted language, JSON or YAML</param>
     /// <param name="schema">The JSON Schema used for validation</param>
     /// <param name="schemaUri">The schema identifier URI</param>
     /// <param name="schemaType">The schema type, used to match the "file"/model URI</param>
     /// <returns>A <see cref="ValueTask"/></returns>
-    public async ValueTask AddValidationSchemaAsync(string language, string schema, string schemaUri, string schemaType)
+    public async ValueTask AddValidationSchemaAsync(string schema, string schemaUri, string schemaType)
     {
         var module = await moduleTask.Value;
-        await module.InvokeVoidAsync("addValidationSchema", language, schema, schemaUri, schemaType);
+        await module.InvokeVoidAsync("addValidationSchema", schema, schemaUri, schemaType);
     }
 
     /// <inheritdoc />
