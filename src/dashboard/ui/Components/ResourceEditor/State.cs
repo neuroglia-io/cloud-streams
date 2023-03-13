@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
-
-namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
+﻿namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
 /// <summary>
 /// Represents the state of the <see cref="ResourceEditor{TResource}"/>'s component
@@ -34,7 +32,27 @@ public record ResourceEditorState<TResource>
     public bool Saving { get; set; } = false;
 
     /// <summary>
-    /// Gets/sets the list of errors that occured when trying to save the resource, if any
+    /// Gets/sets the <see cref="ProblemDetails"/> type that occured when trying to save the resource, if any
     /// </summary>
-    public IDictionary<string, string[]> Errors { get; set; } = new Dictionary<string, string[]>();
+    public Uri? ProblemType { get; set; } = null;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> title that occured when trying to save the resource, if any
+    /// </summary>
+    public string ProblemTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> details that occured when trying to save the resource, if any
+    /// </summary>
+    public string ProblemDetail { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> status that occured when trying to save the resource, if any
+    /// </summary>
+    public int ProblemStatus { get; set; } = 0;
+
+    /// <summary>
+    /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occured when trying to save the resource, if any
+    /// </summary>
+    public IDictionary<string, string[]> ProblemErrors { get; set; } = new Dictionary<string, string[]>();
 }

@@ -71,3 +71,17 @@ $font-size-root: 15px;
     --scroll-thumb-color: var(--bs-primary);
     --bb-offcanvas-horizontal-width-lg: 40vw !important;
 }
+
+$btn-padding-y-xsm: .20rem !default;
+$btn-padding-x-xsm: .30rem !default;
+$btn-font-size-xsm: $font-size-base * .7 !default;
+$btn-border-radius-xsm: .25rem !default;
+
+.btn-xsm {
+    @include button-size($btn-padding-y-xsm, $btn-padding-x-xsm, $btn-font-size-xsm, $btn-border-radius-xsm);
+}
+
+
+.btn-group-xsm > .btn {
+    @extend .btn-xsm;
+}

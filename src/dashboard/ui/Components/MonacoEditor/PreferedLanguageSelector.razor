@@ -2,10 +2,13 @@
 @inject IMonacoEditorHelper MonacoEditorHelper
 @implements IDisposable
 
-<div class="form-check form-switch">
-    <input class="form-check-input" type="checkbox" role="switch" id="toggle-language" checked="@isJsonSelected" @onchange="ToggleLanguage">
-    <label class="form-check-label" for="toggle-language">@this.MonacoEditorHelper.PreferedLanguage</label>
+<div class="width d-flex justify-content-end mb-2">
+    <div class="btn-group btn-group-xsm" role="group" aria-label="Toggle editor language">
+        <Button Color="!isJsonSelected ? ButtonColor.Primary : ButtonColor.Secondary" Outline="true" Active="!isJsonSelected" @onclick="_ => ToggleLanguage()">YAML</Button>
+        <Button Color="isJsonSelected ? ButtonColor.Primary : ButtonColor.Secondary" Outline="true" Active="isJsonSelected" @onclick="_ => ToggleLanguage()">JSON</Button>
+    </div>
 </div>
+
 
 @code {
 
@@ -19,7 +22,7 @@
         this.isJsonSelected = this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON;
     }
 
-    protected virtual async Task ToggleLanguage(ChangeEventArgs e)
+    protected virtual async Task ToggleLanguage()
     {
         if (this.MonacoEditorHelper.PreferedLanguage == PreferedLanguage.JSON) {
             await this.MonacoEditorHelper.ChangePreferedLanguageAsync(PreferedLanguage.YAML);

@@ -19067,6 +19067,13 @@ textarea.form-control-lg {
   --bb-offcanvas-horizontal-width-lg: 40vw !important;
 }
 
+.btn-xsm, .btn-group-xsm > .btn {
+  --bs-btn-padding-y: 0.2rem;
+  --bs-btn-padding-x: 0.3rem;
+  --bs-btn-font-size: 0.7rem;
+  --bs-btn-border-radius: 0.25rem;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;

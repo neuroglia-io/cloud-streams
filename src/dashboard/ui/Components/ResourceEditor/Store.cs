@@ -61,9 +61,45 @@ public class ResourceEditorStore<TResource>
     public IObservable<bool> Saving => this.Select(state => state.Saving).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.Errors"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemType"/> changes
     /// </summary>
-    public IObservable<IDictionary<string, string[]>> Errors => this.Select(state => state.Errors).DistinctUntilChanged();
+    public IObservable<Uri?> ProblemType => this.Select(state => state.ProblemType).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemTitle"/> changes
+    /// </summary>
+    public IObservable<string> ProblemTitle => this.Select(state => state.ProblemTitle).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemDetail"/> changes
+    /// </summary>
+    public IObservable<string> ProblemDetail => this.Select(state => state.ProblemDetail).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemStatus"/> changes
+    /// </summary>
+    public IObservable<int> ProblemStatus => this.Select(state => state.ProblemStatus).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemErrors"/> changes
+    /// </summary>
+    public IObservable<IDictionary<string, string[]>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
+
+    public IObservable<ProblemDetails?> ProblemDetails => Observable.CombineLatest(
+        this.ProblemType,
+        this.ProblemTitle,
+        this.ProblemStatus,
+        this.ProblemDetail,
+        this.ProblemErrors,
+        (type, title, status, details, errors) =>
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return null;
+            }
+            return new ProblemDetails(type ?? new Uri("unknown://"), title, status, details, null, errors, null);
+        }
+    );
 
     /// <summary>
     /// Sets the state's <see cref="ResourceEditorState{TResource}.Resource"/>
@@ -136,14 +172,18 @@ public class ResourceEditorStore<TResource>
     }
 
     /// <summary>
-    /// Sets the state's <see cref="ResourceEditorState{TResource}.Errors"/>
+    /// Sets the state's <see cref="ResourceEditorState{TResource}" /> <see cref="ProblemDetails"/>'s related data
     /// </summary>
-    /// <param name="errors">The new <see cref="ResourceEditorState{TResource}.Errors"/> value</param>
-    public void SetErrors(IDictionary<string, string[]> errors)
+    /// <param name="problem">The <see cref="ProblemDetails"/> to populate the data with</param>
+    public void SetProblemDetails(ProblemDetails? problem)
     {
         this.Reduce(state => state with
         {
-            Errors = errors
+            ProblemType = problem?.Type,
+            ProblemTitle = problem?.Title ?? string.Empty,
+            ProblemStatus = problem?.Status ?? 0,
+            ProblemDetail = problem?.Detail ?? string.Empty,
+            ProblemErrors = problem?.Errors ?? new Dictionary<string, string[]>()
         });
     }
 
@@ -175,7 +215,7 @@ public class ResourceEditorStore<TResource>
     /// <returns></returns>
     public async Task UpdateResourceAsync()
     {
-        this.SetErrors(new Dictionary<string, string[]>());
+        this.SetProblemDetails(null);
         this.SetSaving(true);
         TResource? resource = this.Get(state => state.Resource);
         if (resource == null)
@@ -199,10 +239,7 @@ public class ResourceEditorStore<TResource>
             }
             catch(CloudStreamsException ex)
             {
-                if (ex.ProblemDetails?.Errors != null && ex.ProblemDetails.Errors.Any())
-                {
-                    this.SetErrors(ex.ProblemDetails.Errors);
-                }
+                this.SetProblemDetails(ex.ProblemDetails);
             }
             catch (Exception ex)
             {
