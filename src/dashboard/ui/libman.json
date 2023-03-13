@@ -118,6 +118,11 @@
       "provider": "jsdelivr",
       "library": "bootstrap-icons@1.9.1",
       "destination": "wwwroot/lib/bootstrap-icons/"
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "monaco-yaml-prebuilt@1.0.0",
+      "destination": "wwwroot/lib/monaco-yaml-prebuilt/"
     }
   ]
 }
