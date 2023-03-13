@@ -1,14 +1,10 @@
 ﻿@namespace CloudStreams.Dashboard.Pages.Subscriptions.List
 @page "/subscriptions"
-@using System.Reactive.Linq
-@using CloudStreams.Dashboard.Services;
-@using CloudStreams.Dashboard.StateManagement
 @inherits ResourceManagementComponent<Subscription>
-@inject MonacoInterop MonacoInterop
 
 <ApplicationTitle>Subscriptions</ApplicationTitle>
 
-<Table Items="subscriptions"
+<Table Items="resources"
     AutoGenerateColumns="false"
     TableClass="table table-striped table-hover"
     RowClass="cursor-pointer">
@@ -45,7 +41,7 @@
             <HeaderTemplate />
             <CellTemplate Context="context">
                 <button class="btn btn-outline-primary btn-sm" title="Edit '@context.Item.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
-                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteSubscription(context.Item)" @onclick:preventDefault @onclick:stopPropagation><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
             </CellTemplate>
         </Column>
     </Columns>
@@ -56,74 +52,3 @@
 <Offcanvas @ref="editorOffcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />
 
 <ConfirmDialog @ref="dialog" />
-
-
-@code{
-
-    List<Subscription>? subscriptions;
-    Offcanvas? detailsOffcanvas;
-    Offcanvas? editorOffcanvas;
-    ConfirmDialog? dialog;
-    ResourceDefinition? definition;
-
-    /// <inheritdoc/>
-    protected override async Task OnInitializedAsync()
-    {
-        await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Definition.SubscribeAsync(async definition =>
-        {
-            if (this.definition != definition) {
-                this.definition = definition;
-                if (this.definition != null)
-                {
-                    await this.MonacoInterop.AddValidationSchemaAsync(Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(Subscription).Name.ToLower()}.json", $"{typeof(Subscription).Name.ToLower()}").ConfigureAwait(false);
-                }
-            }
-        }, cancellationToken: this.CancellationTokenSource.Token);
-        this.Store.Resources.Subscribe(OnSubscriptionCollectionChanged, token: this.CancellationTokenSource.Token);
-        await this.Store.GetResourceDefinitionAsync().ConfigureAwait(false);
-        await this.Store.ListResourcesAsync().ConfigureAwait(false);
-    }
-
-    void OnSubscriptionCollectionChanged(List<Subscription>? subscriptions)
-    {
-        if (subscriptions == null) this.subscriptions = null;
-        else this.subscriptions = subscriptions;
-        this.StateHasChanged();
-    }
-
-    async Task OnDeleteSubscription(Subscription subscription) 
-    {
-        if (this.dialog == null) return;
-        var confirmation = await this.dialog.ShowAsync(
-            title: $"Are you sure you want to delete '{subscription.Metadata.Name}'?",
-            message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
-            confirmDialogOptions: new ConfirmDialogOptions()
-            {
-                YesButtonColor = ButtonColor.Danger,
-                YesButtonText = "Delete",
-                NoButtonText = "Abort",
-                IsVerticallyCentered = true
-            }
-        );
-        if (!confirmation) return;
-        await this.Store.DeleteResourceAsync(subscription);
-    }
-
-    Task OnShowResourceDetailsAsync(Subscription subscription)
-    {
-        if (this.detailsOffcanvas == null) return Task.CompletedTask;
-        var parameters = new Dictionary<string, object>();
-        parameters.Add("Resource", subscription);
-        return this.detailsOffcanvas.ShowAsync<ResourceDetails<Subscription>>(title: "Subscription details", parameters: parameters);
-    }
-
-    Task OnShowResourceEditorAsync(Subscription subscription)
-    {
-        if (this.editorOffcanvas == null) return Task.CompletedTask;
-        var parameters = new Dictionary<string, object>();
-        parameters.Add("Resource", subscription);
-        return this.editorOffcanvas.ShowAsync<ResourceEditor<Subscription>>(title: "Subscription edition", parameters: parameters);
-    }
-
-}

@@ -1,6 +1,5 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ResourceEditorStateManagement
-@using CloudStreams.Dashboard.StateManagement
 @typeparam TResource where TResource : class, IResource, new()
 @inherits StatefulComponent<ResourceEditorStore<TResource>, ResourceEditorState<TResource>>
 @inject IMonacoEditorHelper MonacoEditorHelper
