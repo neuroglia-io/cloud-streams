@@ -1,0 +1,73 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@implements IAsyncDisposable;
+
+@inject IJSRuntime JS
+@inject ICloudStreamsApiClient CloudStreamsApi // todo: Factor out to a store
+
+
+<div @ref="timeline"></div>
+
+@code {
+    /// <summary>
+    /// A reference to the DOM element of the timeline
+    /// </summary>
+    private ElementReference timeline;
+    /// <summary>
+    /// A Dotnet reference of the current component, used for interop
+    /// </summary>
+    private DotNetObjectReference<Timeline>? dotnetReference = null;
+    /// <summary>
+    /// A javascript reference of the current component, used for interop
+    /// </summary>
+    private IJSObjectReference? jsReference = null;
+    /// <summary>
+    /// Indicates whether or not the componenet has been disposed
+    /// </summary>
+    private bool disposed;
+
+    /// <inheritdoc/>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            this.dotnetReference = DotNetObjectReference.Create(this);
+            var cloudEvents = new List<CloudEvent?>();
+            var i = 0;
+            //for(var i = 0; i<500; i++)
+            //{
+            var readOptions = new StreamReadOptions(StreamReadDirection.Backwards, null, 100);
+            cloudEvents.AddRange(await(await this.CloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions/*, this.CancellationTokenSource.Token*/).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
+            //}
+            var start = cloudEvents.First()!.Time;
+            var end = cloudEvents.Last()!.Time;
+            var dataset = new List<Object>() { new
+                {
+                    name = "cloud events",
+                    data = cloudEvents.Select(ce => new { date = ce.Time })
+                }
+            };
+            await this.JS.InvokeVoidAsync("makeTimeline", this.timeline, dataset, start, end);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async ValueTask DisposeAsync()
+    {
+        if (!this.disposed)
+        {
+            if (this.jsReference != null)
+            {
+                await this.jsReference.InvokeVoidAsync("disconnect");
+                await this.jsReference.DisposeAsync();
+                this.jsReference = null;
+            }
+            if (this.dotnetReference != null)
+            {
+                this.dotnetReference.Dispose();
+                this.dotnetReference = null;
+            }
+            this.disposed = true;
+        }
+    }
+
+}

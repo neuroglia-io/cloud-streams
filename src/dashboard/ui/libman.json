@@ -123,6 +123,29 @@
       "provider": "jsdelivr",
       "library": "monaco-yaml-prebuilt@1.0.0",
       "destination": "wwwroot/lib/monaco-yaml-prebuilt/"
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "@neuroglia/event-drops@1.4.0",
+      "destination": "wwwroot/lib/neuroglia/event-drops/",
+      "files": [
+        "LICENSE",
+        "dist/index.js",
+        "dist/index.js.map",
+        "dist/index.min.js",
+        "dist/style.css",
+        "dist/style.min.css"
+      ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "d3@7.8.2",
+      "destination": "wwwroot/lib/d3/",
+      "files": [
+        "dist/d3.js",
+        "dist/d3.min.js",
+        "LICENSE"
+      ]
     }
   ]
 }
