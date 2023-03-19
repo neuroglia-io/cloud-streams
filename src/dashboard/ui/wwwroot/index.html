@@ -106,29 +106,6 @@
     <script src="_content/Blazor.Bootstrap/blazor.bootstrap.js"></script>
     <script src="_content/BlazorMonaco/jsInterop.js"></script>
     <script defer src="lib/monaco-yaml-prebuilt/dist/monaco-editor.min.js"></script>
-    <script>
-        // todo: move that sh*t
-        function makeTimeline(el, dataset, start, end) {
-            const chart = eventDrops({
-                d3,
-                range: {
-                    start: new Date(start),
-                    end: new Date(end)
-                },
-                zoom: {
-                    minimumScale: 1,
-                    restrictPan: true,
-                },
-                drop: {
-                    date: d => new Date(d.date)
-                }
-            });
-            d3
-                .select(el)
-                .data([dataset])
-                .call(chart);
-        }
-    </script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 

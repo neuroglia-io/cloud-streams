@@ -215,7 +215,7 @@
         }
     }
 
-    private bool _Disposed;
+    private bool disposed;
     /// <summary>
     /// Disposes of the component
     /// </summary>
@@ -223,7 +223,7 @@
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (!this._Disposed)
+        if (!this.disposed)
         {
             if (disposing)
             {
@@ -243,7 +243,7 @@
                     this.textBasedEditor = null;
                 }
             }
-            this._Disposed = true;
+            this.disposed = true;
         }
     }
 

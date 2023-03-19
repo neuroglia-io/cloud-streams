@@ -1,8 +1,8 @@
 ﻿@namespace CloudStreams.Dashboard.Components
+@using CloudStreams.Dashboard.Components.TimelineStateManagement
+@inherits StatefulComponent<TimelineStore, TimelineState>
+@inject EventDropsInterop EventDropsInterop
 @implements IAsyncDisposable;
-
-@inject IJSRuntime JS
-@inject ICloudStreamsApiClient CloudStreamsApi // todo: Factor out to a store
 
 
 <div @ref="timeline"></div>
@@ -24,6 +24,42 @@
     /// Indicates whether or not the componenet has been disposed
     /// </summary>
     private bool disposed;
+    /// <summary>
+    /// The list of <see cref="StreamReadOptions"/> used to populate <see cref="TimelineLane"/>s
+    /// </summary>
+    private IEnumerable<StreamReadOptions> streamsReadOptions;
+    /// <summary>
+    /// The list of <see cref="TimelineLane"/> to build the <see cref="Timeline"/> with
+    /// </summary>
+    private IEnumerable<TimelineLane> timelineLanes;
+    /// <summary>
+    /// The indicator of the data is being gathered
+    /// </summary>
+    private bool processing;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(state => state.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
+        this.Store.Processing.Subscribe(processing => this.OnStateChanged(state => state.processing = processing), token: this.CancellationTokenSource.Token);
+        this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
+    }
+
+    private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
+    {
+        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Date);
+        await this.EventDropsInterop.RenderTimelineAsync(this.timeline, timelineLanes, entries.First().Date, entries.Last().Date);
+    }
+    /// <summary>
+    /// Patches the <see cref="Timeline"/>'s fields after a <see cref="TimelineStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<Timeline> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
+    }
 
     /// <inheritdoc/>
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -31,23 +67,8 @@
         if (firstRender)
         {
             this.dotnetReference = DotNetObjectReference.Create(this);
-            var cloudEvents = new List<CloudEvent?>();
-            var i = 0;
-            //for(var i = 0; i<500; i++)
-            //{
-            var readOptions = new StreamReadOptions(StreamReadDirection.Backwards, null, 100);
-            cloudEvents.AddRange(await(await this.CloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions/*, this.CancellationTokenSource.Token*/).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
-            //}
-            var start = cloudEvents.First()!.Time;
-            var end = cloudEvents.Last()!.Time;
-            var dataset = new List<Object>() { new
-                {
-                    name = "cloud events",
-                    data = cloudEvents.Select(ce => new { date = ce.Time })
-                }
-            };
-            await this.JS.InvokeVoidAsync("makeTimeline", this.timeline, dataset, start, end);
         }
+        await base.OnAfterRenderAsync(firstRender);
     }
 
     /// <inheritdoc/>
