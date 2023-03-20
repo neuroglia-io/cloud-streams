@@ -16,4 +16,9 @@ public record CloudEventListState
     /// </summary>
     public List<CloudEvent>? CloudEvents { get; set; } = new();
 
+    /// <summary>
+    /// Gets/sets a boolean value that indicates whether data is currently being gathered
+    /// </summary>
+    public bool Loading { get; set; } = false;
+
 }

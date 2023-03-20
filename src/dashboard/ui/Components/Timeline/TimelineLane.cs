@@ -12,5 +12,5 @@ public class TimelineLane
     /// <summary>
     /// The set of data to render
     /// </summary>
-    public IEnumerable<ITimelineData> Data { get; set; }
+    public IEnumerable<CloudEvent> Data { get; set; }
 }

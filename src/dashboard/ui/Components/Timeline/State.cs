@@ -12,9 +12,9 @@ public record TimelineState
     /// <summary>
     /// Gets/sets the list of <see cref="TimelineLane"/> to build the <see cref="Timeline"/> with
     /// </summary>
-    public IDictionary<string, IEnumerable<ITimelineData>> TimelineLanes { get; set; } = new Dictionary<string, IEnumerable<ITimelineData>>();
+    public IDictionary<string, IEnumerable<CloudEvent>> TimelineLanes { get; set; } = new Dictionary<string, IEnumerable<CloudEvent>>();
     /// <summary>
-    /// Gets/sets the indicator of the data is being gathered
+    /// Gets/sets a boolean value that indicates whether data is currently being gathered
     /// </summary>
-    public bool Processing { get; set; } = false;
+    public bool Loading { get; set; } = false;
 }

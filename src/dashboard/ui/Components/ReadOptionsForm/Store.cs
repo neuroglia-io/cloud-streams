@@ -49,7 +49,27 @@ public class ReadOptionsFormStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.Length"/> changes
     /// </summary>
-    public IObservable<ulong?> Length => this.Select(state => state.Length).DistinctUntilChanged();
+    protected IObservable<ulong?> _length => this.Select(state => state.Length).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.MaxLength"/> changes
+    /// </summary>
+    public IObservable<ulong?> MaxLength => this.Select(state => state.MaxLength).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the computed length 
+    /// </summary>
+    public IObservable<ulong?> Length => Observable.CombineLatest(
+        this._length,
+        this.MaxLength,
+        (length, maxLength) =>
+        {
+            if (!length.HasValue) return null;
+            if (!maxLength.HasValue) return length;
+            return Math.Min(length.Value, maxLength.Value);
+        } 
+    ).DistinctUntilChanged();
+
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.Partitions"/> changes
@@ -59,39 +79,60 @@ public class ReadOptionsFormStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the resulting <see cref="StreamReadOptions"/>
     /// </summary>
-    public IObservable<StreamReadOptions?> ReadOptions => this.Select(state =>
-    {
-        var options = new StreamReadOptions() {
-            Direction = state.Direction
-        };
-        if (state.PartitionType.HasValue)
+    public IObservable<StreamReadOptions?> ReadOptions => Observable.CombineLatest(
+        this.Direction,
+        this.PartitionType,
+        this.PartitionId,
+        this.Offset,
+        this.Length,
+        (direction, partitionType, partitionId, offset, length) =>
         {
-            var partition = new PartitionReference()
+            var options = new StreamReadOptions()
             {
-                Type = state.PartitionType.Value
+                Direction = direction
             };
-            if (!string.IsNullOrWhiteSpace(state.PartitionId))
+            if (partitionType.HasValue)
             {
-                partition.Id = state.PartitionId;
+                var partition = new PartitionReference()
+                {
+                    Type = partitionType.Value
+                };
+                if (!string.IsNullOrWhiteSpace(partitionId))
+                {
+                    partition.Id = partitionId;
+                }
+                options.Partition = partition;
             }
-            options.Partition = partition;
+            if (offset.HasValue)
+            {
+                options.Offset = offset.Value;
+            }
+            if (length.HasValue)
+            {
+                options.Length = length.Value;
+            }
+            return options;
         }
-        if (state.Offset.HasValue)
+    );
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the resulting partition
+    /// </summary>
+    protected IObservable<(CloudEventPartitionType?, string?)> Partition => Observable.CombineLatest(
+        this.PartitionType,
+        this.PartitionId,
+        (type, id) =>
         {
-            options.Offset = state.Offset.Value;
+            return (type, id);
         }
-        if (state.Length.HasValue)
-        {
-            options.Length = state.Length.Value;
-        }
-        return options;
-    }).DistinctUntilChanged();
+    ).Throttle(TimeSpan.FromMilliseconds(100)).DistinctUntilChanged();
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
-        await base.InitializeAsync(); 
-        this.PartitionType.SubscribeAsync(this.SetPartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        await base.InitializeAsync();
+        this.PartitionType.SubscribeAsync(this.UpdatePartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Partition.SubscribeAsync(this.UpdateMetadataAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -160,7 +201,7 @@ public class ReadOptionsFormStore
     /// </summary>
     /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="ReadOptionsFormState.Partitions"/> with</param>
     /// <returns></returns>
-    protected async Task SetPartitionsAsync(CloudEventPartitionType? partitionType)
+    protected async Task UpdatePartitionsAsync(CloudEventPartitionType? partitionType)
     {
         if (!partitionType.HasValue)
         {
@@ -175,5 +216,43 @@ public class ReadOptionsFormStore
         {
             Partitions = partitions!
         });
+    }
+
+    /// <summary>
+    /// Updates <see cref="ReadOptionsFormState.MaxLength"/> based on the stream/partition's metadata
+    /// </summary>
+    /// <param name="partition">A (<see cref="CloudEventPartitionType"/>, string) tuple to gather the partition for, if any </param>
+    protected async Task UpdateMetadataAsync((CloudEventPartitionType?, string?) partition)
+    {
+        this.Reduce(state => state with
+        {
+            MaxLength = null
+        });
+        try { 
+            (CloudEventPartitionType? type, string? id) = partition;
+            if (!type.HasValue || string.IsNullOrWhiteSpace(id))
+            {
+                StreamMetadata metadata = await this.cloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+                this.Reduce(state => state with
+                {
+                    MaxLength = metadata.Length
+                });
+            }
+            else
+            {
+                PartitionMetadata? metadata = await this.cloudStreamsApi.CloudEvents.Partitions.GetPartitionMetadataAsync(type!.Value, id!, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                if (metadata != null)
+                {
+                    this.Reduce(state => state with
+                    {
+                        MaxLength = metadata.Length
+                    });
+                }
+            }
+        }
+        catch(Exception ex)
+        {
+
+        }
     }
 }

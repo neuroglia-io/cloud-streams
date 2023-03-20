@@ -21,20 +21,21 @@ public class EventDropsInterop
     /// <param name="jsRuntime">The service used to interop with JS</param>
     public EventDropsInterop(IJSRuntime jsRuntime)
     {
-        moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/event-drops-extension.js").AsTask());
+        moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/event-drops-interop.js").AsTask());
     }
 
     /// <summary>
     /// Renders a <see cref="Timeline"/> using event-drops
     /// </summary>
     /// <param name="domElement">The <see cref="ElementReference"/> to render the time to</param>
+    /// <param name="dotnetReference">The <see cref="DotNetObjectReference{Task}"/> of the calling component</param>
     /// <param name="dataset">The event-drops dataset</param>
     /// <param name="start">The moment the timeline starts</param>
     /// <param name="end">The moment the timeline starts></param>
-    public async ValueTask RenderTimelineAsync(ElementReference domElement, IEnumerable<TimelineLane> dataset, DateTimeOffset start, DateTimeOffset end)
+    public async ValueTask RenderTimelineAsync(ElementReference domElement, DotNetObjectReference<Timeline>? dotnetReference, IEnumerable<TimelineLane> dataset, DateTimeOffset start, DateTimeOffset end)
     {
         var module = await moduleTask.Value;
-        await module.InvokeVoidAsync("renderTimeline", domElement, dataset, start, end);
+        await module.InvokeVoidAsync("renderTimeline", domElement, dotnetReference, dataset, start, end);
     }
 
     /// <inheritdoc />

@@ -8,14 +8,15 @@
 
 <ApplicationTitle>Events</ApplicationTitle>
 
-<Timeline></Timeline>
-
 <ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions"></ReadOptionsForm>
+
 
 <Table Items="events"
     AutoGenerateColumns="false"
     TableClass="table table-striped table-hover"
-    RowClass="cursor-pointer">
+    RowClass="cursor-pointer"
+    Loading="loading"
+>
     <RowTemplate>
         <Row RenderContext="context" OnClick="async _ => await OnShowCloudEventOffcanvasAsync(context.Item)" />
     </RowTemplate>
@@ -78,12 +79,24 @@
     List<CloudEvent>? events;
     Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
+    bool loading = false;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
         this.Store.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged, token: this.CancellationTokenSource.Token);
+    }
+
+    /// <summary>
+    /// Patches the <see cref="View"/>'s fields after a <see cref="CloudEventListStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<View> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
     }
 
     void OnReadCloudEventPartition(CloudEventPartitionType type, string id)

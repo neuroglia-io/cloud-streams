@@ -30,6 +30,11 @@ public record ReadOptionsFormState
     public ulong? Length { get; set; } = null;
 
     /// <summary>
+    /// Gets/sets the total amount of events in the stream
+    /// </summary>
+    public ulong? MaxLength { get; set; } = null;
+
+    /// <summary>
     /// Gets the <see cref="List{T}"/> of suggested <see cref="PartitionReference"/>s
     /// </summary>
     public List<string>? Partitions { get; set; } = new();

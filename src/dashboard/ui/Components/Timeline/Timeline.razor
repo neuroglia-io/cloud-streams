@@ -4,21 +4,45 @@
 @inject EventDropsInterop EventDropsInterop
 @implements IAsyncDisposable;
 
-@if (streamsReadOptions != null) {
-    <div>
-        @var i = 0;
-        @foreach(var options in streamsReadOptions)
+@if (streamsReadOptions != null)
+{
+    <div class="mb-3">
+        @for(int i = 0, c = streamsReadOptions.Count(); i<c; i++)
         {
-            @i+=1;
-            <ReadOptionsForm OnChange="(readOptions) => Store.SetStreamsReadOption(i, readOptions)"></ReadOptionsForm>
-            <Button Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(i)" Disabled="processing"><Icon Name="IconName.Trash"></Icon></Button>
+            int optionIndex = i;
+            <div class="d-flex">
+                <Button class="mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
+                <ReadOptionsForm OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
+            </div>
         }
-        <Button Color="ButtonColor.Success" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="processing"><Icon Name="IconName.Plus"></Icon></Button>
-        <Button Color="ButtonColor.Primary" Outline="true" @onclick="async _ => await Store.GatherCloudEventsAsync()" Disabled="processing" Loading="processing">Process</Button>
+
+        <div class="d-flex justify-content-between">
+            <Button Color="ButtonColor.Success" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="loading"><Icon Name="IconName.Plus"></Icon></Button>
+            <Button Color="ButtonColor.Primary" Outline="true" @onclick="async _ => await Store.GatherCloudEventsAsync()" Disabled="loading" Loading="loading">Process</Button>
+        </div>
     </div>
 }
 
 <div @ref="timeline"></div>
+
+<div @ref="tooltip" class="timeline-tooltip card" style="@(tooltipStyle)">
+    @if (cloudEvent != null)
+    {
+        <div class="card-body">
+            <h5 class="card-title">@cloudEvent.Id</h5>
+            <h6 class="card-subtitle mb-2 text-muted">@cloudEvent.Time!.Value.ToString()</h6>
+            <p class="card-text">@cloudEvent.Type</p>
+            <p class="card-text">@cloudEvent.Source</p>
+            <p class="card-text">@cloudEvent.Subject</p>
+            @if (cloudEvent.Data != null)
+            {
+                <pre>
+                    @Serializer.Json.Serialize(cloudEvent.Data, true)
+                </pre>
+            }
+        </div>
+    }
+</div>
 
 @code {
     /// <summary>
@@ -26,13 +50,17 @@
     /// </summary>
     private ElementReference timeline;
     /// <summary>
+    /// A reference to the DOM element of the timeline's tooltip
+    /// </summary>
+    private ElementReference tooltip;
+    /// <summary>
     /// A Dotnet reference of the current component, used for interop
     /// </summary>
     private DotNetObjectReference<Timeline>? dotnetReference = null;
     /// <summary>
     /// A javascript reference of the current component, used for interop
     /// </summary>
-    private IJSObjectReference? jsReference = null;
+    //private IJSObjectReference? jsReference = null;
     /// <summary>
     /// Indicates whether or not the componenet has been disposed
     /// </summary>
@@ -48,42 +76,23 @@
     /// <summary>
     /// The indicator of the data is being gathered
     /// </summary>
-    private bool processing = false;
+    private bool loading = false;
+    /// <summary>
+    /// The style applied to the tooltip
+    /// </summary>
+    private string tooltipStyle = "";
+    /// <summary>
+    /// The cloud event displayed in the tooltip
+    /// </summary>
+    private CloudEvent? cloudEvent = null;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(state => state.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
-        this.Store.Processing.Subscribe(processing => this.OnStateChanged(state => state.processing = processing), token: this.CancellationTokenSource.Token);
+        this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(cmp => cmp.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
+        this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
         this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
-    }
-
-    /// <summary>
-    /// Renders the timeline with the provided <see cref="TimelineLane"/>s
-    /// </summary>
-    /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
-    private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
-    {
-        if (timelineLanes == null && !timelineLanes.Any())
-        {
-            return;
-        }
-        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Date);
-        if (!entries.Any())
-        {
-            return;
-        }
-        await this.EventDropsInterop.RenderTimelineAsync(this.timeline, timelineLanes, entries.First().Date, entries.Last().Date);
-    }
-    /// <summary>
-    /// Patches the <see cref="Timeline"/>'s fields after a <see cref="TimelineStore"/>'s change
-    /// </summary>
-    /// <param name="patch">The patch to apply</param>
-    private void OnStateChanged(Action<Timeline> patch)
-    {
-        patch(this);
-        this.StateHasChanged();
     }
 
     /// <inheritdoc/>
@@ -96,17 +105,73 @@
         await base.OnAfterRenderAsync(firstRender);
     }
 
+    /// <summary>
+    /// Renders the timeline with the provided <see cref="TimelineLane"/>s
+    /// </summary>
+    /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
+    private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
+    {
+        if (timelineLanes == null && !timelineLanes.Any())
+        {
+            return;
+        }
+        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
+        if (!entries.Any())
+        {
+            return;
+        }
+        var start = entries.First().Time!.Value;
+        var end = entries.Last().Time!.Value;
+        var margin = end.Subtract(start).TotalMilliseconds / 20;
+        await this.EventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
+    }
+
+    /// <summary>
+    /// Patches the <see cref="Timeline"/>'s fields after a <see cref="TimelineStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<Timeline> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Shows the tooltip for the provided <see cref="CloudEvent"/>
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to display</param>
+    /// <param name="x">The position of the tooltip on the x-axis</param>
+    /// <param name="y">The position of the tooltip on the y-axis</param>
+    [JSInvokable]
+    public void ShowTooltipOnMouseOver(CloudEvent cloudEvent, int x, int y)
+    {
+        this.cloudEvent = cloudEvent;
+        this.tooltipStyle = $"opacity: 1; left: calc({x}px - 1rem); top: calc({y}px + 1rem)";
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Hides the tooltip
+    /// </summary>
+    [JSInvokable]
+    public void HideTooltipOnMouseOut()
+    {
+        this.tooltipStyle = "opacity: 0;";
+        this.cloudEvent = null;
+        this.StateHasChanged();
+    }
+
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
         if (!this.disposed)
         {
-            if (this.jsReference != null)
-            {
-                await this.jsReference.InvokeVoidAsync("disconnect");
-                await this.jsReference.DisposeAsync();
-                this.jsReference = null;
-            }
+            //if (this.jsReference != null)
+            //{
+            //    await this.jsReference.InvokeVoidAsync("disconnect");
+            //    await this.jsReference.DisposeAsync();
+            //    this.jsReference = null;
+            //}
             if (this.dotnetReference != null)
             {
                 this.dotnetReference.Dispose();

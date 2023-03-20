@@ -35,14 +35,16 @@ public class TimelineStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.TimelineLanes"/> changes
     /// </summary>
-    public IObservable<IEnumerable<TimelineLane>> TimelineLanes => this.Select(state => 
-        state.TimelineLanes.Select(kvp => new TimelineLane() { Name = kvp.Key, Data = kvp.Value})
-    ).DistinctUntilChanged();
+    public IObservable<IEnumerable<TimelineLane>> TimelineLanes => this.Select(state => state.TimelineLanes)
+        .DistinctUntilChanged()
+        .Select(timelineLanes =>
+            timelineLanes.Select(kvp => new TimelineLane() { Name = kvp.Key, Data = kvp.Value})
+        );
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.Processing"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.Loading"/> changes
     /// </summary>
-    public IObservable<bool> Processing => this.Select(state => state.Processing).DistinctUntilChanged();
+    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
     /// <summary>
     /// Sets a state's <see cref="TimelineState.StreamsReadOptions"/>
@@ -105,8 +107,9 @@ public class TimelineStore
     {
         this.Reduce(state => state with
         {
-            Processing = true
+            Loading = true
         });
+        await Task.Delay(1);
         try
         {
             var streamsReadOptions = this.Get(state => state.StreamsReadOptions);
@@ -114,39 +117,56 @@ public class TimelineStore
             {
                 return;
             }
-            var lanes = new Dictionary<string, IEnumerable<ITimelineData>>();
-            for(int streamIndex = 0, c = streamsReadOptions.Count(); streamIndex < c; streamIndex++)
+            var lanes = new Dictionary<string, IEnumerable<CloudEvent>>();
+            for(int optionsIndex = 0, c = streamsReadOptions.Count(); optionsIndex < c; optionsIndex++)
             {
-                var options = streamsReadOptions.ElementAt(streamIndex);
+                var options = streamsReadOptions.ElementAt(optionsIndex);
                 string name;
-                List<ITimelineData> data = new List<ITimelineData>();
+                List<CloudEvent> data = new List<CloudEvent>();
                 if (options?.Partition?.Type == null || options?.Partition?.Id == null)
                 {
-                    name = $"{streamIndex+1}. All";
+                    name = $"{optionsIndex+1}. All";
                 }
                 else
                 {
-                    name = $"{streamIndex+1}. {options.Partition.Type.ToString()} | {options.Partition.Id}";
+                    name = $"{optionsIndex+1}. {options.Partition.Type.ToString()} | {options.Partition.Id}";
                 }
-                for(ulong offset = 0; offset < options!.Length; offset += 100)
+                if (options!.Length <= StreamReadOptions.MaxLength)
                 {
-                    var readOptions = new StreamReadOptions(StreamReadDirection.Backwards, (long)offset, 100);
-                    var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-                    data.AddRange(cloudEvents.Select(e => new TimelineCloudEvent(e!)));
+                    var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(options, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                    data.AddRange(cloudEvents!);
+                }
+                else
+                {
+                    bool fetchMore = true;
+                    long offset = options.Direction == StreamReadDirection.Forwards ? 0 : -1;
+                    do
+                    {
+                        var readOptions = new StreamReadOptions();
+                        readOptions.Direction = options.Direction;
+                        readOptions.Partition = options.Partition;
+                        readOptions.Offset = offset;
+                        readOptions.Length = StreamReadOptions.MaxLength;
+                        var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                        data.AddRange(cloudEvents!);
+                        offset = (long)cloudEvents.Last()!.GetSequence()!;
+                        fetchMore = cloudEvents.Count() > 1 && (ulong)data.Count < options!.Length;
+                    }
+                    while(fetchMore);
                 }
                 lanes.Add(name, data);
             }
             this.Reduce(state => state with { 
-                TimelineLanes = lanes
+                TimelineLanes = lanes,
+                Loading = false
             });
         }
         catch (Exception ex)
         {
-
+            this.Reduce(state => state with
+            {
+                Loading = false
+            });
         }
-        this.Reduce(state => state with
-        {
-            Processing = false
-        });
     }
 }
