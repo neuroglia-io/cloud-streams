@@ -8,5 +8,5 @@ public interface ITimelineData
     /// <summary>
     /// The date to display the element at in the <see cref="Timeline"/>
     /// </summary>
-    DateTimeOffset Date { get; set; }
+    DateTimeOffset Date { get; }
 }

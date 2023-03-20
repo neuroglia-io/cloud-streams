@@ -1,6 +1,8 @@
 ﻿using CloudStreams.Dashboard.StateManagement;
 using System.Reactive.Linq;
 using CloudStreams.Core.Api.Client.Services;
+using Microsoft.Extensions.Options;
+using System.Collections.Generic;
 
 namespace CloudStreams.Dashboard.Components.TimelineStateManagement;
 
@@ -99,8 +101,7 @@ public class TimelineStore
     /// <summary>
     /// Gathers the <see cref="CloudEvent"/>s for the current <see cref="TimelineState.StreamsReadOptions"/>
     /// </summary>
-    /// <returns></returns>
-    public async Task GatherCloudEvents()
+    public async Task GatherCloudEventsAsync()
     {
         this.Reduce(state => state with
         {
@@ -108,21 +109,36 @@ public class TimelineStore
         });
         try
         {
-            var cloudEvents = new List<CloudEvent?>();
-            var i = 0;
-            //for(var i = 0; i<500; i++)
-            //{
-            var readOptions = new StreamReadOptions(StreamReadDirection.Backwards, null, 100);
-            cloudEvents.AddRange(await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions/*, this.CancellationTokenSource.Token*/).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
-            //}
-            var start = cloudEvents.First()!.Time;
-            var end = cloudEvents.Last()!.Time;
-            var dataset = new List<Object>() { new
+            var streamsReadOptions = this.Get(state => state.StreamsReadOptions);
+            if (streamsReadOptions == null || !streamsReadOptions.Any())
+            {
+                return;
+            }
+            var lanes = new Dictionary<string, IEnumerable<ITimelineData>>();
+            for(int streamIndex = 0, c = streamsReadOptions.Count(); streamIndex < c; streamIndex++)
+            {
+                var options = streamsReadOptions.ElementAt(streamIndex);
+                string name;
+                List<ITimelineData> data = new List<ITimelineData>();
+                if (options?.Partition?.Type == null || options?.Partition?.Id == null)
                 {
-                    name = "cloud events",
-                    data = cloudEvents.Select(ce => new { date = ce.Time })
+                    name = $"{streamIndex+1}. All";
                 }
-            };
+                else
+                {
+                    name = $"{streamIndex+1}. {options.Partition.Type.ToString()} | {options.Partition.Id}";
+                }
+                for(ulong offset = 0; offset < options!.Length; offset += 100)
+                {
+                    var readOptions = new StreamReadOptions(StreamReadDirection.Backwards, (long)offset, 100);
+                    var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                    data.AddRange(cloudEvents.Select(e => new TimelineCloudEvent(e!)));
+                }
+                lanes.Add(name, data);
+            }
+            this.Reduce(state => state with { 
+                TimelineLanes = lanes
+            });
         }
         catch (Exception ex)
         {
