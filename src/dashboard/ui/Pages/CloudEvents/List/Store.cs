@@ -110,7 +110,7 @@ public class CloudEventListStore
         {
             cloudEvents = new();
             bool fetchMore = true;
-            long offset = readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1;
+            long offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
             do
             {
                 var tempReadOptions = new StreamReadOptions();

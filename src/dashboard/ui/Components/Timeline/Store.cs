@@ -139,7 +139,7 @@ public class TimelineStore
                 else
                 {
                     bool fetchMore = true;
-                    long offset = options.Direction == StreamReadDirection.Forwards ? 0 : -1;
+                    long offset = options.Offset ?? (options.Direction == StreamReadDirection.Forwards ? 0 : -1);
                     do
                     {
                         var readOptions = new StreamReadOptions();

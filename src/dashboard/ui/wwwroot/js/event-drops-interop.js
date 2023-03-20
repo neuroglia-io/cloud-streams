@@ -1,5 +1,8 @@
 ﻿const baseConfig = {
     d3,
+    line: {
+        color: (_, i) => d3.interpolateCool((((i % 10 * 10) + Math.floor(i ? Math.log10(i) : 0) + 50) % 101) / 100)
+    },
     zoom: {
         minimumScale: 1,
         restrictPan: true,

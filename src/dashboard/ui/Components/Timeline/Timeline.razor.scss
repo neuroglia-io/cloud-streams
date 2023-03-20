@@ -2,7 +2,7 @@
     position: absolute;
     opacity: 0;
     pointer-events: auto;
-    width: 200px;
+    width: 500px;
 
     &::before {
         content: "";
@@ -12,7 +12,7 @@
         left: var(--bs-card-title-spacer-y);
         width: 1rem;
         height: 1rem;
-        background: var(--bs-card-bg);
+        background: #252A2E; /*var(--bs-card-bg);*/
         border: var(--bs-card-border-width) solid var(--bs-card-border-color);
         border-width: var(--bs-card-border-width) 0 0 var(--bs-card-border-width);
         transform: rotate(45deg);
