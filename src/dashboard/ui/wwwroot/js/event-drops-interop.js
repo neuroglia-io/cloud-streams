@@ -21,8 +21,9 @@ export function renderTimeline(el, dotnetRef, dataset, start, end) {
         },
         drop: {
             ...baseConfig.drop,
-            onMouseOver: async (e, cloudEvent) => await dotnetRef.invokeMethodAsync("ShowTooltipOnMouseOver", cloudEvent, e.pageX, e.pageY),
-            onMouseOut: async () => await dotnetRef.invokeMethodAsync("HideTooltipOnMouseOut")
+            onMouseOver: async (e, cloudEvent) => await dotnetRef.invokeMethodAsync("ShowTooltipOnMouseOver", cloudEvent, e.pageX, e.pageY, (e.pageX + 500 <= window.innerWidth || window.innerWidth <= 500) ? "right" : "left"),
+            onMouseOut: async () => await dotnetRef.invokeMethodAsync("HideTooltipOnMouseOut"),
+            onClick: async (e, cloudEvent) => await dotnetRef.invokeMethodAsync("SelectEventOnClick", cloudEvent)
         }
     });
     d3

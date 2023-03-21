@@ -4,93 +4,54 @@
 @inject EventDropsInterop EventDropsInterop
 @implements IAsyncDisposable;
 
-<div class="overflow-auto h-100">
-    @if (streamsReadOptions != null)
+<div class="timeline-container">
+    <div class="controls">
+        @if (streamsReadOptions != null)
+        {
+            <div class="mb-3">
+                @for(int i = 0, c = streamsReadOptions.Count(); i<c; i++)
+                {
+                    int optionIndex = i;
+                    <div class="d-flex">
+                        <ReadOptionsForm OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
+                        <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between">
+                    <Button Color="ButtonColor.Primary" Outline="true" @onclick="async _ => await Store.GatherCloudEventsAsync()" Disabled="loading" Loading="loading">Refresh</Button>
+                    <Button Color="ButtonColor.Light" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="loading"><Icon Name="IconName.Plus"></Icon></Button>
+                </div>
+            </div>
+        }
+    </div>
+    <div @ref="timeline" class="timeline pt-5"></div>
+    @if (selectedCloudEvents.Any())
     {
-        <div class="mb-3">
-            @for(int i = 0, c = streamsReadOptions.Count(); i<c; i++)
+        <div class="selected-events-grid">
+            @foreach (var cloudEvent in selectedCloudEvents)
             {
-                int optionIndex = i;
-                <div class="d-flex">
-                    <ReadOptionsForm OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
-                    <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
+                <div class="card">
+                    <div class="card-header text-primary">
+                        @cloudEvent.Time!.Value.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="Size.Small" @onclick="_ => DeselectEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
+                    </div>
+                    <div class="card-body">
+                        <TimelineCloudEventDetails CloudEvent="cloudEvent"/>
+                    </div>
                 </div>
             }
-
-            <div class="d-flex justify-content-between">
-                <Button Color="ButtonColor.Primary" Outline="true" @onclick="async _ => await Store.GatherCloudEventsAsync()" Disabled="loading" Loading="loading">Refresh</Button>
-                <Button Color="ButtonColor.Light" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="loading"><Icon Name="IconName.Plus"></Icon></Button>
-            </div>
         </div>
     }
-
-    <div @ref="timeline"></div>
 </div>
 
-<div @ref="tooltip" class="timeline-tooltip card" style="@(tooltipStyle)">
+<div @ref="tooltip" class="timeline-tooltip card @tooltipDirection" style="@(tooltipStyle)">
     @if (cloudEvent != null)
     {
         <div class="card-header text-primary">
             @cloudEvent.Time!.Value.ToString("R")
         </div>
         <div class="card-body">
-            <table class="table table-sm table-striped">
-                <tbody>
-                    <tr>
-                        <td>Id</td>
-                        <td>@cloudEvent.Id</td>
-                    </tr>
-                    <tr>
-                        <td>Source</td>
-                        <td>@cloudEvent.Source</td>
-                    </tr>
-                    <tr>
-                        <td>Type</td>
-                        <td>@cloudEvent.Type</td>
-                    </tr>
-                    @if (!string.IsNullOrWhiteSpace(cloudEvent.Subject))
-                    {
-                        <tr>
-                            <td>Subject</td>
-                            <td>@cloudEvent.Subject</td>
-                        </tr>
-                    }
-                    <tr>
-                        <td>Spec. Version</td>
-                        <td>@cloudEvent.SpecVersion</td>
-                    </tr>
-                    @if (cloudEvent.DataSchema != null)
-                    {
-                        <tr>
-                            <td>Data Schema</td>
-                            <td>@cloudEvent.DataSchema</td>
-                        </tr>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(cloudEvent.DataContentType))
-                    {
-                        <tr>
-                            <td>Data Content Type</td>
-                            <td>@cloudEvent.DataContentType</td>
-                        </tr>
-                    }
-                    @if (cloudEvent != null && cloudEvent.ExtensionAttributes?.Any() == true)
-                    {
-                        @foreach (var attr in cloudEvent.ExtensionAttributes)
-                        {
-                            <tr>
-                                <td>@attr.Key.ToPascalCase()</td>
-                                <td>@attr.Value</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-            @if (cloudEvent.Data != null)
-            {
-                <pre>
-                    @Serializer.Json.Serialize(cloudEvent.Data, true)
-                </pre>
-            }
+            <TimelineCloudEventDetails CloudEvent="cloudEvent" />
         </div>
     }
 </div>
@@ -133,9 +94,17 @@
     /// </summary>
     private string tooltipStyle = "";
     /// <summary>
+    /// The direction of the tooltip
+    /// </summary>
+    private string tooltipDirection = "right";
+    /// <summary>
     /// The cloud event displayed in the tooltip
     /// </summary>
     private CloudEvent? cloudEvent = null;
+    /// <summary>
+    /// The list of selected cloud events
+    /// </summary>
+    private List<CloudEvent> selectedCloudEvents = new List<CloudEvent>();
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -163,7 +132,7 @@
     /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
     private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
     {
-        if (timelineLanes == null && !timelineLanes.Any())
+        if (timelineLanes == null || !timelineLanes.Any())
         {
             return;
         }
@@ -194,11 +163,22 @@
     /// <param name="cloudEvent">The <see cref="CloudEvent"/> to display</param>
     /// <param name="x">The position of the tooltip on the x-axis</param>
     /// <param name="y">The position of the tooltip on the y-axis</param>
+    /// <param name="direction">If the tooltip should be displayed on the right or the left of the cursor</param>
     [JSInvokable]
-    public void ShowTooltipOnMouseOver(CloudEvent cloudEvent, int x, int y)
+    public void ShowTooltipOnMouseOver(CloudEvent cloudEvent, int x, int y, string direction)
     {
         this.cloudEvent = cloudEvent;
-        this.tooltipStyle = $"opacity: 1; left: calc({x}px - 1rem); top: calc({y}px + 1rem)";
+        this.tooltipDirection = direction;
+        string left;
+        if (direction == "right")
+        {
+            left = $"calc({x}px - 1rem)";
+        }
+        else
+        {
+            left = $"calc({x - 500}px + 1rem)";
+        }
+        this.tooltipStyle = $"opacity: 1; left: {left}; top: calc({y}px + 1rem)";
         this.StateHasChanged();
     }
 
@@ -211,6 +191,26 @@
         this.tooltipStyle = "opacity: 0;";
         this.cloudEvent = null;
         this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Adds the clicked <see cref="CloudEvent"/> to the selection
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to add</param>
+    [JSInvokable]
+    public void SelectEventOnClick(CloudEvent cloudEvent)
+    {
+        this.selectedCloudEvents.Add(cloudEvent);
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Removes the <see cref="CloudEvent"/> at the provided index for the selection
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to remove</param>
+    private void DeselectEvent(CloudEvent cloudEvent)
+    {
+        this.selectedCloudEvents.Remove(cloudEvent);
     }
 
     /// <inheritdoc/>
