@@ -30,7 +30,7 @@
             <HeaderTemplate>Id</HeaderTemplate>
         </Column>
         <Column TData="CloudEvent"
-                ValueProvider="e => e.Time"
+                ValueProvider="e => e.Time!.Value.LocalDateTime"
                 Format="R">
             <HeaderTemplate>Time</HeaderTemplate>
         </Column>

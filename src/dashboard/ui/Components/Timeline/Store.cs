@@ -3,6 +3,7 @@ using System.Reactive.Linq;
 using CloudStreams.Core.Api.Client.Services;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
+using CloudStreams.Core;
 
 namespace CloudStreams.Dashboard.Components.TimelineStateManagement;
 
@@ -45,6 +46,13 @@ public class TimelineStore
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.Loading"/> changes
     /// </summary>
     public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
+
+    /// <inheritdoc/>
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        this.StreamsReadOptions.Throttle(TimeSpan.FromMilliseconds(100)).SubscribeAsync(async (_) => await this.GatherCloudEventsAsync(), cancellationToken: this.CancellationTokenSource.Token);
+    }
 
     /// <summary>
     /// Sets a state's <see cref="TimelineState.StreamsReadOptions"/>
@@ -115,6 +123,10 @@ public class TimelineStore
             var streamsReadOptions = this.Get(state => state.StreamsReadOptions);
             if (streamsReadOptions == null || !streamsReadOptions.Any())
             {
+                this.Reduce(state => state with
+                {
+                    Loading = false
+                });
                 return;
             }
             var lanes = new Dictionary<string, IEnumerable<CloudEvent>>();

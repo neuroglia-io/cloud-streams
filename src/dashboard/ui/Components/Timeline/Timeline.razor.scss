@@ -19,7 +19,7 @@
     grid-template-columns: repeat(auto-fill, minmax(var(--min-card-width), 1fr));
 }
 
-.timeline-tooltip {
+.cloud-event-tooltip {
     position: absolute;
     opacity: 0;
     pointer-events: auto;
@@ -34,7 +34,7 @@
         width: calc(2 * var(--bs-card-title-spacer-y)); // 1rem
         height: calc(2 * var(--bs-card-title-spacer-y));
         background: #252A2E; /*var(--bs-card-bg);*/
-        border: var(--bs-card-border-width) solid var(--bs-card-border-color);
+        border: var(--bs-card-border-width) var(--border-style) var(--bs-card-border-color);
         border-width: var(--bs-card-border-width) 0 0 var(--bs-card-border-width);
         transform: rotate(45deg);
         z-index: 1;
@@ -43,4 +43,16 @@
     &.left::before {
         left: calc(500px - calc(3 * var(--bs-card-title-spacer-y)));
     }
+}
+
+.label-tooltip {
+    position: absolute;
+    opacity: 0;
+    pointer-events: auto;
+    background: var(--bs-body-bg);
+    left: 1rem;
+    border-bottom: var(--bs-border-width) var(--bs-border-style) var(--bs-border-color);
+    min-width: 200px;
+    text-align: right;
+    padding-right: 10px;
 }

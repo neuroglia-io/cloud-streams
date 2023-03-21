@@ -2,7 +2,7 @@
 @using CloudStreams.Dashboard.Components.TimelineStateManagement
 @inherits StatefulComponent<TimelineStore, TimelineState>
 @inject EventDropsInterop EventDropsInterop
-@implements IAsyncDisposable;
+@implements IDisposable;
 
 <div class="timeline-container">
     <div class="controls">
@@ -18,8 +18,15 @@
                     </div>
                 }
 
-                <div class="d-flex justify-content-between">
-                    <Button Color="ButtonColor.Primary" Outline="true" @onclick="async _ => await Store.GatherCloudEventsAsync()" Disabled="loading" Loading="loading">Refresh</Button>
+                <div class="d-flex justify-content-end">
+                    @if (loading) 
+                    {
+                        <div class="loading me-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
                     <Button Color="ButtonColor.Light" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="loading"><Icon Name="IconName.Plus"></Icon></Button>
                 </div>
             </div>
@@ -33,7 +40,7 @@
             {
                 <div class="card">
                     <div class="card-header text-primary">
-                        @cloudEvent.Time!.Value.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="Size.Small" @onclick="_ => DeselectEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
+                        @cloudEvent.Time?.LocalDateTime.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="Size.Small" @onclick="_ => DeselectCloudEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
                     </div>
                     <div class="card-body">
                         <TimelineCloudEventDetails CloudEvent="cloudEvent"/>
@@ -44,16 +51,20 @@
     }
 </div>
 
-<div @ref="tooltip" class="timeline-tooltip card @tooltipDirection" style="@(tooltipStyle)">
+<div class="cloud-event-tooltip card @cloudEventTooltipDirection" style="@(cloudEventTooltipStyle)">
     @if (cloudEvent != null)
     {
         <div class="card-header text-primary">
-            @cloudEvent.Time!.Value.ToString("R")
+            @cloudEvent.Time?.LocalDateTime.ToString("R")
         </div>
         <div class="card-body">
             <TimelineCloudEventDetails CloudEvent="cloudEvent" />
         </div>
     }
+</div>
+
+<div class="label-tooltip" style="@(labelTooltipStyle)">
+    @label
 </div>
 
 @code {
@@ -62,17 +73,9 @@
     /// </summary>
     private ElementReference timeline;
     /// <summary>
-    /// A reference to the DOM element of the timeline's tooltip
-    /// </summary>
-    private ElementReference tooltip;
-    /// <summary>
     /// A Dotnet reference of the current component, used for interop
     /// </summary>
     private DotNetObjectReference<Timeline>? dotnetReference = null;
-    /// <summary>
-    /// A javascript reference of the current component, used for interop
-    /// </summary>
-    //private IJSObjectReference? jsReference = null;
     /// <summary>
     /// Indicates whether or not the componenet has been disposed
     /// </summary>
@@ -90,17 +93,25 @@
     /// </summary>
     private bool loading = false;
     /// <summary>
-    /// The style applied to the tooltip
+    /// The style applied to the cloud event tooltip
     /// </summary>
-    private string tooltipStyle = "";
+    private string cloudEventTooltipStyle = "";
     /// <summary>
-    /// The direction of the tooltip
+    /// The direction of the cloud event tooltip
     /// </summary>
-    private string tooltipDirection = "right";
+    private string cloudEventTooltipDirection = "right";
     /// <summary>
     /// The cloud event displayed in the tooltip
     /// </summary>
     private CloudEvent? cloudEvent = null;
+    /// <summary>
+    /// The style applied to the label tooltip
+    /// </summary>
+    private string labelTooltipStyle = "";
+    /// <summary>
+    /// The label displayed in the tooltip
+    /// </summary>
+    private string label = "";
     /// <summary>
     /// The list of selected cloud events
     /// </summary>
@@ -165,10 +176,10 @@
     /// <param name="y">The position of the tooltip on the y-axis</param>
     /// <param name="direction">If the tooltip should be displayed on the right or the left of the cursor</param>
     [JSInvokable]
-    public void ShowTooltipOnMouseOver(CloudEvent cloudEvent, int x, int y, string direction)
+    public void ShowCloudEventTooltipOnMouseOver(CloudEvent cloudEvent, int x, int y, string direction)
     {
         this.cloudEvent = cloudEvent;
-        this.tooltipDirection = direction;
+        this.cloudEventTooltipDirection = direction;
         string left;
         if (direction == "right")
         {
@@ -178,18 +189,40 @@
         {
             left = $"calc({x - 500}px + 1rem)";
         }
-        this.tooltipStyle = $"opacity: 1; left: {left}; top: calc({y}px + 1rem)";
+        this.cloudEventTooltipStyle = $"opacity: 1; left: {left}; top: calc({y}px + 1rem)";
         this.StateHasChanged();
     }
 
     /// <summary>
-    /// Hides the tooltip
+    /// Hides the cloud event tooltip
     /// </summary>
     [JSInvokable]
-    public void HideTooltipOnMouseOut()
+    public void HideCloudEventTooltipOnMouseOut()
     {
-        this.tooltipStyle = "opacity: 0;";
+        this.cloudEventTooltipStyle = "opacity: 0;";
         this.cloudEvent = null;
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Shows the tool
+    /// </summary>
+    /// <param name="label"></param>
+    /// <param name="x">The position of the tooltip on the x-axis</param>
+    /// <param name="y">The position of the tooltip on the y-axis</param>
+    [JSInvokable]
+    public void ShowLabelTooltipOnMouseOver(string label, int x, int y)
+    {
+        this.label = label;
+        this.labelTooltipStyle = $"opacity: 1; top: calc({y}px - 40px)";
+        this.StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void HideLabelTooltipOnMouseOut()
+    {
+        this.labelTooltipStyle = "opacity: 0;";
+        this.label = "";
         this.StateHasChanged();
     }
 
@@ -198,7 +231,7 @@
     /// </summary>
     /// <param name="cloudEvent">The <see cref="CloudEvent"/> to add</param>
     [JSInvokable]
-    public void SelectEventOnClick(CloudEvent cloudEvent)
+    public void SelectCloudEventOnClick(CloudEvent cloudEvent)
     {
         this.selectedCloudEvents.Add(cloudEvent);
         this.StateHasChanged();
@@ -208,22 +241,16 @@
     /// Removes the <see cref="CloudEvent"/> at the provided index for the selection
     /// </summary>
     /// <param name="cloudEvent">The <see cref="CloudEvent"/> to remove</param>
-    private void DeselectEvent(CloudEvent cloudEvent)
+    private void DeselectCloudEvent(CloudEvent cloudEvent)
     {
         this.selectedCloudEvents.Remove(cloudEvent);
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    protected override void Dispose(bool disposing)
     {
         if (!this.disposed)
         {
-            //if (this.jsReference != null)
-            //{
-            //    await this.jsReference.InvokeVoidAsync("disconnect");
-            //    await this.jsReference.DisposeAsync();
-            //    this.jsReference = null;
-            //}
             if (this.dotnetReference != null)
             {
                 this.dotnetReference.Dispose();
@@ -231,6 +258,7 @@
             }
             this.disposed = true;
         }
+        base.Dispose(disposing);
     }
 
 }
