@@ -26,5 +26,9 @@
   {
     "outputFile": "Components/CloudEventOffcanvas/CloudEventOffcanvas.razor.css",
     "inputFile": "Components/CloudEventOffcanvas/CloudEventOffcanvas.razor.scss"
+  },
+  {
+    "outputFile": "Components/ResourceEditor/ResourceEditor.razor.css",
+    "inputFile": "Components/ResourceEditor/ResourceEditor.razor.scss"
   }
 ]

@@ -69,12 +69,12 @@
     </Columns>
 </Table>
 
-<CloudEventOffcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+<Offcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
 
 @code{
 
     List<CloudEvent>? events;
-    CloudEventOffcanvas? offcanvas;
+    Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
 
     /// <inheritdoc/>
@@ -99,8 +99,10 @@
     Task OnShowCloudEventOffcanvasAsync(CloudEvent e)
     {
         if (this.offcanvas == null) return Task.CompletedTask;
-        this.offcanvas.SetCloudEvent(e);
-        return this.offcanvas.ShowAsync();
+        var parameters = new Dictionary<string, object>();
+        parameters.Add("ReadOnly", true);
+        parameters.Add("CloudEvent", e);
+        return this.offcanvas.ShowAsync<CloudEventDetails>(title: "Cloud Event Details", parameters: parameters);
     }
 
 }

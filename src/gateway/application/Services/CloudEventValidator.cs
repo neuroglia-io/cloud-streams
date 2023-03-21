@@ -22,7 +22,7 @@ public class CloudEventValidator
         this.RuleForEach(e => e.ToDictionary())
             .Must(BeLowerCaseAlphanumeric)
             .WithName("attributes")
-            .WithMessage(ProblemDetails.CloudEventAttributeNameMustBeAlphanumeric);
+            .WithMessage(Core.Data.Properties.ProblemDetails.CloudEventAttributeNameMustBeAlphanumeric);
     }
 
     /// <summary>

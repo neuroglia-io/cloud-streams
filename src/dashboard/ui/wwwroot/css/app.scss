@@ -101,11 +101,13 @@ h1:focus {
 .logo-typing {
     font-family: Comfortaa;
     color: $primary-dark;
-    background-image: -webkit-linear-gradient(0deg, $primary-dark 0%, $primary-bg-subtle-dark 100%);
-    background-clip: text;
-    -webkit-background-clip: text;
-    text-fill-color: transparent;
-    -webkit-text-fill-color: transparent;
+    /*
+        background-image: -webkit-linear-gradient(0deg, $primary-dark 0%, $primary-bg-subtle-dark 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        text-fill-color: transparent;
+        -webkit-text-fill-color: transparent;
+    */
 }
 
 .vh-30{
@@ -124,4 +126,16 @@ h1:focus {
     .modal-footer {
         border-top: var(--bs-modal-header-border-width) solid var(--bs-modal-header-border-color) !important;
     }
+}
+
+.monaco-normal {
+    height: 500px !important;
+}
+
+.monaco-small {
+    height: 300px !important;
+}
+
+.monaco-extra-small {
+    height: 100px !important;
 }

@@ -146,7 +146,11 @@ public class ResourceManagementApi<TResource>
         var content = string.Empty;
         if (response.Content != null) content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         this.Logger.LogError("The remote server responded with a non-success status code '{statusCode}': {errorDetails}", response.StatusCode, content);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
+            else throw new CloudStreamsException(Serializer.Json.Deserialize<Core.Data.Models.ProblemDetails>(content));
+        }
         return response;
     }
 

@@ -35,13 +35,30 @@ public static partial class Serializer
             }
         }
 
+        static JsonSerializerOptions? _DefaultIndentedOptions;
+        /// <summary>
+        /// Gets/sets the default indented <see cref="JsonSerializerOptions"/>
+        /// </summary>
+        public static JsonSerializerOptions DefaultIndentedOptions
+        {
+            get
+            {
+                if (_DefaultIndentedOptions != null) return _DefaultIndentedOptions;
+                _DefaultIndentedOptions = new JsonSerializerOptions();
+                DefaultOptionsConfiguration?.Invoke(_DefaultIndentedOptions);
+                _DefaultIndentedOptions.WriteIndented = true;
+                return _DefaultIndentedOptions;
+            }
+        }
+
         /// <summary>
         /// Serializes the specified object to JSON
         /// </summary>
         /// <typeparam name="T">The type of object to serialize</typeparam>
         /// <param name="graph">The object to serialized</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
         /// <returns>The JSON of the serialized object</returns>
-        public static string Serialize<T>(T graph) => JsonSerializer.Serialize(graph, DefaultOptions);
+        public static string Serialize<T>(T graph, bool indented = false) => indented ? JsonSerializer.Serialize(graph, DefaultIndentedOptions) : JsonSerializer.Serialize(graph, DefaultOptions);
 
         /// <summary>
         /// Serializes the specified object into a new <see cref="JsonNode"/>
@@ -107,6 +124,31 @@ public static partial class Serializer
         /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
         /// <returns>A new <see cref="IAsyncEnumerable{T}"/></returns>
         public static IAsyncEnumerable<T?> DeserializeAsyncEnumerable<T>(Stream stream, CancellationToken cancellationToken = default) => JsonSerializer.DeserializeAsyncEnumerable<T>(stream, DefaultOptions, cancellationToken);
+
+        /// <summary>
+        /// Converts the specified YAML input into JSON
+        /// </summary>
+        /// <param name="yaml">The YAML input to convert</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
+        /// <returns>The YAML input converted into JSON</returns>
+        public static string ConvertFromYaml(string yaml, bool indented = false)
+        {
+            if (string.IsNullOrWhiteSpace(yaml)) return null!;
+            var graph = Yaml.Deserialize<object>(yaml);
+            return Serialize(graph, indented);
+        }
+
+        /// <summary>
+        /// Converts the specified JSON input into YAML
+        /// </summary>
+        /// <param name="json">The JSON input to convert</param>
+        /// <returns>The JSON input converted into YAML</returns>
+        public static string ConvertToYaml(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null!;
+            var graph = Deserialize<object>(json);
+            return Yaml.Serialize(graph);
+        }
 
     }
 
