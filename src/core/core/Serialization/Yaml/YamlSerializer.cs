@@ -1,6 +1,6 @@
 ﻿using CloudStreams.Core.Serialization.Yaml;
-using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.NodeDeserializers;
 
 namespace CloudStreams.Core;
@@ -24,11 +24,15 @@ public static partial class Serializer
         {
             Serializer = new SerializerBuilder()
                 .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults | DefaultValuesHandling.OmitEmptyCollections)
+                .WithQuotingNecessaryStrings()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithTypeConverter(new JsonNodeTypeConverter())
                 .WithTypeConverter(new JsonSchemaTypeConverter())
+                .WithTypeConverter(new UriTypeSerializer())
+                .WithTypeConverter(new StringEnumSerializer())
                 .Build();
             Deserializer = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithNodeTypeResolver(new InferTypeResolver())
                 .WithNodeDeserializer(
@@ -80,6 +84,31 @@ public static partial class Serializer
         /// <param name="type">The type to deserialize the specified YAML into</param>
         /// <returns>The deserialized value</returns>
         public static object? Deserialize(TextReader reader, Type type) => Deserializer.Deserialize(reader, type);
+
+        /// <summary>
+        /// Converts the specified JSON input into YAML
+        /// </summary>
+        /// <param name="json">The JSON input to convert</param>
+        /// <returns>The JSON input converted into YAML</returns>
+        public static string ConvertFromJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null!;
+            var graph = Json.Deserialize<object>(json);
+            return Serialize(graph);
+        }
+
+        /// <summary>
+        /// Converts the specified YAML input into JSON
+        /// </summary>
+        /// <param name="yaml">The YAML input to convert</param>
+        /// <param name="indented">A boolean indicating whether or not to indent the output</param>
+        /// <returns>The YAML input converted into JSON</returns>
+        public static string ConvertToJson(string yaml, bool indented = false)
+        {
+            if (string.IsNullOrWhiteSpace(yaml)) return null!;
+            var graph = Deserialize<object>(yaml);
+            return Json.Serialize(graph, indented);
+        }
 
     }
 

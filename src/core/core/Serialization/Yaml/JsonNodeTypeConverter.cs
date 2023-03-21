@@ -1,6 +1,4 @@
-﻿using System.Text.Json;
-using System.Text.Json.Nodes;
-using YamlDotNet.Core;
+﻿using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -16,7 +14,7 @@ public class JsonNodeTypeConverter
 {
 
     /// <inheritdoc/>
-    public virtual bool Accepts(Type type) => typeof(JsonNode).IsAssignableFrom(type);
+    public virtual bool Accepts(Type type) => typeof(JsonElement).IsAssignableFrom(type) || typeof(JsonNode).IsAssignableFrom(type);
 
     /// <inheritdoc/>
     public virtual object? ReadYaml(IParser parser, Type type) => throw new NotSupportedException();
@@ -24,6 +22,7 @@ public class JsonNodeTypeConverter
     /// <inheritdoc/>
     public virtual void WriteYaml(IEmitter emitter, object? value, Type type)
     {
+        if (value is JsonElement jsonElement) value = Serializer.Json.SerializeToNode(jsonElement);
         this.WriteJsonNode(emitter, value as JsonNode);
     }
 

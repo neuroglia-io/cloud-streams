@@ -1,18 +1,15 @@
 ﻿@namespace CloudStreams.Dashboard.Pages.Gateways.List
 @page "/gateways"
-@using System.Reactive.Linq
-@using CloudStreams.Dashboard.StateManagement
 @inherits ResourceManagementComponent<Gateway>
-@inject ICloudStreamsApiClient CloudStreamsApi
 
 <ApplicationTitle>Gateways</ApplicationTitle>
 
-<Table Items="gateways"
+<Table Items="resources"
     AutoGenerateColumns="false"
     TableClass="table table-striped table-hover"
     RowClass="cursor-pointer">
     <RowTemplate>
-        <Row RenderContext="context" OnClick="async _ => await OnShowResourceOffcanvasAsync(context.Item)" />
+        <Row RenderContext="context" OnClick="async _ => await OnShowResourceDetailsAsync(context.Item)" />
     </RowTemplate>
     <Columns>
         <Column TData="Gateway"
@@ -34,60 +31,15 @@
         <Column TData="Gateway" CssClass="text-end">
             <HeaderTemplate />
             <CellTemplate Context="context">
-                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteGateway(context.Item)" @onclick:preventDefault @onclick:stopPropagation><span class="bi bi-trash"></span></button>
+                <button class="btn btn-outline-primary btn-sm" title="Edit '@context.Item.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
+                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
             </CellTemplate>
         </Column>
     </Columns>
 </Table>
 
-<ResourceOffcanvas TResource="Gateway" @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
+<Offcanvas @ref="detailsOffcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />
+
+<Offcanvas @ref="editorOffcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />
 
 <ConfirmDialog @ref="dialog" />
-
-@code{
-
-    List<Gateway>? gateways;
-    ResourceOffcanvas<Gateway>? offcanvas;
-    ConfirmDialog? dialog;
-
-    /// <inheritdoc/>
-    protected override async Task OnInitializedAsync()
-    {
-        await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Resources.Subscribe(OnGatewayCollectionChanged, token: this.CancellationTokenSource.Token);
-        await this.Store.ListResourcesAsync().ConfigureAwait(false); ;
-    }
-
-    void OnGatewayCollectionChanged(List<Gateway>? gateways)
-    {
-        if (gateways == null) this.gateways = null;
-        else this.gateways = gateways;
-        this.StateHasChanged();
-    }
-
-    async Task OnDeleteGateway(Gateway gateway)
-    {
-        if (this.dialog == null) return;
-        var confirmation = await this.dialog.ShowAsync(
-            title: $"Are you sure you want to delete '{gateway.Metadata.Name}'?",
-            message1: "The resource will be permanently deleted. Are you sure you want to proceed ?",
-            confirmDialogOptions: new ConfirmDialogOptions()
-            {
-                YesButtonColor = ButtonColor.Danger,
-                YesButtonText = "Delete",
-                NoButtonText = "Abort",
-                IsVerticallyCentered = true
-            }
-        );
-        if (!confirmation) return;
-        await this.Store.DeleteResourceAsync(gateway).ConfigureAwait(false);
-    }
-
-    Task OnShowResourceOffcanvasAsync(Gateway gateway)
-    {
-        if (this.offcanvas == null) return Task.CompletedTask;
-        this.offcanvas.SetResource(gateway);
-        return this.offcanvas.ShowAsync();
-    }
-
-}

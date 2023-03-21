@@ -86,6 +86,11 @@ public class CloudStreamsApplicationBuilder
     protected HashSet<Assembly> MediationAssemblies { get; } = new() { typeof(CloudStreamsApplicationBuilder).Assembly };
 
     /// <summary>
+    /// Gets a <see cref="List{T}"/> containing the types of the <see cref="IPipelineBehavior{TRequest, TResponse}"/>s to register
+    /// </summary>
+    protected List<Type> MediationPipelineBehaviors { get; } = new();
+
+    /// <summary>
     /// Gets an <see cref="HashSet{T}"/> containing the assemblies to scan for fluent validators
     /// </summary>
     protected HashSet<Assembly> ValidationAssemblies { get; } = new() {  };
@@ -133,6 +138,15 @@ public class CloudStreamsApplicationBuilder
     {
         if (setup == null) throw new ArgumentNullException(nameof(setup));
         this.HealthCheckConfigurations.Add(setup);
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public virtual ICloudStreamsApplicationBuilder RegisterMediationPipelineBehavior(Type behaviorType)
+    {
+        if (behaviorType == null) throw new ArgumentNullException(nameof(behaviorType));
+        if (behaviorType.GetGenericType(typeof(IPipelineBehavior<,>)) == null) throw new ArgumentException($"Failed to cast the specified type to type '{typeof(IPipelineBehavior<,>)}'", nameof(behaviorType));
+        this.MediationPipelineBehaviors.Add(behaviorType);
         return this;
     }
 
@@ -224,6 +238,7 @@ public class CloudStreamsApplicationBuilder
         {
             options.RegisterServicesFromAssemblies(this.MediationAssemblies.ToArray());
             options.BehaviorsToRegister.Add(new(typeof(IPipelineBehavior<,>), typeof(ExceptionHandlingPipelineBehavior<,>), ServiceLifetime.Transient));
+            this.MediationPipelineBehaviors.ForEach(t => options.BehaviorsToRegister.Add(new(typeof(IPipelineBehavior<,>), t, ServiceLifetime.Transient)));
         });
         this.Services.AddValidatorsFromAssemblies(this.ValidationAssemblies, ServiceLifetime.Transient);
         this.Services.AddResponseCompression(options =>

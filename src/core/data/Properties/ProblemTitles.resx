@@ -123,6 +123,9 @@
   <data name="NotFound" xml:space="preserve">
     <value>Not Found</value>
   </data>
+  <data name="NotModified" xml:space="preserve">
+    <value>Not Modified</value>
+  </data>
   <data name="OptimisticConcurrencyError" xml:space="preserve">
     <value>Optimistic Concurrency Error</value>
   </data>
