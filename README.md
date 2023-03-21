@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" height="350px" alt="Logo"/>
+</p>
+
 # Cloud Streams
 
 Cloud Streams is a cloud-native tool that empowers users to capture and process cloud events in real-time, enabling event-driven architectures that are both scalable and efficient. With Cloud Streams, you can customize how you stream, filter, partition, and mutate the cloud events you consume using declarative rules, giving you full control over how your data is processed and consumed.
