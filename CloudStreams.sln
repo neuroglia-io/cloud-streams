@@ -119,6 +119,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "runtime-expressions", "runt
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Core.Infrastructure.RuntimeExpressions.JQ", "src\core\infrastructure\runtime-expressions\jq\CloudStreams.Core.Infrastructure.RuntimeExpressions.JQ.csproj", "{D3FDA6BC-A9D7-444F-9EE0-82300D4E9CC4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution", "solution", "{F63E157B-202B-46BA-8893-A01D39C66BFE}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
