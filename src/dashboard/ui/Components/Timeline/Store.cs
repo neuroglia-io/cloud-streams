@@ -175,6 +175,7 @@ public class TimelineStore
         }
         catch (Exception ex)
         {
+            Console.WriteLine(ex.ToString()); // todo: improve logging
             this.Reduce(state => state with
             {
                 Loading = false

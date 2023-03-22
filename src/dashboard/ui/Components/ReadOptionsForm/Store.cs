@@ -252,7 +252,7 @@ public class ReadOptionsFormStore
         }
         catch(Exception ex)
         {
-
+            Console.WriteLine(ex.ToString()); // todo: improve logging
         }
     }
 }

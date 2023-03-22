@@ -16,7 +16,7 @@ public abstract class ResourceManagementComponent<TResource>
     /// Gets/sets the service to build a bridge with the monaco interop extension
     /// </summary>
     [Inject]
-    protected MonacoInterop MonacoInterop { get; set; }
+    protected MonacoInterop? MonacoInterop { get; set; }
 
     /// <summary>
     /// The list of displayed <see cref="Resource"/>s
@@ -48,7 +48,7 @@ public abstract class ResourceManagementComponent<TResource>
             if (this.definition != definition)
             {
                 this.definition = definition;
-                if (this.definition != null)
+                if (this.definition != null && this.MonacoInterop != null)
                 {
                     await this.MonacoInterop.AddValidationSchemaAsync(Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(TResource).Name.ToLower()}.json", $"{typeof(TResource).Name.ToLower()}").ConfigureAwait(false);
                 }
