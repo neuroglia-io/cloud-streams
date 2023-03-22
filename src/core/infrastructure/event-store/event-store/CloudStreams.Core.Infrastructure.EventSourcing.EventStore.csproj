@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\Projections\cloud-events-bysource.js.tmpl" />
-    <EmbeddedResource Include="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
+    <EmbeddedResource Include="Assets\Projections\bysource.js.tmpl" />
+    <EmbeddedResource Include="Assets\Projections\partitionids.js.tmpl" />
   </ItemGroup>
 
   <ItemGroup>
