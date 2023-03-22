@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_").Replace(".ResourceRepository.Kubernetes", ""))</RootNamespace>
 	<GenerateDocumentationFile>True</GenerateDocumentationFile>
-	<VersionPrefix>0.1.0</VersionPrefix>
+	<VersionPrefix>0.1.1</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>

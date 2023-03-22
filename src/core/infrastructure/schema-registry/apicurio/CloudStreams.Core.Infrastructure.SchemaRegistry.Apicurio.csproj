@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_").Replace(".SchemaRegistry.Apicurio", ""))</RootNamespace>
 	<GenerateDocumentationFile>True</GenerateDocumentationFile>
-	<VersionPrefix>0.1.0</VersionPrefix>
+	<VersionPrefix>0.1.1</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
