@@ -9,11 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Assets\Projections\cloud-events-by_source.js" />
-    <None Remove="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="Assets\Projections\cloud-events-by_source.js" />
     <EmbeddedResource Include="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
   </ItemGroup>
