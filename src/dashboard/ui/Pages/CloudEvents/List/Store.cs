@@ -1,10 +1,20 @@
-﻿using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Dashboard.Components;
+﻿// Copyright © 2023-Present The Cloud Streams Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License"),
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
-using Microsoft.Extensions.Options;
 using System.Reactive.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
@@ -31,11 +41,6 @@ public class CloudEventListStore
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.CloudEvents"/> changes
     /// </summary>
     public IObservable<List<CloudEvent>?> CloudEvents => this.Select(state => state.CloudEvents).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
-    /// </summary>
-    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
@@ -96,39 +101,10 @@ public class CloudEventListStore
     protected async Task SetCloudEventsAsync(StreamReadOptions readOptions)
     {
         if (readOptions == null) return;
+        var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
         this.Reduce(state => state with
         {
-            Loading = true
-        });
-        await Task.Delay(1);
-        List<CloudEvent?> cloudEvents;
-        if (readOptions!.Length <= StreamReadOptions.MaxLength)
-        {
-            cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            cloudEvents = new();
-            bool fetchMore = true;
-            long offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
-            do
-            {
-                var tempReadOptions = new StreamReadOptions();
-                tempReadOptions.Direction = readOptions.Direction;
-                tempReadOptions.Partition = readOptions.Partition;
-                tempReadOptions.Offset = offset;
-                tempReadOptions.Length = StreamReadOptions.MaxLength;
-                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-                cloudEvents.AddRange(tempCloudEvents);
-                offset = (long)cloudEvents.Last()!.GetSequence()!;
-                fetchMore = tempCloudEvents.Count() > 1 && (ulong)cloudEvents.Count < readOptions!.Length;
-            }
-            while (fetchMore);
-        }
-        this.Reduce(state => state with
-        {
-            CloudEvents = cloudEvents!,
-            Loading = false
+            CloudEvents = cloudEvents!
         });
     }
 

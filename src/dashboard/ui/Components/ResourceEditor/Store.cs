@@ -1,9 +1,21 @@
-﻿using CloudStreams.Dashboard.StateManagement;
+﻿// Copyright © 2023-Present The Cloud Streams Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License"),
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using CloudStreams.Dashboard.StateManagement;
 using System.Reactive.Linq;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 using JsonCons.Utilities;
 using System.Text.Json;
-using CloudStreams.Core.Data.Models;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -12,7 +24,7 @@ namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 /// </summary>
 public class ResourceEditorStore<TResource>
     : ComponentStore<ResourceEditorState<TResource>>
-    where TResource : Resource, new()
+    where TResource : class, IResource, new()
 {
     /// <summary>
     /// The service used to interact with a Cloud Streams gateway's API
@@ -86,9 +98,6 @@ public class ResourceEditorStore<TResource>
     /// </summary>
     public IObservable<IDictionary<string, string[]>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
 
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe comptured <see cref="Core.Data.Models.ProblemDetails"/>
-    /// </summary>
     public IObservable<ProblemDetails?> ProblemDetails => Observable.CombineLatest(
         this.ProblemType,
         this.ProblemTitle,
@@ -105,40 +114,24 @@ public class ResourceEditorStore<TResource>
         }
     );
 
-    /// <inheritdoc/>
-    public override async Task InitializeAsync()
-    {
-        await base.InitializeAsync().ConfigureAwait(false);
-        this.Resource.Subscribe(resource =>
-        {
-            if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
-            {
-                this.SetEditorValue(Serializer.Yaml.Serialize(resource));
-            }
-            else
-            {
-                this.SetEditorValue(Serializer.Json.Serialize(resource, true));
-            }
-        }, token: this.CancellationTokenSource.Token);
-    }
-
     /// <summary>
     /// Sets the state's <see cref="ResourceEditorState{TResource}.Resource"/>
     /// </summary>
     /// <param name="resource">The new <see cref="ResourceEditorState{TResource}.Resource"/> value</param>
     public void SetResource(TResource? resource)
     {
-        if (resource != null)
+        this.Reduce(state => state with
         {
-            this.Reduce(state => state with
-            {
-                Resource = resource
-            });
-            return;
-        }
-        this.Reduce(state => state with { 
-            Resource = new() { Metadata = new() { Name = "new-" + typeof(TResource).Name.ToLower() } }
+            Resource = resource
         });
+        if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
+        {
+            this.SetEditorValue(Serializer.Yaml.Serialize(resource));
+        }
+        else
+        {
+            this.SetEditorValue(Serializer.Json.Serialize(resource, true));
+        }
     }
 
     /// <summary>
@@ -230,54 +223,6 @@ public class ResourceEditorStore<TResource>
     }
 
     /// <summary>
-    /// Creates or updates the current resource
-    /// </summary>
-    /// <returns></returns>
-    public async Task SubmitResourceAsync()
-    {
-        TResource? resource = this.Get(state => state.Resource);
-        if (resource?.Metadata?.Generation == null || resource?.Metadata?.Generation == 0)
-        {
-            await this.CreateResourceAsync();
-        }
-        else
-        {
-            await this.UpdateResourceAsync();
-        }
-    }
-
-    /// <summary>
-    /// Creates the current resource using the text editor value
-    /// </summary>
-    /// <returns></returns>
-    public async Task CreateResourceAsync()
-    {
-        this.SetProblemDetails(null);
-        this.SetSaving(true);
-        string textEditorValue = this.Get(state => state.TextEditorValue);
-        if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
-        {
-            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
-        }
-        TResource? resource;
-        try
-        {
-            resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
-            resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource, this.CancellationTokenSource.Token);
-            this.SetResource(resource);
-        }
-        catch (CloudStreamsException ex)
-        {
-            this.SetProblemDetails(ex.ProblemDetails);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString()); // todo: improve logging
-        }
-        this.SetSaving(false);
-    }
-
-    /// <summary>
     /// Updates the current resource using the text editor value
     /// </summary>
     /// <returns></returns>
@@ -311,7 +256,7 @@ public class ResourceEditorStore<TResource>
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString()); // todo: improve logging
+
             }
         }
         this.SetSaving(false);

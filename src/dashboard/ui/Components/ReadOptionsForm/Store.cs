@@ -1,4 +1,17 @@
-﻿using CloudStreams.Core.Api.Client.Services;
+﻿// Copyright © 2023-Present The Cloud Streams Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License"),
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
 using System.Reactive.Linq;
@@ -49,27 +62,7 @@ public class ReadOptionsFormStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.Length"/> changes
     /// </summary>
-    protected IObservable<ulong?> _length => this.Select(state => state.Length).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.MaxLength"/> changes
-    /// </summary>
-    public IObservable<ulong?> MaxLength => this.Select(state => state.MaxLength).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the computed length 
-    /// </summary>
-    public IObservable<ulong?> Length => Observable.CombineLatest(
-        this._length,
-        this.MaxLength,
-        (length, maxLength) =>
-        {
-            if (!length.HasValue) return null;
-            if (!maxLength.HasValue) return length;
-            return Math.Min(length.Value, maxLength.Value);
-        } 
-    ).DistinctUntilChanged();
-
+    public IObservable<ulong?> Length => this.Select(state => state.Length).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.Partitions"/> changes
@@ -79,60 +72,39 @@ public class ReadOptionsFormStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the resulting <see cref="StreamReadOptions"/>
     /// </summary>
-    public IObservable<StreamReadOptions?> ReadOptions => Observable.CombineLatest(
-        this.Direction,
-        this.PartitionType,
-        this.PartitionId,
-        this.Offset,
-        this.Length,
-        (direction, partitionType, partitionId, offset, length) =>
+    public IObservable<StreamReadOptions?> ReadOptions => this.Select(state =>
+    {
+        var options = new StreamReadOptions() {
+            Direction = state.Direction
+        };
+        if (state.PartitionType.HasValue)
         {
-            var options = new StreamReadOptions()
+            var partition = new PartitionReference()
             {
-                Direction = direction
+                Type = state.PartitionType.Value
             };
-            if (partitionType.HasValue)
+            if (!string.IsNullOrWhiteSpace(state.PartitionId))
             {
-                var partition = new PartitionReference()
-                {
-                    Type = partitionType.Value
-                };
-                if (!string.IsNullOrWhiteSpace(partitionId))
-                {
-                    partition.Id = partitionId;
-                }
-                options.Partition = partition;
+                partition.Id = state.PartitionId;
             }
-            if (offset.HasValue)
-            {
-                options.Offset = offset.Value;
-            }
-            if (length.HasValue)
-            {
-                options.Length = length.Value;
-            }
-            return options;
+            options.Partition = partition;
         }
-    );
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the resulting partition
-    /// </summary>
-    protected IObservable<(CloudEventPartitionType?, string?)> Partition => Observable.CombineLatest(
-        this.PartitionType,
-        this.PartitionId,
-        (type, id) =>
+        if (state.Offset.HasValue)
         {
-            return (type, id);
+            options.Offset = state.Offset.Value;
         }
-    ).Throttle(TimeSpan.FromMilliseconds(100)).DistinctUntilChanged();
+        if (state.Length.HasValue)
+        {
+            options.Length = state.Length.Value;
+        }
+        return options;
+    }).DistinctUntilChanged();
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
-        await base.InitializeAsync();
-        this.PartitionType.SubscribeAsync(this.UpdatePartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
-        this.Partition.SubscribeAsync(this.UpdateMetadataAsync, cancellationToken: this.CancellationTokenSource.Token);
+        await base.InitializeAsync(); 
+        this.PartitionType.SubscribeAsync(this.SetPartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -201,7 +173,7 @@ public class ReadOptionsFormStore
     /// </summary>
     /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="ReadOptionsFormState.Partitions"/> with</param>
     /// <returns></returns>
-    protected async Task UpdatePartitionsAsync(CloudEventPartitionType? partitionType)
+    protected async Task SetPartitionsAsync(CloudEventPartitionType? partitionType)
     {
         if (!partitionType.HasValue)
         {
@@ -216,43 +188,5 @@ public class ReadOptionsFormStore
         {
             Partitions = partitions!
         });
-    }
-
-    /// <summary>
-    /// Updates <see cref="ReadOptionsFormState.MaxLength"/> based on the stream/partition's metadata
-    /// </summary>
-    /// <param name="partition">A (<see cref="CloudEventPartitionType"/>, string) tuple to gather the partition for, if any </param>
-    protected async Task UpdateMetadataAsync((CloudEventPartitionType?, string?) partition)
-    {
-        this.Reduce(state => state with
-        {
-            MaxLength = null
-        });
-        try { 
-            (CloudEventPartitionType? type, string? id) = partition;
-            if (!type.HasValue || string.IsNullOrWhiteSpace(id))
-            {
-                StreamMetadata metadata = await this.cloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
-                this.Reduce(state => state with
-                {
-                    MaxLength = metadata.Length
-                });
-            }
-            else
-            {
-                PartitionMetadata? metadata = await this.cloudStreamsApi.CloudEvents.Partitions.GetPartitionMetadataAsync(type!.Value, id!, this.CancellationTokenSource.Token).ConfigureAwait(false);
-                if (metadata != null)
-                {
-                    this.Reduce(state => state with
-                    {
-                        MaxLength = metadata.Length
-                    });
-                }
-            }
-        }
-        catch(Exception ex)
-        {
-            Console.WriteLine(ex.ToString()); // todo: improve logging
-        }
     }
 }
