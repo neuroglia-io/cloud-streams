@@ -9,12 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\Projections\cloud-events-by_source.js">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Assets\Projections\cloud-events-partition-ids.js.tmpl">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
+    <EmbeddedResource Include="Assets\Projections\cloud-events-by_source.js" />
+    <EmbeddedResource Include="Assets\Projections\cloud-events-partition-ids.js.tmpl" />
   </ItemGroup>
 
   <ItemGroup>
