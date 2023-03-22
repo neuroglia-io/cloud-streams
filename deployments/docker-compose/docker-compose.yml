@@ -79,7 +79,7 @@ services:
       - loki
 
   gateway-1:
-    image: ghcr.io/neuroglia-io/cloudstreams-gateway
+    image: ghcr.io/neuroglia-io/cloud-streams-gateway
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
@@ -97,7 +97,7 @@ services:
       - apicurio
 
   broker-1:
-    image: ghcr.io/neuroglia-io/cloudstreams-broker
+    image: ghcr.io/neuroglia-io/cloud-streams-broker
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
