@@ -282,7 +282,7 @@ public class ESCloudEventStore
         //streamReader.Dispose();
         //await this.Projections.UpdateAsync(EventStoreProjections.BuiltInProjections.PartitionByCorrelationId, query, true, cancellationToken: cancellationToken);
 
-        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "cloud-events-by_source.js"))!;
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "cloud-events-bysource.js.tmpl"))!;
         streamReader = new StreamReader(stream);
         query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         streamReader.Dispose();
