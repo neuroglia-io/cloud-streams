@@ -41,9 +41,9 @@ public class Store
     protected IDispatcher Dispatcher { get; }
 
     /// <summary>
-    /// Gets the <see cref="Subject"/> used to stream actions
+    /// Gets the <see cref="BehaviorSubject{T}"/> used to stream actions
     /// </summary>
-    protected Subject<object> Stream { get; } = new();
+    protected BehaviorSubject<object> Stream { get; } = new(default!);
 
     /// <summary>
     /// Gets a <see cref="List{T}"/> containing the <see cref="Store"/>'s <see cref="IFeature"/>s

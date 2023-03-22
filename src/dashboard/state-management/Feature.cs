@@ -18,18 +18,15 @@ public class Feature<TState>
     {
         if(value == null)
             throw new ArgumentNullException(nameof(value)); 
-        this.Stream = new();
-        this.State = value;
+        this.Stream = new(value);
     }
 
-    private TState _State = default!;
     /// <inheritdoc/>
     public TState State
     {
-        get => this._State;
+        get => this.Stream.Value;
         set
         {
-            this._State = value;
             this.Stream.OnNext(value);
         }
     }
@@ -39,7 +36,7 @@ public class Feature<TState>
     /// <summary>
     /// Gets the <see cref="BehaviorSubject{T}"/> used to stream the <see cref="Feature{TState}"/> changes
     /// </summary>
-    protected Subject<TState> Stream { get; }
+    protected BehaviorSubject<TState> Stream { get; }
 
     /// <summary>
     /// Gets a <see cref="Dictionary{TKey, TValue}"/> containing the type/<see cref="IReducer"/>s mappings
