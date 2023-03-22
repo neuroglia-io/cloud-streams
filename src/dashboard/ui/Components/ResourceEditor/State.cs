@@ -4,12 +4,12 @@
 /// Represents the state of the <see cref="ResourceEditor{TResource}"/>'s component
 /// </summary>
 public record ResourceEditorState<TResource>
-    where TResource : class, IResource, new()
+    where TResource : Resource, new()
 {
     /// <summary>
     /// Gets/sets the resource to display details about
     /// </summary>
-    public TResource? Resource { get; set; } = null;
+    public TResource? Resource { get; set; } = new() { Metadata = new() { Name = "new-" + typeof(TResource).Name.ToLower() } };
 
     /// <summary>
     /// Gets/sets the definition of the displayed resource

@@ -3,6 +3,7 @@ using System.Reactive.Linq;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 using JsonCons.Utilities;
 using System.Text.Json;
+using CloudStreams.Core.Data.Models;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -11,7 +12,7 @@ namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 /// </summary>
 public class ResourceEditorStore<TResource>
     : ComponentStore<ResourceEditorState<TResource>>
-    where TResource : class, IResource, new()
+    where TResource : Resource, new()
 {
     /// <summary>
     /// The service used to interact with a Cloud Streams gateway's API
@@ -104,24 +105,40 @@ public class ResourceEditorStore<TResource>
         }
     );
 
+    /// <inheritdoc/>
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync().ConfigureAwait(false);
+        this.Resource.Subscribe(resource =>
+        {
+            if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
+            {
+                this.SetEditorValue(Serializer.Yaml.Serialize(resource));
+            }
+            else
+            {
+                this.SetEditorValue(Serializer.Json.Serialize(resource, true));
+            }
+        }, token: this.CancellationTokenSource.Token);
+    }
+
     /// <summary>
     /// Sets the state's <see cref="ResourceEditorState{TResource}.Resource"/>
     /// </summary>
     /// <param name="resource">The new <see cref="ResourceEditorState{TResource}.Resource"/> value</param>
     public void SetResource(TResource? resource)
     {
-        this.Reduce(state => state with
+        if (resource != null)
         {
-            Resource = resource
+            this.Reduce(state => state with
+            {
+                Resource = resource
+            });
+            return;
+        }
+        this.Reduce(state => state with { 
+            Resource = new() { Metadata = new() { Name = "new-" + typeof(TResource).Name.ToLower() } }
         });
-        if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
-        {
-            this.SetEditorValue(Serializer.Yaml.Serialize(resource));
-        }
-        else
-        {
-            this.SetEditorValue(Serializer.Json.Serialize(resource, true));
-        }
     }
 
     /// <summary>
@@ -210,6 +227,54 @@ public class ResourceEditorStore<TResource>
             Console.WriteLine(ex.ToString());
             await monacoEditorHelper.ChangePreferedLanguageAsync(language == PreferedLanguage.YAML ? PreferedLanguage.JSON : PreferedLanguage.YAML);
         }
+    }
+
+    /// <summary>
+    /// Creates or updates the current resource
+    /// </summary>
+    /// <returns></returns>
+    public async Task SubmitResourceAsync()
+    {
+        TResource? resource = this.Get(state => state.Resource);
+        if (resource?.Metadata?.Generation == null || resource?.Metadata?.Generation == 0)
+        {
+            await this.CreateResourceAsync();
+        }
+        else
+        {
+            await this.UpdateResourceAsync();
+        }
+    }
+
+    /// <summary>
+    /// Creates the current resource using the text editor value
+    /// </summary>
+    /// <returns></returns>
+    public async Task CreateResourceAsync()
+    {
+        this.SetProblemDetails(null);
+        this.SetSaving(true);
+        string textEditorValue = this.Get(state => state.TextEditorValue);
+        if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
+        {
+            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
+        }
+        TResource? resource;
+        try
+        {
+            resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
+            resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource, this.CancellationTokenSource.Token);
+            this.SetResource(resource);
+        }
+        catch (CloudStreamsException ex)
+        {
+            this.SetProblemDetails(ex.ProblemDetails);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString()); // todo: improve logging
+        }
+        this.SetSaving(false);
     }
 
     /// <summary>

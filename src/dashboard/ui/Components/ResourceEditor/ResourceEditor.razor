@@ -1,6 +1,6 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ResourceEditorStateManagement
-@typeparam TResource where TResource : class, IResource, new()
+@typeparam TResource where TResource : Resource, new()
 @inherits StatefulComponent<ResourceEditorStore<TResource>, ResourceEditorState<TResource>>
 @inject IMonacoEditorHelper MonacoEditorHelper
 
@@ -33,7 +33,16 @@
                 }
             }
         </div>
-        <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.UpdateResourceAsync()">Update</Button>
+        <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.SubmitResourceAsync()">
+            @if (resource?.Metadata?.Generation == null || resource?.Metadata?.Generation == 0)
+            {
+                <span>Create</span>
+            }
+            else
+            {
+                <span>Update</span>
+            }
+        </Button>
     </div>
 </div>
 

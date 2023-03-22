@@ -30,6 +30,8 @@
     </Columns>
 </Table>
 
+<Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+
 <Offcanvas @ref="detailsOffcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />
 
 <Offcanvas @ref="editorOffcanvas" Size="OffcanvasSize.Large" UseBackdrop="false" BodyCssClass="d-flex flex-column" />

@@ -10,7 +10,7 @@ namespace CloudStreams.Dashboard.Components;
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to manage</typeparam>
 public abstract class ResourceManagementComponent<TResource>
     : StatefulComponent<ResourceManagementComponentStore<TResource>, ResourceManagementComponentState<TResource>>
-    where TResource : class, IResource, new()
+    where TResource : Resource, new()
 {
     /// <summary>
     /// Gets/sets the service to build a bridge with the monaco interop extension
@@ -108,12 +108,13 @@ public abstract class ResourceManagementComponent<TResource>
     /// Opens the targeted <see cref="Resource"/>'s edition
     /// </summary>
     /// <param name="resource">The <see cref="Resource"/> to edit</param>
-    protected Task OnShowResourceEditorAsync(TResource resource)
+    protected Task OnShowResourceEditorAsync(TResource? resource = null)
     {
         if (this.editorOffcanvas == null) return Task.CompletedTask;
         var parameters = new Dictionary<string, object>();
-        parameters.Add("Resource", resource);
-        return this.editorOffcanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " edition", parameters: parameters);
+        parameters.Add("Resource", resource!);
+        string actionType = resource == null ? "creation" : "edition";
+        return this.editorOffcanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
     }
 
 }
