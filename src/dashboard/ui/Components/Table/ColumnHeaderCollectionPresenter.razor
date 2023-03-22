@@ -1,25 +1,27 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @typeparam TData
 
-@foreach(var column in Table.columns.Where(c => c.IsVisible))
+@if (Table != null)
 {
-    <th draggable="@(column.IsDraggable ? "true" : "false")"
-        ondragover="event.preventDefault();"
-        @ondragstart="() => Table.OnStartDragColumn(column)"
-        @ondragend="() => Table.OnEndDragColumn(column)"
-        @ondrop="() => Table.OnDropColumnOn(column)"
-        @onclick="async () => await Table.OnClickColumn(column)"
-        class="sticky-header dropzone @Table.HeaderClass">
-        @if(column.HeaderTemplate == null)
-            @Table.DefaultHeaderTemplate(new(Table, column))
-        else
-            @column.HeaderTemplate(new(Table, column))
-    </th>
+    @foreach(var column in Table.columns.Where(c => c.IsVisible))
+    {
+        <th draggable="@(column.IsDraggable ? "true" : "false")"
+            ondragover="event.preventDefault();"
+            @ondragstart="() => Table.OnStartDragColumn(column)"
+            @ondragend="() => Table.OnEndDragColumn(column)"
+            @ondrop="() => Table.OnDropColumnOn(column)"
+            @onclick="async () => await Table.OnClickColumn(column)"
+            class="sticky-header dropzone @Table.HeaderClass">
+            @if(column.HeaderTemplate == null)
+                @Table.DefaultHeaderTemplate(new(Table, column))
+            else
+                @column.HeaderTemplate(new(Table, column))
+        </th>
+    }
 }
 
 @code {
 
-    [CascadingParameter]
-    public Table<TData> Table { get; set; } = null!;
+    [CascadingParameter] public Table<TData>? Table { get; set; }
 
 }

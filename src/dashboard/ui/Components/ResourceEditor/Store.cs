@@ -85,6 +85,9 @@ public class ResourceEditorStore<TResource>
     /// </summary>
     public IObservable<IDictionary<string, string[]>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
 
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe comptured <see cref="Core.Data.Models.ProblemDetails"/>
+    /// </summary>
     public IObservable<ProblemDetails?> ProblemDetails => Observable.CombineLatest(
         this.ProblemType,
         this.ProblemTitle,
@@ -243,7 +246,7 @@ public class ResourceEditorStore<TResource>
             }
             catch (Exception ex)
             {
-
+                Console.WriteLine(ex.ToString()); // todo: improve logging
             }
         }
         this.SetSaving(false);
