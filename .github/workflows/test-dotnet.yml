@@ -1,0 +1,42 @@
+name: Test .NET
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '.github/**'
+  workflow_call:
+
+env:
+  SOLUTION: ./CloudStreams.sln
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['7.0.x' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup .NET ${{ matrix.dotnet-version }}
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore "${{ env.SOLUTION }}"
+
+      # - name: Test
+      #   run: dotnet test "${{ env.SOLUTION }}" --no-restore --verbosity normal"
+
+      # Test "per domain" for ease of readability
+      - name: Test Core
+        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Core"
+
+      - name: Test Data.EventSourcing
+        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Data"
+
+      # ...
