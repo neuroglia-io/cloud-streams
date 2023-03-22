@@ -79,10 +79,7 @@ services:
       - loki
 
   gateway-1:
-    image: ${DOCKER_REGISTRY-}cloudstreams-gateway
-    build:
-      context: ../../
-      dockerfile: src/gateway/server/Dockerfile
+    image: ghcr.io/neuroglia-io/cloudstreams-gateway
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
@@ -100,10 +97,7 @@ services:
       - apicurio
 
   broker-1:
-    image: ${DOCKER_REGISTRY-}cloudstreams-broker
-    build:
-      context: ../../
-      dockerfile: src/broker/server/Dockerfile
+    image: ghcr.io/neuroglia-io/cloudstreams-broker
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:80
