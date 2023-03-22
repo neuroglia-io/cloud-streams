@@ -11,10 +11,22 @@
         </a>
         <div class="navbar-collapse">
             <ul class="navbar-nav">
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="events" Match="NavLinkMatch.All">
-                        <span class="btn-label">Events</span>
-                    </NavLink>
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Events
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <NavLink class="nav-link" href="events" Match="NavLinkMatch.All">
+                                <span class="btn-label">List</span>
+                            </NavLink>
+                        </li>
+                        <li>
+                            <NavLink class="nav-link" href="events/timeline" Match="NavLinkMatch.All">
+                                <span class="btn-label">Timeline</span>
+                            </NavLink>
+                        </li>
+                    </ul>
                 </li>
                 <li class="nav-item">
                     <NavLink class="nav-link" href="networks" Match="NavLinkMatch.All">

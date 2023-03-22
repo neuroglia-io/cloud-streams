@@ -31,6 +31,7 @@ builder.Services.AddFlux(flux =>
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
 builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
 builder.Services.AddSingleton<MonacoInterop>();
+builder.Services.AddSingleton<EventDropsInterop>();
 builder.Services.AddBlazorBootstrap();
 
 await builder.Build().RunAsync();

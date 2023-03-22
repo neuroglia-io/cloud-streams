@@ -1,6 +1,5 @@
 ﻿using BlazorBootstrap;
 using CloudStreams.Dashboard.Components.ResourceManagement;
-using CloudStreams.Dashboard.Services;
 using Microsoft.AspNetCore.Components;
 
 namespace CloudStreams.Dashboard.Components;

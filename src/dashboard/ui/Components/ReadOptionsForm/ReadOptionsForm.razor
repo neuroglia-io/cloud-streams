@@ -2,37 +2,37 @@
 @using CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement
 @inherits StatefulComponent<ReadOptionsFormStore, ReadOptionsFormState>
 
-<div id="read-options-form" class="input-group mb-3">
+<div id="@(id + "read-options-form")" class="input-group mb-3">
     <div class="form-floating">
-        <select id="direction" class="form-select" name="direction" @onchange="e => Store.SetDirection(Enum.Parse<StreamReadDirection>((string)e.Value!))">
+        <select id="@(id + "direction")" class="form-select" name="direction" @onchange="e => Store.SetDirection(Enum.Parse<StreamReadDirection>((string)e.Value!))">
             @foreach (var value in Enum.GetValues<StreamReadDirection>())
             {
                     <option value="@value" selected="@(direction == value)">@value</option>
             }
         </select>
-        <label for="direction">Direction</label>
+        <label for="@(id + "direction")">Direction</label>
     </div>
     <div class="form-floating">
-        <input id="offset" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset(string.IsNullOrWhiteSpace((string?)e.Value) ? null : long.Parse((string?)e.Value!))" />
-        <label for="offset">Offset</label>
+        <input id="@(id + "offset")" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset(string.IsNullOrWhiteSpace((string?)e.Value) ? null : long.Parse((string?)e.Value!))" />
+        <label for="@(id + "offset")">Offset</label>
     </div>
     <div class="form-floating">
-        <input id="length" type="number" nim="0" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
-        <label for="length">length</label>
+        <input id="@(id + "length")" type="number" min="0" max="@maxLength" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
+        <label for="@(id + "length")">length</label>
     </div>
     <div class="form-floating">
-        <select id="partitionType" class="form-select" name="partitionType" @onchange="e => Store.SetPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
+        <select id="@(id + "partitionType")" class="form-select" name="partitionType" @onchange="e => Store.SetPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
             <option value="" selected="@(partitionType == null)"></option>
             @foreach (var value in Enum.GetValues<CloudEventPartitionType>())
             {
                     <option value="@value" selected="@(partitionType == value)">@value</option>
             }
         </select>
-        <label for="partitionType">Partition Type</label>
+        <label for="@(id + "partitionType")">Partition Type</label>
     </div>
     <div class="form-floating">
-        <input id="partitionId" type="text" class="form-control" value="@partitionId" list="partitions" autocomplete="on" @onchange="e => Store.SetPartitionId((string?)e.Value)" />
-        <datalist id="partitions">
+        <input id="@(id + "partitionId")" type="text" class="form-control" value="@partitionId" list="@(id + "partitions")" autocomplete="on" @onchange="e => Store.SetPartitionId((string?)e.Value)" />
+        <datalist id="@(id + "partitions")">
             @if (partitions != null)
             {
                 foreach (var partition in partitions)
@@ -41,7 +41,7 @@
                 }
             }
         </datalist>
-        <label for="partitionId">Partition Id</label>
+        <label for="@(id + "partitionId")">Partition Id</label>
     </div>
     <button class="btn btn-outline-danger" type="button" @onclick="Reset"><span class="bi bi-x-circle"></span></button>
 </div>
@@ -73,6 +73,10 @@
     /// </summary>
     private ulong? length;
     /// <summary>
+    /// Reflects the <see cref="ReadOptionsFormStore.MaxLength"/>
+    /// </summary>
+    private ulong? maxLength;
+    /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.Partitions"/>
     /// </summary>
     private List<string>? partitions = null;
@@ -80,17 +84,22 @@
     /// Defines if the component has been disposed yet
     /// </summary>
     private bool disposed;
+    /// <summary>
+    /// A random id used to bind datalists
+    /// </summary>
+    private string id = Guid.NewGuid().ToString();
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.PartitionType.Subscribe(partitionType => this.OnStateChanged(state => state.partitionType = partitionType), token: this.CancellationTokenSource.Token);
-        this.Store.PartitionId.Subscribe(partitionId => this.OnStateChanged(state => state.partitionId = partitionId), token: this.CancellationTokenSource.Token);
-        this.Store.Direction.Subscribe(direction => this.OnStateChanged(state => state.direction = direction), token: this.CancellationTokenSource.Token);
-        this.Store.Offset.Subscribe(offset => this.OnStateChanged(state => state.offset = offset), token: this.CancellationTokenSource.Token);
-        this.Store.Length.Subscribe(length => this.OnStateChanged(state => state.length = length), token: this.CancellationTokenSource.Token);
-        this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(state => state.partitions = partitions), token: this.CancellationTokenSource.Token);
+        this.Store.PartitionType.Subscribe(partitionType => this.OnStateChanged(cmp => cmp.partitionType = partitionType), token: this.CancellationTokenSource.Token);
+        this.Store.PartitionId.Subscribe(partitionId => this.OnStateChanged(cmp => cmp.partitionId = partitionId), token: this.CancellationTokenSource.Token);
+        this.Store.Direction.Subscribe(direction => this.OnStateChanged(cmp => cmp.direction = direction), token: this.CancellationTokenSource.Token);
+        this.Store.Offset.Subscribe(offset => this.OnStateChanged(cmp => cmp.offset = offset), token: this.CancellationTokenSource.Token);
+        this.Store.Length.Subscribe(length => this.OnStateChanged(cmp => cmp.length = length), token: this.CancellationTokenSource.Token);
+        this.Store.MaxLength.Subscribe(maxLength => this.OnStateChanged(cmp => cmp.maxLength = maxLength), token: this.CancellationTokenSource.Token);
+        this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(cmp => cmp.partitions = partitions), token: this.CancellationTokenSource.Token);
         this.Store.ReadOptions.SubscribeAsync(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 

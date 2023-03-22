@@ -84,10 +84,10 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Resource.Subscribe(resource => this.OnStateChanged(state => state.resource = resource), token: this.CancellationTokenSource.Token);
-        this.Store.Updating.Subscribe(updating => this.OnStateChanged(state => state.updating = updating), token: this.CancellationTokenSource.Token);
+        this.Store.Resource.Subscribe(resource => this.OnStateChanged(cmp => cmp.resource = resource), token: this.CancellationTokenSource.Token);
+        this.Store.Updating.Subscribe(updating => this.OnStateChanged(cmp => cmp.updating = updating), token: this.CancellationTokenSource.Token);
         this.Store.Saving.Subscribe(OnSavingChanged, token: this.CancellationTokenSource.Token);
-        this.Store.ProblemDetails.Subscribe(problemDetails => this.OnStateChanged(state => state.problemDetails = problemDetails), token: this.CancellationTokenSource.Token);
+        this.Store.ProblemDetails.Subscribe(problemDetails => this.OnStateChanged(cmp => cmp.problemDetails = problemDetails), token: this.CancellationTokenSource.Token);
         this.textEditorInput
             .Throttle(TimeSpan.FromMilliseconds(300))
             .DistinctUntilChanged()
@@ -215,7 +215,7 @@
         }
     }
 
-    private bool _Disposed;
+    private bool disposed;
     /// <summary>
     /// Disposes of the component
     /// </summary>
@@ -223,7 +223,7 @@
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (!this._Disposed)
+        if (!this.disposed)
         {
             if (disposing)
             {
@@ -243,7 +243,7 @@
                     this.textBasedEditor = null;
                 }
             }
-            this._Disposed = true;
+            this.disposed = true;
         }
     }
 
