@@ -9,7 +9,7 @@ public record ResourceEditorState<TResource>
     /// <summary>
     /// Gets/sets the resource to display details about
     /// </summary>
-    public TResource? Resource { get; set; } = new() { Metadata = new() { Name = "my-new-resources" } };
+    public TResource? Resource { get; set; } = new() { Metadata = new() { Name = "new-" + typeof(TResource).Name.ToLower() } };
 
     /// <summary>
     /// Gets/sets the definition of the displayed resource

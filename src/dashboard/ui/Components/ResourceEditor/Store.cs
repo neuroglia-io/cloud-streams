@@ -137,7 +137,7 @@ public class ResourceEditorStore<TResource>
             return;
         }
         this.Reduce(state => state with { 
-            Resource = new() { Metadata = new() { Name = "my-new-resource" } }
+            Resource = new() { Metadata = new() { Name = "new-" + typeof(TResource).Name.ToLower() } }
         });
     }
 
