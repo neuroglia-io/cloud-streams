@@ -7,7 +7,7 @@ namespace CloudStreams.Dashboard.Components.ResourceManagement;
 /// </summary>
 /// <typeparam name="TResource">The type of managed <see cref="IResource"/>s</typeparam>
 public record ResourceManagementComponentState<TResource>
-    where TResource : class, IResource, new()
+    where TResource : Resource, new()
 {
 
     /// <summary>

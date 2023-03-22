@@ -10,7 +10,7 @@ namespace CloudStreams.Dashboard.Components.ResourceManagement;
 /// <typeparam name="TResource">The type of <see cref="IResource"/>s to manage</typeparam>
 public class ResourceManagementComponentStore<TResource>
     : ComponentStore<ResourceManagementComponentState<TResource>>
-    where TResource : class, IResource, new()
+    where TResource : Resource, new()
 {
     readonly ICloudStreamsResourceManagementApiClient resourceManagementApi;
     ResourceDefinition? definition;
