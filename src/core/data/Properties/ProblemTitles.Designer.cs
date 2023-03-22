@@ -79,6 +79,15 @@ namespace CloudStreams.Core.Data.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Not Modified.
+        /// </summary>
+        public static string NotModified {
+            get {
+                return ResourceManager.GetString("NotModified", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Optimistic Concurrency Error.
         /// </summary>
         public static string OptimisticConcurrencyError {

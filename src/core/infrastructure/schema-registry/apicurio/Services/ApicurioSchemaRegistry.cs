@@ -87,7 +87,7 @@ public class ApiCurioSchemaRegistry
     {
         if (uri == null) throw new ArgumentNullException(nameof(uri));
         var schema = Json.Schema.SchemaRegistry.Global.Get(uri);
-        if (schema != null) return schema;
+        if (schema != null) return schema as JsonSchema;
         return await this.GetSchemaAsync(uri, cancellationToken).ConfigureAwait(false);
     }
 

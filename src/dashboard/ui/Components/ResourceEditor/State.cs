@@ -1,0 +1,58 @@
+﻿namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
+
+/// <summary>
+/// Represents the state of the <see cref="ResourceEditor{TResource}"/>'s component
+/// </summary>
+public record ResourceEditorState<TResource>
+    where TResource : class, IResource, new()
+{
+    /// <summary>
+    /// Gets/sets the resource to display details about
+    /// </summary>
+    public TResource? Resource { get; set; } = null;
+
+    /// <summary>
+    /// Gets/sets the definition of the displayed resource
+    /// </summary>
+    public ResourceDefinition? Definition { get; set; } = null;
+
+    /// <summary>
+    /// Gets/sets the content of the text editor
+    /// </summary>
+    public string TextEditorValue { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets/sets a boolean indicating if the text editor is being updated
+    /// </summary>
+    public bool Updating { get; set; } = false;
+
+    /// <summary>
+    /// Gets/sets a boolean indicating if the resource is being saved
+    /// </summary>
+    public bool Saving { get; set; } = false;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> type that occured when trying to save the resource, if any
+    /// </summary>
+    public Uri? ProblemType { get; set; } = null;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> title that occured when trying to save the resource, if any
+    /// </summary>
+    public string ProblemTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> details that occured when trying to save the resource, if any
+    /// </summary>
+    public string ProblemDetail { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets/sets the <see cref="ProblemDetails"/> status that occured when trying to save the resource, if any
+    /// </summary>
+    public int ProblemStatus { get; set; } = 0;
+
+    /// <summary>
+    /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occured when trying to save the resource, if any
+    /// </summary>
+    public IDictionary<string, string[]> ProblemErrors { get; set; } = new Dictionary<string, string[]>();
+}

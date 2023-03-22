@@ -94,6 +94,11 @@
         this.Store.ReadOptions.SubscribeAsync(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
+    /// <summary>
+    /// Sets the <see cref="StreamReadOptions.Partition"/>
+    /// </summary>
+    /// <param name="type">The <see cref="StreamReadOptions.Partition"/> type</param>
+    /// <param name="id">The <see cref="StreamReadOptions.Partition"/> id</param>
     public void SetPartition(CloudEventPartitionType type, string id)
     {
         this.Store.SetPartitionType(type);

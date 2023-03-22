@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="11.5.1" />
-    <PackageReference Include="JsonPatch.Net" Version="2.0.4" />
+    <PackageReference Include="JsonPatch.Net" Version="2.0.5" />
     <PackageReference Include="JsonSchema.Net.Generation" Version="3.0.3" />
 	<PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
 	<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="7.0.0" />
@@ -19,7 +19,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="7.0.1" />
-    <PackageReference Include="Microsoft.OpenApi" Version="1.6.2" />
+    <PackageReference Include="Microsoft.OpenApi" Version="1.6.3" />
     <PackageReference Include="System.Reactive" Version="5.0.0" />
   </ItemGroup>
 

@@ -124,6 +124,15 @@ namespace CloudStreams.Core.Data.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The specified resource was not modified by the update attempt.
+        /// </summary>
+        public static string NotModified {
+            get {
+                return ResourceManager.GetString("NotModified", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Expected version: &apos;{expectedVersion}&apos;. Actual version: &apos;{actualVersion}&apos;.
         /// </summary>
         public static string OptimisticConcurrencyFailed {

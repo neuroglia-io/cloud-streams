@@ -76,12 +76,12 @@ public static class IRequestHandlerExtensions
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <param name="validationResults">The <see cref="ValidationResults"/> used to describe the failed validation</param>
+    /// <param name="evaluationResults">The <see cref="EvaluationResults"/> used to describe the failed validation</param>
     /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, ValidationResults validationResults)
+    public static Response ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, EvaluationResults evaluationResults)
         where TRequest : IRequest
     {
-        return Response.ValidationFailed(validationResults);
+        return Response.ValidationFailed(evaluationResults);
     }
 
     /// <summary>
@@ -90,12 +90,12 @@ public static class IRequestHandlerExtensions
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <param name="validationResults">The <see cref="ValidationResults"/> used to describe the failed validation</param>
+    /// <param name="evaluationResults">The <see cref="EvaluationResults"/> used to describe the failed validation</param>
     /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, ValidationResults validationResults)
+    public static Response ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, EvaluationResults evaluationResults)
         where TRequest : IRequest<TResult>
     {
-        return Response.ValidationFailed(validationResults);
+        return Response.ValidationFailed(evaluationResults);
     }
 
     /// <summary>

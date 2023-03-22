@@ -56,6 +56,13 @@ public interface ICloudStreamsApplicationBuilder
     ICloudStreamsApplicationBuilder RegisterMediationAssembly<TMarkup>();
 
     /// <summary>
+    /// Registers the specified mediation pipeline behavior
+    /// </summary>
+    /// <param name="behaviorType">The type of the mediation pipeline behavior to register</param>
+    /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
+    ICloudStreamsApplicationBuilder RegisterMediationPipelineBehavior(Type behaviorType);
+
+    /// <summary>
     /// Registers an <see cref="Assembly"/> to scan for fluent validators
     /// </summary>
     /// <typeparam name="TMarkup">A markup type containing by the <see cref="Assembly"/> to scan</typeparam>
