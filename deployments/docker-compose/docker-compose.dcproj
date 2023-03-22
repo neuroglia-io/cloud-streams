@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include=".env" />
+    <None Include="docker-compose.override.yml" />
     <None Include="docker-compose.yml" />
     <None Include=".dockerignore" />
     <None Include="grafana\data-sources.yaml" />
