@@ -19296,3 +19296,8 @@ h1:focus, .h1:focus {
   align-items: center;
   justify-content: center;
 }
+.table-container .sticky-header {
+  position: sticky;
+  top: 0;
+  background-color: var(--bs-body-bg);
+}
