@@ -25,4 +25,4 @@ As event-driven architectures have become more popular, so too have the challeng
 
 ## Solution Overview
 
-<img src="assets/solution-overview.png" height="500px" alt="Solution overview"/>
+<img src="assets/solution-overview.png" alt="Solution overview"/>
