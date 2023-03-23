@@ -8,30 +8,30 @@
             <tbody>
                 <tr>
                     <td>API Version</td>
-                    <td><input type="text" readonly value="@resource?.ApiVersion" required title="The resource's API version" class="form-control" /></td>
+                    <td>@resource?.ApiVersion</td>
                 </tr>
                 <tr>
                     <td>Kind</td>
-                    <td><input type="text" readonly value="@resource?.Kind" required title="The resource's kind" class="form-control" /></td>
+                    <td>@resource?.Kind</td>
                 </tr>
                 <tr>
                     <td>Name</td>
-                    <td><input type="text" readonly value="@resource?.GetName()" required title="The resource's name" class="form-control" /></td>
+                    <td>@resource?.GetName()</td>
                 </tr>
                 @if (resource?.IsNamespaced() == true)
                 {
                     <tr>
                         <td>Namespace</td>
-                        <td><input type="text" readonly value="@resource?.GetNamespace()" required title="The resource's namespace" class="form-control" /></td>
+                        <td>@resource?.GetNamespace()</td>
                     </tr>
                 }
                 <tr>
                     <td>Created At</td>
-                    <td><input type="text" readonly value="@resource?.Metadata.CreationTimestamp?.ToString("R")" required title="The date and time at which the resource has been created" class="form-control" /></td>
+                    <td>@resource?.Metadata.CreationTimestamp?.ToString("R")</td>
                 </tr>
                 <tr>
                     <td>Generation</td>
-                    <td><input type="text" readonly value="@resource?.Metadata.Generation" required title="The resource's spec version" class="form-control" /></td>
+                    <td>@resource?.Metadata.Generation</td>
                 </tr>
                 @if (resource?.Metadata.Labels?.Any() == true)
                 {
