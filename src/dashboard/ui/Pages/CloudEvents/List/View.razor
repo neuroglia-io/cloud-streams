@@ -10,71 +10,66 @@
 
 <ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions"></ReadOptionsForm>
 
-
-<Table Items="events"
-    AutoGenerateColumns="false"
-    TableClass="table table-striped table-hover"
-    RowClass="cursor-pointer"
-    Loading="loading"
->
-    <RowTemplate>
-        <Row RenderContext="context" OnClick="async _ => await OnShowCloudEventOffcanvasAsync(context.Item)" />
-    </RowTemplate>
-    <Columns>
-        <Column TData="CloudEvent" 
-            ValueProvider="e => e.ExtensionAttributes == null ? null : e.ExtensionAttributes[CloudEventExtensionAttributes.Sequence]">
-            <HeaderTemplate>Sequence</HeaderTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.Id">
-            <HeaderTemplate>Id</HeaderTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.Time!.Value.LocalDateTime"
-                Format="R">
-            <HeaderTemplate>Time</HeaderTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.Source">
-            <HeaderTemplate>Source</HeaderTemplate>
-            <CellTemplate Context="context">
-                <a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, context.Value!.ToString()!)">@context.Value</a>
-            </CellTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.Type">
-            <HeaderTemplate>Type</HeaderTemplate>
-            <CellTemplate Context="context">
-                <a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, context.Value!.ToString()!)">@context.Value</a>
-            </CellTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.Subject">
-            <HeaderTemplate>Subject</HeaderTemplate>
-            <CellTemplate Context="context">
-                <a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, context.Value!.ToString()!)">@context.Value</a>
-            </CellTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.DataSchema">
-            <HeaderTemplate>Data Schema</HeaderTemplate>
-            <CellTemplate Context="context">
-                <a href="@context.Value" target="_blank">@context.Value</a>
-            </CellTemplate>
-        </Column>
-        <Column TData="CloudEvent"
-                ValueProvider="e => e.DataContentType">
-            <HeaderTemplate>Data Content Type</HeaderTemplate>
-            <CellTemplate Context="context">
-                <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@context.Value</span>
-            </CellTemplate>
-        </Column>
-    </Columns>
-</Table>
+<div class="table-container">
+    @if (loading)
+    {
+        <div class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Sequence</th>
+                <th>Id</th>
+                <th>Time</th>
+                <th>Source</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Data Schema</th>
+                <th>Data Content Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (events != null && events.Any())
+            {
+                <Virtualize Context="e" Items="@events">
+                    <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
+                        <td>@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</td>
+                        <td>@e.Id</td>
+                        <td>@(e.Time == null ? "" : e.Time!.Value.LocalDateTime.ToString("R"))</td>
+                        <td><a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, e.Source.ToString())">@e.Source</a></td>
+                        <td><a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, e.Type)">@e.Type</a></td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(e.Subject))
+                            {
+                                <a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, e.Subject)">@e.Subject</a>
+                            }
+                        </td>
+                        <td>
+                            @if (e.DataSchema != null)
+                            {
+                                <a href="@e.DataSchema" target="_blank">@e.DataSchema</a>
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(e.DataContentType))
+                            {
+                                <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span>
+                            }
+                        </td>
+                    </tr>    
+                </Virtualize>
+            }
+        </tbody>
+    </table>
+</div>
 
 <Offcanvas @ref="offcanvas" Size="OffcanvasSize.Large" ReadOnly="true" UseBackdrop="false" />
 
-@code{
+@code {
 
     List<CloudEvent>? events;
     Offcanvas? offcanvas;
