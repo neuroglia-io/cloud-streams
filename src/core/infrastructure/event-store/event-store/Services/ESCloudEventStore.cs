@@ -62,13 +62,14 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<ulong> AppendAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventRecord> AppendAsync(CloudEvent e, IDictionary<string, string>? metadata, CancellationToken cancellationToken = default)
     {
-        if (e == null) throw new ArgumentNullException(nameof(e));
+        if (metadata == null) throw new ArgumentNullException(nameof(metadata));
+        data ??= new { };
         var streamName = EventStoreStreams.All;
-        var eventData = await this.SerializeAsync(e, cancellationToken).ConfigureAwait(false);
+        var eventData = await this.SerializeToEventDataAsync(metadata, data, cancellationToken).ConfigureAwait(false);
         var writeResult = await this.Streams.AppendToStreamAsync(streamName, StreamState.Any, new EventData[] { eventData }, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return writeResult.NextExpectedStreamRevision.ToUInt64();
+        return new(streamName, writeResult.NextExpectedStreamRevision.ToUInt64(), metadata, data);
     }
 
     /// <inheritdoc/>
@@ -123,7 +124,7 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEvent> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public virtual async IAsyncEnumerable<CloudEventRecord> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var streamName = EventStoreStreams.All;
         var resolveLinkTos = true;
@@ -131,12 +132,12 @@ public class ESCloudEventStore
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
-            yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
         }
     }
 
     /// <inheritdoc/>
-    public virtual IAsyncEnumerable<CloudEvent> ReadPartitionAsync(PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
+    public virtual IAsyncEnumerable<CloudEventRecord> ReadPartitionAsync(PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
     {
         switch (partition.Type)
         {
@@ -153,13 +154,13 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeAsync(long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEventRecord>> SubscribeAsync(long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
-        var subject = new Subject<CloudEvent>();
+        var subject = new Subject<CloudEventRecord>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
             EventStoreStreams.All, 
             offset.ToSubscriptionPosition(), 
-            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeAsync(e, cancellation).ConfigureAwait(false)), 
+            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeResolvedEventAsync(e, cancellation).ConfigureAwait(false)), 
             cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return Observable.Using
@@ -170,13 +171,13 @@ public class ESCloudEventStore
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEvent>> SubscribeToPartitionAsync(PartitionReference partition, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEventRecord>> SubscribeToPartitionAsync(PartitionReference partition, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default)
     {
-        var subject = new Subject<CloudEvent>();
+        var subject = new Subject<CloudEventRecord>();
         var subscription = await this.Streams.SubscribeToStreamAsync(
             partition.GetStreamName(),
             offset.ToSubscriptionPosition(), 
-            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeAsync(e, cancellation).ConfigureAwait(false)), 
+            async (sub, e, cancellation) => subject.OnNext(await this.DeserializeResolvedEventAsync(e, cancellation).ConfigureAwait(false)), 
             cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return Observable.Using
@@ -195,7 +196,7 @@ public class ESCloudEventStore
     /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    protected virtual async IAsyncEnumerable<CloudEvent> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         var streamName = EventStoreStreams.ByCloudEventSource(source);
@@ -204,7 +205,7 @@ public class ESCloudEventStore
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
-            yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
         }
     }
 
@@ -218,7 +219,7 @@ public class ESCloudEventStore
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
     /// <inheritdoc/>
-    protected virtual async IAsyncEnumerable<CloudEvent> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         var streamName = EventStoreStreams.ByCloudEventType(type);
@@ -227,7 +228,7 @@ public class ESCloudEventStore
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
-            yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
         }
     }
 
@@ -240,7 +241,7 @@ public class ESCloudEventStore
     /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    protected virtual async IAsyncEnumerable<CloudEvent> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = EventStoreStreams.ByCorrelationId(correlationId);
@@ -249,7 +250,7 @@ public class ESCloudEventStore
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
         await foreach (var resolvedEvent in readResult)
         {
-            yield return await this.DeserializeAsync(resolvedEvent, cancellationToken);
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
         }
     }
 
@@ -317,40 +318,68 @@ public class ESCloudEventStore
     /// Serializes the specified <see cref="CloudEvent"/> into a new <see cref="EventData"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to serialize</param>
+    /// <param name="metadata">An <see cref="IDictionary{TKey, TValue}"/> containing additional information about the <see cref="CloudEvent"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The serialized <see cref="EventData"/></returns>
-    protected virtual Task<EventData> SerializeAsync(CloudEvent e, CancellationToken cancellationToken)
+    protected virtual Task<EventData> SerializeToEventDataAsync(CloudEvent e, IDictionary<string, string> metadata, CancellationToken cancellationToken)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         var id = Uuid.NewUuid();
         var type = e.Type!;
-        var metadataObject = (JsonObject)Serializer.Json.SerializeToNode(e)!;
-        metadataObject.Remove("data", out var dataObject);
-        if (!string.IsNullOrWhiteSpace(e.Subject)) metadataObject.Add("$correlationId", e.Subject);
-        var data = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(dataObject));
-        var metadata = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(metadataObject));
-        return Task.FromResult(new EventData(id, type, data, metadata, MediaTypeNames.Application.Json));
+        var contextAttributes = Serializer.Json.Deserialize<IDictionary<string, object>>(Serializer.Json.Serialize(e))!;
+        contextAttributes.Remove(CloudEventAttributes.Data);
+        var dataContentType = string.IsNullOrWhiteSpace(e.DataContentType) ? MediaTypeNames.Application.Json : e.DataContentType;
+        var dataRaw = dataContentType switch
+        {
+            MediaTypeNames.Application.Json => Encoding.UTF8.GetBytes(Serializer.Json.Serialize(e.Data)),
+            "application/x-yaml" or "text/yaml" or "text/x-yaml" => Encoding.UTF8.GetBytes(Serializer.Yaml.Serialize(e.Data)),
+            MediaTypeNames.Application.Octet => e.Data is byte[] byteArray ? byteArray : e.Data is string base64String ? Convert.FromBase64String(base64String)
+                : throw new NotSupportedException($"The cloud event payload must be an array of bytes or a base 64 encoded string when data content type has been set to '{MediaTypeNames.Application.Octet}'"),
+            _ => throw new NotSupportedException($"The specified cloud event data content type '{dataContentType}' is not supported")
+        };
+        var esMetadata = new ESCloudEventMetadata(contextAttributes) { ExtensionData = metadata };
+        var metadataRaw = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(esMetadata));
+        return Task.FromResult(new EventData(id, type, dataRaw, metadataRaw, dataContentType));
     }
 
     /// <summary>
-    /// Deserializes the specified <see cref="ResolvedEvent"/> into a new <see cref="CloudEvent"/>
+    /// Deserializes the specified <see cref="ResolvedEvent"/> into a new <see cref="CloudEventRecord"/>
     /// </summary>
     /// <param name="e">The <see cref="ResolvedEvent"/> to convert</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="CloudEvent"/></returns>
-    protected virtual Task<CloudEvent> DeserializeAsync(ResolvedEvent e, CancellationToken cancellationToken)
+    /// <returns>A new <see cref="CloudEventRecord"/></returns>
+    protected virtual Task<CloudEventRecord> DeserializeResolvedEventAsync(ResolvedEvent e, CancellationToken cancellationToken)
     {
+        var data = e.Event.ContentType switch
+        {
+            MediaTypeNames.Application.Json => Serializer.Json.Deserialize<object>(e.Event.Data.Span),
+            "application/x-yaml" or "text/yaml" or "text/x-yaml" => Serializer.Yaml.Deserialize<object>(e.Event.Data.Span),
+            MediaTypeNames.Application.Octet => e.Event.Data,
+            _ => throw new NotSupportedException($"The specified cloud event data content type '{dataContentType}' is not supported")
+        }; //depends on resolved event's content type
+        var metadata = Serializer.Json.Deserialize<ESCloudEventMetadata>(e.Event.Data.Span)!;
+        var cloudEvent = (JsonObject)Serializer.Json.SerializeToNode(metadata.ContextAttributes)!;
+        cloudEvent[CloudEventAttributes.Data] = dataObject;
+
         var dataObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Data.Span);
         var eventObject = Serializer.Json.Deserialize<JsonObject>(e.Event.Metadata.Span) ?? throw new Exception($"The resolved event at position '{e.OriginalPosition!.Value}' in stream '{e.OriginalStreamId}' is in a invalid/unsupported cloud event image format");
         eventObject.Remove("$correlationId");
         if (dataObject != null) eventObject["data"] = dataObject;
-        var rawEvent = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(eventObject));
-        using var stream = new MemoryStream(rawEvent);
         string? dataContentType = null;
         if (!eventObject.TryGetPropertyValue(CloudEventExtensionAttributes.Sequence, out _)) eventObject[CloudEventExtensionAttributes.Sequence] = e.OriginalEventNumber.ToInt64();
         if (eventObject.TryGetPropertyValue(CloudEventAttributes.DataContentType, out var dataContentTypeNode) && dataContentTypeNode != null) dataContentType = Serializer.Json.Deserialize<string>(dataContentTypeNode);
         if (string.IsNullOrWhiteSpace(dataContentType)) dataContentType = MediaTypeNames.Application.Json;
         return Task.FromResult(Serializer.Json.Deserialize<CloudEvent>(eventObject)!);
     }
+
+}
+
+public class ESCloudEventMetadata
+    : IExtensible
+{
+
+    public virtual IDictionary<string, object> ContextAttributes { get; set; }
+
+    public virtual IDictionary<string, object>? ExtensionData { get; set; }
 
 }

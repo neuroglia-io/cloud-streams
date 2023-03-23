@@ -18,7 +18,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all supported patch types
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum PatchType
 {

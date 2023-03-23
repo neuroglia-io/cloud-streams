@@ -18,7 +18,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates resoruce label selection operators 
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum ResourceLabelSelectionOperator
 {

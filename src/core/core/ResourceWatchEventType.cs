@@ -19,7 +19,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all default types of resource-related event
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum ResourceWatchEventType
 {

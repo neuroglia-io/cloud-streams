@@ -18,6 +18,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all types of cloud event mutations
 /// </summary>
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum CloudEventMutationType
 {

@@ -19,7 +19,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all supported read directions for streams
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum StreamReadDirection
 {

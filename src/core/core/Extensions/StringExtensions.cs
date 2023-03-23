@@ -19,10 +19,10 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Defines extensions for <see cref="string"/>s
 /// </summary>
-public static class StringExtensions
+public static partial class StringExtensions
 {
 
-    private static readonly Regex MatchCurlyBracedWords = new(@"\{([^}]+)\}", RegexOptions.Compiled);
+    private static readonly Regex MatchCurlyBracedWords = MatchCurlyBracedWordsRegex();
 
     /// <summary>
     /// Converts the specified input into a camel-cased string
@@ -44,6 +44,41 @@ public static class StringExtensions
     /// <param name="input">The string to convert to pascal-case</param>
     /// <returns>The pascal-cased input</returns>
     public static string ToPascalCase(this string input) => PascalCaseNamingConvention.Instance.Apply(input);
+
+    /// <summary>
+    /// Determines whether or not the specified input only contains letters
+    /// </summary>
+    /// <param name="input">The input to check</param>
+    /// <returns>A boolean indicating whether or not the specified input only contains letters</returns>
+    public static bool IsAlphabetic(this string input) => input.All(char.IsLetter);
+
+    /// <summary>
+    /// Determines whether or not the specified input only contains digits
+    /// </summary>
+    /// <param name="input">The input to check</param>
+    /// <returns>A boolean indicating whether or not the specified input only contains digits</returns>
+    public static bool IsNumeric(this string input) => input.All(char.IsDigit);
+
+    /// <summary>
+    /// Determines whether or not the specified input only contains letters or digits
+    /// </summary>
+    /// <param name="input">The input to check</param>
+    /// <returns>A boolean indicating whether or not the specified input only contains letters or digits</returns>
+    public static bool IsAlphanumeric(this string input) => input.All(char.IsLetterOrDigit);
+
+    /// <summary>
+    /// Determines whether or not the specified input is lowercased
+    /// </summary>
+    /// <param name="input">The input to check</param>
+    /// <returns>A boolean indicating whether or not the specified input is lowercased</returns>
+    public static bool IsLowercased(this string input) => input.All(char.IsLower);
+
+    /// <summary>
+    /// Determines whether or not the specified input is uppercased
+    /// </summary>
+    /// <param name="input">The input to check</param>
+    /// <returns>A boolean indicating whether or not the specified input is uppercased</returns>
+    public static bool IsUppercased(this string input) => input.All(char.IsLower);
 
     /// <summary>
     /// Formats the string
@@ -90,5 +125,6 @@ public static class StringExtensions
     /// <param name="input">The string to check</param>
     /// <returns>A boolean indicating whether or not the string is a runtime expression</returns>
     public static bool IsRuntimeExpression(this string input) => input.TrimStart().StartsWith("${") && input.TrimEnd().EndsWith("}");
-
+    [GeneratedRegex("\\{([^}]+)\\}", RegexOptions.Compiled)]
+    private static partial Regex MatchCurlyBracedWordsRegex();
 }

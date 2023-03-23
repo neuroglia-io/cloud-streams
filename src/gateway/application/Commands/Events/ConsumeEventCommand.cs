@@ -63,7 +63,7 @@ public class ConsumeCloudEventCommandHandler
         var admissionResult = await this._EventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!admissionResult.IsSuccessStatusCode()) return admissionResult;
         if(!e.Time.HasValue) e.Time = DateTimeOffset.Now;
-        await this._EventStore.AppendAsync(e, cancellationToken).ConfigureAwait(false);
+        await this._EventStore.AppendAsync(e, metadata, cancellationToken).ConfigureAwait(false);
         this._Metrics.IncrementTotalIngestedEvents();
         return this.Accepted();
     }

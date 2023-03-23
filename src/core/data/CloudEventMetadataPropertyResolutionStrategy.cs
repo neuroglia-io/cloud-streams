@@ -12,27 +12,24 @@
 // limitations under the License.
 
 using CloudStreams.Core.Serialization.Json.Converters;
-using System.ComponentModel;
-using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 
-namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported sort orders
+/// Enumerates all strategies for resolving cloud event metadata properties
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum SortOrder
+public enum CloudEventMetadataPropertyResolutionStrategy
 {
     /// <summary>
-    /// Indicates an ascending sorting
+    /// Indicates that the metadata property is extracted from a context attribute
     /// </summary>
-    [EnumMember(Value = "asc")]
-    Ascending,
+    [EnumMember(Value = "attribute")]
+    ContextAttribute,
     /// <summary>
-    /// Indicates a descending sorting
+    /// Indicates that the metadata property is extracted by evaluating a runtime expression against the event
     /// </summary>
-    [EnumMember(Value = "desc")]
-    Descending
+    [EnumMember(Value = "expression")]
+    RuntimeExpression
 }
