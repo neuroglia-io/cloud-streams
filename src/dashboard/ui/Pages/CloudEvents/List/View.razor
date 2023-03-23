@@ -35,8 +35,7 @@
         <tbody>
             @if (events != null && events.Any())
             {
-                foreach(var e in events)
-                {
+                <Virtualize Context="e" Items="@events">
                     <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
                         <td>@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</td>
                         <td>@e.Id</td>
@@ -62,7 +61,7 @@
                             }
                         </td>
                     </tr>    
-                }
+                </Virtualize>
             }
         </tbody>
     </table>
