@@ -16,15 +16,15 @@
                     <tbody>
                         <tr>
                             <td>Created at</td>
-                            <td><input type="text" readonly value="@stream?.FirstEvent?.LocalDateTime.ToString("R")" title="The date and time of the first cloud event published on the stream" class="form-control" /></td>
+                            <td>@stream?.FirstEvent?.LocalDateTime.ToString("R")</td>
                         </tr>
                         <tr>
                             <td>Last modified</td>
-                            <td><input type="text" readonly value="@stream?.LastEvent?.LocalDateTime.ToString("R")" title="The date and time of the last cloud event published on the stream" class="form-control" /></td>
+                            <td>@stream?.LastEvent?.LocalDateTime.ToString("R")</td>
                         </tr>
                             <tr>
                             <td>Length</td>
-                            <td><input type="text" readonly value="@stream?.Length" title="The amount of cloud events on the stream" class="form-control" /></td>
+                            <td>@stream?.Length"</td>
                         </tr>
                     </tbody>
                 </table>
