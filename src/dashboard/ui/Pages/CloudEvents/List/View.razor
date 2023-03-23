@@ -80,7 +80,7 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
+        this.Store.Loading.Subscribe(loading => this.OnStateChanged(cmp => cmp.loading = loading), token: this.CancellationTokenSource.Token);
         this.Store.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged, token: this.CancellationTokenSource.Token);
     }
 

@@ -4,48 +4,48 @@
 
 <ApplicationTitle>Subscriptions</ApplicationTitle>
 
-<Table Items="resources"
-    AutoGenerateColumns="false"
-    TableClass="table table-striped table-hover"
-    RowClass="cursor-pointer">
-    <RowTemplate>
-        <Row RenderContext="context" OnClick="async _ => await OnShowResourceDetailsAsync(context.Item)" />
-    </RowTemplate>
-    <Columns>
-        <Column TData="Subscription"
-                ValueProvider="s => s.Metadata.Name">
-            <HeaderTemplate>Name</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription"
-                ValueProvider="s => s.Metadata.CreationTimestamp"
-                Format="R">
-            <HeaderTemplate>Created At</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription"
-                ValueProvider="@(s => s.Spec.Filter == null ? "no" : "yes")">
-            <HeaderTemplate>Filter</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription"
-                ValueProvider="@(s => s.Spec.Mutation == null ? "no" : "yes")">
-            <HeaderTemplate>Mutation</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription"
-                ValueProvider="@(s => s.Spec.Stream == null ? "-" : s.Spec.Stream.Offset)">
-            <HeaderTemplate>Desired Offset</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription"
-                ValueProvider="s => s.Status == null || s.Status.Stream == null ? null : s.Status.Stream.AckedOffset">
-            <HeaderTemplate>Acked Offset</HeaderTemplate>
-        </Column>
-        <Column TData="Subscription" CssClass="text-end">
-            <HeaderTemplate />
-            <CellTemplate Context="context">
-                <button class="btn btn-outline-primary btn-sm" title="Edit '@context.Item.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
-                <button class="btn btn-outline-danger btn-sm" title="Delete '@context.Item.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(context.Item)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
-            </CellTemplate>
-        </Column>
-    </Columns>
-</Table>
+<div class="table-container">
+    @if (loading)
+    {
+        <div class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Created At</th>
+                <th>Filter</th>
+                <th>Mutation</th>
+                <th>Desired Offset</th>
+                <th>Acked Offset</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (resources != null && resources.Any())
+            {
+                <Virtualize Context="resource" Items="@resources">
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer">
+                        <td>@resource.Metadata.Name</td>
+                        <td>@resource.Metadata.CreationTimestamp.ToString()</td>
+                        <td>@(resource.Spec?.Filter == null ? "no" : "yes")</td>
+                        <td>@(resource.Spec?.Mutation == null ? "no" : "yes")</td>
+                        <td>@(resource.Spec?.Stream == null ? "-" : resource.Spec?.Stream.Offset)</td>
+                        <td>@(resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm" title="Edit '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
+                            <button class="btn btn-outline-danger btn-sm" title="Delete '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
+                        </td>
+                    </tr>
+                </Virtualize>
+            }
+        </tbody>
+    </table>
+</div>
 
 <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
 
