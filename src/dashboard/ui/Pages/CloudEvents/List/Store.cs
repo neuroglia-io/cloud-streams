@@ -12,7 +12,6 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Core.Data.Models;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
