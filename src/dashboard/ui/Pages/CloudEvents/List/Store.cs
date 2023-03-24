@@ -145,25 +145,38 @@ public class CloudEventListStore
         await Task.Delay(1);
         readOptions = readOptions with { };
         int totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
-        List<CloudEvent> cloudEvents = this.Get(state => state.CloudEvents) ?? new();
-        if (cloudEvents.Any())
+        //List<CloudEvent> cloudEvents = this.Get(state => state.CloudEvents) ?? new();
+        //if (cloudEvents.Any())
+        //{
+        //    if (cloudEvents.Count() >= (request.StartIndex + request.Count))
+        //    {
+        //        this.SetLoading(false);
+        //        return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+        //    }
+        //    else
+        //    {
+        //        readOptions.Offset = (long?)cloudEvents.Last().GetSequence();
+        //    }
+        //}
+        //readOptions.Offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
+        //readOptions.Length = (ulong)(request.StartIndex + request.Count - cloudEvents.Count());
+        readOptions.Offset = request.StartIndex;
+        if (readOptions.Direction == StreamReadDirection.Backwards)
         {
-            if (cloudEvents.Count() >= (request.StartIndex + request.Count))
+            if (request.StartIndex == 0)
             {
-                this.SetLoading(false);
-                return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+                readOptions.Offset = -1;
             }
             else
             {
-                readOptions.Offset = (long?)cloudEvents.Last().GetSequence();
+                readOptions.Offset = totalCount - request.StartIndex;
             }
         }
-        readOptions.Offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
-        readOptions.Length = (ulong)(request.StartIndex + request.Count - cloudEvents.Count());
+        readOptions.Length = (ulong)request.Count;
         List<CloudEvent> fetchedCloudEvents = new();
         if (readOptions.Length <= StreamReadOptions.MaxLength)
         {
-            fetchedCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
+            fetchedCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
         }
         else
         {
@@ -174,19 +187,20 @@ public class CloudEventListStore
                 StreamReadOptions tempReadOptions = readOptions with { };
                 tempReadOptions.Offset = offset;
                 tempReadOptions.Length = StreamReadOptions.MaxLength;
-                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
+                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
                 fetchedCloudEvents.AddRange(tempCloudEvents);
                 offset = (long)fetchedCloudEvents.Last()!.GetSequence()!;
                 fetchMore = tempCloudEvents.Count() > 1 && (ulong)fetchedCloudEvents.Count < readOptions!.Length;
             }
             while (fetchMore);
         }
-        cloudEvents.AddRange(fetchedCloudEvents);
-        this.Reduce(state => state with 
-        { 
-            CloudEvents = cloudEvents 
-        });
+        //cloudEvents.AddRange(fetchedCloudEvents);
+        //this.Reduce(state => state with 
+        //{ 
+        //    CloudEvents = cloudEvents 
+        //});
         this.SetLoading(false);
-        return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+        //return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+        return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount);
     }
 }

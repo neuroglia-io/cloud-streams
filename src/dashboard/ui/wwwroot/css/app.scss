@@ -3,6 +3,7 @@
 @import "../lib/bootstrap-icons/font/bootstrap-icons";
 @import "./theme/theme";
 @import "./scrollbar";
+@import "./table";
 @import "./timeline";
 
 html, body {
@@ -139,30 +140,4 @@ h1:focus {
 
 .monaco-extra-small {
     height: 100px !important;
-}
-
-.table-container {
-    max-height: 100%;
-    overflow-y: scroll;
-    flex-grow: 1;
-    position: relative;
-
-    .loading {
-        position: absolute;
-        z-index: 2;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        background: rgba(var(--bs-gray-900-rgb), 0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .sticky-header {
-        position: sticky;
-        top: 0;
-        background-color: var(--bs-body-bg);
-    }
 }
