@@ -10,14 +10,6 @@
 <ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions" OnMaxLengthChange="Store.SetTotalCount"></ReadOptionsForm>
 
 <div class="table-container">
-    @if (loading)
-    {
-        <div class="loading">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    }
     <table class="table table-striped table-hover">
         <thead>
             <tr>
@@ -32,7 +24,7 @@
             </tr>
         </thead>
         <tbody>
-            <Virtualize @ref="virtualize" Context="e" ItemsProvider="@Store.ProvideCloudEvents">
+            <Virtualize @ref="virtualize" Context="e" ItemsProvider="@Store.ProvideCloudEvents" ItemSize="61">
                 <ItemContent>
                     <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
                         <td><div class="contained">@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</div></td>
@@ -85,14 +77,12 @@
     Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
     Virtualize<CloudEvent>? virtualize;
-    bool loading = false;
     bool readOptionsInitialized = false;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Loading.Subscribe(loading => this.OnStateChanged(cmp => cmp.loading = loading), token: this.CancellationTokenSource.Token);
         this.Store.ReadOptions.SubscribeAsync(this.OnReadOptionChangedAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 

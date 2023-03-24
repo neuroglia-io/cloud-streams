@@ -64,9 +64,34 @@ public class ReadOptionsFormStore
     protected IObservable<ulong?> _length => this.Select(state => state.Length).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.MaxLength"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.StreamLength"/> changes
     /// </summary>
-    public IObservable<ulong?> MaxLength => this.Select(state => state.MaxLength).DistinctUntilChanged();
+    protected IObservable<ulong?> StreamLength => this.Select(state => state.StreamLength).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ReadOptionsFormState.StreamLength"/> changes
+    /// </summary>
+    public IObservable<ulong?> MaxLength => Observable.CombineLatest(
+        this.Direction,
+        this.Offset,
+        this.StreamLength,
+        (direction, offset, length) =>
+        {
+            if (length == null)
+            {
+                return null;
+            }
+            if (offset == null || offset == 0 || offset == -1)
+            {
+                return length;
+            }
+            if (direction == StreamReadDirection.Backwards)
+            {
+                return (ulong?)offset + 1;
+            }
+            return length - (ulong?)offset;
+        }
+    );
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the computed length 
@@ -231,14 +256,14 @@ public class ReadOptionsFormStore
     }
 
     /// <summary>
-    /// Updates <see cref="ReadOptionsFormState.MaxLength"/> based on the stream/partition's metadata
+    /// Updates <see cref="ReadOptionsFormState.StreamLength"/> based on the stream/partition's metadata
     /// </summary>
     /// <param name="partition">A (<see cref="CloudEventPartitionType"/>, string) tuple to gather the partition for, if any </param>
     protected async Task UpdateMetadataAsync((CloudEventPartitionType?, string?) partition)
     {
         this.Reduce(state => state with
         {
-            MaxLength = null
+            StreamLength = null
         });
         try { 
             (CloudEventPartitionType? type, string? id) = partition;
@@ -247,7 +272,7 @@ public class ReadOptionsFormStore
                 StreamMetadata metadata = await this.cloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
                 this.Reduce(state => state with
                 {
-                    MaxLength = metadata.Length
+                    StreamLength = metadata.Length
                 });
             }
             else
@@ -257,7 +282,7 @@ public class ReadOptionsFormStore
                 {
                     this.Reduce(state => state with
                     {
-                        MaxLength = metadata.Length
+                        StreamLength = metadata.Length
                     });
                 }
             }

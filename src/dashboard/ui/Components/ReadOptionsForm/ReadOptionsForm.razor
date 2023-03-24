@@ -4,28 +4,11 @@
 
 <div id="@(id + "read-options-form")" class="input-group mb-3">
     <div class="form-floating">
-        <select id="@(id + "direction")" class="form-select" name="direction" @onchange="e => Store.SetDirection(Enum.Parse<StreamReadDirection>((string)e.Value!))">
-            @foreach (var value in Enum.GetValues<StreamReadDirection>())
-            {
-                    <option value="@value" selected="@(direction == value)">@value</option>
-            }
-        </select>
-        <label for="@(id + "direction")">Direction</label>
-    </div>
-    <div class="form-floating">
-        <input id="@(id + "offset")" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset(string.IsNullOrWhiteSpace((string?)e.Value) ? null : long.Parse((string?)e.Value!))" />
-        <label for="@(id + "offset")">Offset</label>
-    </div>
-    <div class="form-floating">
-        <input id="@(id + "length")" type="number" min="0" max="@maxLength" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
-        <label for="@(id + "length")">length</label>
-    </div>
-    <div class="form-floating">
         <select id="@(id + "partitionType")" class="form-select" name="partitionType" @onchange="e => Store.SetPartitionType(string.IsNullOrWhiteSpace((string?)e.Value) ? null : Enum.Parse<CloudEventPartitionType>((string)e.Value!))">
             <option value="" selected="@(partitionType == null)"></option>
             @foreach (var value in Enum.GetValues<CloudEventPartitionType>())
             {
-                    <option value="@value" selected="@(partitionType == value)">@value</option>
+                <option value="@value" selected="@(partitionType == value)">@value</option>
             }
         </select>
         <label for="@(id + "partitionType")">Partition Type</label>
@@ -37,16 +20,41 @@
             {
                 foreach (var partition in partitions)
                 {
-                            <option value="@partition"></option>
+                    <option value="@partition"></option>
                 }
             }
         </datalist>
         <label for="@(id + "partitionId")">Partition Id</label>
     </div>
+    <div class="form-floating">
+        <select id="@(id + "direction")" class="form-select" name="direction" @onchange="e => Store.SetDirection(Enum.Parse<StreamReadDirection>((string)e.Value!))">
+            @foreach (var value in Enum.GetValues<StreamReadDirection>())
+            {
+                <option value="@value" selected="@(direction == value)">@value</option>
+            }
+        </select>
+        <label for="@(id + "direction")">Direction</label>
+    </div>
+    <div class="form-floating">
+        <input id="@(id + "offset")" type="number" class="form-control" value="@offset" @onchange="e => Store.SetOffset(string.IsNullOrWhiteSpace((string?)e.Value) ? null : long.Parse((string?)e.Value!))" />
+        <label for="@(id + "offset")">Offset</label>
+    </div>
+    @if (!Compact)
+    {
+        <div class="form-floating">
+            <input id="@(id + "length")" type="number" min="0" max="@maxLength" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
+            <label for="@(id + "length")">length</label>
+        </div>
+    }
     <button class="btn btn-outline-danger" type="button" @onclick="Reset"><span class="bi bi-x-circle"></span></button>
 </div>
 
 @code {
+    /// <summary>
+    /// Defines if the <see cref="ReadOptionsForm"/> should display offset and length fields or not
+    /// </summary>
+    [Parameter] public bool Compact { get; set; } = true;
+
     /// <summary>
     /// The <see cref="StreamReadOptions"/> emitted by the form
     /// </summary>
