@@ -19142,7 +19142,8 @@ textarea.form-control-lg {
 }
 
 tr {
-  height: 60.5px;
+  height: 61px;
+  max-height: 61px;
 }
 
 td {
@@ -19151,7 +19152,7 @@ td {
 
 .contained {
   display: -webkit-box;
-  max-height: calc(60.5px - 1rem);
+  max-height: calc(61px - 1rem);
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -19169,8 +19170,8 @@ td {
 tr.row-placeholder td::after {
   content: " ";
   display: block;
-  height: 25px;
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.3) 20%, rgba(0, 0, 0, 0.7) 50%, rgba(0, 0, 0, 0.3) 80%);
+  height: 12px;
+  background: linear-gradient(to right, rgba(var(--bs-body-color-rgb), 0.3) 20%, rgba(var(--bs-secondary-bg-rgb), 0.7) 50%, rgba(var(--bs-body-color-rgb), 0.3) 80%);
   background-size: 500px 100px;
   animation-name: moving-gradient;
   animation-duration: 1s;
