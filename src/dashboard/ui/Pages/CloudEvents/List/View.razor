@@ -4,11 +4,10 @@
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
 @inherits StatefulComponent<CloudEventListStore, CloudEventListState>
-@inject ICloudStreamsApiClient CloudStreamsApi
 
 <ApplicationTitle>Events</ApplicationTitle>
 
-<ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions"></ReadOptionsForm>
+<ReadOptionsForm @ref="readOptionForm" OnChange="Store.SetReadOptions" OnMaxLengthChange="Store.SetTotalCount"></ReadOptionsForm>
 
 <div class="table-container">
     @if (loading)
@@ -22,47 +21,58 @@
     <table class="table table-striped table-hover">
         <thead>
             <tr>
-                <th>Sequence</th>
-                <th>Id</th>
-                <th>Time</th>
-                <th>Source</th>
-                <th>Type</th>
-                <th>Subject</th>
-                <th>Data Schema</th>
-                <th>Data Content Type</th>
+                <th class="sticky-header">Sequence</th>
+                <th class="sticky-header">Id</th>
+                <th class="sticky-header">Time</th>
+                <th class="sticky-header">Source</th>
+                <th class="sticky-header">Type</th>
+                <th class="sticky-header">Subject</th>
+                <th class="sticky-header">Data Schema</th>
+                <th class="sticky-header">Content Type</th>
             </tr>
         </thead>
         <tbody>
-            @if (events != null && events.Any())
-            {
-                <Virtualize Context="e" Items="@events">
+            <Virtualize @ref="virtualize" Context="e" ItemsProvider="@Store.ProvideCloudEvents">
+                <ItemContent>
                     <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
-                        <td>@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</td>
-                        <td>@e.Id</td>
-                        <td>@(e.Time == null ? "" : e.Time!.Value.LocalDateTime.ToString("R"))</td>
-                        <td><a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySource, e.Source.ToString())">@e.Source</a></td>
-                        <td><a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.ByType, e.Type)">@e.Type</a></td>
+                        <td><div class="contained">@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</div></td>
+                        <td><div class="contained">@e.Id</div></td>
+                        <td><div class="contained">@(e.Time == null ? "" : e.Time!.Value.LocalDateTime.ToString("R"))</div></td>
+                        <td><div class="contained"><a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySource, e.Source.ToString())">@e.Source</a></div></td>
+                        <td><div class="contained"><a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.ByType, e.Type)">@e.Type</a></div></td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(e.Subject))
                             {
-                                <a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartition(CloudEventPartitionType.BySubject, e.Subject)">@e.Subject</a>
+                            <div class="contained"><a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySubject, e.Subject)">@e.Subject</a></div>
                             }
                         </td>
                         <td>
                             @if (e.DataSchema != null)
                             {
-                                <a href="@e.DataSchema" target="_blank">@e.DataSchema</a>
+                            <div class="contained"><a href="@e.DataSchema" target="_blank">@e.DataSchema</a></div>
                             }
                         </td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(e.DataContentType))
                             {
-                                <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span>
+                                <div class="contained"><span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span></div>
                             }
                         </td>
-                    </tr>    
-                </Virtualize>
-            }
+                    </tr>
+                </ItemContent>
+                <Placeholder>
+                    <tr class="row-placeholder">
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </Placeholder>
+            </Virtualize>
         </tbody>
     </table>
 </div>
@@ -71,17 +81,19 @@
 
 @code {
 
-    List<CloudEvent>? events;
+    List<CloudEvent> events = new();
     Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
+    Virtualize<CloudEvent>? virtualize;
     bool loading = false;
+    bool readOptionsInitialized = false;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
-        this.Store.CloudEvents.Subscribe(this.OnCloudEventCollectionChanged, token: this.CancellationTokenSource.Token);
+        this.Store.Loading.Subscribe(loading => this.OnStateChanged(cmp => cmp.loading = loading), token: this.CancellationTokenSource.Token);
+        this.Store.ReadOptions.SubscribeAsync(this.OnReadOptionChangedAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -94,24 +106,45 @@
         this.StateHasChanged();
     }
 
-    void OnReadCloudEventPartition(CloudEventPartitionType type, string id)
+    /// <summary>
+    /// Handles <see cref="StreamReadOptions" />'s changes
+    /// </summary>
+    /// <param name="readOptions"></param>
+    /// <returns></returns>
+    private async Task OnReadOptionChangedAsync(StreamReadOptions readOptions)
+    {
+        if (!this.readOptionsInitialized)
+        {
+            this.readOptionsInitialized = true;
+            return;
+        }
+        if (this.virtualize != null)
+        {
+            await this.virtualize.RefreshDataAsync();
+        }
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Sets the <see cref="ReadOptionsForm"/>'s value when a partition is clicked in the table
+    /// </summary>
+    /// <param name="type">The type of the partition</param>
+    /// <param name="id">The id of the partition</param>
+    private void OnReadCloudEventPartitionClicked(CloudEventPartitionType type, string id)
     {
         if (this.readOptionForm != null) this.readOptionForm.SetPartition(type, id);
     }
 
-    void OnCloudEventCollectionChanged(List<CloudEvent>? events)
-    {
-        if (this.events == events) return;
-        this.events = events;
-        this.StateHasChanged();
-    }
-
-    Task OnShowCloudEventOffcanvasAsync(CloudEvent e)
+    /// <summary>
+    /// Shows the <see cref="CloudEventDetails"/>
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to show the details of</param>
+    Task OnShowCloudEventOffcanvasAsync(CloudEvent cloudEvent)
     {
         if (this.offcanvas == null) return Task.CompletedTask;
         var parameters = new Dictionary<string, object>();
         parameters.Add("ReadOnly", true);
-        parameters.Add("CloudEvent", e);
+        parameters.Add("CloudEvent", cloudEvent);
         return this.offcanvas.ShowAsync<CloudEventDetails>(title: "Cloud Event Details", parameters: parameters);
     }
 

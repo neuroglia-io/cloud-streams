@@ -13,7 +13,6 @@
 
 using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Dashboard.StateManagement;
-using CloudStreams.Gateway.Api.Client.Services;
 using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement;

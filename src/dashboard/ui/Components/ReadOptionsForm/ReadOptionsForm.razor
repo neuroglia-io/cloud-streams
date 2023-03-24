@@ -53,6 +53,11 @@
     [Parameter] public EventCallback<StreamReadOptions> OnChange { get; set; }
 
     /// <summary>
+    /// The total count of <see cref="CloudEvent"/>s for the selection partition
+    /// </summary>
+    [Parameter] public EventCallback<ulong?> OnMaxLengthChange { get; set; }
+
+    /// <summary>
     /// Reflects the <see cref="ReadOptionsFormStore.PartitionType"/>
     /// </summary>
     private CloudEventPartitionType? partitionType = null;
@@ -97,6 +102,7 @@
         this.Store.MaxLength.Subscribe(maxLength => this.OnStateChanged(cmp => cmp.maxLength = maxLength), token: this.CancellationTokenSource.Token);
         this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(cmp => cmp.partitions = partitions), token: this.CancellationTokenSource.Token);
         this.Store.ReadOptions.SubscribeAsync(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.MaxLength.SubscribeAsync(this.OnMaxLengthChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>

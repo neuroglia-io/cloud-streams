@@ -12,12 +12,10 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Dashboard.Components;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.Gateway.Api.Client.Services;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using System.Reactive.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
@@ -53,7 +51,7 @@ public class CloudEventListStore
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
     /// </summary>
-    private IObservable<StreamReadOptions> ReadOptions => this.Select(state => {
+    public IObservable<StreamReadOptions> ReadOptions => this.Select(state => {
         if (state.ReadOptions.Partition?.Type != null && state.ReadOptions.Partition?.Id != null)
         {
             return state.ReadOptions;
@@ -68,7 +66,6 @@ public class CloudEventListStore
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        this.ReadOptions.SubscribeAsync(this.SetCloudEventsAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -79,7 +76,32 @@ public class CloudEventListStore
     {
         this.Reduce(state => state with
         {
-            ReadOptions = readOptions
+            ReadOptions = readOptions,
+            CloudEvents = new()
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="CloudEventListState.TotalCount"/>
+    /// </summary>
+    /// <param name="totalCount">The new total count</param>
+    public void SetTotalCount(ulong? totalCount)
+    {
+        this.Reduce(state => state with
+        {
+            TotalCount = totalCount
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="CloudEventListState.Loading"/>
+    /// </summary>
+    /// <param name="loading">The new loading state</param>
+    public void SetLoading(bool loading)
+    {
+        this.Reduce(state => state with
+        {
+            Loading = loading
         });
     }
 
@@ -102,47 +124,82 @@ public class CloudEventListStore
     }
 
     /// <summary>
-    /// Gathers and sets the <see cref="CloudEventListState.CloudEvents"/> based on the provided <see cref="StreamReadOptions"/>
+    /// Provides items to the <see cref="Virtualize{TItem}"/> component
     /// </summary>
-    /// <param name="readOptions">The <see cref="StreamReadOptions"/> to gather the <see cref="CloudEventListState.CloudEvents"/> with</param>
-    /// <returns></returns>
-    protected async Task SetCloudEventsAsync(StreamReadOptions readOptions)
+    /// <param name="request">The <see cref="ItemsProviderRequest"/> to execute</param>
+    /// <returns>The resulting <see cref="ItemsProviderResult{TResult}"/></returns>
+    public async ValueTask<ItemsProviderResult<CloudEvent>> ProvideCloudEvents(ItemsProviderRequest request)
     {
-        if (readOptions == null) return;
-        this.Reduce(state => state with
+        // Unstable
+        //
+        // ? Keep previous start index, difference with current one, negative-> scroll up, positive -> scroll down
+        // ? what algo to fetch up and down accrodingly ?
+        // ? when returning, instead of total count, either events.count+1?
+        StreamReadOptions readOptions = this.Get(state => state.ReadOptions);
+        if (readOptions == null)
         {
-            Loading = true
-        });
+            return new ItemsProviderResult<CloudEvent>(new List<CloudEvent>(), 0);
+        }
+        this.SetLoading(true);
         await Task.Delay(1);
-        List<CloudEvent?> cloudEvents;
-        if (readOptions!.Length <= StreamReadOptions.MaxLength)
+        readOptions = readOptions with { };
+        int totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
+        //List<CloudEvent> cloudEvents = this.Get(state => state.CloudEvents) ?? new();
+        //if (cloudEvents.Any())
+        //{
+        //    if (cloudEvents.Count() >= (request.StartIndex + request.Count))
+        //    {
+        //        this.SetLoading(false);
+        //        return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+        //    }
+        //    else
+        //    {
+        //        readOptions.Offset = (long?)cloudEvents.Last().GetSequence();
+        //    }
+        //}
+        //readOptions.Offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
+        //readOptions.Length = (ulong)(request.StartIndex + request.Count - cloudEvents.Count());
+        readOptions.Offset = request.StartIndex;
+        if (readOptions.Direction == StreamReadDirection.Backwards)
         {
-            cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+            if (request.StartIndex == 0)
+            {
+                readOptions.Offset = -1;
+            }
+            else
+            {
+                readOptions.Offset = totalCount - request.StartIndex;
+            }
+        }
+        readOptions.Length = (ulong)request.Count;
+        List<CloudEvent> fetchedCloudEvents = new();
+        if (readOptions.Length <= StreamReadOptions.MaxLength)
+        {
+            fetchedCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
         }
         else
         {
-            cloudEvents = new();
             bool fetchMore = true;
-            long offset = readOptions.Offset ?? (readOptions.Direction == StreamReadDirection.Forwards ? 0 : -1);
+            long offset = readOptions.Offset.Value;
             do
             {
-                var tempReadOptions = new StreamReadOptions();
-                tempReadOptions.Direction = readOptions.Direction;
-                tempReadOptions.Partition = readOptions.Partition;
+                StreamReadOptions tempReadOptions = readOptions with { };
                 tempReadOptions.Offset = offset;
                 tempReadOptions.Length = StreamReadOptions.MaxLength;
-                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-                cloudEvents.AddRange(tempCloudEvents);
-                offset = (long)cloudEvents.Last()!.GetSequence()!;
-                fetchMore = tempCloudEvents.Count() > 1 && (ulong)cloudEvents.Count < readOptions!.Length;
+                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
+                fetchedCloudEvents.AddRange(tempCloudEvents);
+                offset = (long)fetchedCloudEvents.Last()!.GetSequence()!;
+                fetchMore = tempCloudEvents.Count() > 1 && (ulong)fetchedCloudEvents.Count < readOptions!.Length;
             }
             while (fetchMore);
         }
-        this.Reduce(state => state with
-        {
-            CloudEvents = cloudEvents!,
-            Loading = false
-        });
+        //cloudEvents.AddRange(fetchedCloudEvents);
+        //this.Reduce(state => state with 
+        //{ 
+        //    CloudEvents = cloudEvents 
+        //});
+        this.SetLoading(false);
+        //return new ItemsProviderResult<CloudEvent>(cloudEvents.Skip(request.StartIndex).Take(request.Count), totalCount);
+        return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount);
     }
-
 }

@@ -30,6 +30,11 @@ public record CloudEventListState
     public List<CloudEvent>? CloudEvents { get; set; } = new();
 
     /// <summary>
+    /// Gets the total count of <see cref="CloudEvent"/>s for the stream/selected partition
+    /// </summary>
+    public ulong? TotalCount { get; set; } = null;
+
+    /// <summary>
     /// Gets/sets a boolean value that indicates whether data is currently being gathered
     /// </summary>
     public bool Loading { get; set; } = false;
