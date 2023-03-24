@@ -15,7 +15,7 @@ spec:
       required: false
       autoGenerate: true
   sources: #optional
-    - uri: https://mozart-dev.ccie.cisco.com/sys-admin
+    - uri: https://some.domain/source
       authorization:
         rules:
           - type: attribute
@@ -41,10 +41,10 @@ metadata:
     cloud-streams.io/network-id: network-1
 spec:
   subscriber: #required
-    uri: https://pubhook.certs.cloud/56cbc1f7-6452-4e8d-b529-a6418402557b #required
+    uri: http://webhook-tester:18080/00000000-0000-0000-0000-000000000000 #required
     rateLimit: 30
-  stream: #optional
-    offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
-  mutation: #optional
-    type: expression
-    expression: .data["formQualifiedName"] = .data.formqualifiedname | del(.data.formqualifiedname)
+  #stream: #optional
+  #  offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
+  #mutation: #optional
+  #  type: expression
+  #  expression: .data["foo"] = .data.foo | del(.data.foo)

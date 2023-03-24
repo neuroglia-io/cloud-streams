@@ -78,6 +78,12 @@ services:
       - tempo
       - loki
 
+  webhook-tester:
+    image: tarampampam/webhook-tester
+    command: serve --port 18080 --create-session 00000000-0000-0000-0000-000000000000
+    ports: 
+      - "18080:18080" # Open <http://127.0.0.1:18080/#/00000000-0000-0000-0000-000000000000>
+
   gateway-1:
     image: ghcr.io/neuroglia-io/cloud-streams-gateway
     environment:
