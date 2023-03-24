@@ -7,5 +7,6 @@
             const id = metadata.##propertyName##;
             if (!id || stream.includes(id)) return;
             stream.push(id);
+            stream.sort();
         }
     });
