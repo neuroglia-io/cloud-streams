@@ -19074,6 +19074,53 @@ textarea.form-control-lg {
   --bs-btn-border-radius: 0.25rem;
 }
 
+.loading-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+.loading-container .svg-container {
+  width: 8rem;
+  height: 8rem;
+  display: flex;
+  align-content: center;
+  justify-content: center;
+  align-items: center;
+}
+.loading-container .loading-progress {
+  position: absolute;
+  display: block;
+  width: 8rem;
+  height: 8rem;
+}
+.loading-container .loading-progress circle {
+  fill: none;
+  stroke: #0aa2c0;
+  stroke-width: 0.2rem;
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+}
+.loading-container .loading-progress circle:last-child {
+  stroke: #4DCEF3;
+  stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+  transition: stroke-dasharray 0.05s ease-in-out;
+}
+.loading-container .loading-logo {
+  position: absolute;
+  fill: #4DCEF3;
+  height: 100px;
+}
+.loading-container .loading-progress-text {
+  font-weight: bold;
+}
+.loading-container .loading-progress-text:after {
+  content: var(--blazor-load-percentage-text, "Loading");
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -19208,6 +19255,18 @@ text {
   fill: var(--bs-body-color);
 }
 
+.monaco-normal {
+  height: 500px !important;
+}
+
+.monaco-small {
+  height: 300px !important;
+}
+
+.monaco-extra-small {
+  height: 100px !important;
+}
+
 html, body {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   width: 100%;
@@ -19256,39 +19315,6 @@ h1:focus, .h1:focus {
   content: "An error has occurred.";
 }
 
-.loading-progress {
-  position: relative;
-  display: block;
-  width: 8rem;
-  height: 8rem;
-  margin: 20vh auto 1rem auto;
-}
-
-.loading-progress circle {
-  fill: none;
-  stroke: #0aa2c0;
-  stroke-width: 0.6rem;
-  transform-origin: 50% 50%;
-  transform: rotate(-90deg);
-}
-
-.loading-progress circle:last-child {
-  stroke: #4DCEF3;
-  stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
-  transition: stroke-dasharray 0.05s ease-in-out;
-}
-
-.loading-progress-text {
-  position: absolute;
-  text-align: center;
-  font-weight: bold;
-  inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
-}
-
-.loading-progress-text:after {
-  content: var(--blazor-load-percentage-text, "Loading");
-}
-
 .flex-grow {
   flex-grow: 1;
 }
@@ -19328,16 +19354,4 @@ h1:focus, .h1:focus {
 
 .modal-confirmation .modal-footer {
   border-top: var(--bs-modal-header-border-width) solid var(--bs-modal-header-border-color) !important;
-}
-
-.monaco-normal {
-  height: 500px !important;
-}
-
-.monaco-small {
-  height: 300px !important;
-}
-
-.monaco-extra-small {
-  height: 100px !important;
 }
