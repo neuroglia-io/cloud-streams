@@ -63,4 +63,27 @@ public static class CloudEventExtensions
         return new StringContent(Serializer.Json.Serialize(e), Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
     }
 
+    /// <summary>
+    /// Gets the <see cref="CloudEvent"/>'s context attributes
+    /// </summary>
+    /// <param name="e">The <see cref="CloudEvent"/> to get the context attributes of</param>
+    /// <param name="includeExtensionAttributes">A boolean indicating whether or not to include extension attributes</param>
+    /// <returns>A new <see cref="IEnumerable{T}"/></returns>
+    public static IEnumerable<KeyValuePair<string, object>> GetContextAttributes(this CloudEvent e, bool includeExtensionAttributes = true)
+    {
+        yield return new(CloudEventAttributes.Id, e.Id);
+        yield return new(CloudEventAttributes.SpecVersion, e.SpecVersion);
+        if(e.Time.HasValue) yield return new(CloudEventAttributes.Time, e.Time);
+        yield return new(CloudEventAttributes.Source, e.Source);
+        yield return new(CloudEventAttributes.Type, e.Type);
+        if (!string.IsNullOrWhiteSpace(e.Subject)) yield return new(CloudEventAttributes.Subject, e.Subject);
+        if (!string.IsNullOrWhiteSpace(e.DataContentType)) yield return new(CloudEventAttributes.DataContentType, e.DataContentType);
+        if (e.DataSchema != null) yield return new(CloudEventAttributes.DataSchema, e.DataSchema);
+        if (!includeExtensionAttributes || e.ExtensionAttributes == null) yield break;
+        foreach(var extensionAttribute in e.ExtensionAttributes)
+        {
+            yield return extensionAttribute;
+        }
+    }
+
 }

@@ -18,6 +18,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all cloud event filter types
 /// </summary>
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum CloudEventFilterType
 {

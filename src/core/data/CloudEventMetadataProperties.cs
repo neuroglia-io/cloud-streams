@@ -11,28 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Serialization.Json.Converters;
-using System.ComponentModel;
-using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
-
-namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported sort orders
+/// Exposes well known cloud event metadata properties
 /// </summary>
-[TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(StringEnumConverterFactory))]
-public enum SortOrder
+public static class CloudEventMetadataProperties
 {
+
     /// <summary>
-    /// Indicates an ascending sorting
+    /// Gets the name of the metadata property that holds the event's correlation id
     /// </summary>
-    [EnumMember(Value = "asc")]
-    Ascending,
+    public const string CorrelationId = "$correlationId";
     /// <summary>
-    /// Indicates a descending sorting
+    /// Gets the name of the metadata property that holds the event's causation id
     /// </summary>
-    [EnumMember(Value = "desc")]
-    Descending
+    public const string CausationId = "$causationId";
+
 }

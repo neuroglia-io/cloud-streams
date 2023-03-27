@@ -51,13 +51,13 @@ public class ProblemDetails
     /// Gets/sets an uri that reference the type of the described problem.
     /// </summary>
     [DataMember(Order = 1, Name = "type"), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual Uri? Type { get; set; } = null!;
+    public virtual Uri Type { get; set; } = null!;
 
     /// <summary>
     /// Gets/sets a short, human-readable summary of the problem type.It SHOULD NOT change from occurrence to occurrence of the problem, except for purposes of localization.
     /// </summary>
     [DataMember(Order = 2, Name = "title"), JsonPropertyName("title"), YamlMember(Alias = "title")]
-    public virtual string? Title { get; set; } = null!;
+    public virtual string Title { get; set; } = null!;
 
     /// <summary>
     /// Gets/sets the status code produced by the described problem

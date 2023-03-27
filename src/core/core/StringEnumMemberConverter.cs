@@ -20,12 +20,12 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Represents an <see cref="EnumConverter"/> used to convert enum using the values specified by <see cref="EnumMemberAttribute"/>s
 /// </summary>
-public class EnumMemberConverter
+public class StringEnumMemberConverter
     : EnumConverter
 {
 
     /// <inheritdoc/>
-    public EnumMemberConverter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields)] Type type) : base(type) { }
+    public StringEnumMemberConverter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields)] Type type) : base(type) { }
 
     /// <inheritdoc/>
     public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)

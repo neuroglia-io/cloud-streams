@@ -36,6 +36,12 @@ public class GatewaySpec
     /// Gets/sets the configuration that applies to specific cloud event sources
     /// </summary>
     [DataMember(Order = 3, Name = "sources"), JsonPropertyName("sources"), YamlMember(Alias = "sources")]
-    public virtual List<CloudEventSourceSpec>? Sources { get; set; }
+    public virtual List<CloudEventSourceDefinition>? Sources { get; set; }
+
+    /// <summary>
+    /// Gets/sets a list containing event-specific ingestion configurations
+    /// </summary>
+    [DataMember(Order = 4, Name = "events"), JsonPropertyName("events"), YamlMember(Alias = "events")]
+    public virtual List<CloudEventIngestionConfiguration>? Events { get; set; }
 
 }

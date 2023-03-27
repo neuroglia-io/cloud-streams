@@ -12,27 +12,24 @@
 // limitations under the License.
 
 using CloudStreams.Core.Serialization.Json.Converters;
-using System.ComponentModel;
-using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 
-namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported sort orders
+/// Enumerates all supported read output formats
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum SortOrder
+public enum StreamReadOutputFormat
 {
     /// <summary>
-    /// Indicates an ascending sorting
+    /// Specifies that the stream should output cloud events
     /// </summary>
-    [EnumMember(Value = "asc")]
-    Ascending,
+    [EnumMember(Value = "event")]
+    Event = 1,
     /// <summary>
-    /// Indicates a descending sorting
+    /// Specifies that the stream should output cloud event records
     /// </summary>
-    [EnumMember(Value = "desc")]
-    Descending
+    [EnumMember(Value = "record")]
+    Record = 2
 }
