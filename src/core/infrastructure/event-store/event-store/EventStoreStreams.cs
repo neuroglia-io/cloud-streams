@@ -81,9 +81,9 @@ public static class EventStoreStreams
         if(string.IsNullOrWhiteSpace(streamName)) throw new ArgumentNullException(nameof(streamName));
         return partitionType switch
         {
-            CloudEventPartitionType.BySource => streamName.Substring(ByCloudEventSourcePrefix.Length),
-            CloudEventPartitionType.ByType => streamName.Substring(ByCloudEventTypePrefix.Length),
-            CloudEventPartitionType.BySubject => streamName.Substring(ByCorrelationIdPrefix.Length),
+            CloudEventPartitionType.BySource => streamName[ByCloudEventSourcePrefix.Length..],
+            CloudEventPartitionType.ByType => streamName[ByCloudEventTypePrefix.Length..],
+            CloudEventPartitionType.BySubject => streamName[ByCorrelationIdPrefix.Length..],
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
         };
     }

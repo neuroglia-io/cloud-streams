@@ -301,15 +301,7 @@ public class ESCloudEventStore
         {
             var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
             var propertyName = typeName.Replace("by", string.Empty).ToCamelCase();
-            try
-            {
-                await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##propertyName##", propertyName), true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch(Exception ex)
-            {
-                throw;
-            }
-            
+            await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##propertyName##", propertyName), true, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
     }
 

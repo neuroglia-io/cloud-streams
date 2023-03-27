@@ -30,7 +30,7 @@ public static class CloudEventRecordExtensions
     {
         if (record == null) throw new ArgumentNullException(nameof(record));
         var e = ((CloudEventDescriptor)record).ToCloudEvent();
-        if (e.ExtensionAttributes == null) e.ExtensionAttributes = new Dictionary<string, object>();
+        e.ExtensionAttributes ??= new Dictionary<string, object>();
         e.ExtensionAttributes.Add(CloudEventExtensionAttributes.Sequence, record.Sequence);
         return e;
     }

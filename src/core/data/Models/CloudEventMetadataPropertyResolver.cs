@@ -55,7 +55,7 @@ public class CloudEventMetadataPropertyResolver
     /// <summary>
     /// Gets/sets the name of the cloud event metadata property to resolve
     /// </summary>
-    /// <remarks>See <see cref=""/></remarks>
+    /// <remarks>See <see cref="CloudEventMetadataProperties"/></remarks>
     [Required, MinLength(3)]
     [DataMember(Order = 1, Name = "name"), JsonPropertyName("name"), YamlMember(Alias = "name")]
     public virtual string Name { get; set; } = null!;
