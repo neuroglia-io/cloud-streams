@@ -30,8 +30,7 @@ public class Subscriber
     /// <summary>
     /// Gets/sets the maximum amount of events, if any, that can be dispatched per second to the subscriber
     /// </summary>
-    [Required, JsonRequired]
-    [DataMember(Order = 2, Name = "rateLimit", IsRequired = true), JsonPropertyName("rateLimit"), YamlMember(Alias = "rateLimit")]
+    [DataMember(Order = 2, Name = "rateLimit"), JsonPropertyName("rateLimit"), YamlMember(Alias = "rateLimit")]
     public virtual double? RateLimit { get; set; }
 
 }

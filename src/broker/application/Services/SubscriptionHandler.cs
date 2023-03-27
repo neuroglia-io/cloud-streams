@@ -109,6 +109,16 @@ public class SubscriptionHandler
     protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
     /// <summary>
+    /// Gets the <see cref="System.Threading.CancellationTokenSource"/> used to cancel an ongoing stream synchronization loop
+    /// </summary>
+    protected CancellationTokenSource? StreamInitializationCancellationTokenSource { get; private set; }
+
+    /// <summary>
+    /// Gets the <see cref="TaskCompletionSource"/> used to await the completion of an ongoing stream synchronization loop
+    /// </summary>
+    protected TaskCompletionSource? StreamInitializationTaskCompletionSource { get; private set; }
+
+    /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe consumed <see cref="CloudEvent"/>s
     /// </summary>
     protected IObservable<CloudEvent> CloudEventStream { get; private set; } = null!;
@@ -155,21 +165,34 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task InitializeCloudEventStreamAsync()
     {
-        this._Subscription?.Dispose();
-        var offset = this.Subscription.GetOffset();
-        this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
-        if (this.Subscription.Spec.Partition == null)
+        try
         {
-            this.CloudEventStream = (await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
-            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length;
+            this.StreamInitializationCancellationTokenSource ??= CancellationTokenSource.CreateLinkedTokenSource(this.CancellationToken);
+            this.StreamInitializationTaskCompletionSource ??= new();
+            this._Subscription?.Dispose();
+            var offset = this.Subscription.GetOffset();
+            this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
+            if (this.Subscription.Spec.Partition == null)
+            {
+                this.CloudEventStream = (await this.EventStore.SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
+                this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+            }
+            else
+            {
+                this.CloudEventStream = (await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
+                this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+            }
+            this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, null);
+            if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) _ = this.CatchUpAsync().ConfigureAwait(false);
         }
-        else
+        catch(Exception ex) 
+        { 
+        
+        }
+        finally
         {
-            this.CloudEventStream = (await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
-            this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition).ConfigureAwait(false)).Length;
+            if(this.StreamInitializationTaskCompletionSource?.Task.IsCompleted == false) this.StreamInitializationTaskCompletionSource?.SetResult();
         }
-        this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, null);
-        if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) await this.CatchUpAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -347,23 +370,31 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task CatchUpAsync()
     {
-        this.SubscriptionOutOfSync = true;
-        var currentOffset = this.Subscription.GetOffset();
-        if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))!.Sequence;
-        do
+        try
         {
-            var record = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.CancellationToken).ConfigureAwait(false);
-            if (record == null)
+            this.SubscriptionOutOfSync = true;
+            var currentOffset = this.Subscription.GetOffset();
+            if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence;
+            do
             {
-                await Task.Delay(50);
-                continue;
+                var record = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false);
+                if (record == null)
+                {
+                    await Task.Delay(50);
+                    continue;
+                }
+                var e = record.ToCloudEvent();
+                await this.DispatchAsync(e, true, false).ConfigureAwait(false);
+                currentOffset++;
             }
-            var e = record.ToCloudEvent();
-            await this.DispatchAsync(e, true, false).ConfigureAwait(false);
-            currentOffset++;
+            while (!this.StreamInitializationCancellationTokenSource.Token.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
+            this.SubscriptionOutOfSync = false;
         }
-        while (!this.CancellationToken.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
-        this.SubscriptionOutOfSync = false;
+        catch { }
+        finally
+        {
+            this.StreamInitializationTaskCompletionSource?.SetResult();
+        }
     }
 
     /// <summary>
@@ -371,7 +402,7 @@ public class SubscriptionHandler
     /// </summary>
     /// <param name="offset">The <see cref="Subscription"/>'s offset to commit</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task CommitOffsetAsync(ulong offset)
+    protected virtual async Task CommitOffsetAsync(ulong? offset)
     {
         var resource = this.Subscription.Clone()!;
         if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
@@ -396,11 +427,13 @@ public class SubscriptionHandler
             var previousState = this.Subscription;
             this.Subscription = subscription;
             if (previousState.Metadata.Generation == subscription.Metadata.Generation) return;
-            if (previousState.Spec.Stream?.Offset != this.Subscription.Spec.Stream?.Offset
-                && (ulong?)this.Subscription.Spec.Stream?.Offset < this.StreamOffset)
-            {
-                await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
-            }
+            this.StreamInitializationCancellationTokenSource?.Cancel();
+            if (this.StreamInitializationTaskCompletionSource != null) await this.StreamInitializationTaskCompletionSource.Task.ConfigureAwait(false);
+            this.StreamInitializationCancellationTokenSource?.Dispose();
+            this.StreamInitializationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationToken);
+            this.StreamInitializationTaskCompletionSource = new TaskCompletionSource();
+            await this.CommitOffsetAsync(null).ConfigureAwait(false);
+            await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
         catch(Exception ex)
         {
