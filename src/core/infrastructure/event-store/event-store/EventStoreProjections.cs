@@ -25,6 +25,11 @@ public static class EventStoreProjections
     /// Gets the name of the projection used to partition <see cref="CloudEvent"/>s by source
     /// </summary>
     public const string PartitionBySource = "cloud_events_by_source";
+
+    /// <summary>
+    /// Gets the name of the projection used to partition <see cref="CloudEvent"/>s by $causationId
+    /// </summary>
+    public const string PartitionByCausationId = "cloud_events_by_causation_id";
     /// <summary>
     /// Gets the prefix of name of the projection used to gather all <see cref="CloudEvent"/>'s partitions ids
     /// </summary>

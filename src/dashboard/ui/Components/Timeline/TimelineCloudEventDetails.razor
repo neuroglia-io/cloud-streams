@@ -10,17 +10,29 @@
             </tr>
             <tr>
                 <td>Source</td>
-                <td>@cloudEvent.Source</td>
+                <td>
+                    <a href="#" @onclick="async (_) => await OnPartitionClick.InvokeAsync(new PartitionReference(CloudEventPartitionType.BySource, cloudEvent.Source.ToString()))" @onclick:preventDefault @onclick:stopPropagation>
+                        @cloudEvent.Source
+                    </a>
+                </td>
             </tr>
             <tr>
                 <td>Type</td>
-                <td>@cloudEvent.Type</td>
+                <td>
+                    <a href="#" @onclick="async (_) => await OnPartitionClick.InvokeAsync(new PartitionReference(CloudEventPartitionType.ByType, cloudEvent.Type))" @onclick:preventDefault @onclick:stopPropagation>
+                        @cloudEvent.Type
+                    </a>
+                </td>
             </tr>
             @if (!string.IsNullOrWhiteSpace(cloudEvent.Subject))
             {
                 <tr>
                     <td>Subject</td>
-                    <td>@cloudEvent.Subject</td>
+                    <td>
+                        <a href="#" @onclick="async (_) => await OnPartitionClick.InvokeAsync(new PartitionReference(CloudEventPartitionType.BySubject, cloudEvent.Subject))" @onclick:preventDefault @onclick:stopPropagation>
+                            @cloudEvent.Subject
+                        </a>
+                    </td>
                 </tr>
             }
             <tr>
@@ -64,6 +76,8 @@
     bool isDirty = false;
     CloudEvent? cloudEvent;
     [Parameter] public CloudEvent? CloudEvent { get; set; }
+
+    [Parameter] public EventCallback<PartitionReference> OnPartitionClick { get; set; }
 
     protected override void OnParametersSet()
     {
