@@ -13,7 +13,7 @@
                 {
                     int optionIndex = i;
                     <div class="d-flex">
-                        <ReadOptionsForm OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
+                        <ReadOptionsForm Compact="false" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
                         <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
                     </div>
                 }

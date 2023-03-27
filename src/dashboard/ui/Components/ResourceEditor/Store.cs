@@ -16,7 +16,6 @@ using System.Reactive.Linq;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 using JsonCons.Utilities;
 using System.Text.Json;
-using CloudStreams.Core.Data.Models;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -276,7 +275,7 @@ public class ResourceEditorStore<TResource>
         try
         {
             resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
-            resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource, this.CancellationTokenSource.Token);
+            resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
             this.SetResource(resource);
         }
         catch (CloudStreamsException ex)

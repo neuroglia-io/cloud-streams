@@ -13,6 +13,7 @@
 
 using BlazorBootstrap;
 using CloudStreams.Dashboard.Components.ResourceManagement;
+using CloudStreams.Dashboard.Pages.CloudEvents.List;
 using Microsoft.AspNetCore.Components;
 
 namespace CloudStreams.Dashboard.Components;
@@ -51,11 +52,16 @@ public abstract class ResourceManagementComponent<TResource>
     /// The <see cref="Resource"/>'s <see cref="ResourceDefinition"/>
     /// </summary>
     protected ResourceDefinition? definition;
+    /// <summary>
+    /// A boolean value that indicates whether data is currently being gathered
+    /// </summary>
+    protected bool loading = false;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Loading.Subscribe(loading => this.OnStateChanged(cmp => cmp.loading = loading), token: this.CancellationTokenSource.Token);
         this.Store.Definition.SubscribeAsync(async definition =>
         {
             if (this.definition != definition)
@@ -70,6 +76,16 @@ public abstract class ResourceManagementComponent<TResource>
         this.Store.Resources.Subscribe(OnResourceCollectionChanged, token: this.CancellationTokenSource.Token);
         await this.Store.GetResourceDefinitionAsync().ConfigureAwait(false);
         await this.Store.ListResourcesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Patches the <see cref="View"/>'s fields after a <see cref="CloudEventListStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<ResourceManagementComponent<TResource>> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
     }
 
     /// <summary>

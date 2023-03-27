@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Dashboard.Pages.CloudEvents.List;
 using CloudStreams.Dashboard.StateManagement;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 using System.Reactive.Linq;
@@ -50,6 +51,10 @@ public class ResourceManagementComponentStore<TResource>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
     /// </summary>
     public IObservable<List<TResource>?> Resources => this.Select(s => s.Resources);
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
+    /// </summary>
+    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
     /// <summary>
     /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
@@ -94,10 +99,15 @@ public class ResourceManagementComponentStore<TResource>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task ListResourcesAsync()
     {
+        this.Reduce(state => state with
+        {
+            Loading = true
+        });
         this.resources = await (await this.resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
         this.Reduce(s => s with
         {
-            Resources = this.resources
+            Resources = this.resources,
+            Loading = false
         });
     }
 
