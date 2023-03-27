@@ -12,27 +12,29 @@
 // limitations under the License.
 
 using CloudStreams.Core.Serialization.Json.Converters;
-using System.ComponentModel;
-using System.Runtime.Serialization;
-using System.Text.Json.Serialization;
 
-namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all supported sort orders
+/// Enumerates all supported cloud event content modes
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum SortOrder
+public enum CloudEventContentMode
 {
     /// <summary>
-    /// Indicates an ascending sorting
+    /// Indicates the cloud event binary content mode
     /// </summary>
-    [EnumMember(Value = "asc")]
-    Ascending,
+    [EnumMember(Value = "binary")]
+    Binary,
     /// <summary>
-    /// Indicates a descending sorting
+    /// Indicates the cloud event structured content mode
     /// </summary>
-    [EnumMember(Value = "desc")]
-    Descending
+    [EnumMember(Value = "structured")]
+    Structured,
+    /// <summary>
+    /// Indicates the cloud event structured content mode
+    /// </summary>
+    [EnumMember(Value = "batched")]
+    Batched
 }

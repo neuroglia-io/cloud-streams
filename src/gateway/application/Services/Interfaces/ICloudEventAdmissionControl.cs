@@ -25,6 +25,6 @@ public interface ICloudEventAdmissionControl
     /// <param name="e">The <see cref="CloudEvent"/> to evaluate for admission</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="Response"/> that describes the result of the evaluation</returns>
-    Task<Response> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default);
+    Task<Response<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default);
 
 }

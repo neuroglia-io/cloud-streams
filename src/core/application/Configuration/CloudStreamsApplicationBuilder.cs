@@ -12,8 +12,6 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Services;
-using CloudStreams.Core.Data.Models;
-using CloudStreams.Core.Infrastructure.Services;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -24,7 +22,6 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using System.Diagnostics.Metrics;
 using System.Reflection;
 
 namespace CloudStreams.Core.Application.Configuration;

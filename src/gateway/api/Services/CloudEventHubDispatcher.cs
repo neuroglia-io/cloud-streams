@@ -15,6 +15,7 @@ using CloudStreams.Core.Infrastructure.Services;
 using CloudStreams.Gateway.Api.Client.Services;
 using CloudStreams.Gateway.Api.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using System.Reactive.Linq;
 
 namespace CloudStreams.Gateway.Api.Services;
 
@@ -50,6 +51,7 @@ public class CloudEventHubDispatcher
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         (await this.EventStore.SubscribeAsync(cancellationToken: stoppingToken).ConfigureAwait(false))
+            .Select(e => e.ToCloudEvent())
             .SubscribeAsync(e => this.HubContext.Clients.All.StreamEvent(e, stoppingToken), cancellationToken: stoppingToken);
     }
 

@@ -21,7 +21,7 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 /// <summary>
 /// Enumerates all supported artifact states
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 
 public enum ArtifactState

@@ -160,12 +160,12 @@ public class SubscriptionHandler
         this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
         if (this.Subscription.Spec.Partition == null)
         {
-            this.CloudEventStream = await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false);
+            this.CloudEventStream = (await this.EventStore.SubscribeAsync(offset, this.CancellationToken).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
             this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync().ConfigureAwait(false)).Length;
         }
         else
         {
-            this.CloudEventStream = await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false);
+            this.CloudEventStream = (await this.EventStore.SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.CancellationToken).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
             this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition).ConfigureAwait(false)).Length;
         }
         this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnCloudEventStreamingError, null);
@@ -349,15 +349,16 @@ public class SubscriptionHandler
     {
         this.SubscriptionOutOfSync = true;
         var currentOffset = this.Subscription.GetOffset();
-        if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))?.GetSequence()!.Value!;
+        if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.CancellationToken).ConfigureAwait(false))!.Sequence;
         do
         {
-            var e = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.CancellationToken).ConfigureAwait(false);
-            if (e == null)
+            var record = await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.CancellationToken).ConfigureAwait(false);
+            if (record == null)
             {
                 await Task.Delay(50);
                 continue;
             }
+            var e = record.ToCloudEvent();
             await this.DispatchAsync(e, true, false).ConfigureAwait(false);
             currentOffset++;
         }

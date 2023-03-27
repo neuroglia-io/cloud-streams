@@ -43,13 +43,13 @@ public class ReadCloudEventStreamQueryHandler
     : IQueryHandler<ReadEventStreamQuery, IAsyncEnumerable<CloudEvent>>
 {
 
+    readonly ICloudEventStore _EventStore;
+
     /// <inheritdoc/>
     public ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
     {
         this._EventStore = eventStore;
     }
-
-    ICloudEventStore _EventStore;
 
     /// <inheritdoc/>
     public Task<Response<IAsyncEnumerable<CloudEvent>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
@@ -74,7 +74,7 @@ public class ReadCloudEventStreamQueryHandler
         var events = query.Options.Partition == null ?
             this._EventStore.ReadAsync(query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken)
             : this._EventStore.ReadPartitionAsync(query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);
-        return Task.FromResult(this.Ok(events));
+        return Task.FromResult(this.Ok(events.Select(e => e.ToCloudEvent())));
     }
 
 }

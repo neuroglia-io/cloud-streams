@@ -12,15 +12,13 @@
 // limitations under the License.
 
 using CloudStreams.Core.Serialization.Json.Converters;
-using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 
 namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all supported cloud event stream partition types
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum CloudEventPartitionType
 {

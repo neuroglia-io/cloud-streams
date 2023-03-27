@@ -37,12 +37,14 @@ public record StreamReadOptions
     /// <param name="direction">The direction in which to read the stream of cloud events</param>
     /// <param name="offset">The offset starting from which to read the stream</param>
     /// <param name="length">The amount of events to read from the stream</param>
-    public StreamReadOptions(PartitionReference partition, StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength)
+    /// <param name="outputFormat">The expected output format</param>
+    public StreamReadOptions(PartitionReference partition, StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength, StreamReadOutputFormat outputFormat = StreamReadOutputFormat.Event)
     {
         this.Partition = partition;
         this.Direction = direction;
         this.Offset = offset;
         this.Length = length;
+        this.Format = outputFormat;
     }
 
     /// <summary>
@@ -78,5 +80,12 @@ public record StreamReadOptions
     [DefaultValue(MaxLength), Range(1, MaxLength)]
     [DataMember(Order = 4, Name = "length"), JsonPropertyName("length"), YamlMember(Alias = "length")]
     public virtual ulong Length { get; set; } = MaxLength;
+
+    /// <summary>
+    /// Gets/sets the expected output format
+    /// </summary>
+    [DefaultValue(StreamReadOutputFormat.Event)]
+    [DataMember(Order = 5, Name = "outputFormat"), JsonPropertyName("outputFormat"), YamlMember(Alias = "outputFormat")]
+    public virtual StreamReadOutputFormat Format { get; set; } = StreamReadOutputFormat.Event;
 
 }

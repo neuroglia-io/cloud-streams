@@ -21,7 +21,7 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Configuration
 /// <summary>
 /// Enumerates all supported line ending formats
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 
 public enum LineEndingFormatMode

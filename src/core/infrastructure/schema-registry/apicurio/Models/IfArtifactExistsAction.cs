@@ -21,7 +21,7 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 /// <summary>
 /// Enumerates all actions to undertake if an artifact already exist when attempting to create a new one
 /// </summary>
-[TypeConverter(typeof(EnumMemberConverter))]
+[TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
 public enum IfArtifactExistsAction
 {

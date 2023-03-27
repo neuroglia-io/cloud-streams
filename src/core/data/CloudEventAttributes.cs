@@ -62,4 +62,16 @@ public static class CloudEventAttributes
     /// </summary>
     public const string DataBase64 = "data_base64";
 
+    /// <summary>
+    /// Gets an <see cref="IEnumerable{T}"/> that contains all required <see cref="CloudEvent"/> attributes
+    /// </summary>
+    /// <returns>A new <see cref="IEnumerable{T}"/> that contains all required <see cref="CloudEvent"/> attributes</returns>
+    public static IEnumerable<string> GetRequiredAttributes()
+    {
+        yield return Id;
+        yield return SpecVersion;
+        yield return Source;
+        yield return Type;
+    }
+
 }

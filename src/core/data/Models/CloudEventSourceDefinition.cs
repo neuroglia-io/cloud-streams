@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data.Models;
 /// Represents an object used to configure a cloud event source
 /// </summary>
 [DataContract]
-public class CloudEventSourceSpec
+public class CloudEventSourceDefinition
 {
 
     /// <summary>

@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Core.Serialization.Yaml;
+using System.Text;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.NodeDeserializers;
@@ -73,6 +74,14 @@ public static partial class Serializer
         /// <param name="graph">The object to serialized</param>
         /// <returns>The YAML of the serialized object</returns>
         public static void Serialize<T>(TextWriter writer, T graph) => Serializer.Serialize(writer, graph!);
+
+        /// <summary>
+        /// Deserializes the specified YAML input
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize the specified YAML into</typeparam>
+        /// <param name="buffer">The UTF8 encoded YAML input</param>
+        /// <returns>The deserialized value</returns>
+        public static T? Deserialize<T>(ReadOnlySpan<byte> buffer) => Deserializer.Deserialize<T>(Encoding.UTF8.GetString(buffer));
 
         /// <summary>
         /// Deserializes the specified YAML input
