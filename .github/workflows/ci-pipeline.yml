@@ -7,6 +7,7 @@ on:
       - '.github/**'
       - '**/*.md'
       - 'assets/**'
+      - 'deployments/**'
   workflow_dispatch:
 
 jobs:

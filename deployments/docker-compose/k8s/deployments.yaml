@@ -15,7 +15,7 @@ spec:
       required: false
       autoGenerate: true
   sources: #optional
-    - uri: https://test.com/sys-admin
+    - uri: https://some.domain/source
       authorization:
         rules:
           - type: attribute
@@ -41,10 +41,10 @@ metadata:
     cloud-streams.io/network-id: network-1
 spec:
   subscriber: #required
-    uri: https://webhook.site/171b5e49-7981-4232-afd6-ed18129cfe2f #required
+    uri: http://webhook-tester:18080/00000000-0000-0000-0000-000000000000 #required
     rateLimit: 30
-  stream: #optional
-    offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
-  mutation: #optional
-    type: expression
-    expression: .data["patientName"] = .data.name | del(.data.name)
+  #stream: #optional
+  #  offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
+  #mutation: #optional
+  #  type: expression
+  #  expression: .data["foo"] = .data.foo | del(.data.foo)

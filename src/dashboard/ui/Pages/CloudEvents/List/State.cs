@@ -25,9 +25,9 @@ public record CloudEventListState
     public StreamReadOptions ReadOptions { get; set; } = new(StreamReadDirection.Backwards);
 
     /// <summary>
-    /// Gets a <see cref="List{T}"/> that contains all cached <see cref="CloudEvent"/>s
+    /// Gets the total count of <see cref="CloudEvent"/>s for the stream/selected partition
     /// </summary>
-    public List<CloudEvent>? CloudEvents { get; set; } = new();
+    public ulong? TotalCount { get; set; } = null;
 
     /// <summary>
     /// Gets/sets a boolean value that indicates whether data is currently being gathered

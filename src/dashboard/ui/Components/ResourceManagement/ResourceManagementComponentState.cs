@@ -33,4 +33,9 @@ public record ResourceManagementComponentState<TResource>
     /// </summary>
     public List<TResource>? Resources { get; set; }
 
+    /// <summary>
+    /// Gets/sets a boolean value that indicates whether data is currently being gathered
+    /// </summary>
+    public bool Loading { get; set; } = false;
+
 }
