@@ -30,40 +30,24 @@ public class CloudEventMetadata
     /// Initializes a new <see cref="CloudEventMetadata"/>
     /// </summary>
     /// <param name="contextAttributes">A key/value mapping of the described cloud event's context attributes</param>
-    /// <param name="correlationId">The cloud event's correlation id, if any</param>
-    /// <param name="causationId">The cloud event's causation id, if any</param>
-    public CloudEventMetadata(IDictionary<string, string> contextAttributes, string? correlationId = null, string? causationId = null)
+    public CloudEventMetadata(IDictionary<string, object> contextAttributes)
     {
         if (contextAttributes == null) throw new ArgumentNullException(nameof(contextAttributes));
         if (!CloudEventAttributes.GetRequiredAttributes().All(a => contextAttributes.TryGetValue(a, out _))) throw new ArgumentException("The specified mapping does not contains all the cloud event context attributes defined as required by the spec");
         if(contextAttributes.All(a => a.Key.IsAlphanumeric() && a.Key.IsLowercased() && a.Key.Length >= 3  && a.Key.Length < 20)) throw new ArgumentException("Cloud event context attribute names must be lowercased, must contain only alphanumeric characters, and must have a maximum length of 20 characters");
         this.ContextAttributes = contextAttributes;
-        this.CorrelationId = correlationId;
-        this.CausationId = causationId;
     }
 
     /// <summary>
     /// Gets/sets a key/value mapping of the described cloud event's context attributes
     /// </summary>
     [DataMember(Order = 1, Name = "contextAttributes"), JsonPropertyName("contextAttributes"), YamlMember(Alias = "contextAttributes")]
-    public virtual IDictionary<string, string> ContextAttributes { get; set; } = null!;
-
-    /// <summary>
-    /// Gets/sets the cloud event's correlation id, if any
-    /// </summary>
-    [DataMember(Order = 2, Name = "$correlationId"), JsonPropertyName("$correlationId"), YamlMember(Alias = "$correlationId")]
-    public virtual string? CorrelationId { get; set; }
-
-    /// <summary>
-    /// Gets/sets the cloud event's causation id, if any
-    /// </summary>
-    [DataMember(Order = 3, Name = "$causationId"), JsonPropertyName("$causationId"), YamlMember(Alias = "$causationId")]
-    public virtual string? CausationId { get; set; }
+    public virtual IDictionary<string, object> ContextAttributes { get; set; } = null!;
 
     /// <summary>
     /// Gets/sets a key/value mapping containing the described cloud event's extension data
     /// </summary>
-    [DataMember(Order = 4, Name = "extensionData"), JsonExtensionData]
+    [DataMember(Order = 2, Name = "extensionData"), JsonExtensionData]
     public IDictionary<string, object>? ExtensionData { get; set; }
 
 }

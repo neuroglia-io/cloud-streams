@@ -4,7 +4,7 @@
         $any: (stream, evt) => {
             if (!evt || !evt.metadataRaw || !evt.metadataRaw) return;
             const metadata = JSON.parse(evt.metadataRaw);
-            const id = metadata.##propertyName##;
+            const id = metadata.contextAttributes.##propertyName##;
             if (!id || stream.includes(id)) return;
             stream.push(id);
         }

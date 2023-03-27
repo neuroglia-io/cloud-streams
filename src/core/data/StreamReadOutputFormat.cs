@@ -11,20 +11,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace CloudStreams.Gateway.Application.Services;
+using CloudStreams.Core.Serialization.Json.Converters;
+
+namespace CloudStreams.Core;
 
 /// <summary>
-/// Defines the fundamentals of a service that controls <see cref="CloudEvent"/> admission
+/// Enumerates all supported read output formats
 /// </summary>
-public interface ICloudEventAdmissionControl
+[TypeConverter(typeof(StringEnumMemberConverter))]
+[JsonConverter(typeof(StringEnumConverterFactory))]
+public enum StreamReadOutputFormat
 {
-
     /// <summary>
-    /// Evaluates the admission of the specified <see cref="CloudEvent"/>
+    /// Specifies that the stream should output cloud events
     /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to evaluate for admission</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="Response"/> that describes the result of the evaluation</returns>
-    Task<Response<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default);
-
+    [EnumMember(Value = "event")]
+    Event = 1,
+    /// <summary>
+    /// Specifies that the stream should output cloud event records
+    /// </summary>
+    [EnumMember(Value = "record")]
+    Record = 2
 }

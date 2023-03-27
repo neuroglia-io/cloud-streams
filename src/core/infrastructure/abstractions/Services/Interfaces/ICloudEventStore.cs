@@ -22,11 +22,10 @@ public interface ICloudEventStore
     /// <summary>
     /// Appends and persists the specified <see cref="CloudEvent"/> to the store
     /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to append</param>
-    /// <param name="metadata">An <see cref="IDictionary{TKey, TValue}"/> containing additional information about the <see cref="CloudEvent"/></param>
+    /// <param name="e">An object that describes the <see cref="CloudEvent"/> to append</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>An object that describes the recorded <see cref="CloudEvent"/></returns>
-    Task<CloudEventRecord> AppendAsync(CloudEvent e, IDictionary<string, object>? metadata = null, CancellationToken cancellationToken = default);
+    Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the metadata used to describe the application's <see cref="CloudEvent"/> stream

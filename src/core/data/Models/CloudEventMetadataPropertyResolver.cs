@@ -57,7 +57,7 @@ public class CloudEventMetadataPropertyResolver
     /// </summary>
     /// <remarks>See <see cref=""/></remarks>
     [Required, MinLength(3)]
-    [DataMember(Order = 1, Name = "strategy"), JsonPropertyName("strategy"), YamlMember(Alias = "strategy")]
+    [DataMember(Order = 1, Name = "name"), JsonPropertyName("name"), YamlMember(Alias = "name")]
     public virtual string Name { get; set; } = null!;
 
     /// <summary>

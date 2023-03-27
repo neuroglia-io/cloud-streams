@@ -28,4 +28,16 @@ public static class ResponseExtensions
     /// <returns>A boolean indicating whether or not the <see cref="Response"/> defines a success status</returns>
     public static bool IsSuccessStatusCode(this Response response) => response.Status is >= 200 and < 300;
 
+    /// <summary>
+    /// Converts the <see cref="Response"/> to a new <see cref="Response{TContent}"/>
+    /// </summary>
+    /// <typeparam name="TContent">The type of content wrapped by the <see cref="Response"/></typeparam>
+    /// <param name="response">The <see cref="Response"/> to convert</param>
+    /// <returns>A new <see cref="Response{TContent}"/></returns>
+    public static Response<TContent> OfType<TContent>(this Response response)
+    {
+        if(response == null) throw new ArgumentNullException(nameof(response));
+        return new(response.Type, response.Title, response.Status, response.Detail, response.Instance, response.Errors, response.ExtensionData);
+    }
+
 }

@@ -184,5 +184,56 @@ spec:
                                type: boolean
                     required:
                       - uri
+                events:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                      type:
+                        type: string
+                      metadata:
+                        type: object
+                        properties:
+                          properties:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                strategy:
+                                  type: string
+                                  enum:
+                                    - attribute
+                                    - expression
+                                attribute:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                  required:
+                                    - name
+                                expression:
+                                  type: string
+                              anyOf:
+                                - properties:
+                                    strategy:
+                                      const: attribute
+                                  required:
+                                    - name
+                                    - attribute
+                                - properties:
+                                    strategy:
+                                      const: expression
+                                  required:
+                                    - name
+                                    - expression
+                    required:
+                      - source
+                      - type
           required:
             - spec

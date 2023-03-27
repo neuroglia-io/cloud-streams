@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\infrastructure\event-store\event-store\CloudStreams.Core.Infrastructure.EventSourcing.EventStore.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\resource-repository\kubernetes\CloudStreams.Core.Infrastructure.ResourceRepository.Kubernetes.csproj" />
+    <ProjectReference Include="..\..\core\infrastructure\runtime-expressions\jq\CloudStreams.Core.Infrastructure.RuntimeExpressions.JQ.csproj" />
     <ProjectReference Include="..\..\core\infrastructure\schema-registry\apicurio\CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.csproj" />
     <ProjectReference Include="..\..\dashboard\ui\CloudStreams.Dashboard.csproj" />
     <ProjectReference Include="..\..\resource-management\api\CloudStreams.ResourceManagement.Api.csproj" />

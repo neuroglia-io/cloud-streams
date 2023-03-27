@@ -17,17 +17,17 @@ using System.Text.Json.Nodes;
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Defines extensions for <see cref="CloudEventRecord"/>s
+/// Defines extensions for <see cref="CloudEventDescriptor"/>s
 /// </summary>
 public static class CloudEventDescriptorExtensions
 {
 
     /// <summary>
-    /// Converts the <see cref="CloudEventRecord"/> into the <see cref="CloudEvent"/> it describes
+    /// Converts the <see cref="CloudEventDescriptor"/> into the <see cref="CloudEvent"/> it describes
     /// </summary>
-    /// <param name="descriptor">The <see cref="CloudEventRecord"/> to convert</param>
-    /// <returns>The <see cref="CloudEvent"/> described by the converted <see cref="CloudEventRecord"/></returns>
-    public static CloudEvent ToCloudEvent(this CloudEventRecord descriptor)
+    /// <param name="descriptor">The <see cref="CloudEventDescriptor"/> to convert</param>
+    /// <returns>The <see cref="CloudEvent"/> described by the converted <see cref="CloudEventDescriptor"/></returns>
+    public static CloudEvent ToCloudEvent(this CloudEventDescriptor descriptor)
     {
         if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
         var e = (JsonObject)Serializer.Json.SerializeToNode(descriptor.Metadata.ContextAttributes)!;

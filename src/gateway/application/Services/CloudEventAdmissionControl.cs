@@ -14,6 +14,7 @@
 using CloudStreams.Core.Infrastructure;
 using FluentValidation;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace CloudStreams.Gateway.Application.Services;
 
@@ -37,9 +38,10 @@ public class CloudEventAdmissionControl
     /// <param name="schemaGenerator">The service used to generate <see cref="JsonSchema"/>s</param>
     /// <param name="schemaRegistry">The service used to manage <see cref="JsonSchema"/>s</param>
     /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
+    /// <param name="expressionEvaluator">The service used to evaluate runtime expressions</param>
     /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
     public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IGatewayMetrics metrics, IAuthorizationManager authorizationManager, 
-        ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources, IEnumerable<IValidator<CloudEvent>> validators)
+        ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.GatewayOptions = gatewayOptions.Value;
@@ -48,6 +50,7 @@ public class CloudEventAdmissionControl
         this.SchemaGenerator = schemaGenerator;
         this.SchemaRegistry = schemaRegistry;
         this.Resources = resources;
+        this.ExpressionEvaluator = expressionEvaluator;
         this.Validators = validators;
     }
 
@@ -82,6 +85,11 @@ public class CloudEventAdmissionControl
     protected IResourceRepository Resources { get; }
 
     /// <summary>
+    /// Gets the service used to evaluate runtime expressions
+    /// </summary>
+    protected IExpressionEvaluator ExpressionEvaluator { get; }
+
+    /// <summary>
     /// Gets an <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s
     /// </summary>
     protected IEnumerable<IValidator<CloudEvent>> Validators { get; }
@@ -98,7 +106,7 @@ public class CloudEventAdmissionControl
     }
 
     /// <inheritdoc/>
-    public virtual async Task<Response> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    public virtual async Task<Response<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         var validationResults = new List<FluentValidation.Results.ValidationResult>(this.Validators.Count());
         foreach (var validator in this.Validators)
@@ -121,17 +129,20 @@ public class CloudEventAdmissionControl
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
             this._Metrics.IncrementTotalRejectedEvents();
-            return result;
+            return result.OfType<CloudEventDescriptor>();
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
             this._Metrics.IncrementTotalInvalidEvents();
-            return result;
+            return result.OfType<CloudEventDescriptor>();
         }
         this.Logger.LogDebug("Admission evaluation for cloud event with id '{eventId}' completed successfully", e.Id);
-        return Response.Ok();
+        this.Logger.LogDebug("Extracting metadata from the cloud event with id '{eventId}'", e.Id);
+        var metadata = await this.ExtractMetadataAsync(e, cancellationToken).ConfigureAwait(false);
+        this.Logger.LogDebug("Metadata successfully extracted from the cloud event with id '{eventId}'", e.Id);
+        return Response.Ok(new CloudEventDescriptor(metadata, e.Data));
     }
 
     /// <summary>
@@ -142,6 +153,7 @@ public class CloudEventAdmissionControl
     /// <returns>A <see cref="Response"/> that describes the result of the operation</returns>
     protected virtual async Task<Response> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
+        if (e == null) throw new ArgumentNullException(nameof(e));
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? this.Configuration?.Resource.Spec.Authorization;
         if (policy == null) return Response.Ok();
@@ -163,6 +175,7 @@ public class CloudEventAdmissionControl
     /// <returns>A <see cref="Response"/> that describes the result of the operation</returns>
     protected virtual async Task<Response> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
+        if (e == null) throw new ArgumentNullException(nameof(e));
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? this.Configuration?.Resource.Spec.Validation;
         if (policy == null) return Response.Ok();
@@ -215,6 +228,58 @@ public class CloudEventAdmissionControl
         }
         this.Logger.LogDebug("Cloud event with id '{eventId}' successfully validated", e.Id);
         return Response.Ok();
+    }
+
+    /// <summary>
+    /// Extracts metadata from the specified <see cref="CloudEvent"/>
+    /// </summary>
+    /// <param name="e">The <see cref="CloudEvent"/> to extract metadata from</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The metadata extracted from the specified <see cref="CloudEvent"/></returns>
+    protected virtual async Task<CloudEventMetadata> ExtractMetadataAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    {
+        if (e == null) throw new ArgumentNullException(nameof(e));
+        if (!e.Time.HasValue) e.Time = DateTimeOffset.Now;
+        var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+        var ingestionConfiguration = this.Configuration?.Resource.Spec.Events?.LastOrDefault(c => c.AppliesTo(e));
+        if (ingestionConfiguration == null || ingestionConfiguration.Metadata?.Properties == null) return metadata;
+        foreach (var property in ingestionConfiguration.Metadata.Properties)
+        {
+            try
+            {
+               if(metadata.ExtensionData == null) metadata.ExtensionData = new Dictionary<string, object>();
+                switch (property.Strategy)
+                {
+                    case CloudEventMetadataPropertyResolutionStrategy.ContextAttribute:
+                        if (property.Attribute == null) throw new NullReferenceException($"The '{nameof(property.Attribute)}' property cannot be null when the metadata property resolution strategy has been set to '{EnumHelper.Stringify(CloudEventMetadataPropertyResolutionStrategy.ContextAttribute)}'");
+                        if (!e.TryGetAttribute(property.Attribute.Name, out var attributeValue))
+                        {
+                            this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': failed to find a context attribute with name '{attributeName}'", property.Name, e.Id, property.Attribute.Name);
+                            continue;
+                        }
+                        if (!string.IsNullOrWhiteSpace(property.Attribute.Value) && !Regex.IsMatch(attributeValue?.ToString()!, property.Attribute.Value))
+                        {
+                            this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': the value of the context attribute with name '{attributeName}' does not match the configured pattern '{attributeValue}'", property.Name, e.Id, property.Attribute.Name, property.Attribute.Value);
+                            continue;
+                        }
+                        metadata.ExtensionData![property.Name] = attributeValue!;
+                        break;
+                    case CloudEventMetadataPropertyResolutionStrategy.RuntimeExpression:
+                        if (string.IsNullOrWhiteSpace(property.Expression)) throw new NullReferenceException($"The '{nameof(property.Expression)}' property cannot be null when the metadata property resolution strategy has been set to '{EnumHelper.Stringify(CloudEventMetadataPropertyResolutionStrategy.RuntimeExpression)}'");
+                        attributeValue = this.ExpressionEvaluator.Evaluate(property.Expression, e);
+                        if(attributeValue != null) metadata.ExtensionData![property.Name] = attributeValue;
+                        break;
+                    default:
+                        throw new NotSupportedException($"The specified resolution strategy '{EnumHelper.Stringify(property.Strategy)}' is not supported");
+                }
+            }
+            catch(Exception ex)
+            {
+                this.Logger.LogError("An error occured while extracting the metadata property '{property}' from the cloud event with id '{eventId}': {error}", property.Name, e.Id, ex);
+                continue;
+            }
+        }
+        return await Task.FromResult(metadata);
     }
 
     /// <summary>
