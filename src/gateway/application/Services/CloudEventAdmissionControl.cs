@@ -247,7 +247,7 @@ public class CloudEventAdmissionControl
         {
             try
             {
-               if(metadata.ExtensionData == null) metadata.ExtensionData = new Dictionary<string, object>();
+               metadata.ExtensionData ??= new Dictionary<string, object>();
                 switch (property.Strategy)
                 {
                     case CloudEventMetadataPropertyResolutionStrategy.ContextAttribute:
