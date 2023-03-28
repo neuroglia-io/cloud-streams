@@ -95,8 +95,10 @@ public class TimelineStore
     /// </summary>
     public void AddStreamsReadOption()
     {
-        var streamsReadOptions = new List<StreamReadOptions>(this.Get(state => state.StreamsReadOptions));
-        streamsReadOptions.Add(new StreamReadOptions(StreamReadDirection.Backwards));
+        var streamsReadOptions = new List<StreamReadOptions>(this.Get(state => state.StreamsReadOptions))
+        {
+            new StreamReadOptions(StreamReadDirection.Backwards)
+        };
         this.Reduce(state => state with
         {
             StreamsReadOptions = streamsReadOptions
@@ -115,6 +117,31 @@ public class TimelineStore
             return;
         }
         streamsReadOptions.RemoveAt(index);
+        this.Reduce(state => state with
+        {
+            StreamsReadOptions = streamsReadOptions
+        });
+    }
+
+    /// <summary>
+    /// Adds a <see cref="TimelineState.StreamsReadOptions"/> for the provided <see cref="PartitionReference"/> if none already exists
+    /// </summary>
+    /// <param name="partition">The <see cref="PartitionReference"/> to add <see cref="StreamReadOptions"/>'s for</param>
+    public void TryAddPartitionReadOption(PartitionReference partition)
+    {
+        if (partition == null)
+        {
+            return;
+        }
+        var streamsReadOptions = this.Get(state => state.StreamsReadOptions);
+        if (streamsReadOptions.Any(readOption => readOption.Partition?.Type == partition.Type && readOption.Partition?.Id == partition.Id))
+        {
+            return;
+        }
+        streamsReadOptions = new List<StreamReadOptions>(streamsReadOptions)
+        {
+            new StreamReadOptions(partition, StreamReadDirection.Backwards)
+        };
         this.Reduce(state => state with
         {
             StreamsReadOptions = streamsReadOptions

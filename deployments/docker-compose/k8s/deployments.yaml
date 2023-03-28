@@ -21,6 +21,17 @@ spec:
           - type: attribute
             attributeName: subject
             attributeValue: '*'
+  events:
+    - source: '*'
+      type: '*'
+      metadata:
+        properties:
+          - name: '$correlationId'
+            strategy: expression
+            expression: '.subject'
+          - name: '$causationId'
+            strategy: expression
+            expression: '.id'
             
 ---
 

@@ -27,27 +27,59 @@
             <Virtualize @ref="virtualize" Context="e" ItemsProvider="@Store.ProvideCloudEvents" ItemSize="61">
                 <ItemContent>
                     <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
-                        <td><div class="contained">@(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")</div></td>
-                        <td><div class="contained">@e.Id</div></td>
-                        <td><div class="contained">@(e.Time == null ? "" : e.Time!.Value.LocalDateTime.ToString("R"))</div></td>
-                        <td><div class="contained"><a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySource, e.Source.ToString())">@e.Source</a></div></td>
-                        <td><div class="contained"><a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.ByType, e.Type)">@e.Type</a></div></td>
+                        <td>
+                            <div class="contained">
+                                @(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")
+                            </div>
+                        </td>
+                        <td>
+                            <div class="contained">
+                                @e.Id
+                            </div>
+                        </td>
+                        <td>
+                            <div class="contained">
+                                @(e.Time == null ? "" : e.Time!.Value.LocalDateTime.ToString("R"))
+                            </div>
+                        </td>
+                        <td>
+                            <div class="contained">
+                                <a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySource, e.Source.ToString())">
+                                    @e.Source
+                                </a>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="contained">
+                                <a href="#by-type" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.ByType, e.Type)">
+                                    @e.Type
+                                </a>
+                            </div>
+                        </td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(e.Subject))
                             {
-                            <div class="contained"><a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySubject, e.Subject)">@e.Subject</a></div>
+                                <div class="contained">
+                                    <a href="#by-subject" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySubject, e.Subject)">
+                                        @e.Subject
+                                    </a>
+                                </div>
                             }
                         </td>
                         <td>
                             @if (e.DataSchema != null)
                             {
-                            <div class="contained"><a href="@e.DataSchema" target="_blank">@e.DataSchema</a></div>
+                                <div class="contained">
+                                    <a href="@e.DataSchema" target="_blank">@e.DataSchema</a>
+                                </div>
                             }
                         </td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(e.DataContentType))
                             {
-                                <div class="contained"><span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span></div>
+                                <div class="contained">
+                                    <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span>
+                                </div>
                             }
                         </td>
                     </tr>
