@@ -120,14 +120,7 @@
         get
         {
             if (this._eventDropsInterop != null) return this._eventDropsInterop;
-            try
-            {
-                this._eventDropsInterop = ActivatorUtilities.CreateInstance<EventDropsInterop>(this.ServiceProvider);
-            }
-            catch (Exception ex)
-            {
-                
-            }
+            this._eventDropsInterop = ActivatorUtilities.CreateInstance<EventDropsInterop>(this.ServiceProvider);
             return this._eventDropsInterop;
         }
     }
@@ -159,27 +152,19 @@
     /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
     private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
     {
-        try
+        if (this.eventDropsInterop == null || timelineLanes == null || !timelineLanes.Any())
         {
-            if (this.eventDropsInterop == null || timelineLanes == null || !timelineLanes.Any())
-            {
-                return;
-            }
-            var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
-            if (!entries.Any())
-            {
-                return;
-            }
-            var start = entries.First().Time!.Value;
-            var end = entries.Last().Time!.Value;
-            var margin = end.Subtract(start).TotalMilliseconds / 20;
-            await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
-
+            return;
         }
-        catch (Exception ex)
+        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
+        if (!entries.Any())
         {
-
+            return;
         }
+        var start = entries.First().Time!.Value;
+        var end = entries.Last().Time!.Value;
+        var margin = end.Subtract(start).TotalMilliseconds / 20;
+        await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
     }
 
     /// <summary>

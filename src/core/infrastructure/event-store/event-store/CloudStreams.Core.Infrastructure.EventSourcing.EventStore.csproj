@@ -19,10 +19,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Assets\Projections\bycausationid.js" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="Assets\Projections\bycausationid.js" />
     <EmbeddedResource Include="Assets\Projections\bysource.js" />
     <EmbeddedResource Include="Assets\Projections\partitionids.js.tmpl" />
