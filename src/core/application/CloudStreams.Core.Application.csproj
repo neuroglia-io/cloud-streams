@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
 	<GenerateDocumentationFile>True</GenerateDocumentationFile>
 	<OutputType>Library</OutputType>
-  	<VersionPrefix>0.3.2</VersionPrefix>
+  	<VersionPrefix>0.3.3</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
