@@ -57,6 +57,7 @@ public class EventDropsInterop
         if (moduleTask.IsValueCreated)
         {
             var module = await moduleTask.Value;
+            await module.InvokeVoidAsync("dispose");
             await module.DisposeAsync();
         }
     }

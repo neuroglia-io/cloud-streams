@@ -12,6 +12,8 @@
     }
 };
 
+let previousChart;
+
 export function renderTimeline(el, dotnetRef, dataset, start, end) {
     const chart = eventDrops({
         ...baseConfig,
@@ -34,4 +36,12 @@ export function renderTimeline(el, dotnetRef, dataset, start, end) {
         .select(el)
         .data([dataset])
         .call(chart);
+    if (!!previousChart) {
+        chart.zoomToDomain(previousChart.scale().domain());
+    }
+    previousChart = chart;
+}
+
+export function dispose() {
+    previousChart = null;
 }
