@@ -1,6 +1,6 @@
 ﻿fromStream('cloud_events')
     .when({
-        $any: (stream, evt) => {
+        $any: (_, evt) => {
             linkTo('cloud_events-' + JSON.parse(evt.metadataRaw).contextAttributes.source, evt);
         }
     });
