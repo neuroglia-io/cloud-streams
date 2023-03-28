@@ -1,8 +1,7 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.TimelineStateManagement
 @inherits StatefulComponent<TimelineStore, TimelineState>
-@inject EventDropsInterop EventDropsInterop
-@implements IDisposable;
+@implements IAsyncDisposable
 
 <div class="timeline-container">
     <div class="controls">
@@ -112,6 +111,27 @@
     /// </summary>
     private List<CloudEvent> selectedCloudEvents = new List<CloudEvent>();
 
+    /// <summary>
+    /// An instance of the <see cref="EventDropsInterop" /> service scope to the lifetime of the component
+    /// </summary>
+    private EventDropsInterop? _eventDropsInterop;
+    private EventDropsInterop? eventDropsInterop
+    {
+        get
+        {
+            if (this._eventDropsInterop != null) return this._eventDropsInterop;
+            try
+            {
+                this._eventDropsInterop = ActivatorUtilities.CreateInstance<EventDropsInterop>(this.ServiceProvider);
+            }
+            catch (Exception ex)
+            {
+                
+            }
+            return this._eventDropsInterop;
+        }
+    }
+
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
@@ -119,6 +139,7 @@
         this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(cmp => cmp.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
         this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
         this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
+
     }
 
     /// <inheritdoc/>
@@ -138,19 +159,27 @@
     /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
     private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
     {
-        if (timelineLanes == null || !timelineLanes.Any())
+        try
         {
-            return;
+            if (this.eventDropsInterop == null || timelineLanes == null || !timelineLanes.Any())
+            {
+                return;
+            }
+            var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
+            if (!entries.Any())
+            {
+                return;
+            }
+            var start = entries.First().Time!.Value;
+            var end = entries.Last().Time!.Value;
+            var margin = end.Subtract(start).TotalMilliseconds / 20;
+            await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
+
         }
-        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
-        if (!entries.Any())
+        catch (Exception ex)
         {
-            return;
+
         }
-        var start = entries.First().Time!.Value;
-        var end = entries.Last().Time!.Value;
-        var margin = end.Subtract(start).TotalMilliseconds / 20;
-        await this.EventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
     }
 
     /// <summary>
@@ -242,10 +271,15 @@
     }
 
     /// <inheritdoc/>
-    protected override void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (!this.disposed)
         {
+            if(this._eventDropsInterop != null)
+            {
+                await this._eventDropsInterop.DisposeAsync();
+                this._eventDropsInterop = null;
+            }
             if (this.dotnetReference != null)
             {
                 this.dotnetReference.Dispose();
@@ -253,7 +287,6 @@
             }
             this.disposed = true;
         }
-        base.Dispose(disposing);
     }
 
 }
