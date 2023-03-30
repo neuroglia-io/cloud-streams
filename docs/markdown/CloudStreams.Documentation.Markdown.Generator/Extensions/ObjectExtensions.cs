@@ -86,12 +86,12 @@ public static class TypeExtensions
         var keyType = dictionaryType.GetGenericArguments()[0];
         var valueType = dictionaryType.GetGenericArguments()[1];
         if (type.IsInterface) dictionaryType = typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
-        var count = new Random().Next(1, 5);
+        var count = new Random().Next(1, 4);
         var dictionary = (IDictionary)Activator.CreateInstance(dictionaryType)!;
         for (int i = 0; i < count; i++)
         {
             var key = keyType.GetSample();
-            if (key is string str) key = $"attribute{i + 1}";
+            if (key is string) key = $"attribute{i + 1}";
             dictionary.Add(key, valueType.GetSample());
         }
         return dictionary;
@@ -100,7 +100,7 @@ public static class TypeExtensions
     static object GetArraySample(Type type)
     {
         var elementType = type.GetEnumerableElementType();
-        var count = new Random().Next(1, 5);
+        var count = new Random().Next(1, 4);
         var elements = new List<object>(count);
         for (int i = 0; i < count; i++)
         {
@@ -122,7 +122,8 @@ public static class TypeExtensions
         var instance = Activator.CreateInstance(type)!;
         foreach(var property in type.GetProperties().Where(p => p.CanRead && p.CanWrite))
         {
-            property.SetValue(instance, property.PropertyType.GetSample());
+            if(property.Name == "Expression" || property.Name == "RuntimeExpression") property.SetValue(instance, "${ . }");
+            else property.SetValue(instance, property.PropertyType.GetSample());
         }
         return instance;
     }

@@ -11,22 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Serialization.Json.Converters;
+
 namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates default authorization policy effects
 /// </summary>
-public static class AuthorizationPolicyEffect
+[TypeConverter(typeof(StringEnumMemberConverter))]
+[JsonConverter(typeof(StringEnumConverterFactory))]
+public enum AuthorizationPolicyEffect
 {
-
     /// <summary>
     /// Indicates that the policy's effect is to grant authorization when it applies
     /// </summary>
-    public const string Authorize = "authorize";
-    
+    [EnumMember(Value = "authorize")]
+    Authorize = 1,
+
     /// <summary>
     /// Indicates that the policy's effect is to forbid authorization when it applies
     /// </summary>
-    public const string Forbid = "forbid";
-
+    [EnumMember(Value = "forbid")]
+    Forbid = 2
 }

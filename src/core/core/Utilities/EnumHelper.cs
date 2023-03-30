@@ -142,6 +142,17 @@ public static class EnumHelper
     /// <summary>
     /// Gets the <see cref="FieldInfo"/> that corresponds to the specified enum value
     /// </summary>
+    /// <param name="value">The enum value to get the <see cref="FieldInfo"/> of</param>
+    /// <param name="enumType">The type of the enumeration to get a <see cref="FieldInfo"/> of</param>
+    /// <returns>The <see cref="FieldInfo"/> that corresponds to the specified enum value</returns>
+    public static FieldInfo? GetField(Enum value, Type enumType)
+    {
+        return enumType.GetField(Enum.GetName(enumType, value)!);
+    }
+
+    /// <summary>
+    /// Gets the <see cref="FieldInfo"/> that corresponds to the specified enum value
+    /// </summary>
     /// <typeparam name="TEnum">The type of the enumeration to get a <see cref="FieldInfo"/> of</typeparam>
     /// <param name="value">The enum value to get the <see cref="FieldInfo"/> of</param>
     /// <returns>The <see cref="FieldInfo"/> that corresponds to the specified enum value</returns>

@@ -22,19 +22,17 @@ public class CloudEventAuthorizationRule
 
     /// <summary>
     /// Gets/sets the rule's type<para></para>
-    /// See <see cref="CloudEventAuthorizationRuleType"/>
     /// </summary>
-    [Required, JsonRequired, MinLength(1)]
+    [Required, MinLength(1)]
     [DataMember(Order = 1, Name = "type", IsRequired = true), JsonPropertyName("type"), YamlMember(Alias = "type")]
-    public virtual string Type { get; set; } = null!;
+    public virtual CloudEventAuthorizationRuleType Type { get; set; }
 
     /// <summary>
     /// Gets/sets the rule's effect. Defaults to '<see cref="AuthorizationPolicyEffect.Authorize"/>'<para></para>
-    /// See <see cref="AuthorizationPolicyEffect"/>
     /// </summary>
     [DefaultValue(AuthorizationPolicyEffect.Authorize)]
     [DataMember(Order = 2, Name = "effect"), JsonPropertyName("effect"), YamlMember(Alias = "effect")]
-    public virtual string Effect { get; set; } = AuthorizationPolicyEffect.Authorize;
+    public virtual AuthorizationPolicyEffect Effect { get; set; } = AuthorizationPolicyEffect.Authorize;
 
     /// <summary>
     /// Gets/sets the date and time the policy applies from.<para></para>

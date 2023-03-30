@@ -14,12 +14,33 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Documentation.Markdown.Generator;
+using System.Collections;
 using System.Text;
 using System.Text.Json.Serialization;
 
-foreach (var type in TypeCacheUtil.FindFilteredTypes("csdg:resources", t => t.IsClass && !t.IsInterface && !t.IsAbstract && !t.IsGenericTypeDefinition && t.IsPublic && t.Namespace == typeof(Subscription).Namespace, typeof(Broker).Assembly))
+var modelTypes = TypeCacheUtil.FindFilteredTypes("csdg:resources", t => t.IsClass && !t.IsInterface && !t.IsAbstract && !t.IsGenericTypeDefinition && t.IsPublic && t.Namespace == typeof(Subscription).Namespace, typeof(Broker).Assembly).OrderBy(t => t.Name);
+GenerateTableOfContents(modelTypes);
+foreach (var modelType in modelTypes)
 {
-    GenerateMarkdownDocumentationFor(type);
+    GenerateMarkdownDocumentationFor(modelType);
+}
+
+void GenerateTableOfContents(IEnumerable<Type> modelTypes)
+{
+    var stringBuilder = new StringBuilder();
+    stringBuilder.AppendLine(
+$"""
+## Data Models Index
+
+""");
+    foreach(var modelType in modelTypes)
+    {
+        stringBuilder.AppendLine(
+$"""
+- {GenerateTypeReferenceFor(modelType)}
+""");
+    }
+    File.WriteAllText($"README.md", stringBuilder.ToString());
 }
 
 void GenerateMarkdownDocumentationFor(Type type)
@@ -47,7 +68,7 @@ public class {type.Name}
 
 """);
 
-    File.WriteAllText($"{type.Name}.md", stringBuilder.ToString());
+    File.WriteAllText($"{type.Name.ToHyphenCase()}.md", stringBuilder.ToString());
 }
 
 string GeneratePropertiesMarkdownTableFor(Type type)
@@ -58,21 +79,41 @@ $"""
 | Name | Type | Required | Description |
 |------|:----:|:--------:|-------------|
 """);
-    foreach(var property in type.GetProperties().Where(p => p.CanRead && p.CanWrite && !p.TryGetCustomAttribute<JsonIgnoreAttribute>(out _)))
+    foreach(var property in type.GetProperties().Where(p => p.CanRead && p.CanWrite && !p.TryGetCustomAttribute<JsonIgnoreAttribute>(out _)).OrderBy(p =>
     {
+        if (p.TryGetCustomAttribute(out JsonPropertyOrderAttribute? orderAttribute) && orderAttribute != null) return orderAttribute.Order; else return 0;
+    }))
+    {
+        var name = property.Name.ToCamelCase();
+        var propertyType = GenerateTypeReferenceFor(property.PropertyType);
+        var required = property.TryGetCustomAttribute<System.ComponentModel.DataAnnotations.RequiredAttribute>(out _) ? "`yes`" : "`no`";
+        var summary = ConvertLineBreaksToMarkdown(XmlDocumentationHelper.SummaryOf(property));
+        if (property.PropertyType.IsEnum) summary += GenerateSupportedEnumValuesSummary(property.PropertyType);
         stringBuilder.AppendLine(
 $"""
-| {property.Name.ToCamelCase()} | {GenerateTypeReferenceFor(property.PropertyType)} | {(property.TryGetCustomAttribute<System.ComponentModel.DataAnnotations.RequiredAttribute>(out _) ? "`yes`" : "`no`")} | {ConvertLineBreaksToMarkdown(XmlDocumentationHelper.SummaryOf(property))} |
+| {name} | {propertyType} | {required} | {summary} |
 """);
     }
     return stringBuilder.ToString();
 }
 
+string GetTypeName(Type type)
+{
+    if (type.IsEnum || type == typeof(string) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(TimeSpan) || type == typeof(Guid)) return "string";
+    if (type == typeof(short) || type == typeof(int) || type == typeof(long)) return "integer";
+    if (type == typeof(double) || type == typeof(decimal) || type == typeof(float)) return "number";
+    if (type.GetGenericType(typeof(IDictionary<,>)) != null) return "object";
+    if (type.IsEnumerable()) return $"{GetTypeName(type.GetEnumerableElementType())}[]";
+    return type.Name;
+}
+
 string GenerateTypeReferenceFor(Type type)
 {
+    var typeName = GetTypeName(type);
+    if (type.IsPrimitiveType() || typeName == "object") return $"`{typeName}`";
     return 
 $"""
-[{type.Name}](/{type.Name}.md)
+[`{typeName}`](/{typeName.ToHyphenCase()}.md)
 """;
 }
 
@@ -122,4 +163,18 @@ string? ConvertLineBreaksToMarkdown(string? input)
         .Replace("<para/>", "<br>")
         .Replace("<para />", "<br>")
         .Replace("<para></para>", "<br>");
+}
+
+string GenerateSupportedEnumValuesSummary(Type type)
+{
+    var stringBuilder = new StringBuilder();
+    stringBuilder.Append("<br><u>Supported values</u>:<br>");
+    foreach(var value in Enum.GetValues(type))
+    {
+        stringBuilder.Append(
+$"""
+- `{EnumHelper.Stringify((Enum)value, type)}`: {XmlDocumentationHelper.SummaryOf(EnumHelper.GetField((Enum)value, type)!)}<br>
+""");
+    }
+    return stringBuilder.ToString();
 }
