@@ -56,6 +56,12 @@
     [Parameter] public bool Compact { get; set; } = true;
 
     /// <summary>
+    /// The <see cref="StreamReadOptions"/> to build the <see cref="ReadOptionsForm"/> with
+    /// </summary>
+    private StreamReadOptions? _streamReadOptions = null;
+    [Parameter] public StreamReadOptions? StreamReadOptions { get; set; }
+
+    /// <summary>
     /// The <see cref="StreamReadOptions"/> emitted by the form
     /// </summary>
     [Parameter] public EventCallback<StreamReadOptions> OnChange { get; set; }
@@ -111,6 +117,22 @@
         this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(cmp => cmp.partitions = partitions), token: this.CancellationTokenSource.Token);
         this.Store.ReadOptions.Subscribe(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
         this.Store.MaxLength.Subscribe(this.OnMaxLengthChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
+    }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (this._streamReadOptions != this.StreamReadOptions)
+        {
+            this._streamReadOptions = this.StreamReadOptions;
+            if (this._streamReadOptions == null)
+            {
+                this.Reset();
+                return;
+            }
+            this.Store.SetReadOptions(this._streamReadOptions);
+        }
     }
 
     /// <summary>

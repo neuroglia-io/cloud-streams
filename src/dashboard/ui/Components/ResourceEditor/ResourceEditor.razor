@@ -111,9 +111,9 @@
     /// <inheritdoc/>
     protected override Task OnParametersSetAsync()
     {
-        if (this.resource != this.Resource)
+        if (this.resource == null || this.resource.GetQualifiedName() != this.Resource?.GetQualifiedName())
         {
-            this.resource = this.Resource;
+            this.resource = this.Resource; // should happen in this.Store.Resource.Subscribe but prevents possible race when multiple params are set
             this.Store.SetResource(this.Resource);
         }
         return base.OnParametersSetAsync();

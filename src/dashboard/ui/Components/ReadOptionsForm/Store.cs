@@ -234,6 +234,46 @@ public class ReadOptionsFormStore
     }
 
     /// <summary>
+    /// Resets the state with new <see cref="StreamReadOptions"/>
+    /// </summary>
+    /// <param name="readOptions">The new <see cref="StreamReadOptions"/> to reset the state with</param>
+    public void SetReadOptions(StreamReadOptions readOptions)
+    {
+        var state = this.Get() with { };
+        bool changed = false;
+        if (state.Direction != readOptions.Direction)
+        {
+            state.Direction = readOptions.Direction;
+            changed = true;
+        }
+        if (state.Offset != readOptions.Offset)
+        {
+            state.Offset = readOptions.Offset;
+            changed = true;
+        }
+        //if (state.Length != readOptions.Length)
+        //{
+        //    state.Length = readOptions.Length;
+        //    changed = true;
+        //}
+        if (state.PartitionType != readOptions.Partition?.Type)
+        {
+            state.PartitionType = readOptions.Partition?.Type;
+            changed = true;
+        }
+        if (state.PartitionId != readOptions.Partition?.Id)
+        {
+            state.PartitionId = readOptions.Partition?.Id;
+            changed = true;
+        }
+        if (changed)
+        {
+            state.Partitions = new();
+            this.Reduce(_ => state);
+        }
+    }
+
+    /// <summary>
     /// Gathers and sets the <see cref="ReadOptionsFormState.Partitions"/> based on the provided <see cref="CloudEventPartitionType"/>
     /// </summary>
     /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="ReadOptionsFormState.Partitions"/> with</param>

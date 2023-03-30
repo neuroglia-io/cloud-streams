@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_").Replace(".EventSourcing.EventStore", ""))</RootNamespace>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
-	<VersionPrefix>0.3.1</VersionPrefix>
+	<VersionPrefix>0.3.3</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
@@ -19,8 +19,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets\Projections\bysource.js.tmpl" />
-    <EmbeddedResource Include="Assets\Projections\partitionids.js.tmpl" />
+	<EmbeddedResource Include="Assets\Projections\bycausationid.js" />
+	<EmbeddedResource Include="Assets\Projections\bysource.js" />
+	<EmbeddedResource Include="Assets\Projections\partitionids.js.tmpl" />
   </ItemGroup>
 
   <ItemGroup>

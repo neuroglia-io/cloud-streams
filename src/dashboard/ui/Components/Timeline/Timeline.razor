@@ -1,8 +1,7 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.TimelineStateManagement
 @inherits StatefulComponent<TimelineStore, TimelineState>
-@inject EventDropsInterop EventDropsInterop
-@implements IDisposable;
+@implements IAsyncDisposable
 
 <div class="timeline-container">
     <div class="controls">
@@ -13,11 +12,10 @@
                 {
                     int optionIndex = i;
                     <div class="d-flex">
-                        <ReadOptionsForm Compact="false" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
+                        <ReadOptionsForm StreamReadOptions="streamsReadOptions.ElementAt(i)" Compact="false" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
                         <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
                     </div>
                 }
-
                 <div class="d-flex justify-content-end">
                     @if (loading) 
                     {
@@ -43,7 +41,7 @@
                         @cloudEvent.Time?.LocalDateTime.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="Size.Small" @onclick="_ => DeselectCloudEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
                     </div>
                     <div class="card-body">
-                        <TimelineCloudEventDetails CloudEvent="cloudEvent"/>
+                        <TimelineCloudEventDetails CloudEvent="cloudEvent" OnPartitionClick="Store.TryAddPartitionReadOption"/>
                     </div>
                 </div>
             }
@@ -113,13 +111,28 @@
     /// </summary>
     private List<CloudEvent> selectedCloudEvents = new List<CloudEvent>();
 
+    /// <summary>
+    /// An instance of the <see cref="EventDropsInterop" /> service scope to the lifetime of the component
+    /// </summary>
+    private EventDropsInterop? _eventDropsInterop;
+    private EventDropsInterop? eventDropsInterop
+    {
+        get
+        {
+            if (this._eventDropsInterop != null) return this._eventDropsInterop;
+            this._eventDropsInterop = ActivatorUtilities.CreateInstance<EventDropsInterop>(this.ServiceProvider);
+            return this._eventDropsInterop;
+        }
+    }
+
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(cmp => cmp.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
         this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
-        this.Store.TimelineLanes.Subscribe(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
+
     }
 
     /// <inheritdoc/>
@@ -139,7 +152,7 @@
     /// <param name="timelineLanes">The <see cref="TimelineLane"/>s to render</param>
     private async Task RenderTimelineAsync(IEnumerable<TimelineLane> timelineLanes)
     {
-        if (timelineLanes == null || !timelineLanes.Any())
+        if (this.eventDropsInterop == null || timelineLanes == null || !timelineLanes.Any())
         {
             return;
         }
@@ -151,7 +164,7 @@
         var start = entries.First().Time!.Value;
         var end = entries.Last().Time!.Value;
         var margin = end.Subtract(start).TotalMilliseconds / 20;
-        await this.EventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
+        await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
     }
 
     /// <summary>
@@ -243,10 +256,15 @@
     }
 
     /// <inheritdoc/>
-    protected override void Dispose(bool disposing)
+    public async ValueTask DisposeAsync()
     {
         if (!this.disposed)
         {
+            if(this._eventDropsInterop != null)
+            {
+                await this._eventDropsInterop.DisposeAsync();
+                this._eventDropsInterop = null;
+            }
             if (this.dotnetReference != null)
             {
                 this.dotnetReference.Dispose();
@@ -254,7 +272,6 @@
             }
             this.disposed = true;
         }
-        base.Dispose(disposing);
     }
 
 }

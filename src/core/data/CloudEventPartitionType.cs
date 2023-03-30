@@ -36,5 +36,15 @@ public enum CloudEventPartitionType
     /// Indicates a partition by subject
     /// </summary>
     [EnumMember(Value = "by-subject")]
-    BySubject = 4
+    BySubject = 4,
+    /// <summary>
+    /// Indicates a partition by $correlationId
+    /// </summary>
+    [EnumMember(Value = "by-correlation-id")]
+    ByCorrelationId = 5,
+    /// <summary>
+    /// Indicates a partition by $causationId
+    /// </summary>
+    [EnumMember(Value = "by-causation-id")]
+    ByCausationId = 6
 }

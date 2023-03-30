@@ -287,11 +287,17 @@ public class ESCloudEventStore
         StreamReader streamReader;
         string query;
 
-        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "bysource.js.tmpl"))!;
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "bysource.js"))!;
         streamReader = new StreamReader(stream);
         query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         streamReader.Dispose();
         await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionBySource, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "bycausationid.js"))!;
+        streamReader = new StreamReader(stream);
+        query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        streamReader.Dispose();
+        await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionByCausationId, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "partitionids.js.tmpl"))!;
         streamReader = new StreamReader(stream);
@@ -300,10 +306,18 @@ public class ESCloudEventStore
         foreach (var partitionType in Enum.GetValues<CloudEventPartitionType>())
         {
             var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
-            var propertyName = typeName.Replace("by", string.Empty).ToCamelCase();
+            var metadataPath = typeName.Replace("by", string.Empty).ToCamelCase();
+            if (partitionType == CloudEventPartitionType.ByCorrelationId || partitionType == CloudEventPartitionType.ByCausationId)
+            {
+                metadataPath = "$" + metadataPath.Replace("-id", "Id");
+            }
+            else
+            {
+                metadataPath = "contextAttributes." + metadataPath;
+            }
             try
             {
-                await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##propertyName##", propertyName), true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataPath##", metadataPath), true, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             catch(Exception ex)
             {
