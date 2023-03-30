@@ -89,10 +89,9 @@ public static partial class StringExtensions
     /// <returns>The resulting string</returns>
     public static string Format(this string text, params object[] args)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return text;
-        string formattedText = text;
-        List<string> matches = MatchCurlyBracedWords.Matches(text)
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        var formattedText = text;
+        var matches = MatchCurlyBracedWords.Matches(text)
             .Select(m => m.Value)
             .Distinct()
             .ToList();

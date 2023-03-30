@@ -38,6 +38,9 @@ public class Subscription
     public Subscription() : base(ResourceType) { }
 
     /// <inheritdoc/>
-    public Subscription(ResourceMetadata metadata, SubscriptionSpec spec, SubscriptionStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Subscription(ResourceMetadata metadata, SubscriptionSpec spec) : base(ResourceType, metadata, spec) { }
+
+    /// <inheritdoc/>
+    public Subscription(ResourceMetadata metadata, SubscriptionSpec spec, SubscriptionStatus status) : base(ResourceType, metadata, spec, status) { }
 
 }

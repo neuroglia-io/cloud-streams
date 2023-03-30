@@ -26,8 +26,7 @@ public class SubscriptionSpec
     public SubscriptionSpec() { }
 
     /// <summary>
-    /// Gets/sets an object used to reference the partition to subscribe to, if any.
-    /// If none has been set, the subscription receives all cloud events, regardless of their source, type or subject
+    /// Gets/sets an object used to reference the partition to subscribe to, if any.<para/>If none has been set, the subscription receives all cloud events, regardless of their source, type or subject
     /// </summary>
     [DataMember(Order = 1, Name = "partition"), JsonPropertyName("partition"), YamlMember(Alias = "partition")]
     public virtual PartitionReference? Partition { get; set; }

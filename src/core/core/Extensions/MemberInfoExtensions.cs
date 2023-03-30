@@ -35,4 +35,25 @@ public static class MemberInfoExtensions
         return attribute != null;
     }
 
+    /// <summary>
+    /// Gets the <see cref="MemberInfo"/> overriden by the <see cref="MemberInfo"/>
+    /// </summary>
+    /// <param name="extended">The <see cref="MemberInfo"/> to get the overriden <see cref="MemberInfo"/> for</param>
+    /// <returns>The <see cref="MemberInfo"/> overriden by the <see cref="MemberInfo"/>, if any</returns>
+    public static MemberInfo? GetOverridenMember(this MemberInfo extended)
+    {
+        if (extended == null) throw new ArgumentNullException(nameof(extended));
+        var declaringType = extended.DeclaringType!;
+        if (declaringType == extended.ReflectedType) declaringType = declaringType.GetDeclaringTypeOf(extended);
+        if (declaringType == null) return null;
+        return extended switch
+        {
+            ConstructorInfo constructor => extended,
+            FieldInfo field => declaringType.GetField(field.Name),
+            PropertyInfo property => declaringType.GetProperty(property.Name),
+            MethodInfo method => declaringType.GetMethod(method.Name, method.GetParameters().Select(p => p.ParameterType).ToArray()),
+            _ => throw new NotSupportedException($"The specified member type '{extended.MemberType}' is not supported"),
+        };
+    }
+
 }

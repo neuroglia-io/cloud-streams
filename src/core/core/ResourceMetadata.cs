@@ -23,13 +23,30 @@ public class ResourceMetadata
 {
 
     /// <summary>
+    /// Initializes a new <see cref="ResourceMetadata"/>
+    /// </summary>
+    public ResourceMetadata() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="ResourceMetadata"/>
+    /// </summary>
+    /// <param name="name">The described resource's name</param>
+    /// <param name="namespace">The namespace the described resource belongs to, if any</param>
+    public ResourceMetadata(string name, string? @namespace = null)
+    {
+        if(string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        this.Name = name;
+        this.Namespace = @namespace;
+    }
+
+    /// <summary>
     /// Gets/sets the described resource's name
     /// </summary>
     [DataMember(Order = 1, Name = "name"), JsonPropertyName("name"), YamlMember(Alias = "name")]
     public virtual string? Name { get; set; }
 
     /// <summary>
-    /// Gets/sets the described resource's name
+    /// Gets/sets the namespace the described resource belongs to, if any
     /// </summary>
     [DataMember(Order = 2, Name = "namespace"), JsonPropertyName("namespace"), YamlMember(Alias = "namespace")]
     public virtual string? Namespace { get; set; }

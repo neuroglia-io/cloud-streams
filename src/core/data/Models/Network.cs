@@ -38,6 +38,9 @@ public class Network
     public Network() : base(ResourceType) { }
 
     /// <inheritdoc/>
-    public Network(ResourceMetadata metadata, NetworkSpec spec, NetworkStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Network(ResourceMetadata metadata, NetworkSpec spec) : base(ResourceType, metadata, spec) { }
+
+    /// <inheritdoc/>
+    public Network(ResourceMetadata metadata, NetworkSpec spec, NetworkStatus status) : base(ResourceType, metadata, spec, status) { }
 
 }

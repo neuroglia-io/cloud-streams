@@ -23,6 +23,11 @@ public class BrokerDispatchConfiguration
     /// <summary>
     /// Initializes a new <see cref="BrokerDispatchConfiguration"/>
     /// </summary>
+    public BrokerDispatchConfiguration() { }
+
+    /// <summary>
+    /// Initializes a new <see cref="BrokerDispatchConfiguration"/>
+    /// </summary>
     /// <param name="retryPolicy">The retry policy that applies by default to all subscriptions managed by the broker</param>
     public BrokerDispatchConfiguration(HttpClientRetryPolicy retryPolicy)
     {

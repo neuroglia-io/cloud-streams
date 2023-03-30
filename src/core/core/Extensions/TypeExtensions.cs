@@ -75,7 +75,7 @@ public static class TypeExtensions
     public static bool IsPrimitiveType(this Type extended)
     {
         if (extended.IsValueType) return true;
-        if (extended == typeof(Guid) || extended == typeof(DateTime) || extended == typeof(string)
+        if (extended == typeof(Guid) || extended == typeof(DateTime) || extended == typeof(DateTimeOffset) || extended == typeof(TimeSpan) || extended == typeof(string)
             || extended == typeof(char[]) || extended == typeof(string[]) || extended == typeof(byte[]) || extended == typeof(object[]))
         {
             return true;
@@ -240,6 +240,30 @@ public static class TypeExtensions
             MethodInfo method => extended.GetMethod(method.Name, method.GetParameters().Select(p => p.ParameterType).ToArray()) != null,
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// Gets the declaring type of the specified <see cref="MemberInfo"/>
+    /// </summary>
+    /// <param name="extended">The extended <see cref="Type"/></param>
+    /// <param name="member">The <see cref="MemberInfo"/> to get the declaring type of</param>
+    /// <returns>The declaring type of the specified <see cref="MemberInfo"/></returns>
+    public static Type GetDeclaringTypeOf(this Type extended, MemberInfo member)
+    {
+        if (extended == null) throw new ArgumentNullException(nameof(extended));
+        if (member == null) throw new ArgumentNullException(nameof(member));
+        var interfaces = extended.GetInterfaces();
+        var declaringType = interfaces.FirstOrDefault(t => t.DeclaresMember(member));
+        if (declaringType != null) return declaringType;
+        var baseType = extended.BaseType;
+        do
+        {
+            if (baseType != null && baseType.DeclaresMember(member)) return baseType;
+            baseType = baseType?.BaseType;
+        }
+        while (baseType != null);
+        if (baseType == null) baseType = extended;
+        return declaringType!;
     }
 
 }

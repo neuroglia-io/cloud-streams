@@ -38,6 +38,9 @@ public class Broker
     public Broker() : base(ResourceType) { }
 
     /// <inheritdoc/>
-    public Broker(ResourceMetadata metadata, BrokerSpec spec, BrokerStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Broker(ResourceMetadata metadata, BrokerSpec spec) : base(ResourceType, metadata, spec) { }
+
+    /// <inheritdoc/>
+    public Broker(ResourceMetadata metadata, BrokerSpec spec, BrokerStatus status) : base(ResourceType, metadata, spec, status) { }
 
 }
