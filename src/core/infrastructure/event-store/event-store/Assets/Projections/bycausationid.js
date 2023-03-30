@@ -1,6 +1,6 @@
-﻿fromStream('cloud_events')
+﻿fromStream('cloud-events')
     .when({
         $any: (_, evt) => {
-            linkTo('cloud_events-' + JSON.parse(evt.metadataRaw).$causationId, evt);
+            linkTo('cloud-events-' + JSON.parse(evt.metadataRaw).$causationId, evt);
         }
     });
