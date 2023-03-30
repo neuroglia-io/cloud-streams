@@ -62,7 +62,7 @@ public abstract class ResourceManagementComponent<TResource>
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.Loading.Subscribe(loading => this.OnStateChanged(cmp => cmp.loading = loading), token: this.CancellationTokenSource.Token);
-        this.Store.Definition.SubscribeAsync(async definition =>
+        this.Store.Definition.Subscribe(async definition =>
         {
             if (this.definition != definition)
             {
@@ -128,8 +128,10 @@ public abstract class ResourceManagementComponent<TResource>
     protected Task OnShowResourceDetailsAsync(TResource resource)
     {
         if (this.detailsOffcanvas == null) return Task.CompletedTask;
-        var parameters = new Dictionary<string, object>();
-        parameters.Add("Resource", resource);
+        var parameters = new Dictionary<string, object>
+        {
+            { "Resource", resource }
+        };
         return this.detailsOffcanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
     }
 
@@ -140,8 +142,10 @@ public abstract class ResourceManagementComponent<TResource>
     protected Task OnShowResourceEditorAsync(TResource? resource = null)
     {
         if (this.editorOffcanvas == null) return Task.CompletedTask;
-        var parameters = new Dictionary<string, object>();
-        parameters.Add("Resource", resource!);
+        var parameters = new Dictionary<string, object>
+        {
+            { "Resource", resource! }
+        };
         string actionType = resource == null ? "creation" : "edition";
         return this.editorOffcanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
     }

@@ -101,7 +101,7 @@
             .Throttle(TimeSpan.FromMilliseconds(300))
             .DistinctUntilChanged()
             .Subscribe(text => this.Store.SetEditorValue(text));
-        this.Store.TextEditorValue.SubscribeAsync(async textEditorValue =>
+        this.Store.TextEditorValue.Subscribe(async textEditorValue =>
         {
             this.textEditorValue = textEditorValue;
             await this.SetTextEditorValueAsync();

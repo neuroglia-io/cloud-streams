@@ -72,6 +72,14 @@ public interface IResourceManagementApi<TResource>
     Task<TResource> PatchAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Patches the status of the specified <see cref="IResource"/>
+    /// </summary>
+    /// <param name="patch">The <see cref="ResourcePatch{TResource}"/> to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The patched resource</returns>
+    Task<TResource> PatchStatusAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes the specified <see cref="IResource"/>
     /// </summary>
     /// <param name="name">The name of the <see cref="IResource"/> to delete</param>

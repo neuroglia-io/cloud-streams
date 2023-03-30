@@ -126,6 +126,18 @@ public class ResourceManagementApi<TResource>
     }
 
     /// <inheritdoc/>
+    public virtual async Task<TResource> PatchStatusAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default)
+    {
+        if (patch == null) throw new ArgumentNullException(nameof(patch));
+        var json = Serializer.Json.Serialize(patch);
+        using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, $"{this.Path}/status") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return Serializer.Json.Deserialize<TResource>(json)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task DeleteAsync(string name, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));

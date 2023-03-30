@@ -52,7 +52,7 @@ public class CloudEventHubDispatcher
     {
         (await this.EventStore.SubscribeAsync(cancellationToken: stoppingToken).ConfigureAwait(false))
             .Select(e => e.ToCloudEvent())
-            .SubscribeAsync(e => this.HubContext.Clients.All.StreamEvent(e, stoppingToken), cancellationToken: stoppingToken);
+            .Subscribe(e => this.HubContext.Clients.All.StreamEvent(e, stoppingToken), cancellationToken: stoppingToken);
     }
 
 }

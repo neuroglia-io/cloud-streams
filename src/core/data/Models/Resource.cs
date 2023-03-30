@@ -31,8 +31,7 @@ public class Resource
     /// <param name="type">An object used to describe the <see cref="Resource"/>'s type</param>
     public Resource(ResourceType type) 
     {
-        if (type == null) throw new ArgumentNullException(nameof(type));
-        this.Type = type;
+        this.Type = type ?? throw new ArgumentNullException(nameof(type));
         this.ApiVersion = this.Type.GetApiVersion();
         this.Kind = this.Type.Kind;
     }
@@ -45,8 +44,7 @@ public class Resource
     public Resource(ResourceType type, ResourceMetadata metadata)
         : this(type)
     {
-        if (metadata == null) throw new ArgumentNullException(nameof(metadata));
-        this.Metadata = metadata;
+        this.Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
     }
 
     /// <summary>
@@ -111,8 +109,7 @@ public class Resource<TSpec>
     public Resource(ResourceType type, ResourceMetadata metadata, TSpec spec)
         : base(type, metadata)
     {
-        if(spec == null) throw new ArgumentNullException(nameof(spec));
-        this.Spec = spec;
+        this.Spec = spec ?? throw new ArgumentNullException(nameof(spec));
     }
 
     /// <summary>

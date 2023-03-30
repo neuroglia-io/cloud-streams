@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="11.5.1" />
-    <PackageReference Include="JsonPatch.Net" Version="2.0.5" />
     <PackageReference Include="JsonSchema.Net.Generation" Version="3.0.3" />
 	<PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
 	<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="7.0.0" />

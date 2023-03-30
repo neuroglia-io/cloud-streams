@@ -44,10 +44,17 @@ public static partial class Serializer
                 .WithTypeConverter(new JsonSchemaTypeConverter())
                 .WithTypeConverter(new UriTypeSerializer())
                 .WithTypeConverter(new StringEnumSerializer())
+                .WithTypeConverter(new Iso8601TimeSpanSerializer())
                 .Build();
             Deserializer = new DeserializerBuilder()
                 .IgnoreUnmatchedProperties()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .WithNodeDeserializer(
+                    inner => new Iso8601TimeSpanConverter(inner),
+                    syntax => syntax.InsteadOf<ScalarNodeDeserializer>())
+                .WithNodeDeserializer(
+                    inner => new StringEnumDeserializer(inner),
+                    syntax => syntax.InsteadOf<Iso8601TimeSpanConverter>())
                 .WithNodeTypeResolver(new InferTypeResolver())
                 .WithNodeDeserializer(
                     inner => new JsonObjectDeserializer(inner),

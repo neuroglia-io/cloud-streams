@@ -83,7 +83,7 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.ReadOptions.SubscribeAsync(this.OnReadOptionChangedAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.ReadOptions.Subscribe(this.OnReadOptionChangedAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>

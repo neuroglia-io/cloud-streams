@@ -16,30 +16,25 @@ using CloudStreams.Core.Serialization.Json.Converters;
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates resoruce label selection operators 
+/// Enumerates all supported retry backoff duration types
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum ResourceLabelSelectionOperator
+public enum RetryBackoffDurationType
 {
     /// <summary>
-    /// Indicates that the label value must be equal to the specified value
+    /// Indicates a constant duration
     /// </summary>
-    [EnumMember(Value = "equals")]
-    Equals,
+    [EnumMember(Value = "constant")]
+    Constant,
     /// <summary>
-    /// Indicates that the label value must not be equal to the specified value
+    /// Indicates a duration that increments at every retry attempt in a constant fashion
     /// </summary>
-    [EnumMember(Value = "not-equals")]
-    NotEquals,
+    [EnumMember(Value = "incremental")]
+    Incremental,
     /// <summary>
-    /// Indicates that the resource must have the specified label. If values have been supplied, the label must also have one of the specified values
+    /// Indicates an exponential duration
     /// </summary>
-    [EnumMember(Value = "contains")]
-    Contains,
-    /// <summary>
-    /// Indicates that the resource must not the specified label. If values have been supplied, the label must also have one of the specified values
-    /// </summary>
-    [EnumMember(Value = "not-contains")]
-    NotContains
+    [EnumMember(Value = "exponential")]
+    Exponential
 }

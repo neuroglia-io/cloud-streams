@@ -109,8 +109,8 @@
         this.Store.Length.Subscribe(length => this.OnStateChanged(cmp => cmp.length = length), token: this.CancellationTokenSource.Token);
         this.Store.MaxLength.Subscribe(maxLength => this.OnStateChanged(cmp => cmp.maxLength = maxLength), token: this.CancellationTokenSource.Token);
         this.Store.Partitions.Subscribe(partitions => this.OnStateChanged(cmp => cmp.partitions = partitions), token: this.CancellationTokenSource.Token);
-        this.Store.ReadOptions.SubscribeAsync(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
-        this.Store.MaxLength.SubscribeAsync(this.OnMaxLengthChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.ReadOptions.Subscribe(this.OnChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.MaxLength.Subscribe(this.OnMaxLengthChange.InvokeAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>

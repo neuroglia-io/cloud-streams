@@ -64,7 +64,7 @@ public class TimelineStore
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        this.StreamsReadOptions.Throttle(TimeSpan.FromMilliseconds(100)).SubscribeAsync(async (_) => await this.GatherCloudEventsAsync(), cancellationToken: this.CancellationTokenSource.Token);
+        this.StreamsReadOptions.Throttle(TimeSpan.FromMilliseconds(100)).Subscribe(async (_) => await this.GatherCloudEventsAsync(), cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>

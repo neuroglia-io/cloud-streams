@@ -77,7 +77,7 @@ public static class AsyncObservableExtensions
     /// <param name="source">The source sequence.</param>
     /// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    public static void SubscribeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, CancellationToken cancellationToken)
+    public static void Subscribe<T>(this IObservable<T> source, Func<T, Task> onNextAsync, CancellationToken cancellationToken)
     {
         source
             .Select(number => Observable.FromAsync(() => onNextAsync(number)))

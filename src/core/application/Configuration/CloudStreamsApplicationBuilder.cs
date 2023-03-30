@@ -264,6 +264,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.TryAddSingleton(provider => (ICloudEventStore)provider.GetRequiredService(this.CloudEventStoreType));
         this.Services.TryAddSingleton(provider => (IResourceRepository)provider.GetRequiredService(this.ResourceRepositoryType));
         this.Services.TryAddSingleton(provider => (ISchemaRegistry)provider.GetRequiredService(this.SchemaRegistryType));
+        this.Services.TryAddSingleton<IResourceMonitorProvider, ResourceMonitorProvider>();
         this.Services.AddSwaggerGen(builder =>
         {
             builder.CustomOperationIds(o =>

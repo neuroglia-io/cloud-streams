@@ -85,7 +85,7 @@ public class ResourceController<TResource>
         this._InitializationCompletionSource = new();
         await this.ReconcileAsync(stoppingToken).ConfigureAwait(false);
         this.ResourceWatcher = await this.ResourceRepository.WatchResourcesAsync<TResource>(this.Options.ResourceNamespace, cancellationToken: stoppingToken).ConfigureAwait(false);
-        this.ResourceWatcher.SubscribeAsync(async e => await this.OnResourceChangedAsync(e, stoppingToken).ConfigureAwait(false), cancellationToken: stoppingToken);
+        this.ResourceWatcher.Subscribe(async e => await this.OnResourceChangedAsync(e, stoppingToken).ConfigureAwait(false), cancellationToken: stoppingToken);
         this.ReconciliationTimer = new(async _ => await this.ReconcileAsync(stoppingToken).ConfigureAwait(false), null, this.Options.Reconciliation.Interval, this.Options.Reconciliation.Interval);
         this.Initialized = true;
         this._InitializationCompletionSource.SetResult();

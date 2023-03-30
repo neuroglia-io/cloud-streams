@@ -168,8 +168,8 @@ public class ReadOptionsFormStore
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        this.PartitionType.SubscribeAsync(this.UpdatePartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
-        this.Partition.SubscribeAsync(this.UpdateMetadataAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.PartitionType.Subscribe(this.UpdatePartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.Partition.Subscribe(this.UpdateMetadataAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>

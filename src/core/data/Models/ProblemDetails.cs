@@ -90,6 +90,6 @@ public class ProblemDetails
     public virtual IDictionary<string, object>? ExtensionData { get; set; }
 
     /// <inheritdoc/>
-    public override string ToString() => this.Detail ?? Environment.NewLine + string.Join(Environment.NewLine, this.Errors?.Select(e => string.Join(Environment.NewLine, e.Value.Select(v => $"{e.Key}: {v}")))!);
+    public override string ToString() => $"{this.Status} {this.Title}{(string.IsNullOrWhiteSpace(this.Detail) ? string.Empty : $": {this.Detail}")}";
 
 }

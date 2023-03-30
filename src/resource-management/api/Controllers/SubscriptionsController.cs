@@ -16,8 +16,12 @@ using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.ResourceManagement.Application.Commands.Generic;
 using CloudStreams.ResourceManagement.Application.Queries.Generic;
+using Json.Patch;
+using Json.Pointer;
+using Json.Schema;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using OpenTelemetry.Resources;
 using System.Net;
 
 namespace CloudStreams.ResourceManagement.Api.Controllers;
@@ -108,6 +112,22 @@ public class SubscriptionsController
     }
 
     /// <summary>
+    /// Patches the status of the specified subscription
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpPatch("status")]
+    [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
+    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchSubscriptionStatus([FromBody] ResourcePatch<Subscription> patch, CancellationToken cancellationToken)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.Send<Response<Subscription>>(new PatchResourceStatusCommand<Subscription>(patch), cancellationToken));
+    }
+
+    /// <summary>
     /// Updates the specified subscription
     /// </summary>
     /// <param name="resource">The subscription to update</param>
@@ -122,7 +142,7 @@ public class SubscriptionsController
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         return this.Process(await this.Mediator.Send<Response<Subscription>>(new PutResourceCommand<Subscription>(resource), cancellationToken));
     }
-
+   
     /// <summary>
     /// Deletes the specified subscription
     /// </summary>

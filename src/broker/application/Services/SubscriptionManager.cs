@@ -21,7 +21,7 @@ namespace CloudStreams.Broker.Application.Services;
 /// Represents a service used to manage <see cref="Subscription"/>s
 /// </summary>
 public class SubscriptionManager
-    : BackgroundService
+    : BackgroundService, IAsyncDisposable
 {
 
     private bool _Disposed;
@@ -71,8 +71,8 @@ public class SubscriptionManager
         {
             await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
         }
-        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionCreatedAsync, stoppingToken);
-        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionDeletedAsync, stoppingToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).Subscribe(this.OnSubscriptionCreatedAsync, stoppingToken);
+        this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).Subscribe(this.OnSubscriptionDeletedAsync, stoppingToken);
     }
 
     /// <summary>
@@ -99,25 +99,24 @@ public class SubscriptionManager
     /// Handles the deletion of a new <see cref="Subscription"/>
     /// </summary>
     /// <param name="subscription">The newly deleted <see cref="Subscription"/></param>
-    protected virtual Task OnSubscriptionDeletedAsync(Subscription subscription)
+    protected virtual async Task OnSubscriptionDeletedAsync(Subscription subscription)
     {
         var key = this.GetResourceCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (this.Subscriptions.Remove(key, out var handler) && handler != null) handler.Dispose();
-        return Task.CompletedTask;
+        if (this.Subscriptions.Remove(key, out var handler) && handler != null) await handler.DisposeAsync().ConfigureAwait(false);
     }
 
     /// <summary>
     /// Disposes of the <see cref="SubscriptionHandler"/>
     /// </summary>
     /// <param name="disposing">A boolean indicating whether or not the <see cref="SubscriptionHandler"/> is being disposed of</param>
-    protected virtual void Dispose(bool disposing)
+    protected virtual async ValueTask DisposeAsync(bool disposing)
     {
         if (!this._Disposed)
         {
             if (disposing)
             {
                 this.CancellationTokenSource.Dispose();
-                this.Subscriptions.ToList().ForEach(s => s.Value.Dispose());
+                await this.Subscriptions.ToAsyncEnumerable().ForEachAsync(s => s.Value.DisposeAsync().ConfigureAwait(false)).ConfigureAwait(false);
                 this.Subscriptions.Clear();
             }
             this._Disposed = true;
@@ -125,10 +124,6 @@ public class SubscriptionManager
     }
 
     /// <inheritdoc/>
-    public override void Dispose()
-    {
-        base.Dispose();
-        GC.SuppressFinalize(this);
-    }
+    public ValueTask DisposeAsync() => this.DisposeAsync(disposing: true);
 
 }

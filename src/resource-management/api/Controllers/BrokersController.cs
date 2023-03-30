@@ -108,6 +108,22 @@ public class BrokersController
     }
 
     /// <summary>
+    /// Patches the status of the specified broker
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpPatch("status")]
+    [ProducesResponseType(typeof(Broker), (int)HttpStatusCode.OK)]
+    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchBrokerStatus([FromBody] ResourcePatch<Broker> patch, CancellationToken cancellationToken)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.Send<Response<Broker>>(new PatchResourceStatusCommand<Broker>(patch), cancellationToken));
+    }
+
+    /// <summary>
     /// Updates the specified broker
     /// </summary>
     /// <param name="resource">The broker to update</param>

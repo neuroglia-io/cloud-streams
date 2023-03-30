@@ -119,7 +119,7 @@
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(cmp => cmp.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
         this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
-        this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
+        this.Store.TimelineLanes.Subscribe(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <inheritdoc/>

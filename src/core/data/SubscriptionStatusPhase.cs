@@ -20,26 +20,16 @@ namespace CloudStreams.Core;
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
 [JsonConverter(typeof(StringEnumConverterFactory))]
-public enum ResourceLabelSelectionOperator
+public enum SubscriptionStatusPhase
 {
     /// <summary>
-    /// Indicates that the label value must be equal to the specified value
+    /// Indicates that the subscription is inactive because its broker is inactive, or because the later did not pick it up
     /// </summary>
-    [EnumMember(Value = "equals")]
-    Equals,
+    [EnumMember(Value = "inactive")]
+    Inactive = 1,
     /// <summary>
-    /// Indicates that the label value must not be equal to the specified value
+    /// Indicates that the subscription is being monitored by its broker
     /// </summary>
-    [EnumMember(Value = "not-equals")]
-    NotEquals,
-    /// <summary>
-    /// Indicates that the resource must have the specified label. If values have been supplied, the label must also have one of the specified values
-    /// </summary>
-    [EnumMember(Value = "contains")]
-    Contains,
-    /// <summary>
-    /// Indicates that the resource must not the specified label. If values have been supplied, the label must also have one of the specified values
-    /// </summary>
-    [EnumMember(Value = "not-contains")]
-    NotContains
+    [EnumMember(Value = "active")]
+    Active = 2
 }

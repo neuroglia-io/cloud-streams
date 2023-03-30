@@ -101,7 +101,7 @@ public class ResourceReference<TResource>
     /// </summary>
     /// <param name="name">The name of the referenced resource</param>
     /// <param name="namespace">The namespace the referenced resource belongs to, if any</param>
-    public ResourceReference(string name, string? @namespace)
+    public ResourceReference(string name, string? @namespace = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         this.Name = name;

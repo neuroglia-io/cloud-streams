@@ -33,4 +33,10 @@ public class Subscriber
     [DataMember(Order = 2, Name = "rateLimit"), JsonPropertyName("rateLimit"), YamlMember(Alias = "rateLimit")]
     public virtual double? RateLimit { get; set; }
 
+    /// <summary>
+    /// Gets/sets the retry policy to use when dispatching cloud events to the subscriber. If not set, will fallback to the broker's default retry policy
+    /// </summary>
+    [DataMember(Order = 3, Name = "retryPolicy"), JsonPropertyName("retryPolicy"), YamlMember(Alias = "retryPolicy")]
+    public virtual HttpClientRetryPolicy? RetryPolicy { get; set; }
+
 }

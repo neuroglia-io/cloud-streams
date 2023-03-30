@@ -26,4 +26,10 @@ public class CloudEventStreamStatus
     [DataMember(Order = 1, Name = "ackedOffset"), JsonPropertyName("ackedOffset"), YamlMember(Alias = "ackedOffset")]
     public virtual ulong? AckedOffset { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object that describes the last fault that occured while streaming events to subscribers. Streaming is interrupted when fault is set, requiring a user to manually resume streaming
+    /// </summary>
+    [DataMember(Order = 2, Name = "fault"), JsonPropertyName("fault"), YamlMember(Alias = "fault")]
+    public virtual ProblemDetails? Fault { get; set; }
+
 }

@@ -38,4 +38,19 @@ public static class IServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Adds and configures a new <see cref="IResourceMonitor{TResource}"/> to monitor the specified <see cref="IResource"/>
+    /// </summary>
+    /// <typeparam name="TResource">The type of <see cref="IResource"/> to monitor</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure</param>
+    /// <param name="name">AThe name of the <see cref="IResource"/> to monitor</param>
+    /// <param name="namespace">The namespace the <see cref="IResource"/> to monitor belongs to, if any</param>
+    /// <returns>The configured <see cref="IServiceCollection"/></returns>
+    public static IServiceCollection AddResourceMonitor<TResource>(this IServiceCollection services, string name, string? @namespace = null)
+        where TResource : class, IResource, new()
+    {
+        services.AddSingleton(provider => provider.GetRequiredService<IResourceRepository>().MonitorAsync<TResource>(name, @namespace).GetAwaiter().GetResult());
+        return services;
+    }
+
 }

@@ -108,6 +108,22 @@ public class GatewaysController
     }
 
     /// <summary>
+    /// Patches the status of the specified gateway
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpPatch("status")]
+    [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchGatewayStatus([FromBody] ResourcePatch<Gateway> patch, CancellationToken cancellationToken)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.Send<Response<Gateway>>(new PatchResourceStatusCommand<Gateway>(patch), cancellationToken));
+    }
+
+    /// <summary>
     /// Updates the specified gateway
     /// </summary>
     /// <param name="resource">The gateway to update</param>

@@ -26,10 +26,10 @@ public enum CloudEventMutationType
     /// Indicates an expression-based mutation
     /// </summary>
     [EnumMember(Value = "expression")]
-    Expression,
+    Expression = 1,
     /// <summary>
     /// Indicates a webhook-based expression
     /// </summary>
     [EnumMember(Value = "webhook")]
-    Webhook
+    Webhook = 2
 }

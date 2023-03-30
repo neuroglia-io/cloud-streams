@@ -40,6 +40,8 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddResourceController<Subscription>();
         builder.Services.TryAddSingleton<SubscriptionManager>();
         builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
+
+        builder.Services.AddResourceMonitor<Core.Data.Models.Broker>(options.Name, options.Namespace);
         return builder;
     }
 

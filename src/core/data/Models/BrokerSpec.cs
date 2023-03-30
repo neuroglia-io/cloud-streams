@@ -29,10 +29,12 @@ public class BrokerSpec
     /// Initializes a new <see cref="BrokerSpec"/>
     /// </summary>
     /// <param name="network">The name of the network the broker belongs to</param>
-    public BrokerSpec(string network)
+    /// <param name="dispatch">An object used to configure the way the broker should dispatch cloud events</param>
+    public BrokerSpec(string network, BrokerDispatchConfiguration dispatch)
     {
         if (string.IsNullOrWhiteSpace(network)) throw new ArgumentNullException(nameof(network));
         this.Network = network;
+        this.Dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
     }
 
     /// <summary>
@@ -41,5 +43,12 @@ public class BrokerSpec
     [Required, JsonRequired]
     [DataMember(Order = 1, Name = "network", IsRequired = true), JsonPropertyName("network"), YamlMember(Alias = "network")]
     public virtual string Network { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets an object used to configure the way the broker should dispatch cloud events
+    /// </summary>
+    [Required, JsonRequired]
+    [DataMember(Order = 2, Name = "dispatch", IsRequired = true), JsonPropertyName("dispatch"), YamlMember(Alias = "dispatch")]
+    public virtual BrokerDispatchConfiguration Dispatch { get; set; } = null!;
 
 }

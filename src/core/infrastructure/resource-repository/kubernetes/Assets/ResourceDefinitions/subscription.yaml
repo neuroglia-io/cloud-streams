@@ -107,6 +107,63 @@ spec:
                       format: url
                     rateLimit:
                       type: number
+                    retryPolicy:
+                      type: object
+                      properties:
+                        statusCodes:
+                          type: array
+                          items:
+                            type: number
+                        circuitBreaker:
+                          type: object
+                          properties:
+                            breakAfter:
+                              type: integer
+                            breakDuration:
+                              type: string
+                          required:
+                            - breakAfter
+                            - breakDuration
+                        backoffDuration:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              enum:
+                                - constant
+                                - incremental
+                                - exponential
+                            period:
+                              type: string
+                            exponent:
+                              type: number
+                          oneOf:
+                            - properties:
+                                type:
+                                  enum: 
+                                    - constant
+                              required:
+                                - type
+                                - period
+                            - properties:
+                                type: 
+                                  enum: 
+                                    - incremental
+                              required:
+                                - type
+                                - period
+                            - properties:
+                                type:
+                                  enum: 
+                                    - exponential
+                              required:
+                                - type
+                                - period
+                                - exponent 
+                        maxAttempts:
+                          type: integer
+                      required:
+                        - backoffDuration
                   required:
                     - uri
               required:
@@ -114,6 +171,12 @@ spec:
             status:
               type: object
               properties:
+                phase:
+                  type: string
+                  enum:
+                    - inactive
+                    - active
+                    - disabled
                 observedGeneration:
                   type: number
                 stream:
@@ -121,6 +184,29 @@ spec:
                   properties:
                     ackedOffset:
                       type: number
+                    fault:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          format: url
+                        title:
+                          type: string
+                        status:
+                          type: integer
+                        detail:
+                          type: string
+                        instance:
+                          type: string
+                          format: url
+                        errors:
+                          type: array
+                          items:
+                            type: object
+                      required:
+                        - type
+                        - title
+                        - status
           required:
             - spec
       subresources:
