@@ -24,7 +24,7 @@ public static class EventStoreStreams
     /// <summary>
     /// Gets the name of the stream that contains all <see cref="CloudEvent"/>s
     /// </summary>
-    public const string All = "cloud_events";
+    public const string All = "cloud-events";
 
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySource"/> partition EventStore streams

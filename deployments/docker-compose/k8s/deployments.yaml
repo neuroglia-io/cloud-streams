@@ -41,6 +41,16 @@ metadata:
   name: broker-1
 spec:
   network: network-1
+  dispatch:
+    retryPolicy:
+      statusCodes: [503]
+      circuitBreaker:
+        breakAfter: 5
+        breakDuration: PT5S
+      backoffDuration:
+        type: exponential
+        period: PT1S
+        exponent: 2
   
 ---
 
@@ -52,8 +62,8 @@ metadata:
     cloud-streams.io/network-id: network-1
 spec:
   subscriber: #required
-    uri: http://webhook-tester:18080/00000000-0000-0000-0000-000000000000 #required
-    rateLimit: 30
+    uri: http://webhook-tester:18080/00000000-0000-0000-0000-000000000000
+  #  rateLimit: 30
   #stream: #optional
   #  offset: 10 #optional: can be 0 for start, -1 for end, n for wherever in the stream
   #mutation: #optional
