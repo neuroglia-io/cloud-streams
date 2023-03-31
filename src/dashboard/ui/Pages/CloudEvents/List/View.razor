@@ -115,7 +115,13 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
-        this.Store.ReadOptions.Subscribe(this.OnReadOptionChangedAsync, cancellationToken: this.CancellationTokenSource.Token);
+        Observable.CombineLatest<StreamReadOptions, ulong?, bool>(
+            this.Store.ReadOptions,
+            this.Store.TotalCount,
+            (_, _) => true
+        )
+        .Throttle(TimeSpan.FromMilliseconds(300))
+        .SubscribeAsync(this.OnReadOptionChangedAsync, null, null, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -129,11 +135,9 @@
     }
 
     /// <summary>
-    /// Handles <see cref="StreamReadOptions" />'s changes
+    /// Refresh the virtual list on <see cref="StreamReadOptions" />'s or total count's changes
     /// </summary>
-    /// <param name="readOptions"></param>
-    /// <returns></returns>
-    private async Task OnReadOptionChangedAsync(StreamReadOptions readOptions)
+    private async Task OnReadOptionChangedAsync(bool _)
     {
         if (!this.readOptionsInitialized)
         {

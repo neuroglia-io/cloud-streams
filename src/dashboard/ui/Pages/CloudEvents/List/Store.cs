@@ -43,6 +43,11 @@ public class CloudEventListStore
     public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
     /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.TotalCount"/> changes
+    /// </summary>
+    public IObservable<ulong?> TotalCount => this.Select(state => state.TotalCount).DistinctUntilChanged();
+
+    /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.ReadOptions"/> changes
     /// </summary>
     public IObservable<StreamReadOptions> ReadOptions => this.Select(state => {
@@ -112,6 +117,10 @@ public class CloudEventListStore
         }
         this.SetLoading(true);
         readOptions = readOptions with { };
+        if (readOptions.Partition?.Type == null || readOptions.Partition?.Id == null)
+        {
+            readOptions = readOptions with { Partition = null };
+        }
         int totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
         if (readOptions.Direction == StreamReadDirection.Forwards)
         {
