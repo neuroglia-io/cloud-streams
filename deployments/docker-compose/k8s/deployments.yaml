@@ -28,13 +28,10 @@ spec:
         properties:
           - name: '$correlationId'
             strategy: expression
-            expression: |- 
-              fetch('https://petstore.swagger.io/v2/pet/findByStatus?status=available')
-                .then(response => response.json())
-                .then(pets => pets[0].name);
+            expression: '.subject'
           - name: '$causationId'
             strategy: expression
-            expression: 'input.id'
+            expression: '.id'
             
 ---
 

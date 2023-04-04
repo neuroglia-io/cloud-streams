@@ -29,7 +29,7 @@ builder.UseCloudStreams(builder =>
     builder.UseESCloudEventStore();
     builder.UseApicurioSchemaRegistry();
     builder.UseKubernetesResourceStore();
-    builder.UseJavaScriptExpressionEvaluator();
+    builder.UseJQExpressionEvaluator();
 });
 
 var app = builder.Build();

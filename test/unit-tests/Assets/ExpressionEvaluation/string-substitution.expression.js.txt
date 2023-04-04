@@ -1,0 +1,1 @@
+﻿input.say.replace('${greeting}', input.someGreeting)

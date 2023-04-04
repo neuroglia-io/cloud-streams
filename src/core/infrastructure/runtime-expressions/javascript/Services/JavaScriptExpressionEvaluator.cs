@@ -12,7 +12,6 @@
 // limitations under the License.
 
 using Jint;
-using Jint.Native;
 using Jint.Runtime.Interop;
 
 namespace CloudStreams.Core.Infrastructure.Services;
@@ -29,35 +28,50 @@ public class JavaScriptExpressionEvaluator
     public JavaScriptExpressionEvaluator() { }
 
     /// <inheritdoc/>
-    public object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null)
+    public object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(expression)) throw new ArgumentNullException(nameof(expression));
         if (input == null) throw new ArgumentNullException(nameof(input));
         if (expectedType == null) expectedType = typeof(object);
         expression = expression.Trim();
+        if (expression.StartsWith("${"))
+            expression = expression[2..^1].Trim();
         if (string.IsNullOrWhiteSpace(expression)) throw new ArgumentNullException(nameof(expression));
         var jsEngine = new Engine(options =>
         {
             // Limit memory allocations to 1MB
             options.LimitMemory(1_000_000)
-            // Set a timeout to 500ms
-                .TimeoutInterval(TimeSpan.FromMicroseconds(500))
-            // Set limit of 500 executed statements
+                // Set a timeout to 500ms
+                .TimeoutInterval(TimeSpan.FromMilliseconds(500))
+                // Set limit of 500 executed statements
                 .MaxStatements(500)
-            // Set limit of 16 for recursive calls
+                // Set limit of 16 for recursive calls
                 .LimitRecursion(16)
-            // Use a cancellation token.
-                //.CancellationToken(cancellationToken)
+                // Use a cancellation token.
+                .CancellationToken(cancellationToken)
+                // customizing object wrapping to set array prototype to objects
+                .SetWrapObjectHandler((engine, target) =>
+                {
+                    var instance = new ObjectWrapper(engine, target);
+                    if (instance.IsArrayLike)
+                    {
+                        instance.SetPrototypeOf(engine.Realm.Intrinsics.Array.PrototypeObject);
+                    }
+                    return instance;
+                })
             ;
-        });
+        }); ;
         jsEngine.SetValue("input", input);
-        if (arguments != null)
+        if (arguments != null && arguments.Any())
         {
             foreach (var argument in arguments)
             {
                 jsEngine.SetValue(argument.Key, argument.Value);
             }
         }
-        return jsEngine.Evaluate(expression).UnwrapIfPromise().ToObject();
+        var result = jsEngine.Evaluate(expression).UnwrapIfPromise().ToObject();
+        if (expectedType == typeof(object))
+            return result;
+        return Serializer.Json.Deserialize(Serializer.Json.Serialize(result), expectedType);
     }
 }
