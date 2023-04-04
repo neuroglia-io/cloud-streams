@@ -37,9 +37,5 @@ jobs:
 
       # Test "per domain" for ease of readability
       - name: Test Core
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Core"
-
-      - name: Test Data.EventSourcing
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Data"
-
+        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Core"
       # ...
