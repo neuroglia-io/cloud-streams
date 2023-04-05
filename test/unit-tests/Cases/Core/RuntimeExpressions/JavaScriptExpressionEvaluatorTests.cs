@@ -14,11 +14,17 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
+using Jint;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Dynamic;
 
 namespace CloudStreams.UnitTests.Cases.Core.RuntimeExpressions;
+
+internal class DataHolder
+{
+    public int Value { get; set;}
+}
 
 public class JavaScriptExpressionEvaluatorTests
 {
@@ -29,8 +35,8 @@ public class JavaScriptExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var expression = "input.value";
         var data = new { value };
+        var expression = "input.value";
 
         //act
         var result = evaluator.Evaluate<int>(expression, data);
@@ -45,8 +51,8 @@ public class JavaScriptExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var expression = "${ input }";
         var data = new { value };
+        var expression = "${ input }";
         var expected = data.ToDictionary<int>()!;
 
         //act
@@ -61,8 +67,8 @@ public class JavaScriptExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var expression = "({ foo: 'bar', fizz: 'buzz' })";
         var data = new { foo = "bar", fizz = "buzz" };
+        var expression = "({ foo: 'bar', fizz: 'buzz' })";
         var expected = data.ToDictionary<string>()!;
 
         //act
@@ -73,14 +79,31 @@ public class JavaScriptExpressionEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_ShouldNotMutate()
+    {
+        //arrange
+        var evaluator = BuildExpressionEvaluator();
+        var value = 42;
+        var data = new DataHolder { Value = value };
+        var expression = "input.value = 24; input.value";
+
+        //act
+        var result = evaluator.Evaluate<int>(expression, data);
+
+        //assert
+        data.Should().BeEquivalentTo(new { Value = 42 });
+        result.Should().Be(24);
+    }
+
+    [Fact]
     public void Evaluate_LargeData_ShouldWork()
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
         // TODO: remove Newtonsoft dependency
         var data = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
-        var expression = "input.filter(i => i.category?.name === CONST.category)[0]";
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
+        var expression = "input.filter(i => i.category?.name === CONST.category)[0]";
 
         //act
         var result = evaluator.Evaluate(expression, data, args);
@@ -95,8 +118,8 @@ public class JavaScriptExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var data = new { };
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.js.txt"));
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.js.txt"));
 
         //act
         dynamic result = evaluator.Evaluate(expression, data, args)!;

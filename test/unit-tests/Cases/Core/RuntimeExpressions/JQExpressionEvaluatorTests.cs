@@ -31,8 +31,8 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var expression = "${ .value }";
         var data = new { value };
+        var expression = "${ .value }";
 
         //act
         var result = evaluator.Evaluate<int>(expression, data);
@@ -47,8 +47,8 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var expression = "${ . }";
         var data = new { value };
+        var expression = "${ . }";
         var expected = data.ToDictionary<int>()!;
 
         //act
@@ -63,8 +63,8 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var expression = "{ foo: \"bar\", fizz: \"buzz\" }";
         var data = new { foo = "bar", fizz = "buzz" };
+        var expression = "{ foo: \"bar\", fizz: \"buzz\" }";
         var expected = data.ToDictionary<string>()!;
 
         //act
@@ -80,8 +80,8 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var data = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
-        var expression = ". | map(select(.category.name == $CONST.category))[0]";
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
+        var expression = ". | map(select(.category.name == $CONST.category))[0]";
 
         //act
         var result = evaluator.Evaluate(expression, data, args);
@@ -96,8 +96,8 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var data = new { };
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.jq.txt"))!;
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.jq.txt"))!;
 
         //act
         dynamic result = evaluator.Evaluate(expression, data, args)!;
