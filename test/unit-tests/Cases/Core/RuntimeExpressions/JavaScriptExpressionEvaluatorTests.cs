@@ -14,7 +14,6 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
-using Jint;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Dynamic;
@@ -73,7 +72,7 @@ public class JavaScriptExpressionEvaluatorTests
 
         //act
         var result = evaluator.Evaluate(expression, data).ToDictionary<string>()!;
-
+        
         //assert
         result.Should().BeEquivalentTo(expected);
     }
@@ -85,7 +84,7 @@ public class JavaScriptExpressionEvaluatorTests
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
         var data = new DataHolder { Value = value };
-        var expression = "input.value = 24; input.value";
+        var expression = "input.Value = 24; input.Value";
 
         //act
         var result = evaluator.Evaluate<int>(expression, data);
