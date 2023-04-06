@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\core\infrastructure\abstractions\CloudStreams.Core.Infrastructure.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\core\infrastructure\runtime-expressions\csharp\CloudStreams.Core.Infrastructure.RuntimeExpressions.CSharp.csproj" />
     <ProjectReference Include="..\..\src\core\infrastructure\runtime-expressions\javascript\CloudStreams.Core.Infrastructure.RuntimeExpressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\src\core\infrastructure\runtime-expressions\jq\CloudStreams.Core.Infrastructure.RuntimeExpressions.JQ.csproj" />
   </ItemGroup>

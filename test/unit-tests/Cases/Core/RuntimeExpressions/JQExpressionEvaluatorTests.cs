@@ -16,10 +16,7 @@ using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Newtonsoft.Json.Linq;
 using System.Dynamic;
-using System.Text.Json;
-using System.Xml.Linq;
 
 namespace CloudStreams.UnitTests.Cases.Core.RuntimeExpressions;
 
@@ -31,11 +28,11 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var data = new { value };
+        var input = new { value };
         var expression = "${ .value }";
 
         //act
-        var result = evaluator.Evaluate<int>(expression, data);
+        var result = evaluator.Evaluate<int>(expression, input);
 
         //assert
         result.Should().Be(value);
@@ -47,12 +44,12 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
-        var data = new { value };
+        var input = new { value };
         var expression = "${ . }";
-        var expected = data.ToDictionary<int>()!;
+        var expected = input.ToDictionary<int>()!;
 
         //act
-        var result = evaluator.Evaluate<Dictionary<string,int>>(expression, data)!;
+        var result = evaluator.Evaluate<Dictionary<string,int>>(expression, input)!;
 
         //assert
         result.Should().BeEquivalentTo(expected);
@@ -63,12 +60,12 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = new { foo = "bar", fizz = "buzz" };
+        var input = new { foo = "bar", fizz = "buzz" };
         var expression = "{ foo: \"bar\", fizz: \"buzz\" }";
-        var expected = data.ToDictionary<string>()!;
+        var expected = input.ToDictionary<string>()!;
 
         //act
-        var result = evaluator.Evaluate(expression, data).ToDictionary<string>()!;
+        var result = evaluator.Evaluate(expression, input).ToDictionary<string>()!;
 
         //assert
         result.Should().BeEquivalentTo(expected);
@@ -79,12 +76,12 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
+        var input = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = ". | map(select(.category.name == $CONST.category))[0]";
 
         //act
-        var result = evaluator.Evaluate(expression, data, args);
+        var result = evaluator.Evaluate(expression, input, args);
 
         //assert
         result.Should().NotBeNull();
@@ -95,12 +92,12 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = new { };
+        var input = new { };
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.jq.txt"))!;
 
         //act
-        dynamic result = evaluator.Evaluate(expression, data, args)!;
+        dynamic result = evaluator.Evaluate(expression, input, args)!;
         int petsLength = result.GetProperty("pets").GetArrayLength();
 
         //assert
@@ -113,11 +110,11 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var json = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "input-with-escaped-json.json"));
-        var data = Serializer.Json.Deserialize<ExpandoObject>(json)!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(json)!;
         var expression = "${ ._user }";
 
         //act
-        dynamic result = evaluator.Evaluate(expression, data)!;
+        dynamic result = evaluator.Evaluate(expression, input)!;
         string name  = result.GetProperty("name").GetString();
 
         //assert
@@ -129,11 +126,11 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!;
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.expression.jq.txt"));
 
         //act
-        string result = (string)evaluator.Evaluate(expression, data, expectedType: typeof(string))!;
+        string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
 
         //assert
         result.Should().Be("hello world");
@@ -144,11 +141,11 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!;
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.expression.jq.txt"));
 
         //act
-        string result = (string)evaluator.Evaluate(expression, data, expectedType: typeof(string))!;
+        string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
 
         //assert
         result.Should().Be("hello world is a greeting");
@@ -159,11 +156,11 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!;
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.expression.jq.txt"));
 
         //act
-        string result = (string)evaluator.Evaluate(expression, data, expectedType: typeof(string))!;
+        string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
 
         //assert
         result.Should().Be("Hello world");
@@ -174,11 +171,11 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!;
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.expression.jq.txt"));
 
         //act
-        string result = (string)evaluator.Evaluate(expression, data, expectedType: typeof(string))!;
+        string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
 
         //assert
         result.Should().Be(@"bar is ""bar""");

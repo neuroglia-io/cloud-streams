@@ -12,20 +12,64 @@
 // limitations under the License.
 
 using CloudStreams.Core;
+using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
-using Jint;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Dynamic;
 
 namespace CloudStreams.UnitTests.Cases.Core.RuntimeExpressions;
 
-public class JavaScriptExpressionEvaluatorTests
+public class CSharpExpressionEvaluatorTests
 {
+    [Fact]
+    public void Evaluate_KnwonType_PrimitiveOutput_ShouldWork()
+    {
+        //arrange
+        var evaluator = BuildExpressionEvaluator();
+        var input = BuildMockCloudEvent();
+        var expression = "input.Type";
+
+        //act
+        var result = evaluator.Evaluate<string>(expression, input);
+
+        //assert
+        result.Should().Be(input.Type);
+    }
 
     [Fact]
-    public void Evaluate_PrimitiveOutput_ShouldWork()
+    public void Evaluate_KnwonType_MethodOutput_ShouldWork()
+    {
+        //arrange
+        var evaluator = BuildExpressionEvaluator();
+        var input = BuildMockCloudEvent();
+        var expression = "input.GetAttribute(\"Sequence\")";
+
+        //act
+        var result = evaluator.Evaluate<int>(expression, input);
+
+        //assert
+        result.Should().Be(42);
+    }
+
+    [Fact]
+    public void Evaluate_KnwonType_InnerAnonymousOutput_ShouldWork()
+    {
+        //arrange
+        var evaluator = BuildExpressionEvaluator();
+        var input = BuildMockCloudEvent();
+        var expression = "input.Data.Id";
+
+        //act
+        var result = evaluator.Evaluate<string>(expression, input);
+
+        //assert
+        result.Should().Be("");
+    }
+
+    [Fact]
+    public void Evaluate_UnknwonType_PrimitiveOutput_ShouldWork()
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
@@ -210,7 +254,30 @@ public class JavaScriptExpressionEvaluatorTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.TryAddSingleton<IExpressionEvaluator, JavaScriptExpressionEvaluator>();
+        services.TryAddSingleton<IExpressionEvaluator, CSharpExpressionEvaluator>();
         return services.BuildServiceProvider().GetRequiredService<IExpressionEvaluator>();
+    }
+
+    static CloudEvent BuildMockCloudEvent()
+    {
+        return new CloudEvent()
+        {
+            SpecVersion = "1.0",
+            Time = DateTimeOffset.Now,
+            Id = "577d3bed-77c4-4d75-9d1c-4bfe5994828b",
+            Type = "my-event-type",
+            Source = new Uri("https://my-event.source.com"),
+            Subject = "the-subject",
+            DataContentType = "application/json",
+            Data = new
+            {
+                Id = "user-123",
+                Action = "logged-in"
+            },
+            ExtensionAttributes = new Dictionary<string, object>
+            {
+                { "Sequence", 42 }
+            }
+        };
     }
 }

@@ -1,4 +1,4 @@
-// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2023-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-global using FluentAssertions;
-global using Xunit;
-global using CloudStreams.UnitTests.Models;
+namespace CloudStreams.UnitTests.Models
+{
+    internal class ValueHolder
+    {
+        public int Value { get; set; }
+    }
+}

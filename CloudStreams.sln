@@ -132,6 +132,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "unit-test", "unit-test", "{
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.UnitTests", "test\unit-tests\CloudStreams.UnitTests.csproj", "{BECFDEE0-B004-4ABF-9945-D3012BA8807D}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Core.Infrastructure.RuntimeExpressions.CSharp", "src\core\infrastructure\runtime-expressions\csharp\CloudStreams.Core.Infrastructure.RuntimeExpressions.CSharp.csproj", "{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -238,6 +240,10 @@ Global
 		{BECFDEE0-B004-4ABF-9945-D3012BA8807D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BECFDEE0-B004-4ABF-9945-D3012BA8807D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BECFDEE0-B004-4ABF-9945-D3012BA8807D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -299,6 +305,7 @@ Global
 		{785EA5C9-7CF5-42CA-A01A-8B5BF0C150F6} = {1E7FEC52-00D2-4CBB-AD47-CFB2AA9AF155}
 		{C9F49313-0CA9-45B1-BB61-572808E44661} = {5E07011D-5588-4513-BAC7-BFA23372B218}
 		{BECFDEE0-B004-4ABF-9945-D3012BA8807D} = {C9F49313-0CA9-45B1-BB61-572808E44661}
+		{20A3F7EA-0A56-4D9B-B92B-928B428D9FBA} = {1E7FEC52-00D2-4CBB-AD47-CFB2AA9AF155}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {13305552-A19D-453A-A26B-6E7B60F052F2}
