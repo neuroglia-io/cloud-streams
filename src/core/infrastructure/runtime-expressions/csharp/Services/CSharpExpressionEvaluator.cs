@@ -86,7 +86,7 @@ public class CSharpExpressionEvaluator
 
             namespace _ExpressionEvaluator {
                 public class  _CSharpEvaluator {
-                    public object? Evaluate(dynamic input, IDictionary<string, object>? arguments = null) {
+                    public object Evaluate(dynamic input, IDictionary<string, object> arguments = null) {
                         {{(arguments == null ? "" : arguments.Aggregate(
                             new StringBuilder(), 
                             (builder, argument) => builder.AppendFormat("var {0} = arguments[\"{0}\"];\r\n", argument.Key)

@@ -124,7 +124,13 @@ public class CSharpExpressionEvaluatorTests
         var evaluator = BuildExpressionEvaluator();
         var value = 42;
         var input = new ValueHolder { Value = value };
-        var expression = "input.value = 24; input.value";
+        var expression = """
+            new Lazy<int>(() =>
+            {
+                input.Value = 24;
+                return input.Value;
+            }).Value
+            """;
 
         //act
         var result = evaluator.Evaluate<int>(expression, input);
@@ -139,8 +145,7 @@ public class CSharpExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
+        var input = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = "input.filter(i => i.category?.name === CONST.category)[0]";
 
@@ -158,7 +163,7 @@ public class CSharpExpressionEvaluatorTests
         var evaluator = BuildExpressionEvaluator();
         var input = new { };
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.js.txt"));
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.cs.txt"));
 
         //act
         dynamic result = evaluator.Evaluate(expression, input, args)!;
@@ -174,8 +179,7 @@ public class CSharpExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var json = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "input-with-escaped-json.json"));
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<ExpandoObject>(json)!;
+        var input = Serializer.Json.Deserialize<ExpandoObject>(json)!;
         var expression = "input._user";
 
         //act
@@ -191,9 +195,8 @@ public class CSharpExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!;
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.expression.js.txt"));
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!;
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.expression.cs.txt"));
 
         //act
         string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
@@ -207,9 +210,8 @@ public class CSharpExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!;
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.expression.js.txt"));
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!;
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.expression.cs.txt"));
 
         //act
         string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
@@ -223,9 +225,8 @@ public class CSharpExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!;
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.expression.js.txt"));
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!;
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.expression.cs.txt"));
 
         //act
         string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
@@ -239,9 +240,8 @@ public class CSharpExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        // TODO: remove Newtonsoft dependency
-        var input = Newtonsoft.Json.JsonConvert.DeserializeObject<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!;
-        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.expression.js.txt"));
+        var input = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!;
+        var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.expression.cs.txt"));
 
         //act
         string result = (string)evaluator.Evaluate(expression, input, expectedType: typeof(string))!;
