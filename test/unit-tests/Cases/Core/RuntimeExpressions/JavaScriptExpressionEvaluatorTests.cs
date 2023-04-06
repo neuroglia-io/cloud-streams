@@ -113,11 +113,10 @@ public class JavaScriptExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var input = new { };
-        var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.js.txt"));
 
         //act
-        dynamic result = evaluator.Evaluate(expression, input, args)!;
+        dynamic result = evaluator.Evaluate(expression, input)!;
         int petsLength = ((IEnumerable<object>)result.pets).Count();
 
         //assert

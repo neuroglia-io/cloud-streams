@@ -93,11 +93,10 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var input = new { };
-        var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.jq.txt"))!;
 
         //act
-        dynamic result = evaluator.Evaluate(expression, input, args)!;
+        dynamic result = evaluator.Evaluate(expression, input)!;
         int petsLength = result.GetProperty("pets").GetArrayLength();
 
         //assert

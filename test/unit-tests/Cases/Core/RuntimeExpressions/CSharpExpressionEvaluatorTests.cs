@@ -107,7 +107,7 @@ public class CSharpExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var input = new { foo = "bar", fizz = "buzz" };
-        var expression = "({ foo: 'bar', fizz: 'buzz' })";
+        var expression = "new { foo = \"bar\", fizz = \"buzz\" }";
         var expected = input.ToDictionary<string>()!;
 
         //act
@@ -147,7 +147,7 @@ public class CSharpExpressionEvaluatorTests
         var evaluator = BuildExpressionEvaluator();
         var input = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
-        var expression = "input.filter(i => i.category?.name === CONST.category)[0]";
+        var expression = "input.Where(i => i.category?.name == CONST.category)[0]";
 
         //act
         var result = evaluator.Evaluate(expression, input, args);
@@ -162,12 +162,11 @@ public class CSharpExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var input = new { };
-        var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "pets.expression.cs.txt"));
 
         //act
-        dynamic result = evaluator.Evaluate(expression, input, args)!;
-        int petsLength = ((IEnumerable<object>)result.pets).Count();
+        Dictionary<string, List<dynamic>> result = (Dictionary<string, List<dynamic>>)evaluator.Evaluate(expression, input, expectedType: typeof(Dictionary<string, List<dynamic>>))!;
+        int petsLength = result["pets"].Count();
 
         //assert
         petsLength.Should().Be(425);
