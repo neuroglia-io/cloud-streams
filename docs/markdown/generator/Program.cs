@@ -14,36 +14,48 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Data.Models;
 using CloudStreams.Documentation.Markdown.Generator;
-using System.Collections;
 using System.Text;
 using System.Text.Json.Serialization;
 
-var modelTypes = TypeCacheUtil.FindFilteredTypes("csdg:resources", t => t.IsClass && !t.IsInterface && !t.IsAbstract && !t.IsGenericTypeDefinition && t.IsPublic && t.Namespace == typeof(Subscription).Namespace, typeof(Broker).Assembly).OrderBy(t => t.Name);
-GenerateTableOfContents(modelTypes);
-foreach (var modelType in modelTypes)
+var outputDirectory = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..");
+var resourcesOutputDirectory = Path.Combine(outputDirectory, "resources");
+if(!Directory.Exists(resourcesOutputDirectory)) Directory.CreateDirectory(resourcesOutputDirectory);
+var resourceTypes = TypeCacheUtil.FindFilteredTypes("csdg:resources", t => t.IsClass && !t.IsInterface && !t.IsAbstract && !t.IsGenericTypeDefinition && t.IsPublic && t.Namespace == typeof(Subscription).Namespace && typeof(IResource).IsAssignableFrom(t), typeof(Broker).Assembly).OrderBy(t => t.Name);
+GenerateTableOfContents(resourceTypes);
+foreach (var modelType in resourceTypes)
 {
-    GenerateMarkdownDocumentationFor(modelType);
+    GenerateResourceDocumentation(modelType);
 }
 
-void GenerateTableOfContents(IEnumerable<Type> modelTypes)
+void GenerateTableOfContents(IEnumerable<Type> resourceTypes)
 {
     var stringBuilder = new StringBuilder();
     stringBuilder.AppendLine(
 $"""
-## Data Models Index
+## Resources
 
 """);
-    foreach(var modelType in modelTypes)
+    foreach(var resourceType in resourceTypes)
     {
         stringBuilder.AppendLine(
 $"""
-- {GenerateTypeReferenceFor(modelType)}
+- {GenerateTypeReferenceFor(resourceType, true)}
 """);
     }
-    File.WriteAllText($"README.md", stringBuilder.ToString());
+    File.WriteAllText(Path.Combine(outputDirectory, "README.md"), stringBuilder.ToString());
 }
 
-void GenerateMarkdownDocumentationFor(Type type)
+void GenerateResourceDocumentation(Type type)
+{
+    var stringBuilder = new StringBuilder();
+    stringBuilder.AppendLine("### [Resources](/../README.md)");
+    stringBuilder.AppendLine("<hr>");
+
+    stringBuilder.AppendLine("<hr>");
+    File.WriteAllText(Path.Combine(resourcesOutputDirectory!, $"{type.Name.ToHyphenCase()}.md"), stringBuilder.ToString());
+}
+
+void GenerateDocumentationFor(Type type)
 {
     var stringBuilder = new StringBuilder();
     stringBuilder.AppendLine(
@@ -60,7 +72,7 @@ public class {type.Name}
 
 ### Properties
 
-{GeneratePropertiesMarkdownTableFor(type)}
+{GeneratePropertiesTableFor(type)}
 
 ### Examples
 
@@ -68,10 +80,9 @@ public class {type.Name}
 
 """);
 
-    File.WriteAllText($"{type.Name.ToHyphenCase()}.md", stringBuilder.ToString());
 }
 
-string GeneratePropertiesMarkdownTableFor(Type type)
+string GeneratePropertiesTableFor(Type type)
 {
     var stringBuilder = new StringBuilder();
     stringBuilder.AppendLine(
@@ -107,13 +118,17 @@ string GetTypeName(Type type)
     return type.Name;
 }
 
-string GenerateTypeReferenceFor(Type type)
+string GenerateTypeReferenceFor(Type type, bool external = false)
 {
     var typeName = GetTypeName(type);
     if (type.IsPrimitiveType() || typeName == "object") return $"`{typeName}`";
-    return 
+    if (external) return
 $"""
 [`{typeName}`](/{typeName.ToHyphenCase()}.md)
+""";
+    else return
+$"""
+[`{typeName}`](#{typeName.ToHyphenCase()})
 """;
 }
 
