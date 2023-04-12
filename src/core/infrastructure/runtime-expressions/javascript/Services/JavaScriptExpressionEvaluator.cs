@@ -11,12 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Infrastructure.Services.InternalExtensions;
 using Jint;
-using Jint.Native;
 using Jint.Runtime.Interop;
-using Microsoft.VisualBasic;
-using System.Reflection;
-using System.Text.Json;
 
 namespace CloudStreams.Core.Infrastructure.Services;
 
@@ -44,7 +41,7 @@ public class JavaScriptExpressionEvaluator
         var jsEngine = new Engine(options =>
         {
             // Limit memory allocations to 1MB
-            options.LimitMemory(10_000_000)
+            options.LimitMemory(1_000_000)
                 // Set a timeout to 500ms
                 .TimeoutInterval(TimeSpan.FromMilliseconds(500))
                 // Set limit of 500 executed statements
@@ -65,12 +62,12 @@ public class JavaScriptExpressionEvaluator
                 })
             ;
         });
-        this.CopyValue(jsEngine, "input", input);
+        jsEngine.SetValue("input", input.Copy());
         if (arguments != null && arguments.Any())
         {
             foreach (var argument in arguments)
             {
-                this.CopyValue(jsEngine, argument.Key, argument.Value);
+                jsEngine.SetValue(argument.Key, argument.Value.Copy());
             }
         }
         var result = jsEngine.Evaluate(expression).UnwrapIfPromise().ToObject();
@@ -78,47 +75,5 @@ public class JavaScriptExpressionEvaluator
         if (expectedType == typeof(object))
             return result;
         return Serializer.Json.Deserialize(Serializer.Json.Serialize(result), expectedType);
-    }
-
-    /// <summary>
-    /// Clones the provided value
-    /// </summary>
-    /// <typeparam name="T">The type of the value to clone</typeparam>
-    /// <param name="value">The seed value</param>
-    /// <returns>The cloned value</returns>
-    /* TODO: Should be prefered to the "CopyValue" method because it will use less memory
-     * but System.Text creates unwanted side effects by wrapping the content in JsonElement
-     */
-    private T Clone<T>(T value)
-    {
-        if (value == null)
-        {
-            return default(T)!;
-        }
-        if (value.GetType().IsPrimitive) { 
-            return value; 
-        }
-        // System.Text introduces side effects with its "JsonElements"
-        return Serializer.Json.Deserialize<T>(Serializer.Json.Serialize(value))!;
-        /* Newtonsoft works but is banned from the project
-        return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(Newtonsoft.Json.JsonConvert.SerializeObject(value))!;
-        */
-    }
-
-    /// <summary>
-    /// Copies the provided value to a variable inside the engine under the provided name. 
-    /// It prevents the JS engine from being able to mutate the inputed value out of its execution context.
-    /// </summary>
-    /// <param name="engine">The instance of <see cref="Engine"/> to set the variable in</param>
-    /// <param name="name">The name of the variable</param>
-    /// <param name="value">The value of the variable</param>
-    private void CopyValue(Engine engine, string name, object value)
-    {
-        if (value == null || value.GetType().IsPrimitive)
-        {
-            engine.SetValue(name, value);
-        }
-        engine.SetValue($"__{name}__buffer", value);
-        engine.Execute($"const {name} = JSON.parse(JSON.stringify(__{name}__buffer)); delete __{name}__buffer;");
     }
 }
