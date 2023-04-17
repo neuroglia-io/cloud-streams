@@ -26,7 +26,8 @@ public interface IExpressionEvaluator
     /// <param name="input">The data to evaluate the runtime expression against</param>
     /// <param name="arguments">A key/value mapping of the arguments used during evaluation, if any</param>
     /// <param name="expectedType">The expected type of the evaluation's result</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The evaluation's result</returns>
-    object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null);
+    object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null, CancellationToken cancellationToken = default);
 
 }

@@ -24,7 +24,7 @@ public class JQExpressionEvaluator
 {
 
     /// <inheritdoc/>
-    public object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null)
+    public object? Evaluate(string expression, object input, IDictionary<string, object>? arguments = null, Type? expectedType = null, CancellationToken cancellationToken = default)
     {
         if(string.IsNullOrWhiteSpace(expression)) throw new ArgumentNullException(nameof(expression));
         if(input == null) throw new ArgumentNullException(nameof(input));
@@ -78,12 +78,21 @@ public class JQExpressionEvaluator
         startInfo.ArgumentList.Add("-c");
 
         using var process = new Process() { StartInfo = startInfo };
+        var cancellationRegistration = cancellationToken.Register(() => {
+            try
+            {
+                process.Kill();
+            }
+            catch { }
+        });
         process.Start();
         process.StandardInput.Write(Serializer.Json.Serialize(input));
         process.StandardInput.Close();
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        cancellationRegistration.Unregister();
+        cancellationRegistration.Dispose();
 
         foreach (var file in files)
         {

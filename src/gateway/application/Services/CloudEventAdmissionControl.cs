@@ -266,7 +266,7 @@ public class CloudEventAdmissionControl
                         break;
                     case CloudEventMetadataPropertyResolutionStrategy.RuntimeExpression:
                         if (string.IsNullOrWhiteSpace(property.Expression)) throw new NullReferenceException($"The '{nameof(property.Expression)}' property cannot be null when the metadata property resolution strategy has been set to '{EnumHelper.Stringify(CloudEventMetadataPropertyResolutionStrategy.RuntimeExpression)}'");
-                        attributeValue = this.ExpressionEvaluator.Evaluate(property.Expression, e);
+                        attributeValue = this.ExpressionEvaluator.Evaluate(property.Expression, e, cancellationToken: cancellationToken);
                         if(attributeValue != null) metadata.ExtensionData![property.Name] = attributeValue;
                         break;
                     default:

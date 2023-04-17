@@ -1,0 +1,1 @@
+﻿. as $data | . + { say: ( .say | sub("\\${greeting}";$data.someGreeting | tostring)) } | .say

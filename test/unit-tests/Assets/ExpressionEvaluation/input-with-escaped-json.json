@@ -1,0 +1,7 @@
+﻿{
+  "_user": {
+    "sub": "fake-user-sub",
+    "name": "fake-user-name",
+    "realm_access": "{\"roles\":[\"default-roles-fake\",\"fake-role\",\"offline_access\",\"uma_authorization\"]}"
+  }
+}
