@@ -31,8 +31,10 @@ public static class CloudEventPartitionRefExtensions
         return partition.Type switch
         {
             CloudEventPartitionType.BySource => EventStoreStreams.ByCloudEventSource(new(partition.Id)),
+            CloudEventPartitionType.BySubject => EventStoreStreams.ByCloudEventSubject(partition.Id),
             CloudEventPartitionType.ByType => EventStoreStreams.ByCloudEventType(partition.Id),
-            CloudEventPartitionType.BySubject => EventStoreStreams.ByCorrelationId(partition.Id),
+            CloudEventPartitionType.ByCorrelationId => EventStoreStreams.ByCorrelationId(partition.Id),
+            CloudEventPartitionType.ByCausationId => EventStoreStreams.ByCausationId(partition.Id),
             _ => throw new NotSupportedException($"The specified partition type '{partition.Type}' is not supported")
         };
     }

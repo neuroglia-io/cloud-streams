@@ -29,20 +29,32 @@ public static class EventStoreStreams
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySource"/> partition EventStore streams
     /// </summary>
-    public const string ByCloudEventSourcePrefix = $"{All}-";
-    /// <summary>
-    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByType"/> partition EventStore streams
-    /// </summary>
-    public const string ByCloudEventTypePrefix = $"$et-";
+    public const string ByCloudEventSourcePrefix = "$by-source-";
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySubject"/> partition EventStore streams
     /// </summary>
-    public const string ByCorrelationIdPrefix = $"$bc-";
+    public const string ByCloudEventSubjectPrefix = "$by-subject-";
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByType"/> partition EventStore streams
+    /// </summary>
+    public const string ByCloudEventTypePrefix = "$et-";
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByCorrelationId"/> partition EventStore streams
+    /// </summary>
+    public const string ByCorrelationIdPrefix = "$bc-";
+    /// <summary>
+    /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByCausationId"/> partition EventStore streams
+    /// </summary>
+    public const string ByCausationIdPrefix = "$by-causation-";
 
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by source
     /// </summary>
     public static string ByCloudEventSource(Uri source) => $"{ByCloudEventSourcePrefix}{source.OriginalString}";
+    /// <summary>
+    /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by subject
+    /// </summary>
+    public static string ByCloudEventSubject(string subject) => $"{ByCloudEventSubjectPrefix}{subject}";
     /// <summary>
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by type
     /// </summary>
@@ -51,6 +63,10 @@ public static class EventStoreStreams
     /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by correlation id
     /// </summary>
     public static string ByCorrelationId(string correlationId) => $"{ByCorrelationIdPrefix}{correlationId}";
+    /// <summary>
+    /// Gets the name of the stream that partitions <see cref="CloudEvent"/>s by causation id
+    /// </summary>
+    public static string ByCausationId(string causationId) => $"{ByCausationIdPrefix}{causationId}";
 
     /// <summary>
     /// Determines whether or not the specified EventStore stream name is the one of a partition of the specified type
@@ -64,8 +80,10 @@ public static class EventStoreStreams
         return partitionType switch
         {
             CloudEventPartitionType.BySource => streamName.StartsWith(ByCloudEventSourcePrefix),
+            CloudEventPartitionType.BySubject => streamName.StartsWith(ByCloudEventSubjectPrefix),
             CloudEventPartitionType.ByType => streamName.StartsWith(ByCloudEventTypePrefix),
-            CloudEventPartitionType.BySubject => streamName.StartsWith(ByCorrelationIdPrefix),
+            CloudEventPartitionType.ByCorrelationId => streamName.StartsWith(ByCorrelationIdPrefix),
+            CloudEventPartitionType.ByCausationId => streamName.StartsWith(ByCausationIdPrefix),
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
         };
     }
@@ -82,8 +100,10 @@ public static class EventStoreStreams
         return partitionType switch
         {
             CloudEventPartitionType.BySource => streamName.Substring(ByCloudEventSourcePrefix.Length),
+            CloudEventPartitionType.BySubject => streamName.Substring(ByCloudEventSubjectPrefix.Length),
             CloudEventPartitionType.ByType => streamName.Substring(ByCloudEventTypePrefix.Length),
-            CloudEventPartitionType.BySubject => streamName.Substring(ByCorrelationIdPrefix.Length),
+            CloudEventPartitionType.ByCorrelationId => streamName.Substring(ByCorrelationIdPrefix.Length),
+            CloudEventPartitionType.ByCausationId => streamName.Substring(ByCausationIdPrefix.Length),
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
         };
     }
