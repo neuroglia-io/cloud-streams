@@ -11,11 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
-using CloudStreams.ResourceManagement.Application.Commands.Generic;
-using CloudStreams.ResourceManagement.Application.Queries.Generic;
+using Hylo;
+using Hylo.Api.Application;
+using Hylo.Api.Application.Commands.Resources.Generic;
+using Hylo.Api.Application.Queries.Resources.Generic;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
@@ -45,10 +46,10 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.Created)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateNetwork([FromBody] Network resource, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send<Response<Network>>(new CreateResourceCommand<Network>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Network>>(new CreateResourceCommand<Network>(resource, false), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -58,7 +59,7 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetNetworkDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Network>(), cancellationToken));
@@ -72,10 +73,10 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetNetwork(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new GetResourceQuery<Network>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new GetResourceQuery<Network>(name, null), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -85,10 +86,10 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListNetworks(CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new ListResourceQuery<Network>(), cancellationToken));
+        return this.Process(await this.Mediator.Send(new ListResourcesQuery<Network>(null, null, null, null), cancellationToken)); // TODO: fix me: query args ?
     }
 
     /// <summary>
@@ -99,12 +100,28 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPatch]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> PatchNetwork([FromBody] ResourcePatch<Network> patch, CancellationToken cancellationToken)
+    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchNetwork([FromBody] Patch patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Network>>(new PatchResourceCommand<Network>(patch), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Network>>(new PatchResourceCommand<Network>("network", null, patch, false), cancellationToken)); // TODO: fix me: query args !!
+    }
+
+    /// <summary>
+    /// Patches the status of the specified network
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpPatch("status")]
+    [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
+    [ProducesResponseType((int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchNetworkStatus([FromBody] Patch patch, CancellationToken cancellationToken)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.Send<ApiResponse<Network>>(new PatchResourceStatusCommand<Network>(patch), cancellationToken));
     }
 
     /// <summary>
@@ -115,12 +132,12 @@ public class NetworksController
     /// <returns>A new awaitable <see cref="Task"/></returns>
     [HttpPut]
     [ProducesResponseType(typeof(Network), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutNetwork([FromBody] Network resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Network>>(new PutResourceCommand<Network>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Network>>(new PutResourceCommand<Network>(resource), cancellationToken));
     }
 
     /// <summary>
@@ -131,11 +148,11 @@ public class NetworksController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteNetwork(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Network>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Network>(name, null, false), cancellationToken)); // TODO: fix me: query args ?
     }
 
 }

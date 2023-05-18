@@ -13,6 +13,7 @@
 
 global using CloudStreams.Core.Infrastructure.Services;
 global using EventStore.Client;
+global using Hylo;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.DependencyInjection.Extensions;
 global using Microsoft.Extensions.Hosting;

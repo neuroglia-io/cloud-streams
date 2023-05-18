@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -24,32 +25,32 @@ public class AuthorizationManager
 {
 
     /// <inheritdoc/>
-    public virtual Task<Response> EvaluateAsync(CloudEvent e, CloudEventAuthorizationPolicy policy, CancellationToken cancellationToken = default)
+    public virtual Task<ApiResponse> EvaluateAsync(CloudEvent e, CloudEventAuthorizationPolicy policy, CancellationToken cancellationToken = default)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         if (policy == null) throw new ArgumentNullException(nameof(policy));
         return Task.Run(() =>
         {
-            if (policy.Rules == null || !policy.Rules.Any()) return Response.Ok();
+            if (policy.Rules == null || !policy.Rules.Any()) return ApiResponse.Ok();
             switch (policy.DecisionStrategy)
             {
                 case RuleBasedDecisionStrategy.Consensus:
                     var results = policy.Rules.Select(r => this.Evaluate(e, r));
                     var succeeded = results.Count(r => r);
                     var failed = results.Count(r => !r);
-                    if (succeeded <= failed) return Response.Forbidden();
-                    return Response.Ok();
+                    if (succeeded <= failed) return new((int)HttpStatusCode.Forbidden); // TODO: fix me: ApiResponse.Forbidden();
+                    return ApiResponse.Ok();
                 case RuleBasedDecisionStrategy.Minority:
                     results = policy.Rules.Select(r => this.Evaluate(e, r));
                     succeeded = results.Count(r => r);
                     failed = results.Count(r => !r);
-                    if (succeeded <= 0) return Response.Forbidden();
-                    return Response.Ok();
+                    if (succeeded <= 0) return new((int)HttpStatusCode.Forbidden); // TODO: fix me: ApiResponse.Forbidden();
+                    return ApiResponse.Ok();
                 case RuleBasedDecisionStrategy.Unanimous:
-                    if (!policy.Rules.All(r => this.Evaluate(e, r))) return Response.Forbidden();
-                    return Response.Ok();
+                    if (!policy.Rules.All(r => this.Evaluate(e, r))) return new((int)HttpStatusCode.Forbidden); // TODO: fix me: ApiResponse.Forbidden();
+                    return ApiResponse.Ok();
                 default:
-                    return Response.ValidationFailed($"The specified {nameof(RuleBasedDecisionStrategy)} '{policy.DecisionStrategy}' is not supported");
+                    return new((int)HttpStatusCode.BadRequest); // TODO: fix me: ApiResponse.ValidationFailed($"The specified {nameof(RuleBasedDecisionStrategy)} '{policy.DecisionStrategy}' is not supported");
             }
         });
     }

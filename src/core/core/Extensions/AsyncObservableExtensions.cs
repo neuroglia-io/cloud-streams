@@ -22,28 +22,7 @@ namespace CloudStreams.Core;
 public static class AsyncObservableExtensions
 {
 
-    /// <summary>
-    /// Subscribes to the specified <see cref="IObservable{T}"/>
-    /// </summary>
-    /// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
-    /// <param name="source">The source sequence.</param>
-    /// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
-    /// <param name="onErrorAsync">Action to invoke upon exceptional termination of the observable sequence.</param>
-    /// <param name="onCompletedAsync">Action to invoke upon graceful termination of the observable sequence.</param>
-    public static IDisposable SubscribeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Func<Exception, Task>? onErrorAsync = null, Func<Task>? onCompletedAsync = null)
-    {
-        onErrorAsync ??= _ => Task.CompletedTask;
-        onCompletedAsync ??= () => Task.CompletedTask;
-        return source
-            .Select(number => Observable.FromAsync(() => onNextAsync(number)))
-            .Concat()
-            .Subscribe
-            (
-                _ => { },
-                ex => onErrorAsync(ex).GetAwaiter().GetResult(),
-                () => onCompletedAsync().GetAwaiter().GetResult()
-            );
-    }
+
 
     /// <summary>
     /// Subscribes to the specified <see cref="IObservable{T}"/>

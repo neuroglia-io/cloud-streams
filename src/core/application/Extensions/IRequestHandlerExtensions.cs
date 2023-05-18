@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Core.Data.Models;
+using System.Net;
 
 namespace CloudStreams.Core.Application;
 
@@ -22,107 +23,107 @@ public static class IRequestHandlerExtensions
 {
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes a successfull operation
+    /// Creates a new <see cref="ApiResponse"/> that describes a successfull operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response Accepted<TRequest>(this IRequestHandler<TRequest> handler)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse Accepted<TRequest>(this IRequestHandler<TRequest> handler)
         where TRequest : IRequest
     {
-        return Response.Accepted();
+        return ApiResponse.Accepted();
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes failure due to a forbidden operation
+    /// Creates a new <see cref="ApiResponse"/> that describes failure due to a forbidden operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response Forbidden<TRequest>(this IRequestHandler<TRequest> handler)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse Forbidden<TRequest>(this IRequestHandler<TRequest> handler)
         where TRequest : IRequest
     {
-        return Response.Forbidden();
+        return new((int)HttpStatusCode.Forbidden); // TODO: fix me: ApiResponse.Forbidden();
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes a successfull operation
+    /// Creates a new <see cref="ApiResponse"/> that describes a successfull operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response Ok<TRequest>(this IRequestHandler<TRequest> handler)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse Ok<TRequest>(this IRequestHandler<TRequest> handler)
         where TRequest : IRequest
     {
-        return Response.Ok();
+        return ApiResponse.Ok();
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes a successfull operation
+    /// Creates a new <see cref="ApiResponse"/> that describes a successfull operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
     /// <param name="result">The result to return</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response<TResult> Ok<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, TResult result)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse<TResult> Ok<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, TResult result)
         where TRequest : IRequest<TResult>
     {
-        return Response.Ok(result);
+        return ApiResponse.Ok(result);
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes a successfull operation
+    /// Creates a new <see cref="ApiResponse"/> that describes a successfull operation
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response<TResult> Ok<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse<TResult> Ok<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler)
         where TRequest : IRequest<TResult>
     {
         return handler.Ok(default!);
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes failure due to validation problems
+    /// Creates a new <see cref="ApiResponse"/> that describes failure due to validation problems
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <param name="handler">The extended request handler</param>
     /// <param name="evaluationResults">The <see cref="EvaluationResults"/> used to describe the failed validation</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, EvaluationResults evaluationResults)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse ValidationFailed<TRequest>(this IRequestHandler<TRequest> handler, EvaluationResults evaluationResults)
         where TRequest : IRequest
     {
-        return Response.ValidationFailed(evaluationResults);
+        return new((int)HttpStatusCode.BadRequest); // TODO: fix me: ApiResponse.ValidationFailed(evaluationResults);
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes failure due to validation problems
+    /// Creates a new <see cref="ApiResponse"/> that describes failure due to validation problems
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
     /// <param name="evaluationResults">The <see cref="EvaluationResults"/> used to describe the failed validation</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, EvaluationResults evaluationResults)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, EvaluationResults evaluationResults)
         where TRequest : IRequest<TResult>
     {
-        return Response.ValidationFailed(evaluationResults);
+        return new((int)HttpStatusCode.BadRequest); // TODO: fix me: ApiResponse.ValidationFailed(evaluationResults);
     }
 
     /// <summary>
-    /// Creates a new <see cref="Response"/> that describes failure due to validation problems
+    /// Creates a new <see cref="ApiResponse"/> that describes failure due to validation problems
     /// </summary>
     /// <typeparam name="TRequest">The type of request to handle</typeparam>
     /// <typeparam name="TResult">The expected type of result</typeparam>
     /// <param name="handler">The extended request handler</param>
     /// <param name="errors">The errors that have occured during validation</param>
-    /// <returns>A new <see cref="Response"/></returns>
-    public static Response<TResult> ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, params KeyValuePair<string, string[]>[] errors)
+    /// <returns>A new <see cref="ApiResponse"/></returns>
+    public static ApiResponse<TResult> ValidationFailed<TRequest, TResult>(this IRequestHandler<TRequest, TResult> handler, params KeyValuePair<string, string[]>[] errors)
         where TRequest : IRequest<TResult>
     {
-        return Response.ValidationFailed<TResult>(errors);
+        return new((int)HttpStatusCode.BadRequest); // TODO: fix me: ApiResponse.ValidationFailed<TResult>(errors);
     }
 
 }

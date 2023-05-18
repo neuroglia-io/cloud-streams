@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+global using Hylo;
 global using Json.More;
 global using Json.Schema;
 global using System.Runtime.Serialization;

@@ -16,8 +16,9 @@ using CloudStreams.Core.Data.Models;
 using CloudStreams.Core.Infrastructure.Configuration;
 using CloudStreams.ResourceManagement.Api.Controllers;
 using CloudStreams.ResourceManagement.Api.Services;
-using CloudStreams.ResourceManagement.Application.Commands.Generic;
-using CloudStreams.ResourceManagement.Application.Queries.Generic;
+using Hylo.Api.Application;
+using Hylo.Api.Application.Commands.Resources.Generic;
+using Hylo.Api.Application.Queries.Resources.Generic;
 using MediatR;
 
 namespace CloudStreams.ResourceManagement.Api.Configuration;
@@ -42,49 +43,49 @@ public static class ICloudStreamsApiBuilderExtensions
         foreach (var resource in TypeCacheUtil.FindFilteredTypes("cs:resources", t => t.IsClass && !t.IsAbstract && !t.IsInterface && typeof(IResource).IsAssignableFrom(t)))
         {
             var queryType = typeof(CreateResourceCommand<>).MakeGenericType(resource);
-            var resultType = typeof(Response<>).MakeGenericType(resource);
+            var resultType = typeof(ApiResponse<>).MakeGenericType(resource);
             var serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             var implementationType = typeof(CreateResourceCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(GetResourceDefinitionQuery<>).MakeGenericType(resource);
-            resultType = typeof(Response<IResourceDefinition>);
+            resultType = typeof(ApiResponse<IResourceDefinition>);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(GetResourceDefinitionQueryHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(GetResourceQuery<>).MakeGenericType(resource);
-            resultType = typeof(Response<>).MakeGenericType(resource);
+            resultType = typeof(ApiResponse<>).MakeGenericType(resource);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(GetResourceQueryHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
-            queryType = typeof(ListResourceQuery<>).MakeGenericType(resource);
-            resultType = typeof(Response<>).MakeGenericType(typeof(IAsyncEnumerable<>).MakeGenericType(resource));
+            queryType = typeof(ListResourcesQuery<>).MakeGenericType(resource);
+            resultType = typeof(ApiResponse<>).MakeGenericType(typeof(IAsyncEnumerable<>).MakeGenericType(resource));
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
-            implementationType = typeof(ListResourceQueryHandler<>).MakeGenericType(resource);
+            implementationType = typeof(ListResourcesQueryHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(PatchResourceCommand<>).MakeGenericType(resource);
-            resultType = typeof(Response<>).MakeGenericType(resource);
+            resultType = typeof(ApiResponse<>).MakeGenericType(resource);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(PatchResourceCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(PatchResourceStatusCommand<>).MakeGenericType(resource);
-            resultType = typeof(Response<>).MakeGenericType(resource);
+            resultType = typeof(ApiResponse<>).MakeGenericType(resource);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(PatchResourceStatusCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(PutResourceCommand<>).MakeGenericType(resource);
-            resultType = typeof(Response<>).MakeGenericType(resource);
+            resultType = typeof(ApiResponse<>).MakeGenericType(resource);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(PutResourceCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);
 
             queryType = typeof(DeleteResourceCommand<>).MakeGenericType(resource);
-            resultType = typeof(Response);
+            resultType = typeof(ApiResponse);
             serviceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             implementationType = typeof(DeleteResourceCommandHandler<>).MakeGenericType(resource);
             builder.Services.AddTransient(serviceType, implementationType);

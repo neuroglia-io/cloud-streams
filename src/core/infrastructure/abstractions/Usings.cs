@@ -12,6 +12,8 @@
 // limitations under the License.
 
 global using CloudStreams.Core.Data.Models;
+global using Hylo;
+global using Hylo.Api.Application;
 global using Json.Schema;
 global using Microsoft.Extensions.Logging;
 global using System.Reactive.Linq;

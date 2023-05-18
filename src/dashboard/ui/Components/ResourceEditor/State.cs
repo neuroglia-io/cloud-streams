@@ -67,5 +67,5 @@ public record ResourceEditorState<TResource>
     /// <summary>
     /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occured when trying to save the resource, if any
     /// </summary>
-    public IDictionary<string, string[]> ProblemErrors { get; set; } = new Dictionary<string, string[]>();
+    public EquatableList<KeyValuePair<string, string[]>> ProblemErrors { get; set; } = new EquatableList<KeyValuePair<string, string[]>>();
 }

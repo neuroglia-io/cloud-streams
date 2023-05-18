@@ -11,15 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data.Models;
-
 namespace CloudStreams.Core.Application;
 
 /// <summary>
 /// Defines the fundamentals of an application request
 /// </summary>
 public interface IRequest
-    : MediatR.IRequest<Response>
+    : MediatR.IRequest<ApiResponse>
 {
 
 
@@ -31,7 +29,7 @@ public interface IRequest
 /// </summary>
 /// <typeparam name="TResult">The expected type of result</typeparam>
 public interface IRequest<TResult>
-    : MediatR.IRequest<Response<TResult>>
+    : MediatR.IRequest<ApiResponse<TResult>>
 {
 
 

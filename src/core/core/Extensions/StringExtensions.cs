@@ -25,13 +25,6 @@ public static partial class StringExtensions
     private static readonly Regex MatchCurlyBracedWords = MatchCurlyBracedWordsRegex();
 
     /// <summary>
-    /// Converts the specified input into a camel-cased string
-    /// </summary>
-    /// <param name="input">The string to convert to camel-case</param>
-    /// <returns>The camel-cased input</returns>
-    public static string ToCamelCase(this string input) => CamelCaseNamingConvention.Instance.Apply(input);
-
-    /// <summary>
     /// Converts the specified input into a hyphen-cased string
     /// </summary>
     /// <param name="input">The string to convert to hyphen-case</param>
@@ -104,14 +97,6 @@ public static partial class StringExtensions
     }
 
     /// <summary>
-    /// Joins the values of the <see cref="IEnumerable{T}"/> with the specified character
-    /// </summary>
-    /// <param name="values">The values to join</param>
-    /// <param name="separator">The separator char</param>
-    /// <returns>A new string that consists of the joined values, separated by the specified char</returns>
-    public static string Join(this IEnumerable<string> values, char separator) => string.Join(separator, values);
-
-    /// <summary>
     /// Joins the values of the <see cref="IEnumerable{T}"/> with the specified string
     /// </summary>
     /// <param name="values">The values to join</param>
@@ -119,12 +104,6 @@ public static partial class StringExtensions
     /// <returns>A new string that consists of the joined values, separated by the specified string</returns>
     public static string Join(this IEnumerable<string> values, string separator) => string.Join(separator, values);
 
-    /// <summary>
-    /// Determines whether or not the string is a runtime expression
-    /// </summary>
-    /// <param name="input">The string to check</param>
-    /// <returns>A boolean indicating whether or not the string is a runtime expression</returns>
-    public static bool IsRuntimeExpression(this string input) => input.TrimStart().StartsWith("${") && input.TrimEnd().EndsWith("}");
     [GeneratedRegex("\\{([^}]+)\\}", RegexOptions.Compiled)]
     private static partial Regex MatchCurlyBracedWordsRegex();
 }

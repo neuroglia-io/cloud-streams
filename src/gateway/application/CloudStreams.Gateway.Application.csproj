@@ -19,6 +19,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Hylo.Api.Application" Version="0.4.0" />
+    <PackageReference Include="Hylo.Infrastructure" Version="0.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\core\application\CloudStreams.Core.Application.csproj" />
   </ItemGroup>
 

@@ -24,7 +24,7 @@ namespace CloudStreams.ResourceManagement.Api.Client.Services;
 /// <typeparam name="TResource">The type of <see cref="IResource"/>s to manage</typeparam>
 public class ResourceManagementApi<TResource>
     : IResourceManagementApi<TResource>
-    where TResource : class, IResource, new()
+    where TResource : IResource, new()
 {
 
     /// <summary>
@@ -59,12 +59,12 @@ public class ResourceManagementApi<TResource>
     public virtual async Task<TResource> CreateAsync(TResource resource, CancellationToken cancellationToken = default)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
-        var json = Serializer.Json.Serialize(resource);
+        var json = Core.Serializer.Json.Serialize(resource); // TODO: fix me: Core vs Hylo
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!;  // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
@@ -73,7 +73,7 @@ public class ResourceManagementApi<TResource>
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{this.Path}/definition"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<ResourceDefinition>(json)!;
+        return Core.Serializer.Json.Deserialize<ResourceDefinition>(json)!;
     }
 
     /// <inheritdoc/>
@@ -84,11 +84,11 @@ public class ResourceManagementApi<TResource>
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<TResource>> ListAsync(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<TResource>> ListAsync(string? @namespace = null, IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
     {
         var uri = this.Path;
         var queryStringArguments = new Dictionary<string, string>();
@@ -98,43 +98,43 @@ public class ResourceManagementApi<TResource>
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.DeserializeAsyncEnumerable<TResource>(responseStream, cancellationToken: cancellationToken)!;
+        return Core.Serializer.Json.DeserializeAsyncEnumerable<TResource>(responseStream, cancellationToken: cancellationToken)!;
     }
 
     /// <inheritdoc/>
     public virtual async Task<TResource> UpdateAsync(TResource resource, CancellationToken cancellationToken = default)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
-        var json = Serializer.Json.Serialize(resource);
+        var json = Core.Serializer.Json.Serialize(resource);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<TResource> PatchAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default)
+    public virtual async Task<TResource> PatchAsync(Patch patch, CancellationToken cancellationToken = default)
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
-        var json = Serializer.Json.Serialize(patch);
+        var json = Core.Serializer.Json.Serialize(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<TResource> PatchStatusAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default)
+    public virtual async Task<TResource> PatchStatusAsync(Patch patch, CancellationToken cancellationToken = default)
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
-        var json = Serializer.Json.Serialize(patch);
+        var json = Core.Serializer.Json.Serialize(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, $"{this.Path}/status") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!;
     }
 
     /// <inheritdoc/>
@@ -174,7 +174,7 @@ public class ResourceManagementApi<TResource>
         if (!response.IsSuccessStatusCode)
         {
             if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
-            else throw new CloudStreamsException(Serializer.Json.Deserialize<Core.Data.Models.ProblemDetails>(content));
+            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content));
         }
         return response;
     }

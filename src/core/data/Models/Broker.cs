@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data.Models;
 /// Represents a cloud event broker
 /// </summary>
 [DataContract]
-public class Broker
+public record Broker
     : Resource<BrokerSpec, BrokerStatus>
 {
 
@@ -32,12 +32,12 @@ public class Broker
     /// <summary>
     /// Gets the <see cref="Broker"/>'s resource type
     /// </summary>
-    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
+    public static readonly ResourceDefinitionInfo ResourceDefinition = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
 
     /// <inheritdoc/>
-    public Broker() : base(ResourceType) { }
+    public Broker() : base(ResourceDefinition) { }
 
     /// <inheritdoc/>
-    public Broker(ResourceMetadata metadata, BrokerSpec spec, BrokerStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Broker(ResourceMetadata metadata, BrokerSpec spec, BrokerStatus? status = null) : base(ResourceDefinition, metadata, spec, status) { }
 
 }

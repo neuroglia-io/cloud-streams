@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data.Properties;
+using Hylo.Properties;
 
 namespace CloudStreams.Core;
 
@@ -51,8 +51,8 @@ public class ApplicationException
     {
         var resource = new TResource();
         var details = string.IsNullOrWhiteSpace(@namespace) ? 
-            StringExtensions.Format(Core.Data.Properties.ProblemDetails.ClusterResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, name) 
-            : StringExtensions.Format(Core.Data.Properties.ProblemDetails.NamespacedResourceNotFound, resource.Type.Group, resource.Type.Version, resource.Type.Plural, @namespace, name);
+            "" /* TODO: fix me: StringExtensions.Format(ProblemDetails.ClusterResourceNotFound, resource.Definition.Group, resource.Definition.Version, resource.Definition.Plural, name) */
+            : "" /* TODO: fix me : StringExtensions.Format(ProblemDetails.NamespacedResourceNotFound, resource.Definition.Group, resource.Definition.Version, resource.Definition.Plural, @namespace, name) */;
         return new(ProblemTitles.NotFound, details);
     }
 

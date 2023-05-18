@@ -52,7 +52,7 @@ public class GetEventStreamMetadataQueryHandler
 
     ICloudEventStore _CloudEvents;
 
-    async Task<Response<PartitionMetadata>> MediatR.IRequestHandler<GetEventPartitionMetadataQuery, Response<PartitionMetadata>>.Handle(GetEventPartitionMetadataQuery query, CancellationToken cancellationToken)
+    async Task<ApiResponse<PartitionMetadata>> MediatR.IRequestHandler<GetEventPartitionMetadataQuery, ApiResponse<PartitionMetadata>>.Handle(GetEventPartitionMetadataQuery query, CancellationToken cancellationToken)
     {
         return this.Ok(await this._CloudEvents.GetPartitionMetadataAsync(query.Partition, cancellationToken));
     }

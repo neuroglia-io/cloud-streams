@@ -27,13 +27,13 @@
   </ItemGroup>
 	
   <ItemGroup>
-    <PackageReference Include="System.ServiceModel.Primitives" Version="4.10.0" />
+    <PackageReference Include="Hylo.Api.Application" Version="0.4.0" />
+    <PackageReference Include="System.ServiceModel.Primitives" Version="4.10.2" />
   </ItemGroup>
 	
   <ItemGroup>
     <ProjectReference Include="..\..\core\api\CloudStreams.Core.Api.csproj" />
     <ProjectReference Include="..\api-client\CloudStreams.ResourceManagement.Api.Client.csproj" />
-    <ProjectReference Include="..\application\CloudStreams.ResourceManagement.Application.csproj" />
   </ItemGroup>
 
 </Project>

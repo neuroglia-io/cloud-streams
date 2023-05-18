@@ -33,7 +33,7 @@ public class CloudEventStreamController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<StreamMetadata>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> GetStreamMetadata(CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -48,7 +48,7 @@ public class CloudEventStreamController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("read")]
     [ProducesResponseType(typeof(IEnumerable<CloudEvent>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> ReadStream([FromQuery] StreamReadOptions options, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);

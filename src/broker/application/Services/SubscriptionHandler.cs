@@ -48,7 +48,7 @@ public class SubscriptionHandler
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
     /// <param name="subscription">The <see cref="Core.Data.Models.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
-    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, ICloudEventStore eventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
+    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, ICloudEventStore eventStore, IRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
         IResourceMonitor<Core.Data.Models.Broker> brokerResourceMonitor, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
@@ -83,7 +83,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IResourceRepository ResourceRepository { get; }
+    protected IRepository ResourceRepository { get; }
 
     /// <summary>
     /// Gets the service used to control <see cref="Core.Data.Models.Subscription"/> resources
@@ -190,7 +190,7 @@ public class SubscriptionHandler
             ))
             .Subscribe(this.CancellationToken);
         this.BrokerResourceMonitor
-            .Select(e => e.Spec.Dispatch.RetryPolicy)
+            .Select(e => e.Resource.Spec.Dispatch.RetryPolicy)
             .DistinctUntilChanged()
             .Subscribe(policy => this.DefaultRetryPolicy = policy, this.CancellationToken);
         await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Active).ConfigureAwait(false);
@@ -344,7 +344,7 @@ public class SubscriptionHandler
         var responseContent = await response.Content.ReadAsStringAsync(this.CancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentType?.MediaType == MediaTypeNames.Application.Json) throw new Exception($"Unexpected HTTP response's content type: {response.Content.Headers.ContentType?.MediaType}"); //todo: better feedback
-        return Serializer.Json.Deserialize<CloudEvent>(responseContent);
+        return Core.Serializer.Json.Deserialize<CloudEvent>(responseContent); // todo: fix me: Core vs Hylo
     }
 
     /// <summary>
@@ -469,7 +469,7 @@ public class SubscriptionHandler
         resource.Status.Stream.AckedOffset = offset;
         resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
         var patch = this.Subscription.CreatePatch(resource);
-        await this.ResourceRepository.PatchResourceStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationToken).ConfigureAwait(false);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -482,8 +482,8 @@ public class SubscriptionHandler
         var resource = this.Subscription.Clone()!;
         if (resource.Status == null) resource.Status = new();
         resource.Status.Phase = phase;
-        var patch = JsonPatchHelper.CreateJsonPatch(this.Subscription, resource);
-        await this.ResourceRepository.PatchResourceStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationToken).ConfigureAwait(false);
+        var patch = JsonPatchHelper.CreateJsonPatchFromDiff(this.Subscription, resource);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -522,8 +522,8 @@ public class SubscriptionHandler
                 if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
                 if (resource.Status.Stream == null) resource.Status.Stream = new();
                 resource.Status.Stream.Fault = null;
-                var patch = JsonPatchHelper.CreateJsonPatch(this.Subscription, resource);
-                await this.ResourceRepository.PatchResourceStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationToken).ConfigureAwait(false);
+                var patch = JsonPatchHelper.CreateJsonPatchFromDiff(this.Subscription, resource);
+                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
                 return;
             }
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
@@ -587,8 +587,8 @@ public class SubscriptionHandler
         if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
         if (resource.Status.Stream == null) resource.Status.Stream = new();
         resource.Status.Stream.Fault = ex.ToProblemDetails();
-        var patch = JsonPatchHelper.CreateJsonPatch(this.Subscription, resource);
-        await this.ResourceRepository.PatchResourceStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationToken).ConfigureAwait(false);
+        var patch = JsonPatchHelper.CreateJsonPatchFromDiff(this.Subscription, resource);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

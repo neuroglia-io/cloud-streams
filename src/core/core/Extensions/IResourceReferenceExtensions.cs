@@ -24,14 +24,14 @@ public static class IResourceReferenceExtensions
     /// </summary>
     /// <param name="reference">The extended <see cref="IResourceReference"/></param>
     /// <returns>The group the referenced <see cref="IResource"/> belongs to</returns>
-    public static string GetGroup(this IResourceReference reference) => reference.ApiVersion.Split('/')[0];
+    public static string GetGroup(this IResourceReference reference) => reference.Definition.Version.Split('/')[0];
 
     /// <summary>
     /// Gets the referenced <see cref="IResource"/>'s version
     /// </summary>
     /// <param name="reference">The extended <see cref="IResourceReference"/></param>
     /// <returns>The referenced <see cref="IResource"/>'s version</returns>
-    public static string GetVersion(this IResourceReference reference) => reference.ApiVersion.Split('/')[1];
+    public static string GetVersion(this IResourceReference reference) => reference.Definition.Version.Split('/')[1];
 
     /// <summary>
     /// Determines whether or not the <see cref="IResourceReference"/> refers to a namespaced <see cref="IResource"/>

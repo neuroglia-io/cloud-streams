@@ -27,7 +27,7 @@ public partial class CloudStreamsGatewayApiClient
     public virtual async Task PublishCloudEventAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
-        var json = Serializer.Json.Serialize(e);
+        var json = Core.Serializer.Json.Serialize(e); // TODO: fix me: 'Serializer' is an ambiguous reference between 'CloudStreams.Core.Serializer' and 'Hylo.Serializer'
         using var content = new StringContent(json, Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{CloudEventsApiPath}pub") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);

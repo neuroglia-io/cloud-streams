@@ -28,10 +28,10 @@ public static class ICloudStreamsResourceManagementApiClientExtensions
     /// <param name="client">The extended <see cref="ICloudStreamsResourceManagementApiClient"/></param>
     /// <returns>The <see cref="IResourceManagementApi{TResource}"/> for the specified <see cref="IResource"/> type</returns>
     public static IResourceManagementApi<TResource> Manage<TResource>(this ICloudStreamsResourceManagementApiClient client)
-        where TResource : class, IResource, new()
+        where TResource : IResource, new()
     {
         var apiProperty = client.GetType().GetProperties().SingleOrDefault(p => p.CanRead && typeof(IResourceManagementApi<>).MakeGenericType(typeof(TResource)).IsAssignableFrom(p.PropertyType));
-        if (apiProperty == null) throw new NullReferenceException($"Failed to find a management API for the specified resource type '{new TResource().Type}'");
+        if (apiProperty == null) throw new NullReferenceException($"Failed to find a management API for the specified resource type '{new TResource().Definition}'");
         return (IResourceManagementApi<TResource>)apiProperty.GetValue(client)!;
     }
 

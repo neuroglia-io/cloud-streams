@@ -19,7 +19,7 @@ namespace CloudStreams.ResourceManagement.Api.Client.Services;
 /// Defines the fundamentals of the Cloud Streams API used to manage <see cref="IResource"/>s
 /// </summary>
 public interface IResourceManagementApi<TResource>
-    where TResource : class, IResource, new()
+    where TResource : IResource, new()
 {
 
     /// <summary>
@@ -50,10 +50,10 @@ public interface IResourceManagementApi<TResource>
     /// Lists <see cref="IResource"/>s
     /// </summary>
     /// <param name="namespace">The namespace the <see cref="IResource"/>s to list belong to</param>
-    /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing the <see cref="ResourceLabelSelector"/>s used to select the <see cref="IResource"/>s to list by, if any</param>
+    /// <param name="labelSelectors">An <see cref="IEnumerable{T}"/> containing the <see cref="LabelSelector"/>s used to select the <see cref="IResource"/>s to list by, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> used to asynchronously enumerate resulting <see cref="IResource"/>s</returns>
-    Task<IAsyncEnumerable<TResource>> ListAsync(string? @namespace = null, IEnumerable<ResourceLabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default);
+    Task<IAsyncEnumerable<TResource>> ListAsync(string? @namespace = null, IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Updates the specified <see cref="IResource"/>
@@ -66,18 +66,18 @@ public interface IResourceManagementApi<TResource>
     /// <summary>
     /// Patches the specified <see cref="IResource"/>
     /// </summary>
-    /// <param name="patch">The <see cref="ResourcePatch{TResource}"/> to apply</param>
+    /// <param name="patch">The <see cref="Patch"/> to apply</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The patched <see cref="IResource"/></returns>
-    Task<TResource> PatchAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default);
+    Task<TResource> PatchAsync(Patch patch, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Patches the status of the specified <see cref="IResource"/>
     /// </summary>
-    /// <param name="patch">The <see cref="ResourcePatch{TResource}"/> to apply</param>
+    /// <param name="patch">The <see cref="Patch"/> to apply</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The patched resource</returns>
-    Task<TResource> PatchStatusAsync(ResourcePatch<TResource> patch, CancellationToken cancellationToken = default);
+    Task<TResource> PatchStatusAsync(Patch patch, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes the specified <see cref="IResource"/>

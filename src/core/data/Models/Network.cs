@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data.Models;
 /// Represents a cloud event network
 /// </summary>
 [DataContract]
-public class Network
+public record Network
     : Resource<NetworkSpec, NetworkStatus>
 {
 
@@ -32,12 +32,12 @@ public class Network
     /// <summary>
     /// Gets the <see cref="Network"/>'s resource type
     /// </summary>
-    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
+    public static readonly ResourceDefinitionInfo ResourceDefinition = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
 
     /// <inheritdoc/>
-    public Network() : base(ResourceType) { }
+    public Network() : base(ResourceDefinition) { }
 
     /// <inheritdoc/>
-    public Network(ResourceMetadata metadata, NetworkSpec spec, NetworkStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Network(ResourceMetadata metadata, NetworkSpec spec, NetworkStatus? status = null) : base(ResourceDefinition, metadata, spec, status) { }
 
 }

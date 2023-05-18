@@ -73,7 +73,7 @@ public partial class CloudStreamsGatewayApiClient
         if (!response.IsSuccessStatusCode)
         {
             if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
-            else throw new CloudStreamsException(Serializer.Json.Deserialize<Core.Data.Models.ProblemDetails>(content));
+            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content)); // TODO: fix me: 'Serializer' is an ambiguous reference between 'CloudStreams.Core.Serializer' and 'Hylo.Serializer'
         }
         return response;
     }

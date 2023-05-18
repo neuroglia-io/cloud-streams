@@ -11,11 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
-using CloudStreams.ResourceManagement.Application.Commands.Generic;
-using CloudStreams.ResourceManagement.Application.Queries.Generic;
+using Hylo;
+using Hylo.Api.Application;
+using Hylo.Api.Application.Commands.Resources.Generic;
+using Hylo.Api.Application.Queries.Resources.Generic;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
@@ -48,7 +49,7 @@ public class GatewaysController
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateGateway([FromBody] Gateway resource, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send<Response<Gateway>>(new CreateResourceCommand<Gateway>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Gateway>>(new CreateResourceCommand<Gateway>(resource, false), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -58,7 +59,7 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetGatewayDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Gateway>(), cancellationToken));
@@ -72,10 +73,10 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetGateway(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new GetResourceQuery<Gateway>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new GetResourceQuery<Gateway>(name, null), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -85,10 +86,10 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListGateways(CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new ListResourceQuery<Gateway>(), cancellationToken));
+        return this.Process(await this.Mediator.Send(new ListResourcesQuery<Gateway>(null, null, null, null), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -99,12 +100,12 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPatch]
     [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> PatchGateway([FromBody] ResourcePatch<Gateway> patch, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchGateway([FromBody] Patch patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Gateway>>(new PatchResourceCommand<Gateway>(patch), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Gateway>>(new PatchResourceCommand<Gateway>("gateway", null, patch, false), cancellationToken)); // TODO: fix me: query args !!
     }
 
     /// <summary>
@@ -115,12 +116,12 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPatch("status")]
     [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> PatchGatewayStatus([FromBody] ResourcePatch<Gateway> patch, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchGatewayStatus([FromBody] Patch patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Gateway>>(new PatchResourceStatusCommand<Gateway>(patch), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Gateway>>(new PatchResourceStatusCommand<Gateway>(patch), cancellationToken));
     }
 
     /// <summary>
@@ -131,12 +132,12 @@ public class GatewaysController
     /// <returns>A new awaitable <see cref="Task"/></returns>
     [HttpPut]
     [ProducesResponseType(typeof(Gateway), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutGateway([FromBody] Gateway resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Gateway>>(new PutResourceCommand<Gateway>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Gateway>>(new PutResourceCommand<Gateway>(resource), cancellationToken));
     }
 
     /// <summary>
@@ -147,11 +148,11 @@ public class GatewaysController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteGateway(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Gateway>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Gateway>(name, null, false), cancellationToken)); // TODO: fix me: query args ?
     }
 
 }

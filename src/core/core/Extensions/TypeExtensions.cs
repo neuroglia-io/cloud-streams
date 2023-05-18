@@ -151,28 +151,6 @@ public static class TypeExtensions
     }
 
     /// <summary>
-    /// Gets the type's generic type of the specified generic type definition
-    /// </summary>
-    /// <param name="extended">The extended type</param>
-    /// <param name="genericTypeDefinition">The generic type definition to get the generic type of</param>
-    /// <returns>The type's generic type of the specified generic type definition</returns>
-    public static Type? GetGenericType(this Type extended, Type genericTypeDefinition)
-    {
-        Type? baseType, result;
-        if (genericTypeDefinition == null) throw new ArgumentNullException(nameof(genericTypeDefinition));
-        if (!genericTypeDefinition.IsGenericTypeDefinition) throw new ArgumentException("The specified type is not a generic type definition", nameof(genericTypeDefinition));
-        baseType = extended;
-        while (baseType != null)
-        {
-            if (baseType.IsGenericType && baseType.GetGenericTypeDefinition() == genericTypeDefinition) return baseType;
-            result = baseType.GetInterfaces().Select(i => i.GetGenericType(genericTypeDefinition)).Where(t => t != null).FirstOrDefault();
-            if (result != null) return result;
-            baseType = baseType.BaseType;
-        }
-        return null;
-    }
-
-    /// <summary>
     /// Gets the type's generic types of the specified generic type definition
     /// </summary>
     /// <param name="extended">The extended type</param>
@@ -207,20 +185,6 @@ public static class TypeExtensions
     public static bool IsGenericImplementationOf(this Type extended, Type genericTypeDefinition)
     {
         return extended.GetGenericType(genericTypeDefinition) != null;
-    }
-
-    /// <summary>
-    /// Attempts to get a custom attribute of the specified type
-    /// </summary>
-    /// <typeparam name="TAttribute">The type of the custom attribute to get</typeparam>
-    /// <param name="extended">The extended type</param>
-    /// <param name="attribute">The resulting custom attribute</param>
-    /// <returns>A boolean indicating whether or not the custom attribute of the specified type could be found</returns>
-    public static bool TryGetCustomAttribute<TAttribute>(this Type extended, out TAttribute? attribute)
-        where TAttribute : Attribute
-    {
-        attribute = extended.GetCustomAttribute<TAttribute>();
-        return attribute != null;
     }
 
     /// <summary>

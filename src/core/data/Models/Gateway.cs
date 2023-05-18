@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data.Models;
 /// Represents a cloud event gateway, reponsible for authorizing, validating and persisting inbound events
 /// </summary>
 [DataContract]
-public class Gateway
+public record Gateway
     : Resource<GatewaySpec>
 {
 
@@ -32,12 +32,12 @@ public class Gateway
     /// <summary>
     /// Gets the <see cref="Gateway"/>'s resource type
     /// </summary>
-    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
+    public static readonly ResourceDefinitionInfo ResourceDefinition = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
 
     /// <inheritdoc/>
-    public Gateway() : base(ResourceType) { }
+    public Gateway() : base(ResourceDefinition) { }
 
     /// <inheritdoc/>
-    public Gateway(ResourceMetadata metadata, GatewaySpec spec) : base(ResourceType, metadata, spec) { }
+    public Gateway(ResourceMetadata metadata, GatewaySpec spec) : base(ResourceDefinition, metadata, spec) { }
 
 }

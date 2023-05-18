@@ -64,7 +64,7 @@ public class ResourceWatchEventHubClient
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
-        await this.Connection.InvokeAsync(nameof(IResourceEventWatchHub.Watch), resource.Type, @namespace, cancellationToken).ConfigureAwait(false);
+        await this.Connection.InvokeAsync(nameof(IResourceEventWatchHub.Watch), resource.Definition, @namespace, cancellationToken).ConfigureAwait(false);
         var stream = this.WatchEventStream
             .Where(e => e.Resource.IsOfType<TResource>())
             .Select(e => e.ToType<TResource>());
@@ -83,7 +83,7 @@ public class ResourceWatchEventHubClient
         where TResource : class, IResource, new()
     {
         var resource = new TResource();
-        await this.Connection.InvokeAsync(nameof(IResourceEventWatchHub.StopWatching), resource.Type, @namespace, cancellationToken).ConfigureAwait(false);
+        await this.Connection.InvokeAsync(nameof(IResourceEventWatchHub.StopWatching), resource.Definition, @namespace, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

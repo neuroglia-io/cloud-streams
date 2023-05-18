@@ -14,6 +14,8 @@
 global using CloudStreams.Core.Data.Models;
 global using CloudStreams.Core.Infrastructure.Configuration;
 global using CloudStreams.Core.Infrastructure.Services;
+global using Hylo;
+global using Hylo.Api.Application;
 global using Json.Schema;
 global using Microsoft.Extensions.Configuration;
 global using Microsoft.Extensions.DependencyInjection;

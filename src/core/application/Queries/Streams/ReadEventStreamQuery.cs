@@ -52,7 +52,7 @@ public class ReadCloudEventStreamQueryHandler
     }
 
     /// <inheritdoc/>
-    public Task<Response<IAsyncEnumerable<CloudEvent>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
+    public Task<ApiResponse<IAsyncEnumerable<CloudEvent>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
     {
         var length = query.Options.Length > StreamReadOptions.MaxLength ? StreamReadOptions.MaxLength : query.Options.Length;
         if (length < 1) length = 1;

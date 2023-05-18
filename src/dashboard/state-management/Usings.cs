@@ -12,3 +12,4 @@
 // limitations under the License.
 
 global using CloudStreams.Core;
+global using Hylo;

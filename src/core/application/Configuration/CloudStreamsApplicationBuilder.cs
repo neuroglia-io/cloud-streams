@@ -169,14 +169,6 @@ public class CloudStreamsApplicationBuilder
     }
 
     /// <inheritdoc/>
-    public virtual ICloudStreamsApplicationBuilder UseResourceRepository<TRepository>()
-         where TRepository : class, IResourceRepository
-    {
-        this.ResourceRepositoryType = typeof(TRepository);
-        return this;
-    }
-
-    /// <inheritdoc/>
     public virtual ICloudStreamsApplicationBuilder UseSchemaRegistry<TRegistry>()
          where TRegistry : class, ISchemaRegistry
     {
@@ -262,9 +254,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.TryAddSingleton<IAuthorizationManager, AuthorizationManager>();
         this.Services.TryAddSingleton<ISchemaGenerator, SchemaGenerator>();
         this.Services.TryAddSingleton(provider => (ICloudEventStore)provider.GetRequiredService(this.CloudEventStoreType));
-        this.Services.TryAddSingleton(provider => (IResourceRepository)provider.GetRequiredService(this.ResourceRepositoryType));
         this.Services.TryAddSingleton(provider => (ISchemaRegistry)provider.GetRequiredService(this.SchemaRegistryType));
-        this.Services.TryAddSingleton<IResourceMonitorProvider, ResourceMonitorProvider>();
         this.Services.AddSwaggerGen(builder =>
         {
             builder.CustomOperationIds(o =>

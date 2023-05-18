@@ -41,7 +41,7 @@ public class CloudEventAdmissionControl
     /// <param name="expressionEvaluator">The service used to evaluate runtime expressions</param>
     /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
     public CloudEventAdmissionControl(ILoggerFactory loggerFactory, IOptions<GatewayOptions> gatewayOptions, IGatewayMetrics metrics, IAuthorizationManager authorizationManager, 
-        ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IResourceRepository resources, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators)
+        ISchemaGenerator schemaGenerator, ISchemaRegistry schemaRegistry, IRepository resources, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.GatewayOptions = gatewayOptions.Value;
@@ -82,7 +82,7 @@ public class CloudEventAdmissionControl
     /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IResourceRepository Resources { get; }
+    protected IRepository Resources { get; }
 
     /// <summary>
     /// Gets the service used to evaluate runtime expressions
@@ -102,11 +102,11 @@ public class CloudEventAdmissionControl
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        this.Configuration = await this.Resources.MonitorAsync<Core.Data.Models.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, stoppingToken).ConfigureAwait(false);
+        this.Configuration = await this.Resources.MonitorAsync<Core.Data.Models.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, false, stoppingToken).ConfigureAwait(false); // TODO: fix me: leave open?
     }
 
     /// <inheritdoc/>
-    public virtual async Task<Response<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    public virtual async Task<ApiResponse<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         var validationResults = new List<FluentValidation.Results.ValidationResult>(this.Validators.Count());
         foreach (var validator in this.Validators)
@@ -116,23 +116,25 @@ public class CloudEventAdmissionControl
         if (!validationResults.All(r => r.IsValid)) return new()
         {
             Status = (int)HttpStatusCode.BadRequest,
-            Title = ProblemTitles.ValidationFailed,
-            Errors = validationResults
-                .Where(r => !r.IsValid)
-                .SelectMany(r => r.Errors)
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
+            Title = Core.Data.Properties.ProblemTitles.ValidationFailed,
+            Errors = new EquatableList<KeyValuePair<string, string[]>>(
+                validationResults
+                    .Where(r => !r.IsValid)
+                    .SelectMany(r => r.Errors)
+                    .GroupBy(e => e.PropertyName)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
+            )
         };
         this.Logger.LogDebug("Started admission evaluation for cloud event with id '{eventId}'...", e.Id);
         var result = await this.AuthorizeAsync(e, cancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccessStatusCode())
+        if (!result.Status.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
             this._Metrics.IncrementTotalRejectedEvents();
             return result.OfType<CloudEventDescriptor>();
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccessStatusCode())
+        if (!result.Status.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}': {detail}", result.Status, e.Id, result.Detail);
             this._Metrics.IncrementTotalInvalidEvents();
@@ -142,7 +144,7 @@ public class CloudEventAdmissionControl
         this.Logger.LogDebug("Extracting metadata from the cloud event with id '{eventId}'", e.Id);
         var metadata = await this.ExtractMetadataAsync(e, cancellationToken).ConfigureAwait(false);
         this.Logger.LogDebug("Metadata successfully extracted from the cloud event with id '{eventId}'", e.Id);
-        return Response.Ok(new CloudEventDescriptor(metadata, e.Data));
+        return ApiResponse.Ok(new CloudEventDescriptor(metadata, e.Data));
     }
 
     /// <summary>
@@ -150,21 +152,21 @@ public class CloudEventAdmissionControl
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to authorize</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A <see cref="Response"/> that describes the result of the operation</returns>
-    protected virtual async Task<Response> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    /// <returns>A <see cref="ApiResponse"/> that describes the result of the operation</returns>
+    protected virtual async Task<ApiResponse> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? this.Configuration?.Resource.Spec.Authorization;
-        if (policy == null) return Response.Ok();
+        if (policy == null) return ApiResponse.Ok();
         var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
-        if (!result.IsSuccessStatusCode())
+        if (!result.Status.IsSuccessStatusCode())
         {
             this.Logger.LogDebug("Authorization denied for cloud event with id '{eventId}': {detail}", e.Id, result.Detail);
             return result;
         }
         this.Logger.LogDebug("Authorization granted for cloud event with id '{eventId}' completed successfully", e.Id);
-        return Response.Ok();
+        return ApiResponse.Ok();
     }
 
     /// <summary>
@@ -172,17 +174,17 @@ public class CloudEventAdmissionControl
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to validate</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A <see cref="Response"/> that describes the result of the operation</returns>
-    protected virtual async Task<Response> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    /// <returns>A <see cref="ApiResponse"/> that describes the result of the operation</returns>
+    protected virtual async Task<ApiResponse> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? this.Configuration?.Resource.Spec.Validation;
-        if (policy == null) return Response.Ok();
+        if (policy == null) return ApiResponse.Ok();
         if (policy.SkipValidation)
         {
             this.Logger.LogDebug("Skipping validation of cloud event with id '{eventId}': the validation policy for source '{sourceUri}' is configured to skip validation", e.Id, e.Source);
-            return Response.Ok();
+            return ApiResponse.Ok();
         }
         var dataSchemaPolicy = policy.DataSchema;
         JsonSchema? schema = null;
@@ -192,7 +194,7 @@ public class CloudEventAdmissionControl
             if (dataSchemaPolicy?.Required == true)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);
-                return Response.ValidationFailed(StringExtensions.Format(Core.Data.Properties.ProblemDetails.MissingDataSchema, e.Source!));
+                return ApiResponse.ValidationFailed(Hylo.StringExtensions.Format(Core.Data.Properties.ProblemDetails.MissingDataSchema, e.Source!)); // TODO: fix me: Core vs Hylo (StringExtensions)
             }
             var schemaUri = await this.SchemaRegistry.GetSchemaUriByIdAsync(e.Type, cancellationToken).ConfigureAwait(false);
             if (schemaUri != null)
@@ -213,21 +215,21 @@ public class CloudEventAdmissionControl
             if (schema == null)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: failed to find the specified data schema '{dataSchemaUri}'", e.Id, e.DataSchema);
-                return Response.ValidationFailed(StringExtensions.Format(Core.Data.Properties.ProblemDetails.DataSchemaNotFound, e.DataSchema));
+                return ApiResponse.ValidationFailed(Hylo.StringExtensions.Format(Core.Data.Properties.ProblemDetails.DataSchemaNotFound, e.DataSchema)); // TODO: fix me: Core vs Hylo (StringExtensions)
             }
         }
         if (schema != null)
         {
             var validationOptions = new EvaluationOptions() {  OutputFormat = OutputFormat.Hierarchical };
-            var validationResults = schema.Evaluate(Serializer.Json.SerializeToNode(e.Data), validationOptions);
+            var validationResults = schema.Evaluate(Core.Serializer.Json.SerializeToNode(e.Data), validationOptions);
             if (!validationResults.IsValid)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {detail}", e.Id, validationResults);
-                return Response.ValidationFailed(validationResults);
+                return ApiResponse.ValidationFailed(validationResults);
             }
         }
         this.Logger.LogDebug("Cloud event with id '{eventId}' successfully validated", e.Id);
-        return Response.Ok();
+        return ApiResponse.Ok();
     }
 
     /// <summary>

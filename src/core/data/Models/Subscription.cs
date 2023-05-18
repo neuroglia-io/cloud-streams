@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data.Models;
 /// Represents a cloud event subscription
 /// </summary>
 [DataContract]
-public class Subscription
+public record Subscription
     : Resource<SubscriptionSpec, SubscriptionStatus>
 {
 
@@ -32,12 +32,12 @@ public class Subscription
     /// <summary>
     /// Gets the <see cref="Subscription"/>'s resource type
     /// </summary>
-    public static readonly ResourceType ResourceType = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
+    public static readonly ResourceDefinitionInfo ResourceDefinition = new(ResourceGroup, ResourceVersion, ResourcePlural, ResourceKind);
 
     /// <inheritdoc/>
-    public Subscription() : base(ResourceType) { }
+    public Subscription() : base(ResourceDefinition) { }
 
     /// <inheritdoc/>
-    public Subscription(ResourceMetadata metadata, SubscriptionSpec spec, SubscriptionStatus? status = null) : base(ResourceType, metadata, spec, status) { }
+    public Subscription(ResourceMetadata metadata, SubscriptionSpec spec, SubscriptionStatus? status = null) : base(ResourceDefinition, metadata, spec, status) { }
 
 }

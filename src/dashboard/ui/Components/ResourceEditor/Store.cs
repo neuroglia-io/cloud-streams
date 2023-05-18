@@ -96,10 +96,10 @@ public class ResourceEditorStore<TResource>
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemErrors"/> changes
     /// </summary>
-    public IObservable<IDictionary<string, string[]>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
+    public IObservable<EquatableList<KeyValuePair<string, string[]>>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe comptured <see cref="Core.Data.Models.ProblemDetails"/>
+    /// Gets an <see cref="IObservable{T}"/> used to observe comptured <see cref="ProblemDetails"/>
     /// </summary>
     public IObservable<ProblemDetails?> ProblemDetails => Observable.CombineLatest(
         this.ProblemType,
@@ -125,11 +125,11 @@ public class ResourceEditorStore<TResource>
         {
             if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
             {
-                this.SetEditorValue(Serializer.Yaml.Serialize(resource));
+                this.SetEditorValue(Core.Serializer.Yaml.Serialize(resource));
             }
             else
             {
-                this.SetEditorValue(Serializer.Json.Serialize(resource, true));
+                this.SetEditorValue(Core.Serializer.Json.Serialize(resource, true));
             }
         }, token: this.CancellationTokenSource.Token);
     }
@@ -215,7 +215,7 @@ public class ResourceEditorStore<TResource>
             ProblemTitle = problem?.Title ?? string.Empty,
             ProblemStatus = problem?.Status ?? 0,
             ProblemDetail = problem?.Detail ?? string.Empty,
-            ProblemErrors = problem?.Errors ?? new Dictionary<string, string[]>()
+            ProblemErrors = problem?.Errors ?? new EquatableList<KeyValuePair<string, string[]>>()
         });
     }
 
@@ -230,8 +230,8 @@ public class ResourceEditorStore<TResource>
         try
         {
             string text = language == PreferedLanguage.YAML ?
-                Serializer.Yaml.ConvertFromJson(textEditorValue) :
-                Serializer.Yaml.ConvertToJson(textEditorValue, true);
+                Core.Serializer.Yaml.ConvertFromJson(textEditorValue) :
+                Core.Serializer.Yaml.ConvertToJson(textEditorValue, true);
             this.SetEditorValue(text);
         }
         catch (Exception ex)
@@ -269,12 +269,12 @@ public class ResourceEditorStore<TResource>
         string textEditorValue = this.Get(state => state.TextEditorValue);
         if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
         {
-            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
+            textEditorValue = Core.Serializer.Yaml.ConvertToJson(textEditorValue);
         }
         TResource? resource;
         try
         {
-            resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
+            resource = Core.Serializer.Json.Deserialize<TResource>(textEditorValue);
             resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
             this.SetResource(resource);
         }
@@ -305,10 +305,10 @@ public class ResourceEditorStore<TResource>
         string textEditorValue = this.Get(state => state.TextEditorValue);
         if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
         {
-            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
+            textEditorValue = Core.Serializer.Yaml.ConvertToJson(textEditorValue);
         }
-        JsonDocument jsonPatch = JsonPatch.FromDiff(Serializer.Json.SerializeToElement(resource)!.Value, Serializer.Json.SerializeToElement(Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
-        Json.Patch.JsonPatch? patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
+        JsonDocument jsonPatch = JsonPatch.FromDiff(Core.Serializer.Json.SerializeToElement(resource)!.Value, Core.Serializer.Json.SerializeToElement(Core.Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
+        Json.Patch.JsonPatch? patch = Core.Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
         if (patch != null)
         {
             var resourcePatch = new ResourcePatch<TResource>(resource!, new Patch(PatchType.JsonPatch, jsonPatch));

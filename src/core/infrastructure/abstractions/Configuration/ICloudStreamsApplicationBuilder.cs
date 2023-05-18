@@ -98,14 +98,6 @@ public interface ICloudStreamsApplicationBuilder
         where TStore : class, ICloudEventStore;
 
     /// <summary>
-    /// Configures Cloud Streams to use the specified <see cref="IResourceRepository"/>
-    /// </summary>
-    /// <typeparam name="TRepository">The type of <see cref="IResourceRepository"/> to use</typeparam>
-    /// <returns>The configured <see cref="ICloudEventStore"/></returns>
-    ICloudStreamsApplicationBuilder UseResourceRepository<TRepository>()
-        where TRepository : class, IResourceRepository;
-
-    /// <summary>
     /// Configures Cloud Streams to use the specified <see cref="ISchemaRegistry"/>
     /// </summary>
     /// <typeparam name="TRegistry">The type of <see cref="ISchemaRegistry"/> to use</typeparam>

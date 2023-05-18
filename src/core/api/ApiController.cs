@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Hylo.Api.Application;
+
 namespace CloudStreams.Core.Api;
 
 /// <summary>
@@ -35,25 +37,25 @@ public abstract class ApiController
     protected IMediator Mediator { get; }
 
     /// <summary>
-    /// Processes the specified <see cref="Response"/>
+    /// Processes the specified <see cref="ApiResponse"/>
     /// </summary>
-    /// <param name="response">The <see cref="Response"/> to process</param>
+    /// <param name="response">The <see cref="ApiResponse"/> to process</param>
     /// <returns>A new <see cref="IActionResult"/></returns>
-    protected virtual IActionResult Process(Response response)
+    protected virtual IActionResult Process(ApiResponse response)
     {
-        if (response.IsSuccessStatusCode()) return new ObjectResult(response.Content) { StatusCode = response.Status };
+        if (response.Status.IsSuccessStatusCode()) return new ObjectResult(response.Content) { StatusCode = response.Status };
         return new ObjectResult(response) { StatusCode = response.Status };
     }
 
     /// <summary>
-    /// Processes the specified <see cref="Response"/>
+    /// Processes the specified <see cref="ApiResponse"/>
     /// </summary>
     /// <typeparam name="TContent">The expected type of result</typeparam>
-    /// <param name="response">The <see cref="Response"/> to process</param>
+    /// <param name="response">The <see cref="ApiResponse"/> to process</param>
     /// <returns>A new <see cref="IActionResult"/></returns>
-    protected virtual IActionResult Process<TContent>(Response<TContent> response)
+    protected virtual IActionResult Process<TContent>(ApiResponse<TContent> response)
     {
-        if (response.IsSuccessStatusCode()) return new ObjectResult(response.Content) { StatusCode = response.Status };
+        if (response.Status.IsSuccessStatusCode()) return new ObjectResult(response.Content) { StatusCode = response.Status };
         return new ObjectResult(response) { StatusCode = response.Status };
     }
 

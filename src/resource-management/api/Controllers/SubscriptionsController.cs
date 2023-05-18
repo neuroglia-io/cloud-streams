@@ -11,17 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Data.Models;
-using CloudStreams.ResourceManagement.Application.Commands.Generic;
-using CloudStreams.ResourceManagement.Application.Queries.Generic;
-using Json.Patch;
-using Json.Pointer;
-using Json.Schema;
+using Hylo;
+using Hylo.Api.Application;
+using Hylo.Api.Application.Commands.Resources.Generic;
+using Hylo.Api.Application.Queries.Resources.Generic;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using OpenTelemetry.Resources;
 using System.Net;
 
 namespace CloudStreams.ResourceManagement.Api.Controllers;
@@ -49,10 +46,10 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpPost]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.Created)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateSubscription([FromBody] Subscription resource, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send<Response<Subscription>>(new CreateResourceCommand<Subscription>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Subscription>>(new CreateResourceCommand<Subscription>(resource, false), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -62,7 +59,7 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("definition")]
     [ProducesResponseType(typeof(IResourceDefinition), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetSubscriptionDefinition(CancellationToken cancellationToken)
     {
         return this.Process(await this.Mediator.Send(new GetResourceDefinitionQuery<Subscription>(), cancellationToken));
@@ -76,10 +73,10 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}")]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetSubscription(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new GetResourceQuery<Subscription>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new GetResourceQuery<Subscription>(name, null), cancellationToken)); // TODO: fix me: query args ? 
     }
 
     /// <summary>
@@ -89,10 +86,10 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> ListSubscriptions(CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new ListResourceQuery<Subscription>(), cancellationToken));
+        return this.Process(await this.Mediator.Send(new ListResourcesQuery<Subscription>(null, null, null, null), cancellationToken)); // TODO: fix me: query args ?
     }
 
     /// <summary>
@@ -104,11 +101,11 @@ public class SubscriptionsController
     [HttpPatch]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> PatchSubscription([FromBody] ResourcePatch<Subscription> patch, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchSubscription([FromBody] Patch patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Subscription>>(new PatchResourceCommand<Subscription>(patch), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Subscription>>(new PatchResourceCommand<Subscription>("subscription", null, patch, false), cancellationToken)); // TODO: fix me: query args !!
     }
 
     /// <summary>
@@ -120,11 +117,11 @@ public class SubscriptionsController
     [HttpPatch("status")]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> PatchSubscriptionStatus([FromBody] ResourcePatch<Subscription> patch, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> PatchSubscriptionStatus([FromBody] Patch patch, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Subscription>>(new PatchResourceStatusCommand<Subscription>(patch), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Subscription>>(new PatchResourceStatusCommand<Subscription>(patch), cancellationToken));
     }
 
     /// <summary>
@@ -135,12 +132,12 @@ public class SubscriptionsController
     /// <returns>A new awaitable <see cref="Task"/></returns>
     [HttpPut]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> PutSubscription([FromBody] Subscription resource, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send<Response<Subscription>>(new PutResourceCommand<Subscription>(resource), cancellationToken));
+        return this.Process(await this.Mediator.Send<ApiResponse<Subscription>>(new PutResourceCommand<Subscription>(resource), cancellationToken));
     }
    
     /// <summary>
@@ -151,11 +148,11 @@ public class SubscriptionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpDelete("{name}")]
     [ProducesResponseType((int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Core.Data.Models.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> DeleteSubscription(string name, CancellationToken cancellationToken)
     {
-        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Subscription>(name), cancellationToken));
+        return this.Process(await this.Mediator.Send(new DeleteResourceCommand<Subscription>(name, null, false), cancellationToken)); // TODO: fix me: query args ?
     }
 
 }

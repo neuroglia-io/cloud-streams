@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Infrastructure.Configuration;
 
 namespace CloudStreams.Broker.Application.Configuration;
 
@@ -19,7 +18,7 @@ namespace CloudStreams.Broker.Application.Configuration;
 /// Represents the options used to configure a Cloud Streams cloud event gateway
 /// </summary>
 public class BrokerOptions
-    : ResourceControllerOptions
+    : ResourceControllerOptions<Core.Data.Models.Broker>
 {
 
     /// <summary>

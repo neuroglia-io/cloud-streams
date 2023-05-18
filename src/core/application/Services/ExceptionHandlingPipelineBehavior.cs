@@ -24,7 +24,7 @@ namespace CloudStreams.Core.Application.Services;
 public class ExceptionHandlingPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : MediatR.IRequest<TResponse>
-    where TResponse : Response, new()
+    where TResponse : ApiResponse, new()
 {
 
     /// <inheritdoc/>

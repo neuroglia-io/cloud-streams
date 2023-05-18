@@ -17,7 +17,7 @@ namespace CloudStreams.Gateway.Application.Commands.CloudEvents;
 /// Represents the <see cref="ICommand"/> used to consume an incoming <see cref="Core.Data.Models.CloudEvent"/>s
 /// </summary>
 public class ConsumeEventCommand
-    : ICommand
+    : Core.Application.ICommand
 {
 
     /// <summary>
@@ -41,7 +41,7 @@ public class ConsumeEventCommand
 /// Represents the service used to handle <see cref="ConsumeEventCommand"/>s
 /// </summary>
 public class ConsumeCloudEventCommandHandler
-    : ICommandHandler<ConsumeEventCommand>
+    : Core.Application.ICommandHandler<ConsumeEventCommand>
 {
 
     readonly ICloudEventAdmissionControl _EventAdmissionControl;
@@ -57,11 +57,11 @@ public class ConsumeCloudEventCommandHandler
     }
 
     /// <inheritdoc/>
-    public async Task<Response> Handle(ConsumeEventCommand command, CancellationToken cancellationToken)
+    public async Task<ApiResponse> Handle(ConsumeEventCommand command, CancellationToken cancellationToken)
     {
         var e = command.CloudEvent;
         var admissionResult = await this._EventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
-        if (!admissionResult.IsSuccessStatusCode()) return admissionResult;
+        if (!admissionResult.Status.IsSuccessStatusCode()) return admissionResult;
         await this._EventStore.AppendAsync(admissionResult.Content!, cancellationToken).ConfigureAwait(false);
         this._Metrics.IncrementTotalIngestedEvents();
         return this.Accepted();

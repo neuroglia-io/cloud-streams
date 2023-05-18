@@ -68,7 +68,7 @@
     @if (cloudEvent!.Data != null)
     {
         <pre>
-            @Serializer.Json.Serialize(cloudEvent.Data, true)
+            @Core.Serializer.Json.Serialize(cloudEvent.Data, true)
         </pre>
     }
 }

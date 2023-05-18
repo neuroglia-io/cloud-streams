@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data.Models;
-
 namespace CloudStreams.Core.Application;
 
 /// <summary>
@@ -20,7 +18,7 @@ namespace CloudStreams.Core.Application;
 /// </summary>
 /// <typeparam name="TRequest">The type of <see cref="IRequest"/> to handle</typeparam>
 public interface IRequestHandler<TRequest>
-    : MediatR.IRequestHandler<TRequest, Response>
+    : MediatR.IRequestHandler<TRequest, ApiResponse>
     where TRequest : IRequest
 {
 
@@ -34,7 +32,7 @@ public interface IRequestHandler<TRequest>
 /// <typeparam name="TRequest">The type of <see cref="IRequest"/> to handle</typeparam>
 /// <typeparam name="TResult">The expected type of result</typeparam>
 public interface IRequestHandler<TRequest, TResult>
-    : MediatR.IRequestHandler<TRequest, Response<TResult>>
+    : MediatR.IRequestHandler<TRequest, ApiResponse<TResult>>
     where TRequest : IRequest<TResult>
 {
 

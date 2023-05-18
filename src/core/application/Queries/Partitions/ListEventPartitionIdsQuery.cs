@@ -52,7 +52,7 @@ public class ListEventPartitionIdsQueryHandler
 
     ICloudEventStore _CloudEvents;
 
-    Task<Response<IAsyncEnumerable<string>>> MediatR.IRequestHandler<ListEventPartitionIdsQuery, Response<IAsyncEnumerable<string>>>.Handle(ListEventPartitionIdsQuery query, CancellationToken cancellationToken)
+    Task<ApiResponse<IAsyncEnumerable<string>>> MediatR.IRequestHandler<ListEventPartitionIdsQuery, ApiResponse<IAsyncEnumerable<string>>>.Handle(ListEventPartitionIdsQuery query, CancellationToken cancellationToken)
     {
         return Task.FromResult(this.Ok(this._CloudEvents.ListPartitionIdsAsync(query.PartitionType, cancellationToken)));
     }

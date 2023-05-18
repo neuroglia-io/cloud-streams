@@ -37,16 +37,16 @@ public static class JsonResourceExtensions
     /// Determines whether or not the <see cref="JsonObject"/> represents an <see cref="IResource"/> of the specified type
     /// </summary>
     /// <param name="jsonObject">The <see cref="JsonObject"/> to check</param>
-    /// <param name="type">The expected type of <see cref="IResource"/></param>
+    /// <param name="definition">The expected type of <see cref="IResource"/></param>
     /// <returns>A boolean indicating whether or not the <see cref="JsonObject"/> represents an <see cref="IResource"/> of the specified type</returns>
-    public static bool IsOfType(this JsonObject jsonObject, ResourceType type)
+    public static bool IsOfType(this JsonObject jsonObject, ResourceDefinitionInfo definition)
     {
-        if (type == null) throw new ArgumentNullException(nameof(type));
+        if (definition == null) throw new ArgumentNullException(nameof(definition));
         if (!jsonObject.TryGetPropertyValue(nameof(IResource.ApiVersion).ToCamelCase(), out var apiVersionNode) || apiVersionNode == null) return false;
         if (!jsonObject.TryGetPropertyValue(nameof(IResource.Kind).ToCamelCase(), out var kindNode) || kindNode == null) return false;
         var apiVersion = Serializer.Json.Deserialize<string>(apiVersionNode);
         var kind = Serializer.Json.Deserialize<string>(kindNode);
-        return apiVersion == type.GetApiVersion() && kind == type.Kind;
+        return apiVersion == definition.GetApiVersion() && kind == definition.Kind;
     }
 
     /// <summary>
@@ -58,7 +58,7 @@ public static class JsonResourceExtensions
     public static bool IsOfType<TResource>(this JsonObject jsonObject)
         where TResource : class, IResource, new()
     {
-        return jsonObject.IsOfType(new TResource().Type);
+        return jsonObject.IsOfType(new TResource().Definition);
     }
 
 }
