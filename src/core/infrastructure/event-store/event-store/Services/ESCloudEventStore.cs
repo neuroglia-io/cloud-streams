@@ -369,15 +369,7 @@ public class ESCloudEventStore
             {
                 metadataPath = "contextAttributes." + metadataPath;
             }
-            try
-            {
-                await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataPath##", metadataPath), true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch(Exception ex)
-            {
-                throw;
-            }
-            
+            await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataPath##", metadataPath), true, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
     }
 
