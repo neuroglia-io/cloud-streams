@@ -12,7 +12,6 @@
 // limitations under the License.
 
 using CloudStreams.Core.Data.Models;
-using CloudStreams.Core.Infrastructure.Models;
 using System.Net.Mime;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -143,10 +142,14 @@ public class ESCloudEventStore
             case CloudEventPartitionType.BySource:
                 if (!Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out var source)) throw new Exception();
                 return this.ReadBySourceAsync(readDirection, source, offset, length, cancellationToken);
+            case CloudEventPartitionType.BySubject:
+                return this.ReadBySubjectAsync(readDirection, partition.Id, offset, length, cancellationToken);
             case CloudEventPartitionType.ByType:
                 return this.ReadByTypeAsync(readDirection, partition.Id, offset, length, cancellationToken);
-            case CloudEventPartitionType.BySubject:
+            case CloudEventPartitionType.ByCorrelationId:
                 return this.ReadByCorrelationIdAsync(readDirection, partition.Id, offset, length, cancellationToken);
+            case CloudEventPartitionType.ByCausationId:
+                return this.ReadByCausationIdAsync(readDirection, partition.Id, offset, length, cancellationToken);
             default:
                 throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partition.Type}' is not supported");
         }
@@ -209,6 +212,29 @@ public class ESCloudEventStore
     }
 
     /// <summary>
+    /// Reads stored <see cref="CloudEvent"/>s by subject
+    /// </summary>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="subject">The subject of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="offset">The offset starting from which to read events</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
+    /// <inheritdoc/>
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadBySubjectAsync(StreamReadDirection readDirection, string subject, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(subject)) throw new ArgumentNullException(nameof(subject));
+        var streamName = EventStoreStreams.ByCloudEventSubject(subject);
+        var resolveLinkTos = true;
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        await foreach (var resolvedEvent in readResult)
+        {
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Reads stored <see cref="CloudEvent"/>s by type
     /// </summary>
     /// <param name="readDirection">The direction in which to read</param>
@@ -244,6 +270,28 @@ public class ESCloudEventStore
     {
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = EventStoreStreams.ByCorrelationId(correlationId);
+        var resolveLinkTos = true;
+        var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
+        var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
+        await foreach (var resolvedEvent in readResult)
+        {
+            yield return await this.DeserializeResolvedEventAsync(resolvedEvent, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Reads stored <see cref="CloudEvent"/>s by causation id
+    /// </summary>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="causationId">The causation id of the <see cref="CloudEvent"/>s to read</param>
+    /// <param name="offset">The offset starting from which to read events</param>
+    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByCausationIdAsync(StreamReadDirection readDirection, string causationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(causationId)) throw new ArgumentNullException(nameof(causationId));
+        var streamName = EventStoreStreams.ByCausationId(causationId);
         var resolveLinkTos = true;
         var position = offset == StreamPosition.EndOfStream ? EventStore.Client.StreamPosition.End : EventStore.Client.StreamPosition.FromInt64(offset);
         var readResult = this.Streams.ReadStreamAsync(readDirection.ToDirection(), streamName, position, (long)(length ?? long.MaxValue), resolveLinkTos, cancellationToken: cancellationToken);
@@ -293,6 +341,12 @@ public class ESCloudEventStore
         streamReader.Dispose();
         await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionBySource, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
 
+        stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "bysubject.js"))!;
+        streamReader = new StreamReader(stream);
+        query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        streamReader.Dispose();
+        await this.Projections.CreateContinuousAsync(EventStoreProjections.PartitionBySubject, query, true, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         stream = typeof(ESCloudEventStore).Assembly.GetManifestResourceStream(string.Join('.', typeof(EventStoreProjections).Namespace, "Assets", "Projections", "bycausationid.js"))!;
         streamReader = new StreamReader(stream);
         query = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
@@ -315,15 +369,7 @@ public class ESCloudEventStore
             {
                 metadataPath = "contextAttributes." + metadataPath;
             }
-            try
-            {
-                await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataPath##", metadataPath), true, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch(Exception ex)
-            {
-                throw;
-            }
-            
+            await this.Projections.CreateContinuousAsync(EventStoreProjections.CloudEventPartitionsMetadataPrefix + typeName, query.Replace("##metadataPath##", metadataPath), true, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
     }
 

@@ -39,7 +39,7 @@ public class ExceptionHandlingPipelineBehavior<TRequest, TResponse>
             return new()
             {
                 Status = (int)ex.StatusCode!,
-                Title = ex.StatusCode.ToString(),
+                Title = ex.StatusCode?.ToString() ?? string.Empty,
                 Detail = ex.Message
             };
         }
