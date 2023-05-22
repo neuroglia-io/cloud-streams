@@ -66,7 +66,7 @@
         </tbody>
     </table>
     @if (cloudEvent!.Data != null)
-    {
+    { // TODO: fix me: Core vs Hylo
         <pre>
             @Core.Serializer.Json.Serialize(cloudEvent.Data, true)
         </pre>

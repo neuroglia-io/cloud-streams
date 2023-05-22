@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
+using Hylo;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;

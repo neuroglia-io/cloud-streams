@@ -12,4 +12,5 @@
 // limitations under the License.
 
 global using FluentAssertions;
+global using Hylo;
 global using Xunit;

@@ -70,6 +70,7 @@ public abstract class ResourceManagementComponent<TResource>
                 if (this.definition != null && this.MonacoInterop != null)
                 {
                     await this.MonacoInterop.AddValidationSchemaAsync(Core.Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(TResource).Name.ToLower()}.json", $"{typeof(TResource).Name.ToLower()}").ConfigureAwait(false);
+                    // TODO: fix me: Core vs Hylo
                 }
             }
         }, cancellationToken: this.CancellationTokenSource.Token);

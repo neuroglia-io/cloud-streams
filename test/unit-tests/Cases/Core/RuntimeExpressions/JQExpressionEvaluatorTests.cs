@@ -79,7 +79,7 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<List<ExpandoObject>>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "dogs.json")))!; // TODO: fix me: Core vs Hylo
         var args = new Dictionary<string, object>() { { "CONST", new { category = "Pugal" } } };
         var expression = ". | map(select(.category.name == $CONST.category))[0]";
 
@@ -113,7 +113,7 @@ public class JQExpressionEvaluatorTests
         //arrange
         var evaluator = BuildExpressionEvaluator();
         var json = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "input-with-escaped-json.json"));
-        var data = Serializer.Json.Deserialize<ExpandoObject>(json)!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<ExpandoObject>(json)!; // TODO: fix me: Core vs Hylo
         var expression = "${ ._user }";
 
         //act
@@ -129,7 +129,7 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.input.json")))!; // TODO: fix me: Core vs Hylo
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-concat.expression.jq.txt"));
 
         //act
@@ -144,7 +144,7 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.input.json")))!; // TODO: fix me: Core vs Hylo
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-interpolation.expression.jq.txt"));
 
         //act
@@ -159,7 +159,7 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.input.json")))!; // TODO: fix me: Core vs Hylo
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-substitution.expression.jq.txt"));
 
         //act
@@ -174,7 +174,7 @@ public class JQExpressionEvaluatorTests
     {
         //arrange
         var evaluator = BuildExpressionEvaluator();
-        var data = Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!;
+        var data = CloudStreams.Core.Serializer.Json.Deserialize<ExpandoObject>(File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.input.json")))!; // TODO: fix me: Core vs Hylo
         var expression = File.ReadAllText(Path.Combine("Assets", "ExpressionEvaluation", "string-quoted.expression.jq.txt"));
 
         //act

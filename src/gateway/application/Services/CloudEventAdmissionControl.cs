@@ -221,7 +221,7 @@ public class CloudEventAdmissionControl
         if (schema != null)
         {
             var validationOptions = new EvaluationOptions() {  OutputFormat = OutputFormat.Hierarchical };
-            var validationResults = schema.Evaluate(Core.Serializer.Json.SerializeToNode(e.Data), validationOptions);
+            var validationResults = schema.Evaluate(Core.Serializer.Json.SerializeToNode(e.Data), validationOptions); // TODO: fix me: Core vs Hylo
             if (!validationResults.IsValid)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {detail}", e.Id, validationResults);

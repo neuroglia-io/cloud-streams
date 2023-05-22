@@ -57,7 +57,7 @@
     </div>
     <div class="row vh-30">
         <h5>Data</h5>
-        <pre class="h-100">@(JsonCore.Serializer.Serialize(cloudEvent?.Data, new JsonSerializerOptions() { WriteIndented = true }))</pre>
+        <pre class="h-100">@(JsonSerializer.Serialize(cloudEvent?.Data, new JsonSerializerOptions() { WriteIndented = true }))</pre>
     </div>
 </div>
 

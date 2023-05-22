@@ -101,7 +101,7 @@ public partial class CloudStreamsResourceManagementApiClient
         if (!response.IsSuccessStatusCode)
         {
             if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
-            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content));
+            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content)); // TODO: fix me: Core vs Hylo
         }
         return response;
     }

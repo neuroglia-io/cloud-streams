@@ -68,22 +68,6 @@ public static class TypeExtensions
     }
 
     /// <summary>
-    /// Gets a boolean indicating whether or not the type is a primitive type (includes value types, <see cref="Guid"/>, <see cref="string"/>, <see cref="DateTime"/> and array types)
-    /// </summary>
-    /// <param name="extended">The type to check</param>
-    /// <returns>A boolean indicating whether or not the type is a primitive type</returns>
-    public static bool IsPrimitiveType(this Type extended)
-    {
-        if (extended.IsValueType) return true;
-        if (extended == typeof(Guid) || extended == typeof(DateTime) || extended == typeof(string)
-            || extended == typeof(char[]) || extended == typeof(string[]) || extended == typeof(byte[]) || extended == typeof(object[]))
-        {
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
     /// Gets a boolean indicating whether or not the type is an <see cref="IEnumerable"/> type
     /// </summary>
     /// <param name="extended">The extended type</param>

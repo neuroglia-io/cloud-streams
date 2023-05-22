@@ -73,7 +73,7 @@ public class ResourceManagementApi<TResource>
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{this.Path}/definition"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.Deserialize<ResourceDefinition>(json)!;
+        return Core.Serializer.Json.Deserialize<ResourceDefinition>(json)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
@@ -84,7 +84,7 @@ public class ResourceManagementApi<TResource>
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
@@ -98,43 +98,43 @@ public class ResourceManagementApi<TResource>
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.DeserializeAsyncEnumerable<TResource>(responseStream, cancellationToken: cancellationToken)!;
+        return Core.Serializer.Json.DeserializeAsyncEnumerable<TResource>(responseStream, cancellationToken: cancellationToken)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
     public virtual async Task<TResource> UpdateAsync(TResource resource, CancellationToken cancellationToken = default)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
-        var json = Core.Serializer.Json.Serialize(resource);
+        var json = Core.Serializer.Json.Serialize(resource); // TODO: fix me: Core vs Hylo
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
     public virtual async Task<TResource> PatchAsync(Patch patch, CancellationToken cancellationToken = default)
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
-        var json = Core.Serializer.Json.Serialize(patch);
+        var json = Core.Serializer.Json.Serialize(patch); // TODO: fix me: Core vs Hylo
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
     public virtual async Task<TResource> PatchStatusAsync(Patch patch, CancellationToken cancellationToken = default)
     {
         if (patch == null) throw new ArgumentNullException(nameof(patch));
-        var json = Core.Serializer.Json.Serialize(patch);
+        var json = Core.Serializer.Json.Serialize(patch); // TODO: fix me: Core vs Hylo
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, $"{this.Path}/status") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Core.Serializer.Json.Deserialize<TResource>(json)!;
+        return Core.Serializer.Json.Deserialize<TResource>(json)!; // TODO: fix me: Core vs Hylo
     }
 
     /// <inheritdoc/>
@@ -174,7 +174,7 @@ public class ResourceManagementApi<TResource>
         if (!response.IsSuccessStatusCode)
         {
             if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
-            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content));
+            else throw new CloudStreamsException(Core.Serializer.Json.Deserialize<ProblemDetails>(content)); // TODO: fix me: Core vs Hylo
         }
         return response;
     }

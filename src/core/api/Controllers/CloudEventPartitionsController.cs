@@ -34,7 +34,7 @@ public class CloudEventPartitionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}")]
     [ProducesResponseType(typeof(IEnumerable<string>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> ListPartitionsByType(CloudEventPartitionType type, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
@@ -50,7 +50,7 @@ public class CloudEventPartitionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}/{id}")]
     [ProducesResponseType(typeof(PartitionMetadata), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> GetPartitionMetadata(CloudEventPartitionType type, string id, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
