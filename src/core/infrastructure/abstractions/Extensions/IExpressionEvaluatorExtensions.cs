@@ -71,18 +71,18 @@ public static class IExpressionEvaluatorExtensions
         if (mutation == null) throw new ArgumentNullException(nameof(mutation));
         if (input == null) throw new ArgumentNullException(nameof(input));
         if (expectedType == null) expectedType= typeof(object);
-        if (mutation is string mutationExpression) return evaluator.Evaluate(mutationExpression, input, arguments, expectedType);
-        else if(mutation is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.String) return evaluator.Evaluate(Serializer.Json.Deserialize<string>(jsonElement)!, input, arguments, expectedType);
-        var json = Serializer.Json.Serialize(mutation);
+        if (mutation is string mutationExpression) return evaluator.Evaluate(mutationExpression, input, arguments, expectedType, cancellationToken);
+        else if(mutation is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.String) return evaluator.Evaluate(Hylo.Serializer.Json.Deserialize<string>(jsonElement)!, input, arguments, expectedType, cancellationToken: cancellationToken);
+        var json = Hylo.Serializer.Json.Serialize(mutation);
         foreach (Match match in Regex.Matches(json, @"""\$\{.+?\}""", RegexOptions.Compiled))
         {
             var expression = match.Value[3..^2].Trim();
             var evaluationResult = evaluator.Evaluate(expression, input, arguments, cancellationToken: cancellationToken);
-            var value = Serializer.Json.Serialize(evaluationResult);
+            var value = Hylo.Serializer.Json.Serialize(evaluationResult);
             if (string.IsNullOrEmpty(value)) value = "null";
             json = json.Replace(match.Value, value);
         }
-        return Serializer.Json.Deserialize(json, expectedType);
+        return Hylo.Serializer.Json.Deserialize(json, expectedType);
     }
 
     /// <summary>

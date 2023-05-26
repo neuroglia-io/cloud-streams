@@ -14,6 +14,7 @@
 using CloudStreams.Core;
 using CloudStreams.ResourceManagement.Api.Client.Services;
 using CloudStreams.ResourceManagement.Api.Services;
+using Hylo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
@@ -42,10 +43,10 @@ public class ResourceEventWatchHub
     protected ResourceWatchEventHubController Controller { get; }
 
     /// <inheritdoc/>
-    public virtual Task Watch(ResourceType type, string? @namespace = null) => this.Controller.WatchResourcesAsync(this.Context.ConnectionId, type, @namespace);
+    public virtual Task Watch(ResourceDefinitionInfo definition, string? @namespace = null) => this.Controller.WatchResourcesAsync(this.Context.ConnectionId, definition, @namespace);
 
     /// <inheritdoc/>
-    public virtual Task StopWatching(ResourceType type, string? @namespace = null) => this.Controller.StopWatchingResourcesAsync(this.Context.ConnectionId, type, @namespace);
+    public virtual Task StopWatching(ResourceDefinitionInfo definition, string? @namespace = null) => this.Controller.StopWatchingResourcesAsync(this.Context.ConnectionId, definition, @namespace);
 
     /// <inheritdoc/>
     public override Task OnDisconnectedAsync(Exception? exception) => this.Controller.ReleaseConnectionResourcesAsync(this.Context.ConnectionId);

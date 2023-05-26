@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Infrastructure.Services;
 using System.Collections.Concurrent;
 using System.Reactive.Linq;
 
@@ -66,7 +65,6 @@ public class SubscriptionManager
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        await this.SubscriptionController.WaitUntilInitializedAsync().ConfigureAwait(false);
         foreach (var subscription in this.SubscriptionController.Resources.ToList())
         {
             await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
@@ -124,6 +122,10 @@ public class SubscriptionManager
     }
 
     /// <inheritdoc/>
-    public ValueTask DisposeAsync() => this.DisposeAsync(disposing: true);
+    public async ValueTask DisposeAsync()
+    {
+        await this.DisposeAsync(disposing: true).ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
 
 }

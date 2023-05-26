@@ -13,6 +13,7 @@
 
 using CloudStreams.Core.Application.Services;
 using FluentValidation;
+using Hylo.Infrastructure;
 using MediatR;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -74,11 +75,6 @@ public class CloudStreamsApplicationBuilder
     /// Gets the type of <see cref="ICloudEventStore"/> to use
     /// </summary>
     protected Type? CloudEventStoreType { get; set; }
-
-    /// <summary>
-    /// Gets the type of <see cref="IResourceRepository"/> to use
-    /// </summary>
-    protected Type? ResourceRepositoryType { get; set; }
 
     /// <summary>
     /// Gets the type of <see cref="ISchemaRegistry"/> to use
@@ -180,8 +176,9 @@ public class CloudStreamsApplicationBuilder
     public virtual void Build()
     {
         if (this.CloudEventStoreType == null) throw new Exception("Invalid Cloud Streams API configuration: the cloud event store type must be set");
-        if (this.ResourceRepositoryType == null) throw new Exception("Invalid Cloud Streams API configuration: the resource repository type must be set");
         if (this.SchemaRegistryType == null) throw new Exception("Invalid Cloud Streams API configuration: the schema registry type must be set");
+
+        this.Services.AddHylo(this.Configuration, setup);
 
         var mvc = this.Services.AddControllers(options =>
         {

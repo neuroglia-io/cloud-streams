@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Serialization.Json.Converters;
+using Hylo.Serialization.Json;
 using System.ComponentModel;
 using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
@@ -22,7 +22,7 @@ namespace CloudStreams.Core.Infrastructure.SchemaRegistry.Apicurio.Models;
 /// Enumerates all actions to undertake if an artifact already exist when attempting to create a new one
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(StringEnumConverterFactory))]
+[JsonConverter(typeof(JsonStringEnumConverterFactory))]
 public enum IfArtifactExistsAction
 {
     /// <summary>

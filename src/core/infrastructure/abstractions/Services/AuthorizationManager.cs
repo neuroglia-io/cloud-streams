@@ -80,7 +80,7 @@ public class AuthorizationManager
                 if (!string.IsNullOrWhiteSpace(rule.AttributeValue) && !Regex.IsMatch(value.ToString()!, rule.AttributeValue)) return mismatch;
                 break;
             case CloudEventAuthorizationRuleType.Payload:
-                var payloadSize = Encoding.UTF8.GetBytes(Serializer.Json.Serialize(e.Data)).Length;
+                var payloadSize = Encoding.UTF8.GetBytes(Hylo.Serializer.Json.Serialize(e.Data)).Length;
                 if (payloadSize > rule.MaxSize) return mismatch;
                 break;
             case CloudEventAuthorizationRuleType.Temporary:

@@ -48,7 +48,7 @@ public static class CloudEventExtensions
         {
             string str => ulong.Parse(str),
             ulong num => num,
-            JsonElement jsonElem => Serializer.Json.Deserialize<ulong?>(jsonElem), 
+            JsonElement jsonElem => Hylo.Serializer.Json.Deserialize<ulong?>(jsonElem), 
             _ => null
         };
     }
@@ -60,7 +60,7 @@ public static class CloudEventExtensions
     /// <returns>The <see cref="CloudEvent"/>'s <see cref="HttpContent"/> representation</returns>
     public static HttpContent ToHttpContent(this CloudEvent e)
     {
-        return new StringContent(Serializer.Json.Serialize(e), Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
+        return new StringContent(Hylo.Serializer.Json.Serialize(e), Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
     }
 
     /// <summary>

@@ -17,7 +17,7 @@ using System.Net;
 namespace CloudStreams.Core.Application.Services;
 
 /// <summary>
-/// Represents the <see cref="IPipelineBehavior{TRequest, TResponse}"/> used to catch and transform uncaught <see cref="Exception"/>s into <see cref="Response"/>s
+/// Represents the <see cref="IPipelineBehavior{TRequest, TResponse}"/> used to catch and transform uncaught <see cref="Exception"/>s into <see cref="ApiResponse"/>s
 /// </summary>
 /// <typeparam name="TRequest">The type of request to handle</typeparam>
 /// <typeparam name="TResponse">The expected type of response</typeparam>

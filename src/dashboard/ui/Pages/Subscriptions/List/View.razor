@@ -111,8 +111,8 @@
 
     Task OnResumeSubscription(Subscription subscription)
     {
-        var patch = new ResourcePatch<Subscription>(subscription!, new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase()))));
-        return this.ApiClient.Subscriptions.PatchStatusAsync(patch);
+        var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
+        return this.ApiClient.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
     }
 
 }

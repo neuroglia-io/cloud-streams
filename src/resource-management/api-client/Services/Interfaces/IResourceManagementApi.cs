@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data.Models;
-
 namespace CloudStreams.ResourceManagement.Api.Client.Services;
 
 /// <summary>
@@ -67,17 +65,21 @@ public interface IResourceManagementApi<TResource>
     /// Patches the specified <see cref="IResource"/>
     /// </summary>
     /// <param name="patch">The <see cref="Patch"/> to apply</param>
+    /// <param name="name">The name of the resource to patch</param>
+    /// <param name="namespace">The namespace the resource to patch belongs to, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The patched <see cref="IResource"/></returns>
-    Task<TResource> PatchAsync(Patch patch, CancellationToken cancellationToken = default);
+    Task<TResource> PatchAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Patches the status of the specified <see cref="IResource"/>
     /// </summary>
     /// <param name="patch">The <see cref="Patch"/> to apply</param>
+    /// <param name="name">The name of the resource to patch</param>
+    /// <param name="namespace">The namespace the resource to patch belongs to, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The patched resource</returns>
-    Task<TResource> PatchStatusAsync(Patch patch, CancellationToken cancellationToken = default);
+    Task<TResource> PatchStatusAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes the specified <see cref="IResource"/>

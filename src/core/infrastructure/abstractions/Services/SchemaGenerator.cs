@@ -28,7 +28,7 @@ public class SchemaGenerator
     {
         if (graph == null) return new JsonSchemaBuilder().Type(SchemaValueType.Null).Build();
         var schemaGeneratorConfiguration = SchemaGeneratorConfiguration.Current;
-        if(graph is not JsonNode graphNode) graphNode = Serializer.Json.SerializeToNode(graph)!;
+        if(graph is not JsonNode graphNode) graphNode = Hylo.Serializer.Json.SerializeToNode(graph)!;
         return graphNode switch
         {
             JsonArray jsonArray => await this.GenerateForJsonArrayAsync(jsonArray, options, cancellationToken),

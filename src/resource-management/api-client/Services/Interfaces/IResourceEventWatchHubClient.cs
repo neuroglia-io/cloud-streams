@@ -22,7 +22,7 @@ public interface IResourceEventWatchHubClient
     /// <summary>
     /// Notifies clients about a resource-related event
     /// </summary>
-    /// <param name="e">The <see cref="Core.Data.Models.ResourceWatchEvent"/> that has been produced</param>
+    /// <param name="e">The <see cref="ResourceWatchEvent"/> that has been produced</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     Task ResourceWatchEvent(object e);
 

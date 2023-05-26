@@ -125,11 +125,11 @@ public class ResourceEditorStore<TResource>
         {
             if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
             {
-                this.SetEditorValue(Core.Serializer.Yaml.Serialize(resource)); // TODO: fix me: Core vs Hylo
+                this.SetEditorValue(Serializer.Yaml.Serialize(resource));
             }
             else
             {
-                this.SetEditorValue(Core.Serializer.Json.Serialize(resource, true)); // TODO: fix me: Core vs Hylo
+                this.SetEditorValue(Serializer.Json.Serialize(resource, true));
             }
         }, token: this.CancellationTokenSource.Token);
     }
@@ -230,8 +230,8 @@ public class ResourceEditorStore<TResource>
         try
         {
             string text = language == PreferedLanguage.YAML ?
-                Core.Serializer.Yaml.ConvertFromJson(textEditorValue) : // TODO: fix me: Core vs Hylo
-                Core.Serializer.Yaml.ConvertToJson(textEditorValue, true); // TODO: fix me: Core vs Hylo
+                Serializer.Yaml.ConvertFromJson(textEditorValue) :
+                Serializer.Yaml.ConvertToJson(textEditorValue, true);
             this.SetEditorValue(text);
         }
         catch (Exception ex)
@@ -269,12 +269,12 @@ public class ResourceEditorStore<TResource>
         string textEditorValue = this.Get(state => state.TextEditorValue);
         if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
         {
-            textEditorValue = Core.Serializer.Yaml.ConvertToJson(textEditorValue); // TODO: fix me: Core vs Hylo
+            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
         }
         TResource? resource;
         try
         {
-            resource = Core.Serializer.Json.Deserialize<TResource>(textEditorValue); // TODO: fix me: Core vs Hylo
+            resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
             resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
             this.SetResource(resource);
         }
@@ -305,16 +305,15 @@ public class ResourceEditorStore<TResource>
         string textEditorValue = this.Get(state => state.TextEditorValue);
         if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
         {
-            textEditorValue = Core.Serializer.Yaml.ConvertToJson(textEditorValue); // TODO: fix me: Core vs Hylo
+            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
         }
-        JsonDocument jsonPatch = JsonPatch.FromDiff(Core.Serializer.Json.SerializeToElement(resource)!.Value, Core.Serializer.Json.SerializeToElement(Core.Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value); // TODO: fix me: Core vs Hylo
-        Json.Patch.JsonPatch? patch = Core.Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement); // TODO: fix me: Core vs Hylo
+        JsonDocument jsonPatch = JsonPatch.FromDiff(Serializer.Json.SerializeToElement(resource)!.Value, Serializer.Json.SerializeToElement(Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
+        Json.Patch.JsonPatch? patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
         if (patch != null)
         {
-            var resourcePatch = new ResourcePatch<TResource>(resource!, new Patch(PatchType.JsonPatch, jsonPatch));
             try
             {
-                resource = await this.resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, this.CancellationTokenSource.Token);
+                resource = await this.resourceManagementApi.Manage<TResource>().PatchAsync(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
                 this.SetResource(resource);
             }
             catch(CloudStreamsException ex)

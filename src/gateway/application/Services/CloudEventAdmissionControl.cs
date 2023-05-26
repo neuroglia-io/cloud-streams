@@ -194,7 +194,7 @@ public class CloudEventAdmissionControl
             if (dataSchemaPolicy?.Required == true)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);
-                return ApiResponse.ValidationFailed(Hylo.StringExtensions.Format(Core.Data.Properties.ProblemDetails.MissingDataSchema, e.Source!)); // TODO: fix me: Core vs Hylo (StringExtensions)
+                return ApiResponseExtensions.ValidationFailed(StringExtensions.Format(Core.Data.Properties.ProblemDetails.MissingDataSchema, e.Source!));
             }
             var schemaUri = await this.SchemaRegistry.GetSchemaUriByIdAsync(e.Type, cancellationToken).ConfigureAwait(false);
             if (schemaUri != null)
@@ -215,17 +215,17 @@ public class CloudEventAdmissionControl
             if (schema == null)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: failed to find the specified data schema '{dataSchemaUri}'", e.Id, e.DataSchema);
-                return ApiResponse.ValidationFailed(Hylo.StringExtensions.Format(Core.Data.Properties.ProblemDetails.DataSchemaNotFound, e.DataSchema)); // TODO: fix me: Core vs Hylo (StringExtensions)
+                return ApiResponseExtensions.ValidationFailed(StringExtensions.Format(Core.Data.Properties.ProblemDetails.DataSchemaNotFound, e.DataSchema));
             }
         }
         if (schema != null)
         {
             var validationOptions = new EvaluationOptions() {  OutputFormat = OutputFormat.Hierarchical };
-            var validationResults = schema.Evaluate(Core.Serializer.Json.SerializeToNode(e.Data), validationOptions); // TODO: fix me: Core vs Hylo
+            var validationResults = schema.Evaluate(Serializer.Json.SerializeToNode(e.Data), validationOptions);
             if (!validationResults.IsValid)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {detail}", e.Id, validationResults);
-                return ApiResponse.ValidationFailed(validationResults);
+                return ApiResponseExtensions.ValidationFailed(validationResults);
             }
         }
         this.Logger.LogDebug("Cloud event with id '{eventId}' successfully validated", e.Id);

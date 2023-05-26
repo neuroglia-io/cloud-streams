@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data.Models;
-
 namespace CloudStreams.Core;
 
 /// <summary>
@@ -30,7 +28,7 @@ public static class ResourceWatchEventExtensions
     public static ResourceWatchEvent<TResource> ToType<TResource>(this ResourceWatchEvent e)
         where TResource : class, IResource, new()
     {
-        var resource = Serializer.Json.Deserialize<TResource>(Serializer.Json.Serialize(e.Resource))!;
+        var resource = Hylo.Serializer.Json.Deserialize<TResource>(Hylo.Serializer.Json.Serialize(e.Resource))!;
         return new ResourceWatchEvent<TResource>(e.Type, resource);
     }
 

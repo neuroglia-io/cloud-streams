@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Serialization.Json.Converters;
+using Hylo.Serialization.Json;
 
 namespace CloudStreams.Core;
 
@@ -19,7 +19,7 @@ namespace CloudStreams.Core;
 /// Enumerates all supported retry backoff duration types
 /// </summary>
 [TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(StringEnumConverterFactory))]
+[JsonConverter(typeof(JsonStringEnumConverterFactory))]
 public enum RetryBackoffDurationType
 {
     /// <summary>
