@@ -29,7 +29,7 @@ public static class ICloudStreamsApiBuilderExtensions
     /// <returns>The configured <see cref="ICloudStreamsApplicationBuilder"/></returns>
     public static ICloudStreamsApplicationBuilder UseJavaScriptExpressionEvaluator(this ICloudStreamsApplicationBuilder builder)
     {
-        builder.Services.TryAddSingleton<IExpressionEvaluatorProvider, JavaScriptExpressionEvaluator>();
+        builder.Services.TryAddSingleton<IExpressionEvaluator, JavaScriptExpressionEvaluator>();
         return builder;
     }
 
