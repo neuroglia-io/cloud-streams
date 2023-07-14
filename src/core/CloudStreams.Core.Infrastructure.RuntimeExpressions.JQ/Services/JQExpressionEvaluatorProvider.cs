@@ -22,7 +22,7 @@ namespace CloudStreams.Core.Infrastructure.Services;
 /// </summary>
 [Plugin(typeof(IExpressionEvaluatorProvider), typeof(JQExpressionEvaluatorPluginBootstrapper))]
 public class JQExpressionEvaluatorProvider
-    : IExpressionEvaluatorProvider
+    : IExpressionEvaluatorProvider, IDisposable, IAsyncDisposable
 {
 
     private bool _disposed;
@@ -42,7 +42,7 @@ public class JQExpressionEvaluatorProvider
     protected IServiceProvider Services { get; }
 
     /// <inheritdoc/>
-    public virtual IExpressionEvaluatorProvider GetExpressionEvaluator() => this.Services.GetRequiredService<JQExpressionEvaluator>();
+    public virtual IExpressionEvaluator GetExpressionEvaluator() => this.Services.GetRequiredService<JQExpressionEvaluator>();
 
     /// <summary>
     /// Disposes of the <see cref="JQExpressionEvaluatorProvider"/>
