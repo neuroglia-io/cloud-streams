@@ -1,1 +1,0 @@
-﻿`${input.foo.bar} is a greeting`

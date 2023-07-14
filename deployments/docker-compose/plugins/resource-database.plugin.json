@@ -1,0 +1,5 @@
+{
+	"assemblyFilePath": "Hylo.Providers.Redis.dll",
+	"typeName": "Hylo.Providers.FileSystem.Services.RedisDatabaseProvider",
+	"nugetPackage": "Hylo.Providers.Redis"
+}

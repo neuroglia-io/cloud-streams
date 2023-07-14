@@ -1,0 +1,199 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@using Hylo;
+@typeparam TData
+
+<CascadingValue Value="this">
+    @Columns
+    <div class="table-container">
+        @if (Loading) {
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        <table class="@TableClass">
+            <thead>
+                <tr class="@HeaderRowClass">
+                    <ColumnHeaderCollectionPresenter TData="TData" />
+                </tr>
+            </thead>
+            <tbody>
+                @if(items != null)
+                {
+                    var index = 0;
+                    @foreach (var item in items)
+                    {
+                        @RowTemplate(new(this, item, index))
+                        index++;
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</CascadingValue>
+
+@code {
+
+    internal List<Column<TData>> columns = new();
+    private IEnumerable<TData>? items;
+    private Column<TData>? draggedColumn;
+
+    /// <summary>
+    /// Gets/sets the table's CSS class
+    /// </summary>
+    [Parameter] public string? TableClass { get; set; } = "table table-stripped table-hover";
+
+    /// <summary>
+    /// Gets/sets the header row's CSS class
+    /// </summary>
+    [Parameter] public string? HeaderRowClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets headers CSS class
+    /// </summary>
+    [Parameter] public string? HeaderClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets rows CSS class
+    /// </summary>
+    [Parameter] public string? RowClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets cells CSS class
+    /// </summary>
+    [Parameter] public string? CellClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets the table's columns
+    /// </summary>
+    [Parameter] public RenderFragment Columns { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not to auto generate columns
+    /// </summary>
+    [Parameter] public bool AutoGenerateColumns { get; set; } = true;
+
+    /// <summary>
+    /// Gets/sets a boolean value to indicate the table is being loaded
+    /// </summary>
+    [Parameter] public bool Loading { get; set; } = false;
+
+    /// <summary>
+    /// Gets/sets the default header template
+    /// </summary>
+    [Parameter]
+    public RenderFragment<ColumnHeaderRenderingContext<TData>> DefaultHeaderTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(ColumnHeader<TData>));
+        __builder.AddAttribute(0, nameof(ColumnHeader<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    /// <summary>
+    /// Gets/sets the default row template
+    /// </summary>
+    [Parameter]
+    public RenderFragment<RowRenderingContext<TData>> RowTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(Row<TData>));
+        __builder.AddAttribute(0, nameof(Row<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    /// <summary>
+    /// Gets/sets the default cell template
+    /// </summary>
+    [Parameter]
+    public RenderFragment<CellRenderingContext<TData>> DefaultCellTemplate { get; set; } = context => __builder =>
+    {
+        __builder.OpenComponent(0, typeof(Cell<TData>));
+        __builder.AddAttribute(0, nameof(Cell<TData>.RenderContext), context);
+        __builder.CloseComponent();
+    };
+
+    /// <summary>
+    /// Gets/sets the items to display
+    /// </summary>
+    [Parameter] public IEnumerable<TData>? Items { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback to invoke when ordering item by a specific column
+    /// </summary>
+    [Parameter] public EventCallback<Column<TData>> OnOrderBy { get; set; }
+
+    /// <summary>
+    /// Adds the specifed <see cref="Column{TData}"/>
+    /// </summary>
+    /// <param name="column">The <see cref="Column{TData}"/> to add</param>
+    public void AddColumn(Column<TData> column)
+    {
+        this.columns.Add(column);
+        this.StateHasChanged();
+    }
+
+    /// <summary>
+    /// Revmoes the specifed <see cref="Column{TData}"/>
+    /// </summary>
+    /// <param name="column">The <see cref="Column{TData}"/> to remove</param>
+    public bool RemoveColumn(Column<TData> column)
+    {
+        var removed = this.columns.Remove(column);
+        this.StateHasChanged();
+        return removed;
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (this.AutoGenerateColumns)
+        {
+            foreach (var property in typeof(TData)
+                .GetProperties()
+                .Where(p => p.PropertyType.IsPrimitiveType() || p.PropertyType == typeof(string) || p.PropertyType == typeof(DateTimeOffset) || p.PropertyType == typeof(DateTime) || p.PropertyType == typeof(TimeSpan) || p.PropertyType == typeof(Uri)))
+            {
+                this.AddColumn(Column<TData>.CreateFor(property));
+            }
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnParametersSetAsync()
+    {
+        if (this.Items is IAsyncEnumerable<TData> asyncEnumerable) this.items = await asyncEnumerable.ToListAsync();
+        else this.items = this.Items;
+    }
+
+    internal async Task OnClickColumn(Column<TData> column)
+    {
+        if (!column.IsSorteable || column.PropertyPath == null) return;
+        column.ToggleSortMode();
+        if (this.OnOrderBy.HasDelegate) await this.OnOrderBy.InvokeAsync(column);
+    }
+
+    internal void OnStartDragColumn(Column<TData> column)
+    {
+        this.draggedColumn = column;
+    }
+
+    internal void OnEndDragColumn(Column<TData> column)
+    {
+        this.draggedColumn = null;
+    }
+
+    internal void OnDropColumnOn(Column<TData> column)
+    {
+        if (column == null || this.draggedColumn == null) return;
+        int draggedIndex = this.columns.IndexOf(this.draggedColumn);
+        int droppedIndex = this.columns.IndexOf(column);
+        this.columns.Remove(this.draggedColumn);
+        int insertAt;
+        if (draggedIndex < droppedIndex)  insertAt = droppedIndex++;
+        else insertAt = droppedIndex;
+        if (droppedIndex >= this.columns.Count) droppedIndex = this.columns.Count - 1;
+        this.columns.Insert(insertAt, this.draggedColumn);
+        this.StateHasChanged();
+    }
+
+}

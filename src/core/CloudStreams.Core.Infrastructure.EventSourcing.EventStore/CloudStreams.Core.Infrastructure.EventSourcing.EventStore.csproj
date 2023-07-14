@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+	<ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	<VersionPrefix>0.5.1</VersionPrefix>
+	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+	<FileVersion>$(VersionPrefix)</FileVersion>
+	<NeutralLanguage>en</NeutralLanguage>
+	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+    <Copyright>Copyright © 2023 - Present The Cloud Streams Authors. All rights reserverd</Copyright>
+	<PackageTags>cloudstreams;core;event-sourcing;</PackageTags>
+	<Description>Contains EventStore implementations of Cloud Streams cloud event sourcing services</Description>
+    <PackageIcon>logo.png</PackageIcon>
+	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	<EnableDynamicLoading>true</EnableDynamicLoading>
+	<RootNamespace>CloudStreams.Core.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<EmbeddedResource Include="Assets\Projections\bycausationid.js">
+	  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	</EmbeddedResource>
+	<EmbeddedResource Include="Assets\Projections\bysubject.js">
+	  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	</EmbeddedResource>
+	<EmbeddedResource Include="Assets\Projections\bysource.js">
+	  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	</EmbeddedResource>
+	<EmbeddedResource Include="Assets\Projections\partitionids.js.tmpl">
+	  <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	</EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\assets\logo.png" Link="logo.png">
+      <PackagePath>\</PackagePath>
+      <Pack>True</Pack>
+    </None>
+    <None Include="..\..\..\README.md" Link="README.md">
+      <PackagePath>\</PackagePath>
+      <Pack>True</Pack>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNetCore.HealthChecks.EventStore.gRPC" Version="6.0.1" />
+    <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="23.0.0" />
+    <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" Version="23.0.0" />
+    <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.0.0" />
+    <PackageReference Include="Hylo.Core" Version="0.7.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CloudStreams.Core.Infrastructure\CloudStreams.Core.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
