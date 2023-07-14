@@ -1,4 +1,0 @@
-﻿{
-  "someGreeting": "Hello",
-  "say": "${greeting} world"
-}

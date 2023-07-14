@@ -1,0 +1,22 @@
+{
+  "profiles": {
+    "CloudStreams.Broker.Api.Server": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "CLOUDSTREAMS_BROKER_NAME": "broker-1",
+        "CONNECTIONSTRINGS__EVENTSTORE": "esdb://localhost:2113?tls=false",
+        "CONNECTIONSTRINGS__REDIS": "localhost"
+      },
+      "applicationUrl": "https://localhost:52660;http://localhost:52661"
+    },
+    "Docker": {
+      "commandName": "Docker",
+      "launchBrowser": true,
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "publishAllPorts": true,
+      "useSSL": true
+    }
+  }
+}

@@ -1,0 +1,119 @@
+﻿@namespace CloudStreams.Dashboard.Pages.Subscriptions.List
+@page "/subscriptions"
+@using CloudStreams.Core.Api.Client.Services;
+@using Hylo;
+@using Json.Patch;
+@using Json.Pointer;
+@inherits ResourceManagementComponent<Subscription>
+@inject ICloudStreamsCoreApiClient ApiClient;
+
+<ApplicationTitle>Subscriptions</ApplicationTitle>
+
+<div class="table-container">
+    @if (loading)
+    {
+        <div class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th class="sticky-header">Name</th>
+                <th class="sticky-header text-center">Created At</th>
+                <th class="sticky-header text-center">Status</th>
+                <th class="sticky-header text-center">Subscriber</th>
+                <th class="sticky-header text-center">Rate Limit</th>
+                <th class="sticky-header text-center">Filter</th>
+                <th class="sticky-header text-center">Stream</th>
+                <th class="sticky-header text-center">Mutate</th>
+                <th class="sticky-header text-center">Offset</th>
+                <th class="sticky-header"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (resources != null && resources.Any())
+            {
+                <Virtualize Context="resource" Items="@resources">
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer">
+                        <td>@resource.Metadata.Name</td>
+                        <td class="text-center">@resource.Metadata.CreationTimestamp?.ToString("R")</td>
+                        <td class="text-center">
+                            @switch (resource.Status?.Phase)
+                            {
+                                case SubscriptionStatusPhase.Active:
+                                    <span class="badge text-dark bg-primary">active</span>
+                                    break;
+                                case SubscriptionStatusPhase.Inactive:
+                                    <span class="badge text-dark bg-secondary">inactive</span>
+                                    break;
+                            }
+                            @if(resource.Status?.Stream?.Fault != null)
+                            {
+                                <span class="badge text-dark bg-danger ms-1 cursor-pointer" title="@resource.Status.Stream.Fault.ToString()" @onclick="async e => await OnResumeSubscription(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</span>
+                            }
+                        </td>
+                        <td class="text-center"><a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a></td>
+                        <td class="text-center">@(resource.Spec.Subscriber.RateLimit.HasValue ? resource.Spec.Subscriber.RateLimit.Value.ToString() : "-")</td>
+                        <td class="text-center">
+                            @if (resource.Spec?.Filter == null)
+                            {
+                                <span class="badge bg-secondary">no</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-dark bg-primary">yes</span>
+                            }
+                        </td>
+                        <td class="text-center">
+                            @if (resource.Spec?.Stream == null)
+                            {
+                                <span class="badge bg-secondary">no</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-dark bg-primary">yes</span>
+                            }
+                        </td>
+                        <td class="text-center">
+                            @if (resource.Spec?.Mutation == null)
+                            {
+                                <span class="badge bg-secondary">no</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-dark bg-primary">yes</span>
+                            }
+                        </td>
+                        <td class="text-center">@(resource.Spec?.Stream == null ? "-" : resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
+                        <td class="text-end">
+                            <button class="btn btn-outline-primary btn-sm" title="Edit '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
+                            <button class="btn btn-outline-danger btn-sm" title="Delete '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
+                        </td>
+                    </tr>
+                </Virtualize>
+            }
+        </tbody>
+    </table>
+</div>
+
+<Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+
+<Offcanvas @ref="detailsOffcanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+
+<Offcanvas @ref="editorOffcanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+
+<ConfirmDialog @ref="dialog" />
+
+@code
+{
+
+    Task OnResumeSubscription(Subscription subscription)
+    {
+        var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
+        return this.ApiClient.Resources.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
+    }
+
+}

@@ -22,105 +22,40 @@ services:
         source: eventstore-logs
         target: /var/log/eventstore
 
-  postgres:
-    image: postgres
-    environment:
-      POSTGRES_DB: apicurio-registry
-      POSTGRES_USER: ${POSTGRES_USERNAME}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:latest
 
-  apicurio:
-    image: apicurio/apicurio-registry-sql:latest-release
-    environment:
-      REGISTRY_DATASOURCE_URL: jdbc:postgresql://postgres/apicurio-registry
-      REGISTRY_DATASOURCE_USERNAME: ${POSTGRES_USERNAME}
-      REGISTRY_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - 9666:8080
-    depends_on:
-      - postgres
-
-  otl-collector:
-    image: otel/opentelemetry-collector-contrib
-    command: [ "--config=/etc/collector.yaml" ]
-    volumes:
-      - ./otel/collector/config.yaml:/etc/collector.yaml
-
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./prometheus/config.yaml:/etc/prometheus/prometheus.yml
-
-  tempo:
-    image: grafana/tempo
-    command: [ "-config.file=/etc/tempo.yaml" ]
-    volumes:
-      - ./tempo/config.yaml:/etc/tempo.yaml
-
-  loki:
-    image: grafana/loki
-    command: [ "-config.file=/etc/loki/local-config.yaml" ]
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./grafana/data-sources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
-    environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
-    depends_on:
-      - prometheus
-      - tempo
-      - loki
-
-  webhook-tester:
-    image: tarampampam/webhook-tester
-    command: serve --port 18080 --create-session 00000000-0000-0000-0000-000000000000
-    ports: 
-      - "18080:18080" # Open <http://127.0.0.1:18080/#/00000000-0000-0000-0000-000000000000>
-
-  gateway-1:
-    image: ghcr.io/neuroglia-io/cloud-streams-gateway
+  api-server:
+    image: ${DOCKER_REGISTRY-}api-server
+    build:
+      context: ../../
+      dockerfile: ./src/core/CloudStreams.Core.Api.Server/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:80
+      CONNECTIONSTRINGS__REDIS: ${REDIS_URI}
+      CONNECTIONSTRINGS__EVENTSTORE: ${EVENTSTORE_URI}
+    volumes:
+      - ./plugins:/app/bin/Debug/net7.0/plugins
+    depends_on:
+      - redis
+      - eventstore
+
+  gateway:
+    image: ${DOCKER_REGISTRY-}gateway
+    build:
+      context: ../../
+      dockerfile: ./src/gateway/CloudStreams.Gateway.Api.Server/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      CONNECTIONSTRINGS__REDIS: ${REDIS_URI}
+      CONNECTIONSTRINGS__EVENTSTORE: ${EVENTSTORE_URI}
       CLOUDSTREAMS_GATEWAY_NAME: gateway-1
-      CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
-      CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otl-collector:4317
-    ports:
-      - 9696:80
     volumes:
-      - ./k8s/config:/root/.kube/config
+      - ./plugins:/app/bin/Debug/net7.0/plugins
     depends_on:
+      - redis
       - eventstore
-      - postgres
-      - apicurio
-
-  broker-1:
-    image: ghcr.io/neuroglia-io/cloud-streams-broker
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:80
-      CLOUDSTREAMS_BROKER_NAME: broker-1
-      CONNECTIONSTRINGS__EVENTSTORE: esdb://eventstore:2113?tls=false
-      CONNECTIONSTRINGS__APICURIO: http://apicurio:8080
-    ports:
-      - 9697:80
-    volumes:
-      - ./k8s/config:/root/.kube/config
-    depends_on:
-      - eventstore
-      - postgres
-      - apicurio
-      - gateway-1 # prevents concurrency the first time the stack is launched
 
 volumes:
   eventstore-data:
-  eventstore-logs:
-  postgres_data:
+  eventstore-logs:  
