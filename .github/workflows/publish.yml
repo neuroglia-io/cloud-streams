@@ -24,8 +24,6 @@ jobs:
         run: dotnet build "${{ env.SOLUTION }}" --configuration Release --no-restore 
       - name: Push1
         run: dotnet nuget push "./src/*/*/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-      - name: Push2
-        run: dotnet nuget push "./src/*/*/*/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   publish-api-server-image:
     name: Publish API Server image
