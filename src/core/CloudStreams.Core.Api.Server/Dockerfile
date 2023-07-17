@@ -1,4 +1,4 @@
-#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+#See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
 FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
 WORKDIR /app
@@ -9,6 +9,13 @@ RUN apt-get install -y jq
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["src/core/CloudStreams.Core.Api.Server/CloudStreams.Core.Api.Server.csproj", "src/core/CloudStreams.Core.Api.Server/"]
+COPY ["src/dashboard/CloudStreams.Dashboard/CloudStreams.Dashboard.csproj", "src/dashboard/CloudStreams.Dashboard/"]
+COPY ["src/core/CloudStreams.Core.Api.Client/CloudStreams.Core.Api.Client.csproj", "src/core/CloudStreams.Core.Api.Client/"]
+COPY ["src/core/CloudStreams.Core/CloudStreams.Core.csproj", "src/core/CloudStreams.Core/"]
+COPY ["src/dashboard/CloudStreams.Dashboard.StateManagement/CloudStreams.Dashboard.StateManagement.csproj", "src/dashboard/CloudStreams.Dashboard.StateManagement/"]
+COPY ["src/core/CloudStreams.Core.Api/CloudStreams.Core.Api.csproj", "src/core/CloudStreams.Core.Api/"]
+COPY ["src/core/CloudStreams.Core.Application/CloudStreams.Core.Application.csproj", "src/core/CloudStreams.Core.Application/"]
+COPY ["src/core/CloudStreams.Core.Infrastructure/CloudStreams.Core.Infrastructure.csproj", "src/core/CloudStreams.Core.Infrastructure/"]
 RUN dotnet restore "src/core/CloudStreams.Core.Api.Server/CloudStreams.Core.Api.Server.csproj"
 COPY . .
 WORKDIR "/src/src/core/CloudStreams.Core.Api.Server"
