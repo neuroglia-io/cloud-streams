@@ -55,6 +55,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Broker.Api", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Broker.Api.Server", "src\broker\CloudStreams.Broker.Api.Server\CloudStreams.Broker.Api.Server.csproj", "{15686F8D-528D-4525-AB4C-920356A9FAF7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kubernetes", "kubernetes", "{D8AC6338-9A30-4FD5-A2EB-F46760F074C6}"
+	ProjectSection(SolutionItems) = preProject
+		deployments\kubernetes\deployment.yaml = deployments\kubernetes\deployment.yaml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -165,6 +170,7 @@ Global
 		{56C38938-070C-46CD-A9A2-812D0389A527} = {DB906BCE-DF5E-48A4-B2D0-78EBD504EE08}
 		{B8BD211C-D29B-4763-8780-B8C1AB7CA867} = {DB906BCE-DF5E-48A4-B2D0-78EBD504EE08}
 		{15686F8D-528D-4525-AB4C-920356A9FAF7} = {DB906BCE-DF5E-48A4-B2D0-78EBD504EE08}
+		{D8AC6338-9A30-4FD5-A2EB-F46760F074C6} = {43DFCA07-D86F-472B-AF59-B979DC9C948C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A39D1D72-5614-4CCF-B7AD-923E4DC3F452}

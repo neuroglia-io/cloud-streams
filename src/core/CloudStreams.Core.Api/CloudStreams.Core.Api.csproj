@@ -36,7 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hylo.Api.Http" Version="0.7.2" />
+    <PackageReference Include="Hylo.Api.Http" Version="0.7.3" />
   </ItemGroup>
 
   <ItemGroup>
