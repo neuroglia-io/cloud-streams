@@ -40,7 +40,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hylo.Api.Http" Version="0.7.3" />
+    <PackageReference Include="Hylo.Api.Http" Version="0.7.4" />
   </ItemGroup>
 
   <ItemGroup>

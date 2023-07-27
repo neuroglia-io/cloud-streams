@@ -40,7 +40,7 @@ spec:
       volumes:
       - name: cloud-streams-plugins
         hostPath:    
-          path: /run/desktop/mnt/host/c/Users/User/source/repos/CloudStreams/src/core/CloudStreams.Core.Api.Server/bin/Debug/net7.0/plugins
+          path: /run/desktop/mnt/host/c/Users/User/.cloud-streams/plugins
 ---
 
 apiVersion: apps/v1
@@ -62,7 +62,7 @@ spec:
     spec:
       containers:
       - name: gateway
-        image: ghcr.io/neuroglia-io/cloud-streams-gateway:6.0
+        image: ghcr.io/neuroglia-io/cloud-streams-gateway:latest
         ports:
         - containerPort: 80
         env:
@@ -80,7 +80,7 @@ spec:
       volumes:
       - name: cloud-streams-plugins
         hostPath:    
-          path: /run/desktop/mnt/host/c/Users/User/source/repos/CloudStreams/src/broker/CloudStreams.Broker.Api.Server/bin/Debug/net7.0/plugins/
+          path: /run/desktop/mnt/host/c/Users/User/.cloud-streams/plugins
 ---
 
 apiVersion: apps/v1
@@ -102,7 +102,7 @@ spec:
     spec:
       containers:
       - name: broker
-        image: ghcr.io/neuroglia-io/cloud-streams-broker:6.0
+        image: ghcr.io/neuroglia-io/cloud-streams-broker:latest
         ports:
         - containerPort: 80
         env:
@@ -120,7 +120,7 @@ spec:
       volumes:
       - name: cloud-streams-plugins
         hostPath:    
-          path: /run/desktop/mnt/host/c/Users/User/source/repos/CloudStreams/src/broker/CloudStreams.Broker.Api.Server/bin/Debug/net7.0/plugins/
+          path: /run/desktop/mnt/host/c/Users/User/.cloud-streams/plugins
 ---
 
 apiVersion: v1

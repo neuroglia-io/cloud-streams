@@ -13,6 +13,7 @@
 
 using Hylo;
 using Hylo.Infrastructure.Services;
+using Microsoft.Extensions.Logging;
 
 namespace CloudStreams.Core.Infrastructure.Services;
 
@@ -22,7 +23,7 @@ public class DatabaseInitializer
 {
 
     /// <inheritdoc/>
-    public DatabaseInitializer(IDatabaseProvider databaseProvider) : base(databaseProvider) { }
+    public DatabaseInitializer(ILoggerFactory loggerFactory, IDatabaseProvider databaseProvider) : base(loggerFactory, databaseProvider) { }
 
     /// <inheritdoc/>
     protected override async Task SeedAsync(CancellationToken cancellationToken)
