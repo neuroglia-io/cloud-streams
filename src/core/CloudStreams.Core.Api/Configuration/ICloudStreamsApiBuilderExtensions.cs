@@ -34,7 +34,6 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ResourceWatchEventHubController>());
         builder.Services.AddHostedService<GatewayResourceController>();
         builder.Services.AddHostedService<BrokerResourceController>();
-        builder.RegisterApplicationPart<Broker>();
         return builder;
     }
 

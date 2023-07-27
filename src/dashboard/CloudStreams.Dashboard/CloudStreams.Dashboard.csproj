@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Blazor.Bootstrap" Version="1.9.4" />
+    <PackageReference Include="Blazor.Bootstrap" Version="1.9.5" />
     <PackageReference Include="BlazorMonaco" Version="3.0.0" />
     <PackageReference Include="JsonCons.Utilities" Version="1.0.0" />
     <PackageReference Include="JsonPatch.Net" Version="2.1.0" />
