@@ -109,8 +109,8 @@ spec:
                             attributeConflictResolution:
                               enum:
                                 - overwrite
-                            required:
-                            - type
+                          required:
+                            - strategy
                             - attributeConflictResolution
                             - attributeName
                         - properties:
@@ -120,8 +120,8 @@ spec:
                             attributeConflictResolution:
                               enum:
                                 - fallback
-                            required:
-                            - type
+                          required:
+                            - strategy
                             - attributeConflictResolution
                             - attributeName
                             - fallbackAttributeName
@@ -132,9 +132,16 @@ spec:
                       type: string
                       format: url
                     healthChecks:
-                      request:
-                        method: GET
-                        path: /healthz
+                      type: object
+                      properties:
+                        request:
+                          type: object
+                          properties:
+                            method:
+                              type: string
+                            path:
+                              type: string
+                          required: [ method, path ]
                   required:
                     - uri
             status:

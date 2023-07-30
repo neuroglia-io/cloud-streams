@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Data;
 using CloudStreams.Core.Infrastructure;
 using CloudStreams.Core.Infrastructure.Services;
 using FluentValidation;
@@ -145,7 +146,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe consumed <see cref="CloudEvent"/>s
     /// </summary>
-    protected IObservable<CloudEvent> CloudEventStream { get; private set; } = null!;
+    protected IObservable<CloudEventRecord> CloudEventStream { get; private set; } = null!;
 
     /// <summary>
     /// Gets a boolean indicating whether or not the subscriber is available
@@ -219,12 +220,12 @@ public class SubscriptionHandler
             this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
             if (this.Subscription.Spec.Partition == null)
             {
-                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing));
+                this.CloudEventStream = await this.EventStoreProvider.GetEventStore().SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
                 this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
             }
             else
             {
-                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing));
+                this.CloudEventStream = await this.EventStoreProvider.GetEventStore().SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
                 this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
             }
             this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
@@ -246,29 +247,29 @@ public class SubscriptionHandler
     }
 
     /// <summary>
-    /// Determines whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEvent"/>
+    /// Determines whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEventRecord"/>
     /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to filter</param>
-    /// <returns>A boolean indicating whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEvent"/></returns>
-    protected virtual bool Filters(CloudEvent e)
+    /// <param name="e">The <see cref="CloudEventRecord"/> to filter</param>
+    /// <returns>A boolean indicating whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEventRecord"/></returns>
+    protected virtual bool Filters(CloudEventRecord e)
     {
         if(e == null) throw new ArgumentNullException(nameof(e));
         if (this.Subscription.Spec.Filter == null) return true;
         return this.Subscription.Spec.Filter.Type switch
         {
             CloudEventFilterType.Attributes => this.Filters(e, this.Subscription.Spec.Filter.Attributes!),
-            CloudEventFilterType.Expression => this.ExpressionEvaluatorProvider.GetExpressionEvaluator().EvaluateCondition(this.Subscription.Spec.Filter.Expression!, e),
+            CloudEventFilterType.Expression => this.Filters(e, this.Subscription.Spec.Filter.Expression!),
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventFilterType)} '{EnumHelper.Stringify(this.Subscription.Spec.Filter.Type)}' is not supported")
         };
     }
 
     /// <summary>
-    /// Determines whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEvent"/>
+    /// Determines whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEventRecord"/>
     /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to filter</param>
-    /// <param name="attributeFilters">An <see cref="IDictionary{TKey, TValue}"/> containing the key/value mappings of the attributes to filter the specified <see cref="CloudEvent"/> by</param>
-    /// <returns>A boolean indicating whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEvent"/></returns>
-    protected virtual bool Filters(CloudEvent e, IDictionary<string, string?> attributeFilters)
+    /// <param name="e">The <see cref="CloudEventRecord"/> to filter</param>
+    /// <param name="attributeFilters">An <see cref="IDictionary{TKey, TValue}"/> containing the key/value mappings of the attributes to filter the specified <see cref="CloudEventRecord"/> by</param>
+    /// <returns>A boolean indicating whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEventRecord"/></returns>
+    protected virtual bool Filters(CloudEventRecord e, IDictionary<string, string?> attributeFilters)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         if (attributeFilters == null) throw new ArgumentNullException(nameof(attributeFilters));
@@ -289,7 +290,7 @@ public class SubscriptionHandler
     /// <param name="e">The <see cref="CloudEvent"/> to filter</param>
     /// <param name="expression">A runtime expression used to determine whether or not the specified <see cref="CloudEvent"/> should be dispatched to subscribers</param>
     /// <returns>A boolean indicating whether or not the <see cref="Subscription"/> filters the specified <see cref="CloudEvent"/></returns>
-    protected virtual bool Filters(CloudEvent e, string expression)
+    protected virtual bool Filters(CloudEventRecord e, string expression)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         if (string.IsNullOrWhiteSpace(expression)) throw new ArgumentNullException(nameof(expression));
@@ -363,27 +364,41 @@ public class SubscriptionHandler
     }
 
     /// <summary>
-    /// Dispatches the specified <see cref="CloudEvent"/> to the configured subscriber
+    /// Dispatches the specified <see cref="CloudEventRecord"/> to the configured subscriber
     /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to dispatch</param>
+    /// <param name="e">The <see cref="CloudEventRecord"/> to dispatch</param>
     /// <param name="retryOnError">A boolean indicating whether or not to retry when the subscriber is unavailable</param>
     /// <param name="catchUpWhenAvailable">A boolean indicating whether or not to catch up missed events when the subscriber becomes available</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task DispatchAsync(CloudEvent e, bool retryOnError, bool catchUpWhenAvailable)
+    protected virtual async Task DispatchAsync(CloudEventRecord e, bool retryOnError, bool catchUpWhenAvailable)
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
-        var offset = e.GetSequence()!.Value + 1;
+        var cloudEvent = e.ToCloudEvent(this.Broker.Resource.Spec.Dispatch?.Sequencing);
+        cloudEvent = await this.MutateAsync(cloudEvent).ConfigureAwait(false);
+        await this.DispatchAsync(cloudEvent, e.Sequence, retryOnError, catchUpWhenAvailable).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Dispatches the specified <see cref="CloudEvent"/> to the configured subscriber
+    /// </summary>
+    /// <param name="e">The <see cref="CloudEvent"/> to dispatch</param>
+    /// <param name="offset">The offset of the <see cref="CloudEvent"/> to dispatch</param>
+    /// <param name="retryOnError">A boolean indicating whether or not to retry when the subscriber is unavailable</param>
+    /// <param name="catchUpWhenAvailable">A boolean indicating whether or not to catch up missed events when the subscriber becomes available</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task DispatchAsync(CloudEvent e, ulong offset, bool retryOnError, bool catchUpWhenAvailable)
+    {
         using var requestContent = e.ToHttpContent();
         using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
         using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
         if (retryOnError && !response.IsSuccessStatusCode)
         {
-            await this.RetryDispatchAsync(e, catchUpWhenAvailable);
+            await this.RetryDispatchAsync(e, offset, catchUpWhenAvailable);
         }
         else
         {
             response.EnsureSuccessStatusCode();
-            if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset).ConfigureAwait(false);
+            if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
             if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value));
         }
     }
@@ -392,9 +407,10 @@ public class SubscriptionHandler
     /// Retries to dispatch the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to dispatch</param>
+    /// <param name="offset">The offset of the <see cref="CloudEvent"/> to dispatch</param>
     /// <param name="catchUpWhenAvailable">A boolean indicating whether or not to catch up events when the subscribe becomes available again</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task RetryDispatchAsync(CloudEvent e, bool catchUpWhenAvailable)
+    protected virtual async Task RetryDispatchAsync(CloudEvent e, ulong offset, bool catchUpWhenAvailable)
     {
         try
         {
@@ -413,7 +429,7 @@ public class SubscriptionHandler
                     .WaitAndRetryForeverAsync(policyConfiguration.BackoffDuration.ForAttempt);
 
             retryPolicy = circuitBreakerPolicy == null ? retryPolicy : retryPolicy.WrapAsync(circuitBreakerPolicy);
-            await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);
+            await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, offset, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);
 
             this.SubscriberAvailable = true;
             if (catchUpWhenAvailable) await this.CatchUpAsync().ConfigureAwait(false);
@@ -444,8 +460,7 @@ public class SubscriptionHandler
                     await Task.Delay(50);
                     continue;
                 }
-                var e = record.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing);
-                await this.DispatchAsync(e, true, false).ConfigureAwait(false);
+                await this.DispatchAsync(record, true, false).ConfigureAwait(false);
                 currentOffset++;
             }
             while (!this.StreamInitializationCancellationTokenSource.Token.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
@@ -563,14 +578,13 @@ public class SubscriptionHandler
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to handle</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task OnCloudEventAsync(CloudEvent e)
+    protected virtual async Task OnCloudEventAsync(CloudEventRecord e)
     {
         try
         {
-            this.StreamOffset = e.GetSequence()!.Value;
+            this.StreamOffset = e.Sequence;
             if (this.Subscription.Status?.Stream?.Fault != null || !this.SubscriberAvailable || this.SubscriptionOutOfSync) return;
-            var mutated = await this.MutateAsync(e).ConfigureAwait(false);
-            await this.DispatchAsync(mutated, true, true).ConfigureAwait(false);
+            await this.DispatchAsync(e, true, true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

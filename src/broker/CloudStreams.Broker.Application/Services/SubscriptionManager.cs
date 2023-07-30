@@ -106,7 +106,7 @@ public class SubscriptionManager
                         Sequencing = CloudEventSequencingConfiguration.Default
                     } 
                 });
-                await this.Resources.AddAsync(broker, false, stoppingToken).ConfigureAwait(false);
+                broker = await this.Resources.AddAsync(broker, false, stoppingToken).ConfigureAwait(false);
             }
             this.Configuration = await this.Resources.MonitorAsync<Core.Data.Broker>(this.Options.Name, this.Options.Namespace, false, this.CancellationToken).ConfigureAwait(false);
         }
