@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object that provides information about a cloud event
 /// </summary>
 [DataContract]
-public class CloudEventMetadata
+public record CloudEventMetadata
     : IExtensible
 {
 

@@ -15,7 +15,6 @@ using CloudStreams.Core.Application.Services;
 using CloudStreams.Core.Data;
 using CloudStreams.Core.Infrastructure.Configuration;
 using CloudStreams.Core.Infrastructure.Services;
-using CloudStreams.Core.Serialization;
 using FluentValidation;
 using Hylo;
 using Hylo.Infrastructure;
@@ -29,8 +28,6 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace CloudStreams.Core.Application.Configuration;
 

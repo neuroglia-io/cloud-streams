@@ -19328,6 +19328,10 @@ h1:focus, .h1:focus {
   height: 75px;
 }
 
+.logo-large {
+  height: 300px;
+}
+
 .logo-typing {
   font-family: Comfortaa;
   color: #4DCEF3;

@@ -25,13 +25,19 @@ public static class CloudEventRecordExtensions
     /// Converts the <see cref="CloudEventRecord"/> into the <see cref="CloudEvent"/> it describes
     /// </summary>
     /// <param name="record">The <see cref="CloudEventRecord"/> to convert</param>
+    /// <param name="sequencingConfiguration">An object used to configure the sequencing strategy to use</param>
     /// <returns>The <see cref="CloudEvent"/> described by the converted <see cref="CloudEventRecord"/></returns>
-    public static CloudEvent ToCloudEvent(this CloudEventRecord record)
+    public static CloudEvent ToCloudEvent(this CloudEventRecord record, CloudEventSequencingConfiguration? sequencingConfiguration)
     {
         if (record == null) throw new ArgumentNullException(nameof(record));
-        var e = ((CloudEventDescriptor)record).ToCloudEvent();
-        if (e.ExtensionAttributes == null) e.ExtensionAttributes = new Dictionary<string, object>();
-        e.ExtensionAttributes.Add(CloudEventExtensionAttributes.Sequence, record.Sequence);
+        sequencingConfiguration ??= CloudEventSequencingConfiguration.Default;
+        var e = record.ToCloudEvent();
+        if (sequencingConfiguration.Strategy == CloudEventSequencingStrategy.None) return e;
+        e.ExtensionAttributes ??= new Dictionary<string, object>();
+        if (e.ExtensionAttributes.ContainsKey(sequencingConfiguration.AttributeName!) && sequencingConfiguration.AttributeConflictResolution == CloudEventAttributeConflictResolution.Fallback)
+            e.ExtensionAttributes[sequencingConfiguration.FallbackAttributeName!] = record.Sequence;
+        else
+            e.ExtensionAttributes[sequencingConfiguration.AttributeName!] = record.Sequence;
         return e;
     }
 

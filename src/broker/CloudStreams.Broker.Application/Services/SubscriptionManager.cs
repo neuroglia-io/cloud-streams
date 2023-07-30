@@ -97,7 +97,17 @@ public class SubscriptionManager
         catch (HyloException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
         finally
         {
-            if (broker == null) await this.Resources.AddAsync(new Core.Data.Broker(new ResourceMetadata(this.Options.Name, this.Options.Namespace), new BrokerSpec()), false, stoppingToken).ConfigureAwait(false);
+            if (broker == null)
+            {
+                broker = new Core.Data.Broker(new ResourceMetadata(this.Options.Name, this.Options.Namespace), new BrokerSpec() 
+                { 
+                    Dispatch = new() 
+                    { 
+                        Sequencing = CloudEventSequencingConfiguration.Default
+                    } 
+                });
+                broker = await this.Resources.AddAsync(broker, false, stoppingToken).ConfigureAwait(false);
+            }
             this.Configuration = await this.Resources.MonitorAsync<Core.Data.Broker>(this.Options.Name, this.Options.Namespace, false, this.CancellationToken).ConfigureAwait(false);
         }
         foreach (var subscription in this.SubscriptionController.Resources.ToList())

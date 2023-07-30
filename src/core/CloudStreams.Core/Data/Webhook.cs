@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a webhook
 /// </summary>
 [DataContract]
-public class Webhook
+public record Webhook
 {
 
     /// <summary>

@@ -82,7 +82,7 @@ public class ReadCloudEventStreamQueryHandler
             : eventStore.ReadPartitionAsync(query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);
         var results = query.Options.Format switch
         {
-            StreamReadOutputFormat.Event => events.Select(e => e.ToCloudEvent()).OfType<object>(),
+            StreamReadOutputFormat.Event => events.Select(e => e.ToCloudEvent(default)).OfType<object>(),
             _ => events
         };
         return Task.FromResult(this.Ok(results));

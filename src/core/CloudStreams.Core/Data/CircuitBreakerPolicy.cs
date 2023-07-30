@@ -19,7 +19,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a circuit breaker
 /// </summary>
 [DataContract]
-public class CircuitBreakerPolicy
+public record CircuitBreakerPolicy
 {
 
     /// <summary>
@@ -46,7 +46,7 @@ public class CircuitBreakerPolicy
     public virtual int BreakAfter { get; set; }
 
     /// <summary>
-    /// Gets/sets the duration the circuit remains broker
+    /// Gets/sets the duration the circuit remains broken
     /// </summary>
     [Required, JsonConverter(typeof(Iso8601TimeSpanConverter))]
     [DataMember(Order = 2, Name = "breakDuration", IsRequired = true), JsonPropertyOrder(2), JsonPropertyName("breakDuration"), YamlMember(Order = 2, Alias = "breakDuration")]

@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a cloud event subscription
 /// </summary>
 [DataContract]
-public class SubscriptionSpec
+public record SubscriptionSpec
 {
 
     /// <summary>

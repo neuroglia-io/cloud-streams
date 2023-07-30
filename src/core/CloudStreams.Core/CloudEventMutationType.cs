@@ -28,7 +28,7 @@ public enum CloudEventMutationType
     [EnumMember(Value = "expression")]
     Expression = 1,
     /// <summary>
-    /// Indicates a webhook-based expression
+    /// Indicates a webhook-based mutation
     /// </summary>
     [EnumMember(Value = "webhook")]
     Webhook = 2

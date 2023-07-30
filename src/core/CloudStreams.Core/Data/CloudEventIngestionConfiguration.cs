@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure the ingestion of specific cloud events
 /// </summary>
 [DataContract]
-public class CloudEventIngestionConfiguration
+public record CloudEventIngestionConfiguration
 {
 
     /// <summary>

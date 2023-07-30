@@ -19,7 +19,7 @@ namespace CloudStreams.Core.Data;
 /// Represents a <see href="https://cloudevents.io/">Cloud Event</see> envelope
 /// </summary>
 [DataContract]
-public class CloudEvent
+public record CloudEvent
     : IExtensible
 {
 

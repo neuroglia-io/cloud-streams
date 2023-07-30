@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a cloud event gateway
 /// </summary>
 [DataContract]
-public class GatewaySpec
+public record GatewaySpec
 {
 
     /// <summary>

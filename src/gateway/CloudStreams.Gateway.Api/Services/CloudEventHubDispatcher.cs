@@ -52,7 +52,7 @@ public class CloudEventHubDispatcher
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         (await this.EventStoreProvider.GetEventStore().SubscribeAsync(cancellationToken: stoppingToken).ConfigureAwait(false))
-            .Select(e => e.ToCloudEvent())
+            .Select(e => e.ToCloudEvent(default))
             .SubscribeAsync(e => this.HubContext.Clients.All.StreamEvent(e, stoppingToken), cancellationToken: stoppingToken);
     }
 
