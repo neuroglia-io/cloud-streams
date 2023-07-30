@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure how to mutate consumed cloud events
 /// </summary>
 [DataContract]
-public class CloudEventMutation
+public record CloudEventMutation
 {
 
     /// <summary>
@@ -28,14 +28,14 @@ public class CloudEventMutation
 
     /// <summary>
     /// Gets/sets the runtime expression string or object used to mutate consumed cloud events. 
-    /// Required if 'strategy' has been set to 'expression'
+    /// Required if 'type' has been set to 'expression'
     /// </summary>
     [DataMember(Order = 2, Name = "expression"), JsonPropertyName("expression"), YamlMember(Alias = "expression")]
     public virtual object? Expression { get; set; }
 
     /// <summary>
-    /// Gets/sets the runtime expression string or object used to mutate consumed cloud events. 
-    /// Required if 'strategy' has been set to 'webhook'
+    /// Gets/sets an object used to configure the webhook request to perform in order to mutate the cloud event.
+    /// Required if 'type' has been set to 'webhook'
     /// </summary>
     [DataMember(Order = 3, Name = "webhook"), JsonPropertyName("webhook"), YamlMember(Alias = "webhook")]
     public virtual Webhook? Webhook { get; set; }

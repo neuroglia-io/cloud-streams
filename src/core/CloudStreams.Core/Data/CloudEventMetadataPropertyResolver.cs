@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure how to resolve the value of a cloud event metadata property
 /// </summary>
 [DataContract]
-public class CloudEventMetadataPropertyResolver
+public record CloudEventMetadataPropertyResolver
 {
 
     /// <summary>
@@ -68,13 +68,15 @@ public class CloudEventMetadataPropertyResolver
     public virtual CloudEventMetadataPropertyResolutionStrategy Strategy { get; set; }
 
     /// <summary>
-    /// Gets/sets an object used to configure the cloud event context attribute to extract the metadata property from
+    /// Gets/sets an object used to configure the cloud event context attribute to extract the metadata property from<para></para>
+    /// Required if strategy has been set to <see cref="CloudEventMetadataPropertyResolutionStrategy.Attribute"/>
     /// </summary>
     [DataMember(Order = 3, Name = "attribute"), JsonPropertyName("attribute"), YamlMember(Alias = "attribute")]
     public virtual CloudEventAttributeFilter? Attribute { get; set; }
 
     /// <summary>
-    /// Gets/sets a runtime expression used to resolve the cloud event metadata property
+    /// Gets/sets a runtime expression used to resolve the cloud event metadata property<para></para>
+    /// Required if strategy has been set to <see cref="CloudEventMetadataPropertyResolutionStrategy.Expression"/>
     /// </summary>
     [DataMember(Order = 4, Name = "expression"), JsonPropertyName("expression"), YamlMember(Alias = "expression")]
     public virtual string? Expression { get; set; }

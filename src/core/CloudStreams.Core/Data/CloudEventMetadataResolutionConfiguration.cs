@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure the way the metadata of ingested cloud events should be resolved
 /// </summary>
 [DataContract]
-public class CloudEventMetadataResolutionConfiguration
+public record CloudEventMetadataResolutionConfiguration
 {
 
     /// <summary>

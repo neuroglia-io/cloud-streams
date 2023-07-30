@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a cloud event context attribute filter.
 /// </summary>
 [DataContract]
-public class CloudEventAttributeFilter
+public record CloudEventAttributeFilter
 {
 
     /// <summary>

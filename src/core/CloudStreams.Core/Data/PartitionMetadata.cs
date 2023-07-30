@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to describe a cloud event partition
 /// </summary>
 [DataContract]
-public class PartitionMetadata
+public record PartitionMetadata
 {
 
     /// <summary>

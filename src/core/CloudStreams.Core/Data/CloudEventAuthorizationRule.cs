@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an authorization rule that applies to events produced by a specific source
 /// </summary>
 [DataContract]
-public class CloudEventAuthorizationRule
+public record CloudEventAuthorizationRule
 {
 
     /// <summary>

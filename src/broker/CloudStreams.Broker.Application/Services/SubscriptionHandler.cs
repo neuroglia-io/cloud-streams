@@ -45,25 +45,25 @@ public class SubscriptionHandler
     /// <param name="eventStoreProvider">The service used to store <see cref="CloudEvent"/>s</param>
     /// <param name="resourceRepository">The service used to manage <see cref="IResource"/>s</param>
     /// <param name="subscriptionController">The service used to control <see cref="Core.Data.Subscription"/> resources</param>
-    /// <param name="brokerResourceMonitor">The service used to monitor the current <see cref="Core.Data.Broker"/></param>
+    /// <param name="broker">The service used to monitor the current <see cref="Core.Data.Broker"/></param>
     /// <param name="expressionEvaluatorProvider">The service used to evaluate runtime expressions</param>
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
     /// <param name="subscription">The <see cref="Core.Data.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
     public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IEventStoreProvider eventStoreProvider, IRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
-        IResourceMonitor<Core.Data.Broker> brokerResourceMonitor, IExpressionEvaluatorProvider expressionEvaluatorProvider, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
+        IResourceMonitor<Core.Data.Broker> broker, IExpressionEvaluatorProvider expressionEvaluatorProvider, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.HostApplicationLifetime = hostApplicationLifetime;
         this.EventStoreProvider = eventStoreProvider;
         this.ResourceRepository = resourceRepository;
         this.SubscriptionController = subscriptionController;
-        this.BrokerResourceMonitor = brokerResourceMonitor;
+        this.Broker = broker;
         this.ExpressionEvaluatorProvider = expressionEvaluatorProvider;
         this.CloudEventValidators = cloudEventValidators;
         this.HttpClient = httpClient;
         this.Subscription = subscription;
-        this.DefaultRetryPolicy = this.BrokerResourceMonitor.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
+        this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
         hostApplicationLifetime.ApplicationStopping.Register(async () => await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Inactive).ConfigureAwait(false));
     }
 
@@ -95,7 +95,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the service used to monitor the current <see cref="Core.Data.Broker"/>
     /// </summary>
-    protected IResourceMonitor<Core.Data.Broker> BrokerResourceMonitor { get; }
+    protected IResourceMonitor<Core.Data.Broker> Broker { get; }
 
     /// <summary>
     /// Gets the service used to evaluate runtime expressions
@@ -191,7 +191,7 @@ public class SubscriptionHandler
                     .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable())
             ))
             .Subscribe(this.CancellationToken);
-        this.BrokerResourceMonitor
+        this.Broker
             .Select(e => e.Resource.Spec.Dispatch?.RetryPolicy)
             .DistinctUntilChanged()
             .Subscribe(policy => this.DefaultRetryPolicy = policy ?? new HttpClientRetryPolicy(), this.CancellationToken);
@@ -219,12 +219,12 @@ public class SubscriptionHandler
             this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
             if (this.Subscription.Spec.Partition == null)
             {
-                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
+                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing));
                 this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
             }
             else
             {
-                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent());
+                this.CloudEventStream = (await this.EventStoreProvider.GetEventStore().SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Select(e => e.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing));
                 this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
             }
             this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
@@ -444,7 +444,7 @@ public class SubscriptionHandler
                     await Task.Delay(50);
                     continue;
                 }
-                var e = record.ToCloudEvent();
+                var e = record.ToCloudEvent(this.Broker.Resource.Spec?.Dispatch?.Sequencing);
                 await this.DispatchAsync(e, true, false).ConfigureAwait(false);
                 currentOffset++;
             }

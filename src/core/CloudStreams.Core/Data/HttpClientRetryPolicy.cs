@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure the retry policy for an http client
 /// </summary>
 [DataContract]
-public class HttpClientRetryPolicy
+public record HttpClientRetryPolicy
     : RetryPolicy
 {
 

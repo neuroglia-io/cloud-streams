@@ -11,25 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo.Serialization.Json;
-
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all strategies for resolving cloud event metadata properties
+/// Enumerates default sequencing strategies for cloud events
 /// </summary>
-[TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(JsonStringEnumConverterFactory))]
-public enum CloudEventMetadataPropertyResolutionStrategy
+public static class CloudEventSequencingStrategy
 {
+
     /// <summary>
-    /// Indicates that the metadata property is extracted from a context attribute
+    /// Indicates that cloud events should not be sequenced by CloudStreams
     /// </summary>
-    [EnumMember(Value = "attribute")]
-    Attribute = 1,
+    public const string None = "none";
     /// <summary>
-    /// Indicates that the metadata property is extracted by evaluating a runtime expression against the event
+    /// Indicates that cloud events should be sequenced by CloudStreams using the specified context attribute
     /// </summary>
-    [EnumMember(Value = "expression")]
-    Expression = 2
+    public const string Attribute = "attribute";
+
 }

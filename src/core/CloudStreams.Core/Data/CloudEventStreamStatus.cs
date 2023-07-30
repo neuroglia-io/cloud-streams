@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to describe the status of a cloud event stream
 /// </summary>
 [DataContract]
-public class CloudEventStreamStatus
+public record CloudEventStreamStatus
 {
 
     /// <summary>

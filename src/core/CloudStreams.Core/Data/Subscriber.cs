@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure the consumer of cloud events produced by a subscription
 /// </summary>
 [DataContract]
-public class Subscriber
+public record Subscriber
 {
 
     /// <summary>

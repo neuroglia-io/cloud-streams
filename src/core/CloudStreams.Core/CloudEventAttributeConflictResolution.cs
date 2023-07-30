@@ -11,25 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo.Serialization.Json;
-
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates all strategies for resolving cloud event metadata properties
+/// Enumerates default resolution strategies to adopt when handling conflict with existing cloud event context attributes
 /// </summary>
-[TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(JsonStringEnumConverterFactory))]
-public enum CloudEventMetadataPropertyResolutionStrategy
+public static class CloudEventAttributeConflictResolution
 {
+
     /// <summary>
-    /// Indicates that the metadata property is extracted from a context attribute
+    /// Indicates that the value of the existing attribute should be overwriten
     /// </summary>
-    [EnumMember(Value = "attribute")]
-    Attribute = 1,
+    public const string Overwrite = "overwrite";
     /// <summary>
-    /// Indicates that the metadata property is extracted by evaluating a runtime expression against the event
+    /// Indicates that the value be writen to a fallback attribute when the target attribute exists
     /// </summary>
-    [EnumMember(Value = "expression")]
-    Expression = 2
+    public const string Fallback = "fallback";
+
 }

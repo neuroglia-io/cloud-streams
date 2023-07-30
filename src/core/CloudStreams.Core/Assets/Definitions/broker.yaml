@@ -82,6 +82,49 @@ spec:
                           type: integer
                       required:
                         - backoffDuration
+                    sequencing:
+                      type: object
+                      properties:
+                        strategy:
+                          type: string
+                          enum: [ 'none', 'attribute' ]
+                        attributeName:
+                          type: string
+                          format: '^[a-z0-9]{3,20}$'
+                        attributeConflictResolution:
+                          type: string
+                          enum: [ 'overwrite', 'fallback' ]
+                        fallbackAttributeName:
+                          type: string
+                          format: '^[a-z0-9]{3,20}$'
+                      oneOf:
+                        - properties:
+                            strategy:
+                              enum: 
+                                - none
+                        - properties:
+                            strategy: 
+                              enum: 
+                                - attribute
+                            attributeConflictResolution:
+                              enum:
+                                - overwrite
+                            required:
+                            - type
+                            - attributeConflictResolution
+                            - attributeName
+                        - properties:
+                            strategy:
+                              enum: 
+                                - attribute
+                            attributeConflictResolution:
+                              enum:
+                                - fallback
+                            required:
+                            - type
+                            - attributeConflictResolution
+                            - attributeName
+                            - fallbackAttributeName
                 service:
                   type: object
                   properties:

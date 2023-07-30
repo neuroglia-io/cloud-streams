@@ -17,7 +17,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure cloud event validation
 /// </summary>
 [DataContract]
-public class CloudEventValidationPolicy
+public record CloudEventValidationPolicy
 {
 
     /// <summary>

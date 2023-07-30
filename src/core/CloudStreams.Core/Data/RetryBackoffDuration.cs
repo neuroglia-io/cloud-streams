@@ -19,7 +19,7 @@ namespace CloudStreams.Core.Data;
 /// Represents an object used to configure a retry backoff duration
 /// </summary>
 [DataContract]
-public class RetryBackoffDuration
+public record RetryBackoffDuration
 {
 
     /// <summary>
