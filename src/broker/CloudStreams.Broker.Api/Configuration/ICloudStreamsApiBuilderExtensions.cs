@@ -15,6 +15,7 @@ using CloudStreams.Broker.Application.Configuration;
 using CloudStreams.Broker.Application.Services;
 using CloudStreams.Core.Infrastructure.Configuration;
 using Hylo.Infrastructure;
+using Hylo.Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CloudStreams.Broker.Api.Configuration;
@@ -38,8 +39,8 @@ public static class ICloudStreamsApiBuilderExtensions
 
         builder.WithServiceName(options.Name);
         builder.Services.Configure<BrokerOptions>(builder.Configuration);
-        builder.Services.AddResourceController<Subscription>();
         builder.Services.TryAddSingleton<SubscriptionManager>();
+        builder.Services.AddSingleton<IResourceController<Subscription>>(provider => provider.GetRequiredService<SubscriptionManager>());
         builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
 
         return builder;
