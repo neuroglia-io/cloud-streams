@@ -273,7 +273,7 @@ public class SubscriptionHandler
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         if (attributeFilters == null) throw new ArgumentNullException(nameof(attributeFilters));
-        var attributes = e.ToDictionary()!.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+        var attributes = e.Metadata.ContextAttributes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
         foreach (var attributeFilter in attributeFilters)
         {
             if (!attributes.TryGetValue(attributeFilter.Key, out var attributeValue) || string.IsNullOrWhiteSpace(attributeValue)) return false;
@@ -374,6 +374,7 @@ public class SubscriptionHandler
     {
         if (e == null) throw new ArgumentNullException(nameof(e));
         var cloudEvent = e.ToCloudEvent(this.Broker.Resource.Spec.Dispatch?.Sequencing);
+        if (!this.Filters(e)) return;
         cloudEvent = await this.MutateAsync(cloudEvent).ConfigureAwait(false);
         await this.DispatchAsync(cloudEvent, e.Sequence, retryOnError, catchUpWhenAvailable).ConfigureAwait(false);
     }
