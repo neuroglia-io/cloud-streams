@@ -48,13 +48,13 @@ public class ReadCloudEventStreamQueryHandler
     : IQueryHandler<ReadEventStreamQuery, IAsyncEnumerable<object>>
 {
 
+    readonly IEventStoreProvider _eventStoreProvider;
+
     /// <inheritdoc/>
     public ReadCloudEventStreamQueryHandler(IEventStoreProvider eventStoreProvider)
     {
         this._eventStoreProvider = eventStoreProvider;
     }
-
-    IEventStoreProvider _eventStoreProvider;
 
     /// <inheritdoc/>
     public Task<ApiResponse<IAsyncEnumerable<object>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)

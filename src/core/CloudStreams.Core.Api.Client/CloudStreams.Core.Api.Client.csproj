@@ -34,8 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hylo.Api.Application" Version="0.7.4" />
-    <PackageReference Include="Hylo.Core" Version="0.7.4" />
+    <PackageReference Include="Hylo.Api.Application" Version="0.7.5" />
+    <PackageReference Include="Hylo.Core" Version="0.7.5" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.9" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="7.0.0" />

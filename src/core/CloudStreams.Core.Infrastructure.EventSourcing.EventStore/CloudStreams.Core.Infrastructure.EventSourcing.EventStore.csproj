@@ -54,7 +54,7 @@
     <PackageReference Include="EventStore.Client.Grpc.PersistentSubscriptions" Version="23.0.0" />
     <PackageReference Include="EventStore.Client.Grpc.ProjectionManagement" Version="23.0.0" />
     <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.0.0" />
-    <PackageReference Include="Hylo.Core" Version="0.7.4" />
+    <PackageReference Include="Hylo.Core" Version="0.7.5" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="7.0.0" />
   </ItemGroup>
 
