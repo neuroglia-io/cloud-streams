@@ -47,6 +47,7 @@ public record CloudEventSequencingConfiguration
     /// <summary>
     /// Gets/sets the way to handle conflicts with existing attributes
     /// </summary>
+    /// <remarks>See <see cref="CloudEventAttributeConflictResolution"/></remarks>
     [DataMember(Order = 3, Name = "attributeConflictResolution"), JsonPropertyOrder(3), JsonPropertyName("attributeConflictResolution"), YamlMember(Order = 3, Alias = "attributeConflictResolution")]
     public virtual string? AttributeConflictResolution { get; set; }
 

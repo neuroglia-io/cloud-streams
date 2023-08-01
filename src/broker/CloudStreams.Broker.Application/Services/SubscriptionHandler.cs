@@ -21,6 +21,7 @@ using Hylo.Infrastructure.Services;
 using Json.Patch;
 using Polly;
 using Polly.CircuitBreaker;
+using System.Net;
 using System.Net.Mime;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
@@ -220,13 +221,30 @@ public class SubscriptionHandler
             this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
             if (this.Subscription.Spec.Partition == null)
             {
+                try
+                {
+                    this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                }
+                catch (HyloException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
+                {
+                    this.StreamOffset = 0;
+                }
+                if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                 this.CloudEventStream = await this.EventStoreProvider.GetEventStore().SubscribeAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
-                this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
             }
             else
             {
+                try
+                {
+                    this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                }
+                catch (HyloException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
+                {
+                    this.StreamOffset = 0;
+                }
+                if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                 this.CloudEventStream = await this.EventStoreProvider.GetEventStore().SubscribeToPartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
-                this.StreamOffset = (await this.EventStoreProvider.GetEventStore().GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+
             }
             this._Subscription = this.CloudEventStream.Where(this.Filters).SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
             if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) _ = this.CatchUpAsync().ConfigureAwait(false);
@@ -451,10 +469,15 @@ public class SubscriptionHandler
             this.SubscriptionOutOfSync = true;
             this.StreamInitializationTaskCompletionSource ??= new();
             var currentOffset = this.Subscription.GetOffset();
-            if (currentOffset == StreamPosition.EndOfStream) currentOffset = (long)(await this.EventStoreProvider.GetEventStore().ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence;
+            var eventStore = this.EventStoreProvider.GetEventStore();
+            if (currentOffset == StreamPosition.EndOfStream) currentOffset = this.Subscription.Spec.Partition == null ?
+                    (long)(await eventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence
+                    : (long)(await eventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, this.StreamInitializationCancellationTokenSource!.Token).SingleAsync(this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence;
             do
             {
-                var record = await this.EventStoreProvider.GetEventStore().ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false);
+                var record = this.Subscription.Spec.Partition == null ?
+                    await eventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false)
+                    : await eventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Forwards, currentOffset, 1, this.StreamInitializationCancellationTokenSource!.Token).SingleOrDefaultAsync(this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false);
                 if (record == null)
                 {
                     await Task.Delay(50);
