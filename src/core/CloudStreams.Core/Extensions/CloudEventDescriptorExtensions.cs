@@ -30,6 +30,11 @@ public static class CloudEventDescriptorExtensions
     public static CloudEvent ToCloudEvent(this CloudEventDescriptor descriptor)
     {
         if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+        if(descriptor.Data is byte[] byteArray)
+        {
+            //lets assume the data is actually JSON
+
+        }
         var e = (JsonObject)Hylo.Serializer.Json.SerializeToNode(descriptor.Metadata.ContextAttributes)!;
         var data = Hylo.Serializer.Json.SerializeToNode(descriptor.Data);
         e[CloudEventAttributes.Data] = data;

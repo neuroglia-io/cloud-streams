@@ -13,13 +13,11 @@
 
 using CloudStreams.Core.Data;
 using Hylo.Properties;
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Mime;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Runtime.CompilerServices;
-using static EventStore.Client.StreamMessage;
 
 namespace CloudStreams.Core.Infrastructure.Services;
 
@@ -202,6 +200,7 @@ public class ESEventStore
             partition.GetStreamName(),
             offset.ToSubscriptionPosition(), 
             async (sub, e, cancellation) => subject.OnNext(await this.DeserializeResolvedEventAsync(e, cancellation).ConfigureAwait(false)), 
+            true,
             cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return Observable.Using
