@@ -34,12 +34,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hylo.Infrastructure" Version="0.7.5" />
-    <PackageReference Include="Hylo.Providers.FileSystem" Version="0.7.5" />
-    <PackageReference Include="JsonSchema.Net.Generation" Version="3.3.1" />
+    <PackageReference Include="Hylo.Infrastructure" Version="0.7.6" />
+    <PackageReference Include="Hylo.Providers.FileSystem" Version="0.7.6" />
+    <PackageReference Include="JsonSchema.Net.Generation" Version="3.3.2" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="7.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="7.0.10" />
   </ItemGroup>
 
   <ItemGroup>

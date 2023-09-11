@@ -23,11 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
-	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="7.0.0" />
+	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="7.1.0" />
 	<PackageReference Include="AspNetCore.HealthChecks.Uris" Version="7.0.0" />
-	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="7.0.9" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.9" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.18.1" />
+	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="7.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="7.0.10" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
