@@ -37,8 +37,8 @@
 
   <ItemGroup>
 	<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.7.1" />
-	<PackageReference Include="Hylo.Api.Application" Version="0.7.7" />
-	<PackageReference Include="Hylo.Core" Version="0.7.7" />
+	<PackageReference Include="Hylo.Api.Application" Version="0.7.8" />
+	<PackageReference Include="Hylo.Core" Version="0.7.8" />
     <PackageReference Include="MediatR" Version="12.1.1" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.6.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.6.0" />
