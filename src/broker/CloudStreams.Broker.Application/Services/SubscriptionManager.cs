@@ -72,7 +72,6 @@ public class SubscriptionManager
     /// <inheritdoc/>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        await base.StartAsync(cancellationToken).ConfigureAwait(false);
         Core.Data.Broker? broker = null;
         try
         {
@@ -94,6 +93,7 @@ public class SubscriptionManager
             }
             this.Broker = await this.Repository.MonitorAsync<Core.Data.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, false, cancellationToken).ConfigureAwait(false);
         }
+        await base.StartAsync(cancellationToken).ConfigureAwait(false);
         foreach (var subscription in this.Resources.Values.ToList())
         {
             await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
