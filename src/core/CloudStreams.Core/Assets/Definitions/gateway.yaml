@@ -242,14 +242,31 @@ spec:
                       type: string
                       format: url
                     healthChecks:
-                      request:
-                        method: GET
-                        path: /healthz
+                      type: object
+                      properties:
+                        request:
+                          type: object
+                          properties:
+                            method:
+                              type: string
+                            path:
+                              type: string
+                            headers:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            body:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                          required: [ method, path ]
+                        interval:
+                          type: string
+                          pattern: '/^P([0-9]+(?:[,\.][0-9]+)?Y)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?D)?(?:T([0-9]+(?:[,\.][0-9]+)?H)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?S)?)?$/'
+                      required: [ request ]
                   required:
                     - uri
             status:
               type: object
           required:
             - spec
-        subresources:
-          status: {}
+      subresources:
+        status: {}
