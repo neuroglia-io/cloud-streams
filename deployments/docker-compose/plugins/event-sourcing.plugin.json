@@ -1,4 +1,0 @@
-﻿{
-  "assemblyFilePath": "/app/bin/Debug/net7.0/plugins/event-sourcing/CloudStreams.Core.Infrastructure.EventSourcing.EventStore.dll",
-  "typeName": "CloudStreams.Core.Infrastructure.Services.ESEventStoreProvider"
-}
