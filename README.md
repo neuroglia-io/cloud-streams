@@ -6,6 +6,8 @@
 ## Contents
 
 - [About](#about)
+	+ [Features](#features)
+	+ [Benefits](#benefits)
 - [Documentation](#documentation)
 	+ [Fundamentals](#fundamentals)
 	+ [Getting started](#getting-started)
