@@ -19,7 +19,7 @@ builder.Configuration.AddEnvironmentVariables(GatewayOptions.EnvironmentVariable
 builder.UseCloudStreams(builder =>
 {
     builder.UseCoreApi();
-    builder.RegisterApplicationPart<CloudEventsController>();
+    builder.RegisterApplicationPart<EventsController>();
     builder.RegisterMediationAssembly<ConsumeEventCommand>();
 });
 

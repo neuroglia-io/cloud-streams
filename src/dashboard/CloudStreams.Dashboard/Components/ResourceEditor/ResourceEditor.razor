@@ -3,10 +3,11 @@
 @typeparam TResource where TResource : Resource, new()
 @inherits StatefulComponent<ResourceEditorStore<TResource>, ResourceEditorState<TResource>>
 @inject IMonacoEditorHelper MonacoEditorHelper
+@inject IJSRuntime JSRuntime
 
 <div class="container-fluid d-flex flex-grow flex-column">
     <div class="row flex-grow">
-        <PreferedLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
+        <PreferredLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
         <StandaloneCodeEditor @ref="textBasedEditor"
             ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(this.textEditorValue, false, this.MonacoEditorHelper.PreferredLanguage)"
             OnDidInit="OnTextBasedEditorInit"
@@ -147,10 +148,10 @@
     private async Task OnTextBasedEditorInit()
     {
         var resourceUri = $"inmemory://{typeof(TResource).Name.ToLower()}";
-        this.textEditorModel = await Global.GetModel(resourceUri);
+        this.textEditorModel = await Global.GetModel(this.JSRuntime, resourceUri);
         if (this.textEditorModel == null)
         {
-            this.textEditorModel = await Global.CreateModel(this.textEditorValue, this.MonacoEditorHelper.PreferredLanguage, resourceUri);
+            this.textEditorModel = await Global.CreateModel(this.JSRuntime, this.textEditorValue, this.MonacoEditorHelper.PreferredLanguage, resourceUri);
             await this.textBasedEditor!.SetModel(this.textEditorModel);
         }
         else
@@ -197,7 +198,7 @@
         if (this.textBasedEditor != null && this.textEditorModel != null)
         {
             //TextModel model = await this.textBasedEditor!.GetModel();
-            await Global.SetModelLanguage(this.textEditorModel, this.MonacoEditorHelper.PreferredLanguage);
+            await Global.SetModelLanguage(this.JSRuntime, this.textEditorModel, this.MonacoEditorHelper.PreferredLanguage);
         }
     }
 

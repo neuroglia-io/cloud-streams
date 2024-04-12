@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OutputType>Exe</OutputType>
 	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<DockerFileTag>cloud-streams-broker</DockerFileTag>
 	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 	<DockerfileContext>..\..\..</DockerfileContext>
   </PropertyGroup>

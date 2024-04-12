@@ -9,8 +9,8 @@ namespace CloudStreams.Gateway.Controllers;
 /// Represents the API controller used to manage events
 /// </summary>
 /// <param name="mediator">The service used to mediate calls</param>
-[Route("api/gateway/v1/cloud-events")]
-public class CloudEventsController(IMediator mediator)
+[Route("api/events")]
+public class EventsController(IMediator mediator)
     : Controller
 {
 

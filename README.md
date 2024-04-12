@@ -69,6 +69,74 @@ CloudStreams [subscriptions](https://github.com/neuroglia-io/cloud-streams/wiki/
 
 ### Getting started
 
+The easiest way to start the solution is using ``docker-compose``. 
+
+To to this, clone the repository:
+
+```shell
+git clone https://github.com/neuroglia-io/cloud-streams.git
+```
+
+Navigate to the resulting `/cloud-streams/` directory, then run the following command:
+
+```shell
+docker-compose -f "deployments/docker-compose/docker-compose.yml" up
+```
+
+Now that everything is up and running, you can start publishing cloud events using POST requests on the gateway's ingestion endpoint, at `http://localhost:8080/api/events/pub`:
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/api/events/pub' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/cloudevents+json' \
+  -d '{
+  "id": "1234567890",
+  "specversion": "1.0",
+  "source": "https://foo.bar.com",
+  "type": "bar.foo",
+  "subject": "foobar",
+  "dataschema": "string",
+  "data": {
+    "foo": "bar"
+  }
+}'
+```
+
+You can start consuming cloud events by creating a new subscription, which can be done via [Dashboard](http://localhost:8080/subscriptions), or by executing a simple POST request:
+
+```shell
+curl -X 'POST' \
+  'http://localhost:8080/api/resources/v1/subscriptions?dryRun=false' \
+  -H 'accept: text/plain' \
+  -H 'Content-Type: text/json' \
+  -d '{
+  "metadata": {
+    "name": "my-subscription"
+  },
+  "spec": {
+    "subscriber": {
+      "uri": "https://webhook.site/00000000-0000-0000-0000-000000000000"
+    },
+	"stream":{
+	  "offset": 0
+	}
+  }
+}'
+```
+
+The preceeding sample creates a new subscription to all events (no partition has been defined and no filter has been set). Because we have defined the stream offset at '0', when will start receiving all events ever published, even the ones published before the creation of the subscription. 
+
+Note that, by default, subscriptions will only process cloud events published **after** their creation.
+
+*For more information on subscriptions, please check the [wiki](https://github.com/neuroglia-io/cloud-streams/wiki/Fundamentals#subscriptions)📚.*
+
+<hr>
+
+The `Dashboard UI` is served by the `gateway` and is reachable at [http://localhost:8080](http://localhost:8080/).
+
+The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhost:8080/api/doc](http://localhost:8080/api/doc).
+
 ### API Reference
 
 *Please refer to the [wiki](https://github.com/neuroglia-io/cloud-streams/wiki/API-Reference)📚.*

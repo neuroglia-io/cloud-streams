@@ -21,7 +21,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 
-    List<string> _lockedKeys = [];
+    readonly List<string> _lockedKeys = [];
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
