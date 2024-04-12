@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using Neuroglia.Data.Infrastructure.EventSourcing;
 using Neuroglia.Data.Infrastructure.EventSourcing.Services;
 using Neuroglia.Data.Infrastructure.ResourceOriented.Properties;
@@ -13,26 +12,22 @@ namespace CloudStreams.Core.Application.Services;
 /// <summary>
 /// Represents the default implementation of the <see cref="ICloudEventStore"/> interface
 /// </summary>
-/// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
+/// <param name="eventStore">The underlying service used to source events</param>
+/// <param name="projectionManager">The service used to manage event-driven projections</param>
 /// <param name="serializer">The service used to serialize/deserialize data to/from JSON</param>
-public class CloudEventStore(IServiceProvider serviceProvider, IJsonSerializer serializer)
+public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer)
     : IHostedService, ICloudEventStore
 {
 
     /// <summary>
-    /// Gets the current <see cref="IServiceProvider"/>
-    /// </summary>
-    protected IServiceProvider ServiceProvider { get; } = serviceProvider;
-
-    /// <summary>
     /// Gets the underlying service used to source events
     /// </summary>
-    protected IEventStore EventStore => this.ServiceProvider.GetRequiredService<IEventStore>();
+    protected IEventStore EventStore => eventStore;
 
     /// <summary>
     /// Gets the service used to manage event-driven projections
     /// </summary>
-    protected IProjectionManager ProjectionManager => this.ServiceProvider.GetRequiredService<IProjectionManager>();
+    protected IProjectionManager ProjectionManager => projectionManager;
 
     /// <summary>
     /// Gets the service used to serialize/deserialize data to/from JSON
@@ -178,39 +173,55 @@ public class CloudEventStore(IServiceProvider serviceProvider, IJsonSerializer s
         try { if (await this.ProjectionManager.GetStatusAsync(Projections.PartitionBySource, cancellationToken: cancellationToken) != null) return; }
         catch { }
 
-        await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySource, 
-            projection => projection
-                .FromStream(Streams.All)
-                .When((state, e) => e.Metadata!.Get("source") != null)
-                .Then((state, e) => Projection.LinkEventTo("$by-source-" + e.Metadata!.Get("source"), e)),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySource,
+                projection => projection
+                    .FromStream(Streams.All)
+                    .When((state, e) => e.Metadata!.Get("source") != null)
+                    .Then((state, e) => Projection.LinkEventTo("$by-source-" + e.Metadata!.Get("source"), e)),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch { }
 
-        await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySubject,
+        try
+        {
+            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySubject,
             projection => projection
                 .FromStream(Streams.All)
                 .When((state, e) => e.Metadata!.Get("subject") != null)
                 .Then((state, e) => Projection.LinkEventTo("$by-subject-" + e.Metadata!.Get("subject"), e)),
             cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch { }
 
-        await this.ProjectionManager.CreateAsync<object>(Projections.PartitionByCausationId,
+        try
+        {
+            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionByCausationId,
            projection => projection
                 .FromStream(Streams.All)
                 .When((state, e) => e.Metadata!.Get("$causationId") != null)
                 .Then((state, e) => Projection.LinkEventTo("$by-causation-" + e.Metadata!.Get("$causationId"), e)),
             cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch { }
 
         foreach (var partitionType in Enum.GetValues<CloudEventPartitionType>())
         {
             var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
             var metadataPath = typeName.Replace("by", string.Empty).ToCamelCase();
             if (partitionType == CloudEventPartitionType.ByCorrelationId || partitionType == CloudEventPartitionType.ByCausationId) metadataPath = "$" + metadataPath.Replace("-id", "Id");
-            await this.ProjectionManager.CreateAsync<List<object>>(Projections.CloudEventPartitionsMetadataPrefix + typeName,
-                 projection => projection
-                    .FromStream(Streams.All)
-                    .Given(() => new List<object>())
-                    .When((state, e) => e.Metadata!.Get(metadataPath) != null && !state.Contains(e.Metadata!.Get(metadataPath)))
-                    .Then((state, e) => state.Add(e.Metadata!.Get(metadataPath))),
-                 cancellationToken: cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await this.ProjectionManager.CreateAsync<List<object>>(Projections.CloudEventPartitionsMetadataPrefix + typeName,
+                     projection => projection
+                        .FromStream(Streams.All)
+                        .Given(() => new List<object>())
+                        .When((state, e) => e.Metadata!.Get(metadataPath) != null && !state.Contains(e.Metadata!.Get(metadataPath)))
+                        .Then((state, e) => state.Add(e.Metadata!.Get(metadataPath))),
+                     cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch { }
         }
     }
 

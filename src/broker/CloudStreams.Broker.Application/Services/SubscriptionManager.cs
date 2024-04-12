@@ -21,6 +21,8 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 
+    List<string> _lockedKeys = [];
+
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
     /// </summary>
@@ -113,6 +115,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     {
         if (this.Broker == null) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+        if (this._lockedKeys.Contains(key)) return;
         if (this.Options.LabelSelectors == null || this.Options.LabelSelectors.All(s => s.Selects(subscription)) == true)
         {
             if (this.Subscriptions.TryGetValue(key, out _)) return;
@@ -141,9 +144,11 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     protected virtual async Task OnSubscriptionCreatedAsync(Subscription subscription)
     {
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+        this._lockedKeys.Add(key);
         var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
         await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
         this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
+        this._lockedKeys.Remove(key);
     }
 
     /// <summary>

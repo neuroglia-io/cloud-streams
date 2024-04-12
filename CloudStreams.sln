@@ -21,17 +21,24 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Core.Api", "sr
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Gateway.Api", "src\gateway\CloudStreams.Gateway.Api\CloudStreams.Gateway.Api.csproj", "{2F904542-163A-49A8-832A-3545A962234C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudStreams.Gateway.Application", "src\gateway\CloudStreams.Gateway.Application\CloudStreams.Gateway.Application.csproj", "{07217222-82B9-490E-B722-4C836A84A0C7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Gateway.Application", "src\gateway\CloudStreams.Gateway.Application\CloudStreams.Gateway.Application.csproj", "{07217222-82B9-490E-B722-4C836A84A0C7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudStreams.Broker.Application", "src\broker\CloudStreams.Broker.Application\CloudStreams.Broker.Application.csproj", "{09481105-759E-4EC7-AF2E-1343ECF953B2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Broker.Application", "src\broker\CloudStreams.Broker.Application\CloudStreams.Broker.Application.csproj", "{09481105-759E-4EC7-AF2E-1343ECF953B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudStreams.Broker.Api", "src\broker\CloudStreams.Broker.Api\CloudStreams.Broker.Api.csproj", "{92EDB067-DD65-4106-A0DA-5DC4B4386DFD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Broker.Api", "src\broker\CloudStreams.Broker.Api\CloudStreams.Broker.Api.csproj", "{92EDB067-DD65-4106-A0DA-5DC4B4386DFD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dashboard", "dashboard", "{BDA26004-D077-442C-A4F7-F389D5AC9FE5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Dashboard", "src\dashboard\CloudStreams.Dashboard\CloudStreams.Dashboard.csproj", "{DEF277AF-8024-49D8-BD80-338A79431F8C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Dashboard.StateManagement", "src\dashboard\CloudStreams.Dashboard.StateManagement\CloudStreams.Dashboard.StateManagement.csproj", "{7BD5FCBA-1D5A-4DF2-BDC3-5672D3507C06}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{129B2507-0C27-4324-AFC9-2C802E25E51D}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		code-of-conduct.md = code-of-conduct.md
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -27,7 +27,7 @@ public static class IServiceCollectionExtensions
         {
             var options = provider.GetRequiredService<IOptions<CoreApiClientOptions>>().Value;
             var connection = new HubConnectionBuilder()
-                .WithUrl($"{options.BaseAddress}api/resource-management/v1/ws/watch")
+                .WithUrl($"{options.BaseAddress}api/ws/resources/watch")
                 .WithAutomaticReconnect()
                 .Build();
             return new ResourceWatchEventHubClient(connection);
