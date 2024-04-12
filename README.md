@@ -123,7 +123,7 @@ curl -X 'POST' \
 	}
   }
 }'
-```
+``` 
 
 The preceeding sample creates a new subscription to all events (no partition has been defined and no filter has been set). Because we have defined the stream offset at '0', when will start receiving all events ever published, even the ones published before the creation of the subscription. 
 
