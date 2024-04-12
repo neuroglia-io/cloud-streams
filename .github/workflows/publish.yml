@@ -17,7 +17,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: 8.0.x
       - name: Restore dependencies
         run: dotnet restore "${{ env.SOLUTION }}"
       - name: Build
@@ -25,8 +25,8 @@ jobs:
       - name: Push1
         run: dotnet nuget push "./src/*/*/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
-  publish-api-server-image:
-    name: Publish API Server image
+  publish-api-image:
+    name: Publish API image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-api-server
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-api
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -49,7 +49,7 @@ jobs:
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
           context: .
-          file: './src/core/CloudStreams.Core.Api.Server/Dockerfile'
+          file: './src/core/CloudStreams.Core.Api/Dockerfile'
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -78,7 +78,7 @@ jobs:
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
           context: .
-          file: './src/broker/CloudStreams.Broker.Api.Server/Dockerfile'
+          file: './src/broker/CloudStreams.Broker.Api/Dockerfile'
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -107,13 +107,13 @@ jobs:
         uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
         with:
           context: .
-          file: './src/gateway/CloudStreams.Gateway.Api.Server/Dockerfile'
+          file: './src/gateway/CloudStreams.Gateway.Api/Dockerfile'
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  publish-api-server-bin:
-    name: Publish API Server Binaries
+  publish-api-bin:
+    name: Publish API Binaries
     strategy:
       matrix:
         kind: ['linux', 'windows', 'macOS']
@@ -134,7 +134,7 @@ jobs:
       - name: Setup
         uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: 8.0.x
       - name: Restore
         run: dotnet restore
       - name: Build
@@ -143,7 +143,7 @@ jobs:
           tag=$(git describe --tags --abbrev=0)
           release_name="cloud-streams-broker-${{ matrix.target }}"
           # Publish
-          dotnet publish src/core/CloudStreams.Core.Api.Server/CloudStreams.Core.Api.Server.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
+          dotnet publish src/core/CloudStreams.Core.Api/CloudStreams.Core.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
           # Pack
           if [ "${{ matrix.target }}" == "win-x64" ]; then
             # Pack for Windows
@@ -157,7 +157,7 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
-          files: "cloud-streams-api-server*"
+          files: "cloud-streams-api*"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -192,7 +192,7 @@ jobs:
           tag=$(git describe --tags --abbrev=0)
           release_name="cloud-streams-broker-${{ matrix.target }}"
           # Publish
-          dotnet publish src/broker/CloudStreams.Broker.Api.Server/CloudStreams.Broker.Api.Server.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
+          dotnet publish src/broker/CloudStreams.Broker.Api/CloudStreams.Broker.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
           # Pack
           if [ "${{ matrix.target }}" == "win-x64" ]; then
             # Pack for Windows
@@ -241,7 +241,7 @@ jobs:
           tag=$(git describe --tags --abbrev=0)
           release_name="cloud-streams-gateway-${{ matrix.target }}"
           # Publish
-          dotnet publish src/gateway/CloudStreams.Gateway.Api.Server/CloudStreams.Gateway.Api.Server.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
+          dotnet publish src/gateway/CloudStreams.Gateway.Api/CloudStreams.Gateway.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
           # Pack
           if [ "${{ matrix.target }}" == "win-x64" ]; then
             # Pack for Windows
