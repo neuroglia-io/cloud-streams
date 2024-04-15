@@ -20,6 +20,9 @@ namespace CloudStreams.Core.Resources;
 public record RetryPolicy
 {
 
+    static readonly RetryBackoffDuration DefaultRetryBackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(3));
+    const int DefaultMaxAttempts = 5;
+
     /// <summary>
     /// Initializes a new <see cref="RetryPolicy"/>
     /// </summary>
@@ -32,7 +35,7 @@ public record RetryPolicy
     /// <param name="maxAttempts"></param>
     public RetryPolicy(RetryBackoffDuration backoffDuration, int? maxAttempts = null)
     {
-        this.BackoffDuration = backoffDuration ?? throw new ArgumentNullException(nameof(backoffDuration));
+        this.BackoffDuration = backoffDuration ?? DefaultRetryBackoffDuration;
         this.MaxAttempts = maxAttempts;
     }
 

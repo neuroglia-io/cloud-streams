@@ -69,8 +69,8 @@ public class CloudEventHubDispatcher(IServiceProvider serviceProvider, ILogger<C
             }
             catch (StreamNotFoundException)
             {
-                var delay = 3000;
-                this.Logger.LogWarning("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
+                var delay = 5000;
+                this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
                 await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
             }
         }

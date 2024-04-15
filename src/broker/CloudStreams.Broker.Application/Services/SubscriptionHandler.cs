@@ -228,7 +228,20 @@ public class SubscriptionHandler
                     this.StreamOffset = 0;
                 }
                 if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
-                this.CloudEventStream = await this.EventStore.ObserveAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                while (true)
+                {
+                    try
+                    {
+                        this.CloudEventStream = await this.EventStore.ObserveAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                        break;
+                    }
+                    catch (StreamNotFoundException)
+                    {
+                        var delay = 5000;
+                        this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
+                        await Task.Delay(delay).ConfigureAwait(false);
+                    }
+                }
             }
             else
             {
@@ -241,8 +254,20 @@ public class SubscriptionHandler
                     this.StreamOffset = 0;
                 }
                 if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
-                this.CloudEventStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
-
+                while (true)
+                {
+                    try
+                    {
+                        this.CloudEventStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                        break;
+                    }
+                    catch (StreamNotFoundException)
+                    {
+                        var delay = 5000;
+                        this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
+                        await Task.Delay(delay).ConfigureAwait(false);
+                    }
+                }  
             }
             this._Subscription = this.CloudEventStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
             if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) _ = this.CatchUpAsync().ConfigureAwait(false);
@@ -441,9 +466,9 @@ public class SubscriptionHandler
 
             AsyncPolicy retryPolicy = policyConfiguration.MaxAttempts.HasValue ?
                 Policy.Handle(exceptionPredicate)
-                    .WaitAndRetryAsync(policyConfiguration.MaxAttempts.Value, policyConfiguration.BackoffDuration.ForAttempt)
+                    .WaitAndRetryAsync(policyConfiguration.MaxAttempts.Value, attempt => policyConfiguration.BackoffDuration == null ? TimeSpan.FromSeconds(3) : policyConfiguration.BackoffDuration.ForAttempt(attempt))
                 : Policy.Handle(exceptionPredicate)
-                    .WaitAndRetryForeverAsync(policyConfiguration.BackoffDuration.ForAttempt);
+                    .WaitAndRetryForeverAsync(attempt => policyConfiguration.BackoffDuration == null ? TimeSpan.FromSeconds(3) : policyConfiguration.BackoffDuration.ForAttempt(attempt));
 
             retryPolicy = circuitBreakerPolicy == null ? retryPolicy : retryPolicy.WrapAsync(circuitBreakerPolicy);
             await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, offset, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);

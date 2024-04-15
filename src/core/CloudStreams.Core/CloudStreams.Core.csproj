@@ -30,9 +30,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Neuroglia.Data.Infrastructure.EventSourcing.Abstractions" Version="4.9.5" />
-    <PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented" Version="4.9.5" />
-    <PackageReference Include="Neuroglia.Eventing.CloudEvents" Version="4.9.5" />
+    <PackageReference Include="Neuroglia.Data.Infrastructure.EventSourcing.Abstractions" Version="4.9.6" />
+    <PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented" Version="4.9.6" />
+    <PackageReference Include="Neuroglia.Eventing.CloudEvents" Version="4.9.6" />
   </ItemGroup>
 
 </Project>
