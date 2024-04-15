@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -21,6 +21,7 @@
 	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 	<DockerfileContext>..\..\..</DockerfileContext><IsPackable>true</IsPackable>
 	<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+    <UserSecretsId>909f35f5-c6c0-4abd-b2e2-699b307cd4aa</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

@@ -8,7 +8,8 @@
         "CLOUDSTREAMS_GATEWAY_NAME": "gateway-1"
       },
       "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5139"
+      "applicationUrl": "http://localhost:5139",
+      "inspectUri": "{wsProtocol}://{url.hostname}:{url.port}/_framework/debug/ws-proxy?browser={browserInspectUri}"
     },
     "IIS Express": {
       "commandName": "IISExpress",

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -16,6 +16,7 @@
 	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
 	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <UserSecretsId>7bc875f7-ac1c-432d-93b2-7c228be79c8c</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
