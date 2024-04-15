@@ -4,7 +4,20 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+	<VersionPrefix>0.14.0</VersionPrefix>
+	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+	<FileVersion>$(VersionPrefix)</FileVersion>
+	<NeutralLanguage>en</NeutralLanguage>
 	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+	<Copyright>Copyright © 2023-Present The Cloud Streams Authors. All rights reserved.</Copyright>
+	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<DockerFileTag>cloud-streams/broker</DockerFileTag>
 	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 	<DockerfileContext>..\..\..</DockerfileContext>
   </PropertyGroup>
