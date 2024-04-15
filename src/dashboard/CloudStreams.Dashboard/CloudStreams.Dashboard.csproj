@@ -13,14 +13,13 @@
 	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 	<Copyright>Copyright © 2023-Present The Cloud Streams Authors. All rights reserved.</Copyright>
 	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
 	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
 	<GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Blazor.Bootstrap" Version="2.1.0" />
+    <PackageReference Include="Blazor.Bootstrap" Version="2.2.0" />
     <PackageReference Include="BlazorMonaco" Version="3.2.0" />
     <PackageReference Include="JsonCons.Utilities" Version="1.0.0" />
     <PackageReference Include="JsonPatch.Net" Version="3.0.0" />
