@@ -29,7 +29,7 @@ public record ResourceManagementComponentState<TResource>
     /// <summary>
     /// Gets a <see cref="List{T}"/> that contains all cached <see cref="IResource"/>s
     /// </summary>
-    public List<TResource>? Resources { get; set; }
+    public EquatableList<TResource>? Resources { get; set; }
 
     /// <summary>
     /// Gets/sets a boolean value that indicates whether data is currently being gathered
