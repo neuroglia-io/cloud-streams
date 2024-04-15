@@ -163,7 +163,12 @@
         }
         var start = entries.First().Time!.Value;
         var end = entries.Last().Time!.Value;
-        var margin = end.Subtract(start).TotalMilliseconds / 20;
+        var delta = end.Subtract(start).TotalMilliseconds;
+        if (delta == 0)
+        {
+            delta = 20;
+        }
+        var margin = delta / 20;
         await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
     }
 

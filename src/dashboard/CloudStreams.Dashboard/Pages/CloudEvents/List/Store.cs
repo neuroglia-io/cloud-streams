@@ -110,7 +110,7 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         {
             readOptions = readOptions with { Partition = null };
         }
-        var totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
+        var totalCount = (int?)this.Get(state => state.TotalCount) ?? 0;
         if (readOptions.Direction == StreamReadDirection.Forwards)
         {
             readOptions.Offset = (readOptions.Offset ?? 0) + request.StartIndex;
