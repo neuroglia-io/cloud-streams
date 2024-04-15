@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
+using CloudStreams.Core.Resources;
 
 namespace CloudStreams.Core;
 
@@ -29,12 +29,13 @@ public static class RetryBackoffDurationExtensions
     /// <returns>A new <see cref="TimeSpan"/> that represents the backoff duration for the specified retry attempt</returns>
     public static TimeSpan ForAttempt(this RetryBackoffDuration duration, int attemptNumber)
     {
-        if(duration == null) throw new ArgumentNullException(nameof(duration));
+        ArgumentNullException.ThrowIfNull(duration);
+        var timeSpan = duration.Period.ToTimeSpan();
         return duration.Type switch
         {
-            RetryBackoffDurationType.Constant => duration.Period,
-            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent!.Value) * duration.Period,
-            RetryBackoffDurationType.Incremental => attemptNumber * duration.Period,
+            RetryBackoffDurationType.Constant => timeSpan,
+            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent!.Value) * timeSpan,
+            RetryBackoffDurationType.Incremental => attemptNumber * timeSpan,
             _ => throw new NotSupportedException($"The specified {nameof(RetryBackoffDurationType)} '{duration.Type}' is not supported")
         };
     }

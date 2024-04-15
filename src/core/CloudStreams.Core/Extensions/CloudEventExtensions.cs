@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,29 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
+using Neuroglia.Serialization;
 using System.Text;
+using System.Text.Json;
 
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Defines extensions for <see cref="CloudEvent"/>
+/// Defines extensions for <see cref="CloudEvent"/>s
 /// </summary>
 public static class CloudEventExtensions
 {
-
-    /// <summary>
-    /// Attempts to get the <see cref="CloudEvent"/> attribute with the specified name
-    /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to get the attribute of</param>
-    /// <param name="attributeName">The name of the context attribute to get</param>
-    /// <param name="value">The value of the <see cref="CloudEvent"/>'s attribute, if any</param>
-    /// <returns>A boolean indicating whether or not the <see cref="CloudEvent"/> containing the specified attribute</returns>
-    public static bool TryGetAttribute(this CloudEvent e, string attributeName, out object? value)
-    {
-        value = e.GetAttribute(attributeName);
-        return value != null;
-    }
 
     /// <summary>
     /// Gets the <see cref="CloudEvent"/>'s sequence
@@ -47,7 +35,7 @@ public static class CloudEventExtensions
         {
             string str => ulong.Parse(str),
             ulong num => num,
-            JsonElement jsonElem => Hylo.Serializer.Json.Deserialize<ulong?>(jsonElem),
+            JsonElement jsonElem => Neuroglia.Serialization.Json.JsonSerializer.Default.Deserialize<ulong?>(jsonElem),
             _ => null
         };
     }
@@ -56,33 +44,12 @@ public static class CloudEventExtensions
     /// Converts the <see cref="CloudEvent"/> into a new <see cref="HttpContent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to convert to a new <see cref="HttpContent"/></param>
+    /// <param name="serializer">The service used to serialize the <see cref="CloudEvent"/> to a new <see cref="HttpContent"/></param>
     /// <returns>The <see cref="CloudEvent"/>'s <see cref="HttpContent"/> representation</returns>
-    public static HttpContent ToHttpContent(this CloudEvent e)
+    public static HttpContent ToHttpContent(this CloudEvent e, IJsonSerializer? serializer = null)
     {
-        return new StringContent(Hylo.Serializer.Json.Serialize(e), Encoding.UTF8, CloudEventMediaTypeNames.CloudEventsJson);
-    }
-
-    /// <summary>
-    /// Gets the <see cref="CloudEvent"/>'s context attributes
-    /// </summary>
-    /// <param name="e">The <see cref="CloudEvent"/> to get the context attributes of</param>
-    /// <param name="includeExtensionAttributes">A boolean indicating whether or not to include extension attributes</param>
-    /// <returns>A new <see cref="IEnumerable{T}"/></returns>
-    public static IEnumerable<KeyValuePair<string, object>> GetContextAttributes(this CloudEvent e, bool includeExtensionAttributes = true)
-    {
-        yield return new(CloudEventAttributes.Id, e.Id);
-        yield return new(CloudEventAttributes.SpecVersion, e.SpecVersion);
-        if (e.Time.HasValue) yield return new(CloudEventAttributes.Time, e.Time);
-        yield return new(CloudEventAttributes.Source, e.Source);
-        yield return new(CloudEventAttributes.Type, e.Type);
-        if (!string.IsNullOrWhiteSpace(e.Subject)) yield return new(CloudEventAttributes.Subject, e.Subject);
-        if (!string.IsNullOrWhiteSpace(e.DataContentType)) yield return new(CloudEventAttributes.DataContentType, e.DataContentType);
-        if (e.DataSchema != null) yield return new(CloudEventAttributes.DataSchema, e.DataSchema);
-        if (!includeExtensionAttributes || e.ExtensionAttributes == null) yield break;
-        foreach (var extensionAttribute in e.ExtensionAttributes)
-        {
-            yield return extensionAttribute;
-        }
+        serializer ??= Neuroglia.Serialization.Json.JsonSerializer.Default;
+        return new StringContent(serializer.SerializeToText(e), Encoding.UTF8, CloudEventContentType.Json);
     }
 
 }

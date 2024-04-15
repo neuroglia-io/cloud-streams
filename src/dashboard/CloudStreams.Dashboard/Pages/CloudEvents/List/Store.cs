@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,30 +12,22 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Dashboard.StateManagement;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
-using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 
 /// <summary>
 /// Represents the Cloud Event List's <see cref="ComponentStore{TState}"/>
 /// </summary>
-public class CloudEventListStore
-    : ComponentStore<CloudEventListState>
+/// <remarks>
+/// Initializes a new <see cref="CloudEventListStore"/>
+/// </remarks>
+/// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
+public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
+        : ComponentStore<CloudEventListState>(new())
 {
 
-    ICloudStreamsCoreApiClient cloudStreamsApi;
-
-    /// <summary>
-    /// Initializes a new <see cref="CloudEventListStore"/>
-    /// </summary>
-    /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
-    public CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi) 
-        : base(new())
-    { 
-        this.cloudStreamsApi = cloudStreamsApi;
-    }
+    ICloudStreamsCoreApiClient cloudStreamsApi = cloudStreamsApi;
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
@@ -110,35 +102,26 @@ public class CloudEventListStore
     /// <returns>The resulting <see cref="ItemsProviderResult{TResult}"/></returns>
     public async ValueTask<ItemsProviderResult<CloudEvent>> ProvideCloudEvents(ItemsProviderRequest request)
     {
-        StreamReadOptions readOptions = this.Get(state => state.ReadOptions);
-        if (readOptions == null)
-        {
-            return new ItemsProviderResult<CloudEvent>(new List<CloudEvent>(), 0);
-        }
+        var readOptions = this.Get(state => state.ReadOptions);
+        if (readOptions == null) return new ItemsProviderResult<CloudEvent>([], 0);
         this.SetLoading(true);
         readOptions = readOptions with { };
         if (readOptions.Partition?.Type == null || readOptions.Partition?.Id == null)
         {
             readOptions = readOptions with { Partition = null };
         }
-        int totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
+        var totalCount = (int?)this.Get(state => state.TotalCount) ?? 100;
         if (readOptions.Direction == StreamReadDirection.Forwards)
         {
             readOptions.Offset = (readOptions.Offset ?? 0) + request.StartIndex;
         }
         else
         {
-            if ((readOptions.Offset??0) == 0 && request.StartIndex == 0)
-            {
-                readOptions.Offset = -1;
-            }
-            else
-            {
-                readOptions.Offset = Math.Max((readOptions.Offset ?? totalCount) - request.StartIndex, 0);
-            }
+            if ((readOptions.Offset??0) == 0 && request.StartIndex == 0) readOptions.Offset = -1;
+            else readOptions.Offset = Math.Max((readOptions.Offset ?? totalCount) - request.StartIndex, 0);
         }
         readOptions.Length = (ulong)request.Count;
-        List<CloudEvent> fetchedCloudEvents = new();
+        var fetchedCloudEvents = new List<CloudEvent>();
         if (readOptions.Length <= StreamReadOptions.MaxLength)
         {
             fetchedCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
@@ -146,7 +129,7 @@ public class CloudEventListStore
         else
         {
             bool fetchMore = true;
-            long offset = readOptions.Offset.Value;
+            var offset = readOptions.Offset.Value;
             do
             {
                 StreamReadOptions tempReadOptions = readOptions with { };

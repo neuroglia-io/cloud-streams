@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,22 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo.Api.Http;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
-
 namespace CloudStreams.Core.Api.Controllers;
 
 /// <summary>
 /// Represents the <see cref="ResourceApiController{TResource}"/> used to manage <see cref="Subscription"/>s
 /// </summary>
+/// <inheritdoc/>
 [Route("api/resources/v1/subscriptions")]
-public class SubscriptionsController
-    : ClusterResourceApiController<Subscription>
+public class SubscriptionsController(IMediator mediator)
+    : ClusterResourceApiController<Subscription>(mediator)
 {
-
-    /// <inheritdoc/>
-    public SubscriptionsController(IMediator mediator) : base(mediator) { }
-
 }

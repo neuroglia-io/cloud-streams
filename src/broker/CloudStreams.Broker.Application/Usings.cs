@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,4 +12,21 @@
 // limitations under the License.
 
 global using CloudStreams.Core;
-global using CloudStreams.Core.Data;
+global using CloudStreams.Core.Application;
+global using CloudStreams.Core.Application.Services;
+global using CloudStreams.Core.Resources;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Logging;
+global using Neuroglia;
+global using Neuroglia.Data;
+global using Neuroglia.Data.Expressions;
+global using Neuroglia.Data.Expressions.Services;
+global using Neuroglia.Data.Infrastructure.EventSourcing;
+global using Neuroglia.Data.Infrastructure.ResourceOriented;
+global using Neuroglia.Data.Infrastructure.ResourceOriented.Services;
+global using Neuroglia.Eventing.CloudEvents;
+global using Neuroglia.Reactive;
+global using Neuroglia.Serialization;
+global using System.Net;
+global using System.Net.Mime;
+global using System.Reactive.Linq;

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,53 +11,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using CloudStreams.Core.Infrastructure.Services;
-using Hylo.Api.Application;
-using System.Net;
+using CloudStreams.Core.Application.Services;
+using Neuroglia.Data.Infrastructure.EventSourcing;
 
 namespace CloudStreams.Core.Application.Queries.Streams;
 
 /// <summary>
 /// Represents the <see cref="IQuery{TResult}"/> used to list stored <see cref="CloudEvent"/>s
 /// </summary>
-public class ReadEventStreamQuery
-    : IQuery<IAsyncEnumerable<object>>
+/// <remarks>
+/// Initializes a new <see cref="ReadEventStreamQuery"/>
+/// </remarks>
+/// <param name="options">The object used to configure the query to perform</param>
+public class ReadEventStreamQuery(StreamReadOptions options)
+        : Query<IAsyncEnumerable<object>>
 {
-
-    /// <summary>
-    /// Initializes a new <see cref="ReadEventStreamQuery"/>
-    /// </summary>
-    /// <param name="options">The object used to configure the query to perform</param>
-    public ReadEventStreamQuery(StreamReadOptions options)
-    {
-        this.Options = options;
-    }
-
+    
     /// <summary>
     /// Gets the object used to configure the query to perform
     /// </summary>
-    public StreamReadOptions Options { get; }
+    public StreamReadOptions Options { get; } = options;
 
 }
 
 /// <summary>
 /// Represents the service used to handle <see cref="ReadEventStreamQuery"/> instances
 /// </summary>
-public class ReadCloudEventStreamQueryHandler
+public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
     : IQueryHandler<ReadEventStreamQuery, IAsyncEnumerable<object>>
 {
 
-    readonly IEventStoreProvider _eventStoreProvider;
-
     /// <inheritdoc/>
-    public ReadCloudEventStreamQueryHandler(IEventStoreProvider eventStoreProvider)
-    {
-        this._eventStoreProvider = eventStoreProvider;
-    }
-
-    /// <inheritdoc/>
-    public Task<ApiResponse<IAsyncEnumerable<object>>> Handle(ReadEventStreamQuery query, CancellationToken cancellationToken)
+    public Task<IOperationResult<IAsyncEnumerable<object>>> HandleAsync(ReadEventStreamQuery query, CancellationToken cancellationToken)
     {
         var length = query.Options.Length > StreamReadOptions.MaxLength ? StreamReadOptions.MaxLength : query.Options.Length;
         if (length < 1) length = 1;
@@ -73,10 +58,9 @@ public class ReadCloudEventStreamQueryHandler
                     offset = StreamPosition.EndOfStream;
                     break;
                 default:
-                    return Task.FromResult(new ApiResponse<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest) { Errors = new(new KeyValuePair<string, string[]>[] { new(nameof(query.Options.Direction).ToLowerInvariant(), new string[] { $"The specified {nameof(StreamReadDirection)} '{query.Options.Direction}' is not supported" }) }) });
+                    return Task.FromResult((IOperationResult<IAsyncEnumerable<object>>)new OperationResult<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest));
             }
         }
-        var eventStore = _eventStoreProvider.GetEventStore();
         var events = query.Options.Partition == null ?
             eventStore.ReadAsync(query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken)
             : eventStore.ReadPartitionAsync(query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);

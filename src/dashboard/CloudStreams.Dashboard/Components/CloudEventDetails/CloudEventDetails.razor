@@ -1,6 +1,5 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using System.Text.Json;
-@using Hylo;
 
 <div class="container-fluid">
     <div class="row">
@@ -48,7 +47,7 @@
                     @foreach (var attr in cloudEvent.ExtensionAttributes)
                     {
                         <tr>
-                            <td>@attr.Key.ToPascalCase()</td>
+                            <td>@attr.Key</td>
                             <td>@attr.Value</td>
                         </tr>
                     }

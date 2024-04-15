@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,32 +12,19 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Dashboard.StateManagement;
-using Hylo;
-using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Components.TimelineStateManagement;
 
 /// <summary>
 /// Represents a <see cref="Timeline"/>'s form <see cref="ComponentStore{TState}"/>
 /// </summary>
-public class TimelineStore
-    : ComponentStore<TimelineState>
+/// <remarks>
+/// Initializes a new <see cref="TimelineStore"/>
+/// </remarks>
+/// <param name="cloudStreamsApi">The service used to interact with a Cloud Streams gateway's API</param>
+public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
+    : ComponentStore<TimelineState>(new())
 {
-    /// <summary>
-    /// The service used to interact with a Cloud Streams gateway's API
-    /// </summary>
-    ICloudStreamsCoreApiClient cloudStreamsApi;
-
-    /// <summary>
-    /// Initializes a new <see cref="TimelineStore"/>
-    /// </summary>
-    /// <param name="cloudStreamsApi">The service used to interact with a Cloud Streams gateway's API</param>
-    public TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
-        : base(new())
-    {
-        this.cloudStreamsApi = cloudStreamsApi;
-    }
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.StreamsReadOptions"/> changes
@@ -95,7 +82,7 @@ public class TimelineStore
     {
         var streamsReadOptions = new List<StreamReadOptions>(this.Get(state => state.StreamsReadOptions))
         {
-            new StreamReadOptions(StreamReadDirection.Backwards)
+            new(StreamReadDirection.Backwards)
         };
         this.Reduce(state => state with
         {
@@ -138,7 +125,7 @@ public class TimelineStore
         }
         streamsReadOptions = new List<StreamReadOptions>(streamsReadOptions)
         {
-            new StreamReadOptions(partition, StreamReadDirection.Backwards)
+            new(partition, StreamReadDirection.Backwards)
         };
         this.Reduce(state => state with
         {
@@ -183,7 +170,7 @@ public class TimelineStore
                 }
                 if (options!.Length <= StreamReadOptions.MaxLength)
                 {
-                    var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(options, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(options, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
                     data.AddRange(cloudEvents!);
                 }
                 else
@@ -199,10 +186,10 @@ public class TimelineStore
                             Offset = offset,
                             Length = StreamReadOptions.MaxLength
                         };
-                        var cloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                        var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
                         data.AddRange(cloudEvents!);
                         offset = (long)cloudEvents.Last()!.GetSequence()!;
-                        fetchMore = cloudEvents.Count() > 1 && (ulong)data.Count < options!.Length;
+                        fetchMore = cloudEvents.Count > 1 && (ulong)data.Count < options!.Length;
                     }
                     while(fetchMore);
                 }

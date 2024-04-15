@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ public static class IServiceCollectionExtensions
         {
             var options = provider.GetRequiredService<IOptions<CoreApiClientOptions>>().Value;
             var connection = new HubConnectionBuilder()
-                .WithUrl($"{options.BaseAddress}api/resource-management/v1/ws/watch")
+                .WithUrl($"{options.BaseAddress}api/ws/resources/watch")
                 .WithAutomaticReconnect()
                 .Build();
             return new ResourceWatchEventHubClient(connection);

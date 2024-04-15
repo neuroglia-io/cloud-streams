@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Gateway.Api.Client.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CloudStreams.Gateway.Api.Hubs;
@@ -19,7 +18,6 @@ namespace CloudStreams.Gateway.Api.Hubs;
 /// <summary>
 /// Represents the <see cref="Hub"/> used to observe <see cref="CloudEvent"/>s
 /// </summary>
-[Route("api/gateway/v1/ws/cloud-events")]
 public class CloudEventHub
     : Hub<ICloudEventHubClient>, ICloudEventHub
 {

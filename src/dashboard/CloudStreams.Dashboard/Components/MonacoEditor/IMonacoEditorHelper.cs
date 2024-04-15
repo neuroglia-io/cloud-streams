@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using BlazorMonaco;
-using System.ComponentModel;
-
 namespace CloudStreams.Dashboard.Components;
 
 /// <summary>
@@ -21,7 +18,7 @@ namespace CloudStreams.Dashboard.Components;
 /// </summary>
 /// <param name="newLanguage">The new preferred language.</param>
 /// <returns>A task representing the asynchronous operation of handling the event.</returns>
-public delegate Task PreferedLanguageChangedEventHandler(string newLanguage);
+public delegate Task PreferredLanguageChangedEventHandler(string newLanguage);
 
 /// <summary>
 /// Represents a service used to facilitate the Monaco editor configuration
@@ -29,21 +26,21 @@ public delegate Task PreferedLanguageChangedEventHandler(string newLanguage);
 public interface IMonacoEditorHelper
 {
     /// <summary>
-    /// The prefered editor language
+    /// The preferred editor language
     /// </summary>
-    string PreferedLanguage { get; }
+    string PreferredLanguage { get; }
 
     /// <summary>
     /// Emits when the editor language changes
     /// </summary>
-    event PreferedLanguageChangedEventHandler? PreferedLanguageChanged;
+    event PreferredLanguageChangedEventHandler? PreferredLanguageChanged;
 
     /// <summary>
     /// A function used to facilitate the construction of <see cref="StandaloneEditorConstructionOptions"/> 
     /// </summary>
     /// <param name="value">The text of the editor</param>
     /// <param name="readOnly">Defines if the editor should be in read only</param>
-    /// <param name="language">The default prefered language</param>
+    /// <param name="language">The default preferred language</param>
     /// <returns>A function used to build <see cref="StandaloneEditorConstructionOptions"/></returns>
     Func<StandaloneCodeEditor, StandaloneEditorConstructionOptions> GetStandaloneEditorConstructionOptions(string value = "", bool readOnly = false, string language = "json");
 
@@ -55,10 +52,10 @@ public interface IMonacoEditorHelper
     Func<StandaloneDiffEditor, DiffEditorConstructionOptions> GetDiffEditorConstructionOptions(bool readOnly = true);
 
     /// <summary>
-    /// Changes the prefered editor language
+    /// Changes the preferred editor language
     /// </summary>
     /// <param name="language">The new language to use</param>
     /// <returns>A task representing the asynchronous operation</returns>
-    Task ChangePreferedLanguageAsync(string language);
+    Task ChangePreferredLanguageAsync(string language);
 
 }

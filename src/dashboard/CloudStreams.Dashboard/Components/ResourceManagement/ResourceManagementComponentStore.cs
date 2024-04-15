@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,6 @@
 
 using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Dashboard.Pages.CloudEvents.List;
-using CloudStreams.Dashboard.StateManagement;
-using Hylo;
-using System.Reactive.Linq;
 
 namespace CloudStreams.Dashboard.Components.ResourceManagement;
 
@@ -23,25 +20,18 @@ namespace CloudStreams.Dashboard.Components.ResourceManagement;
 /// Represents a <see cref="ComponentStore{TState}"/> used to manage Cloud Streams <see cref="IResource"/>s of the specified type
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/>s to manage</typeparam>
-public class ResourceManagementComponentStore<TResource>
-    : ComponentStore<ResourceManagementComponentState<TResource>>
+/// <remarks>
+/// Initializes a new <see cref="ResourceManagementComponentStore{TResource}"/>
+/// </remarks>
+/// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
+/// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
+public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
+    : ComponentStore<ResourceManagementComponentState<TResource>>(new())
     where TResource : Resource, new()
 {
-    readonly ICloudStreamsCoreApiClient resourceManagementApi;
+
     ResourceDefinition? definition;
     List<TResource>? resources;
-
-    /// <summary>
-    /// Initializes a new <see cref="ResourceManagementComponentStore{TResource}"/>
-    /// </summary>
-    /// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
-    /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
-    public ResourceManagementComponentStore(ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
-        : base(new())
-    {
-        this.resourceManagementApi = resourceManagementApi;
-        this.ResourceEventHub = resourceEventHub;
-    }
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
@@ -60,12 +50,12 @@ public class ResourceManagementComponentStore<TResource>
     /// <summary>
     /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
     /// </summary>
-    protected ResourceWatchEventHubClient ResourceEventHub { get; }
+    protected ResourceWatchEventHubClient ResourceEventHub { get; } = resourceEventHub;
 
     /// <summary>
     /// Gets the service used to monitor resources of the specified type
     /// </summary>
-    protected ResourceWatch<TResource> ResourceWatch { get; private set; } = null!;
+    protected Core.Api.Client.Services.ResourceWatch<TResource> ResourceWatch { get; private set; } = null!;
 
     /// <summary>
     /// Gets an <see cref="IDisposable"/> that represents the store's <see cref="ResourceWatch"/> subscription
@@ -87,7 +77,7 @@ public class ResourceManagementComponentStore<TResource>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task GetResourceDefinitionAsync()
     {
-        this.definition = await this.resourceManagementApi.Manage<TResource>().GetDefinitionAsync().ConfigureAwait(false);
+        this.definition = await resourceManagementApi.Manage<TResource>().GetDefinitionAsync().ConfigureAwait(false);
         this.Reduce(s => s with
         {
             Definition = this.definition
@@ -104,7 +94,7 @@ public class ResourceManagementComponentStore<TResource>
         {
             Loading = true
         });
-        this.resources = await (await this.resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        this.resources = await (await resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
         this.Reduce(s => s with
         {
             Resources = this.resources,
@@ -119,7 +109,7 @@ public class ResourceManagementComponentStore<TResource>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task DeleteResourceAsync(TResource resource)
     {
-        await this.resourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
+        await resourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
         var match = this.resources?.ToList().FirstOrDefault(r => r.GetName() == resource.GetName() && r.GetNamespace() == resource.GetNamespace());
         var resourceCollectionChanged = false;
         if (match != null)

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -10,6 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+using CloudStreams.Core.Resources;
+using System.Diagnostics;
 
 namespace CloudStreams.Core;
 
@@ -39,17 +42,17 @@ public static class CloudStreamsDefaults
             /// <summary>
             /// Gets the definition of Broker resources
             /// </summary>
-            public static ResourceDefinition Broker { get; } = LoadResourceDefinition(nameof(Broker));
+            public static ResourceDefinition Broker { get; } = new BrokerResourceDefinition();
 
             /// <summary>
             /// Gets the definition of Gateway resources
             /// </summary>
-            public static ResourceDefinition Gateway { get; } = LoadResourceDefinition(nameof(Gateway));
+            public static ResourceDefinition Gateway { get; } = new GatewayResourceDefinition();
 
             /// <summary>
             /// Gets the definition of Subscription resources
             /// </summary>
-            public static ResourceDefinition Subscription { get; } = LoadResourceDefinition(nameof(Subscription));
+            public static ResourceDefinition Subscription { get; } = new SubscriptionResourceDefinition();
 
             /// <summary>
             /// Gets a new <see cref="IEnumerable{T}"/> containing Cloud Streams default resource definitions
@@ -62,15 +65,20 @@ public static class CloudStreamsDefaults
                 yield return Subscription;
             }
 
-            static ResourceDefinition LoadResourceDefinition(string name)
-            {
-                var filePath = Path.Combine(AppContext.BaseDirectory, "Assets", "Definitions", $"{name.ToHyphenCase()}.yaml");
-                var yaml = File.ReadAllText(filePath);
-                var resourceDefinition = Hylo.Serializer.Json.Deserialize<ResourceDefinition>(Hylo.Serializer.Json.Serialize(Hylo.Serializer.Yaml.Deserialize<IDictionary<string, object>>(yaml)!))!;
-                return resourceDefinition;
-            }
-
         }
+
+    }
+
+    /// <summary>
+    /// Exposes constants about Cloud Streams application telemetry
+    /// </summary>
+    public static class Telemetry
+    {
+
+        /// <summary>
+        /// Exposes the Cloud Streams application's <see cref="System.Diagnostics.ActivitySource"/>
+        /// </summary>
+        public static ActivitySource ActivitySource { get; set; } = null!;
 
     }
 

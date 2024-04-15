@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 
 using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Core.Api.Hubs;
-using Hylo;
-using Hylo.Infrastructure.Services;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
@@ -23,30 +21,24 @@ namespace CloudStreams.Core.Api.Services;
 /// <summary>
 /// Represents a service used to dispatch <see cref="ResourceWatchEvent"/>s to all <see cref="IResourceEventWatchHubClient"/>s
 /// </summary>
-public class ResourceWatchEventHubController
+/// <remarks>
+/// Initializes a new <see cref="ResourceWatchEventHubController"/>
+/// </remarks>
+/// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
+/// <param name="hubContext">The current <see cref="IResourceEventWatchHubClient"/>'s <see cref="IHubContext{THub, T}"/></param>
+public class ResourceWatchEventHubController(IRepository resources, IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> hubContext)
     : BackgroundService
 {
 
     /// <summary>
-    /// Initializes a new <see cref="ResourceWatchEventHubController"/>
-    /// </summary>
-    /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
-    /// <param name="hubContext">The current <see cref="IResourceEventWatchHubClient"/>'s <see cref="IHubContext{THub, T}"/></param>
-    public ResourceWatchEventHubController(IRepository resources, IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> hubContext)
-    {
-        this.Resources = resources;
-        this.HubContext = hubContext;
-    }
-
-    /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IRepository Resources { get; }
+    protected IRepository Resources { get; } = resources;
 
     /// <summary>
     /// Gets the current <see cref="IResourceEventWatchHubClient"/>'s <see cref="IHubContext{THub, T}"/>
     /// </summary>
-    protected IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> HubContext { get; }
+    protected IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> HubContext { get; } = hubContext;
 
     /// <summary>
     /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> containing the mapping of active ^subscriptions per hub connection id
@@ -76,7 +68,7 @@ public class ResourceWatchEventHubController
     public virtual async Task WatchResourcesAsync(string connectionId, ResourceDefinitionInfo definition, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(connectionId)) throw new ArgumentNullException(nameof(connectionId));
-        if (definition == null) throw new ArgumentNullException(nameof(definition));
+        ArgumentNullException.ThrowIfNull(definition);
         var subscriptionKey = this.GetSubscriptionKey(definition, @namespace);
         if (this.Connections.TryGetValue(connectionId, out var subscriptions) && subscriptions != null && subscriptions.TryGetValue(subscriptionKey, out var watch) && watch != null) return;
         if (subscriptions == null)
@@ -108,8 +100,8 @@ public class ResourceWatchEventHubController
     public virtual Task StopWatchingResourcesAsync(string connectionId, ResourceDefinitionInfo definition, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(connectionId)) throw new ArgumentNullException(nameof(connectionId));
-        if (definition == null) throw new ArgumentNullException(nameof(definition));
-        if (!this.Connections.TryGetValue(connectionId, out var subscriptions) || subscriptions == null || !subscriptions.Any()) return Task.CompletedTask;
+        ArgumentNullException.ThrowIfNull(definition);
+        if (!this.Connections.TryGetValue(connectionId, out var subscriptions) || subscriptions == null || subscriptions.IsEmpty) return Task.CompletedTask;
         var subscriptionKey = this.GetSubscriptionKey(definition, @namespace);
         if (subscriptions.Remove(subscriptionKey, out var subscription) && subscription != null) subscription.Dispose();
         return Task.CompletedTask;
@@ -124,7 +116,7 @@ public class ResourceWatchEventHubController
     public virtual Task ReleaseConnectionResourcesAsync(string connectionId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(connectionId)) throw new ArgumentNullException(nameof(connectionId));
-        if (!this.Connections.Remove(connectionId, out var subscriptions) || subscriptions == null || !subscriptions.Any()) return Task.CompletedTask;
+        if (!this.Connections.Remove(connectionId, out var subscriptions) || subscriptions == null || subscriptions.IsEmpty) return Task.CompletedTask;
         subscriptions.Keys.ToList().ForEach(subscriptionId =>
         {
             subscriptions.Remove(subscriptionId, out var subscription);

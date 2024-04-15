@@ -1,6 +1,5 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement
-@using Hylo;
 @inherits StatefulComponent<ReadOptionsFormStore, ReadOptionsFormState>
 
 <div id="@(id + "read-options-form")" class="input-group mb-3">
@@ -43,7 +42,7 @@
     @if (!Compact)
     {
         <div class="form-floating">
-            <input id="@(id + "length")" type="number" min="0" max="@maxLength" class="form-control" value="@length" @onchange="e => Store.SetLenght(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
+            <input id="@(id + "length")" type="number" min="0" max="@maxLength" class="form-control" value="@length" @onchange="e => Store.SetLength(string.IsNullOrWhiteSpace((string?)e.Value) ? null : ulong.Parse((string?)e.Value!))" />
             <label for="@(id + "length")">length</label>
         </div>
     }
@@ -101,7 +100,7 @@
     /// </summary>
     private List<string>? partitions = null;
     /// <summary>
-    /// A random id used to bind datalists
+    /// A random id used to bind data lists
     /// </summary>
     private string id = Guid.NewGuid().ToString();
 
@@ -166,6 +165,6 @@
         this.Store.SetPartitionId(null);
         this.Store.SetDirection(StreamReadDirection.Backwards);
         this.Store.SetOffset(null);
-        this.Store.SetLenght(null);
+        this.Store.SetLength(null);
     }
 }

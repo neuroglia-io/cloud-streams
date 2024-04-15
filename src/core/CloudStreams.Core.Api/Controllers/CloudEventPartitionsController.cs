@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,17 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Queries.Partitions;
-using CloudStreams.Core.Data;
-using Hylo.Api.Http;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using System.Net;
 
 namespace CloudStreams.Core.Api.Controllers;
 
 /// <summary>
 /// Represents the API controller used to manage the cloud event partitions
 /// </summary>
+/// <inheritdoc/>
 [Route("api/core/v1/cloud-events/partitions")]
-public class CloudEventPartitionsController
-    : ApiController
+public class CloudEventPartitionsController(IMediator mediator)
+    : ApiController(mediator)
 {
-
-    /// <inheritdoc/>
-    public CloudEventPartitionsController(IMediator mediator) : base(mediator) { }
 
     /// <summary>
     /// Lists the ids of the cloud event partitions of the specified type
@@ -39,15 +32,15 @@ public class CloudEventPartitionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}")]
     [ProducesResponseType(typeof(IEnumerable<string>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> ListPartitionsByType(CloudEventPartitionType type, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send(new ListEventPartitionIdsQuery(type), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
-    /// Gets the specificied cloud event partition's metadata
+    /// Gets the specified cloud event partition's metadata
     /// </summary>
     /// <param name="type">The type of the partition to get the metadata of</param>
     /// <param name="id">The id of the partition to get the metadata of</param>
@@ -55,11 +48,11 @@ public class CloudEventPartitionsController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}/{id}")]
     [ProducesResponseType(typeof(PartitionMetadata), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> GetPartitionMetadata(CloudEventPartitionType type, string id, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send(new GetEventPartitionMetadataQuery(new(type, id)), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new GetEventPartitionMetadataQuery(new(type, id)), cancellationToken).ConfigureAwait(false));
     }
 
 }

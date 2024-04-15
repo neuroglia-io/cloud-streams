@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo;
+using Neuroglia;
 using System.Reactive.Subjects;
 
 namespace CloudStreams.Dashboard.StateManagement;
@@ -55,21 +55,21 @@ public class Feature<TState>
     /// <summary>
     /// Gets a <see cref="Dictionary{TKey, TValue}"/> containing the type/<see cref="IReducer"/>s mappings
     /// </summary>
-    protected Dictionary<Type, List<IReducer<TState>>> Reducers { get; } = new();
+    protected Dictionary<Type, List<IReducer<TState>>> Reducers { get; } = [];
 
     /// <inheritdoc/>
     public virtual void AddReducer(IReducer<TState> reducer)
     {
-        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
+        ArgumentNullException.ThrowIfNull(reducer);
         var genericReducerType = reducer.GetType().GetGenericType(typeof(IReducer<,>)) ?? throw new Exception($"The specified {nameof(IReducer<TState>)} '{reducer.GetType()}' does not implement the '{typeof(IReducer<,>)}' interface");
         var actionType = genericReducerType.GetGenericArguments()[1];
         if (this.Reducers.TryGetValue(actionType, out var reducers)) reducers.Add(reducer);
-        else this.Reducers.Add(actionType, new() { reducer });
+        else this.Reducers.Add(actionType, [reducer]);
     }
 
     void IFeature.AddReducer(IReducer reducer)
     {
-        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
+        ArgumentNullException.ThrowIfNull(reducer);
         this.AddReducer((IReducer<TState>)reducer);
     }
 
@@ -79,15 +79,15 @@ public class Feature<TState>
     /// <inheritdoc/>
     public virtual bool ShouldReduceStateFor(object action)
     {
-        if (action == null) throw new ArgumentNullException(nameof(action));
+        ArgumentNullException.ThrowIfNull(action);
         return this.Reducers.ContainsKey(action.GetType());
     }
     
     /// <inheritdoc/>
     public virtual async Task ReduceStateAsync(IActionContext context, Func<DispatchDelegate, DispatchDelegate> reducerPipelineBuilder)
     {
-        if (context == null) throw new ArgumentNullException(nameof(context));
-        if (reducerPipelineBuilder == null) throw new ArgumentNullException(nameof(reducerPipelineBuilder));
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(reducerPipelineBuilder);
         var pipeline = reducerPipelineBuilder(ApplyReducersAsync);
         this.State = (TState)await pipeline(context);
     }
@@ -99,8 +99,9 @@ public class Feature<TState>
     /// <returns>The reduced <see cref="IFeature"/>'s state</returns>
     protected virtual async Task<object> ApplyReducersAsync(IActionContext context)
     {
-        if (context == null) throw new ArgumentNullException(nameof(context));
-        return (await Task.Run(() =>
+        return (context == null
+            ? throw new ArgumentNullException(nameof(context))
+            : (object?)await Task.Run(() =>
         {
             var newState = this.State;
             if (this.Reducers.TryGetValue(context.Action.GetType(), out var reducers))

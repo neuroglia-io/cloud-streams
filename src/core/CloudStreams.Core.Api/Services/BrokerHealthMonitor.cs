@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,15 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo;
-using Hylo.Infrastructure.Services;
-using Json.Patch;
-using Json.Pointer;
-using System.Diagnostics;
-using System.Net;
-using System.Net.Mime;
-using System.Reactive.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -28,7 +19,15 @@ namespace CloudStreams.Core.Api.Services;
 /// <summary>
 /// Represents a service used to monitor the health of a gateway
 /// </summary>
-public class BrokerHealthMonitor
+/// <remarks>
+/// Initializes a new <see cref="BrokerHealthMonitor"/>
+/// </remarks>
+/// <param name="logger">The service used to perform logging</param>
+/// <param name="serializer">The  service used to serialize/deserialize objects to/from JSON</param>
+/// <param name="repository">The service used to manage resources</param>
+/// <param name="monitor">The service used to monitor the handled <see cref="Resources.Broker"/></param>
+/// <param name="httpClient">The service used to perform HTTP requests</param>
+public class BrokerHealthMonitor(ILogger<BrokerHealthMonitor> logger, IJsonSerializer serializer, IRepository repository, IResourceMonitor<Broker> monitor, HttpClient httpClient)
     : IHostedService, IDisposable, IAsyncDisposable
 {
 
@@ -36,47 +35,37 @@ public class BrokerHealthMonitor
     bool _disposed;
 
     /// <summary>
-    /// Initializes a new <see cref="BrokerHealthMonitor"/>
-    /// </summary>
-    /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
-    /// <param name="repository">The service used to manage resources</param>
-    /// <param name="monitor">The service used to monitor the handled <see cref="Data.Broker"/></param>
-    /// <param name="httpClient">The service used to perform HTTP requests</param>
-    public BrokerHealthMonitor(ILoggerFactory loggerFactory, IRepository repository, IResourceMonitor<Broker> monitor, HttpClient httpClient)
-    {
-        this.Logger = loggerFactory.CreateLogger(this.GetType());
-        this.Repository = repository;
-        this.Monitor = monitor;
-        this.HttpClient = httpClient;
-    }
-
-    /// <summary>
     /// Gets the service used to perform logging
     /// </summary>
-    protected ILogger Logger { get; }
+    protected ILogger Logger { get; } = logger;
+
+    /// <summary>
+    /// Gets the service used to serialize/deserialize objects to/from JSON
+    /// </summary>
+    protected IJsonSerializer Serializer { get; } = serializer;
 
     /// <summary>
     /// Gets the service used to manage resources
     /// </summary>
-    protected IRepository Repository { get; }
+    protected IRepository Repository { get; } = repository;
 
     /// <summary>
-    /// Gets the service used to monitor the handled <see cref="Data.Broker"/>
+    /// Gets the service used to monitor the handled <see cref="Resources.Broker"/>
     /// </summary>
-    protected IResourceMonitor<Broker> Monitor { get; }
+    protected IResourceMonitor<Broker> Monitor { get; } = monitor;
 
     /// <summary>
     /// Gets the service used to perform HTTP requests
     /// </summary>
-    protected HttpClient HttpClient { get; }
+    protected HttpClient HttpClient { get; } = httpClient;
 
     /// <summary>
-    /// Gets the monitored <see cref="Data.Broker"/>
+    /// Gets the monitored <see cref="Resources.Broker"/>
     /// </summary>
     protected Broker Broker => this.Monitor.Resource;
 
     /// <summary>
-    /// Gets the <see cref="Timer"/> used to periodically check the health of the <see cref="Broker"/>
+    /// Gets the <see cref="Timer"/> used to periodically check the health of the <see cref="Resources.Broker"/>
     /// </summary>
     protected Timer? HealthCheckTimer { get; private set; }
 
@@ -104,7 +93,7 @@ public class BrokerHealthMonitor
     }
 
     /// <summary>
-    /// Handles changes to the <see cref="Broker"/>'s <see cref="ServiceHealthCheckConfiguration"/>
+    /// Handles changes to the <see cref="Resources.Broker"/>'s <see cref="ServiceHealthCheckConfiguration"/>
     /// </summary>
     /// <param name="configuration">The updated <see cref="ServiceHealthCheckConfiguration"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
@@ -115,8 +104,8 @@ public class BrokerHealthMonitor
         if (this.Broker.Spec.Service == null || this.Broker.Spec.Service.HealthChecks == null) return;
         var delay = this.Broker.Status?.LastHealthCheckAt.HasValue == true ? DateTimeOffset.Now - this.Broker.Status.LastHealthCheckAt : TimeSpan.Zero;
         if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
-        if (this.Broker.Spec.Service.HealthChecks.Interval.HasValue && this.Broker.Spec.Service.HealthChecks.Interval > delay) delay = this.Broker.Spec.Service.HealthChecks.Interval;
-        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Broker.Spec.Service.HealthChecks.Interval ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+        if (this.Broker.Spec.Service.HealthChecks.Interval != null && this.Broker.Spec.Service.HealthChecks.Interval > delay) delay = this.Broker.Spec.Service.HealthChecks.Interval;
+        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Broker.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
@@ -137,7 +126,7 @@ public class BrokerHealthMonitor
             var uri = $"{hostNameAndPort}{path}";
             using var request = new HttpRequestMessage(new HttpMethod(this.Broker.Spec.Service.HealthChecks.Request.Method), uri);
             if (this.Broker.Spec.Service.HealthChecks.Request.Headers != null) this.Broker.Spec.Service.HealthChecks.Request.Headers!.ToList().ForEach(h => request.Headers.TryAddWithoutValidation(h.Key, h.Value));
-            if (this.Broker.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(Serializer.Json.Serialize(this.Broker.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
+            if (this.Broker.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(this.Serializer.SerializeToText(this.Broker.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
             HealthCheckResponse? healthCheckResponse = null;
             try
             {
@@ -150,12 +139,12 @@ public class BrokerHealthMonitor
                 {
                     try
                     {
-                        healthCheckResponse = Serializer.Json.Deserialize<HealthCheckResponse>(content)!;
+                        healthCheckResponse = this.Serializer.Deserialize<HealthCheckResponse>(content)!;
                     }
                     catch { }
                     if(healthCheckResponse == null)
                     {
-                        var result = Serializer.Json.Deserialize<JsonObject>(content);
+                        var result = this.Serializer.Deserialize<JsonObject>(content);
                         if (result?.TryGetPropertyValue(nameof(HealthCheckResult.Status).ToCamelCase(), out var node) == true && node != null) healthCheckResponse = new(node.GetValue<string>().ToCamelCase());
                         else healthCheckResponse = new(response.IsSuccessStatusCode ? HealthStatus.Healthy : HealthStatus.Unhealthy);
                     } 
@@ -178,7 +167,7 @@ public class BrokerHealthMonitor
                 patchTarget.Status ??= new();
                 patchTarget.Status.HealthStatus = healthCheckResponse.Status;
                 patchTarget.Status.LastHealthCheckAt = DateTimeOffset.Now;
-                var patch = new Patch(PatchType.JsonPatch, JsonPatchHelper.CreateJsonPatchFromDiff(patchSource, patchTarget));
+                var patch = new Patch(PatchType.JsonPatch, JsonPatchUtility.CreateJsonPatchFromDiff(patchSource, patchTarget));
                 await this.Repository.PatchStatusAsync<Broker>(patch, this.Broker.GetName(), this.Broker.GetNamespace(), false, this.CancellationTokenSource!.Token).ConfigureAwait(false);
             }
         }
@@ -190,7 +179,7 @@ public class BrokerHealthMonitor
         {
             if (this.Broker.Spec.Service != null && this.Broker.Spec.Service.HealthChecks != null)
             {
-                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Broker.Spec.Service.HealthChecks.Interval ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Broker.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
             }
         }
     }

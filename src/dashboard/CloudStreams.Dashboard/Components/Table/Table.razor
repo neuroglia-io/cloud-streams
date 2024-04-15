@@ -1,5 +1,4 @@
 ﻿@namespace CloudStreams.Dashboard.Components
-@using Hylo;
 @typeparam TData
 
 <CascadingValue Value="this">
@@ -123,7 +122,7 @@
     [Parameter] public EventCallback<Column<TData>> OnOrderBy { get; set; }
 
     /// <summary>
-    /// Adds the specifed <see cref="Column{TData}"/>
+    /// Adds the specified <see cref="Column{TData}"/>
     /// </summary>
     /// <param name="column">The <see cref="Column{TData}"/> to add</param>
     public void AddColumn(Column<TData> column)
@@ -133,7 +132,7 @@
     }
 
     /// <summary>
-    /// Revmoes the specifed <see cref="Column{TData}"/>
+    /// Removes the specified <see cref="Column{TData}"/>
     /// </summary>
     /// <param name="column">The <see cref="Column{TData}"/> to remove</param>
     public bool RemoveColumn(Column<TData> column)
@@ -167,7 +166,7 @@
 
     internal async Task OnClickColumn(Column<TData> column)
     {
-        if (!column.IsSorteable || column.PropertyPath == null) return;
+        if (!column.IsSortable || column.PropertyPath == null) return;
         column.ToggleSortMode();
         if (this.OnOrderBy.HasDelegate) await this.OnOrderBy.InvokeAsync(column);
     }

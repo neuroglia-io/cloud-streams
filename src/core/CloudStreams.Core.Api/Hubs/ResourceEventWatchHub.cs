@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 
 using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Core.Api.Services;
-using Hylo;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
 namespace CloudStreams.Core.Api.Hubs;
@@ -22,24 +20,19 @@ namespace CloudStreams.Core.Api.Hubs;
 /// <summary>
 /// Represents the <see cref="Hub"/> used to notify clients about resource-related changes
 /// </summary>
+/// <remarks>
+/// Initializes a new <see cref="ResourceEventWatchHub"/>
+/// </remarks>
+/// <param name="controller">The service used to control <see cref="ResourceEventWatchHub"/>s</param>
 [Route("api/resource-management/v1/ws/watch")]
-public class ResourceEventWatchHub
-    : Hub<IResourceEventWatchHubClient>, IResourceEventWatchHub
+public class ResourceEventWatchHub(ResourceWatchEventHubController controller)
+        : Hub<IResourceEventWatchHubClient>, IResourceEventWatchHub
 {
-
-    /// <summary>
-    /// Initializes a new <see cref="ResourceEventWatchHub"/>
-    /// </summary>
-    /// <param name="controller">The service used to control <see cref="ResourceEventWatchHub"/>s</param>
-    public ResourceEventWatchHub(ResourceWatchEventHubController controller)
-    {
-        this.Controller = controller;
-    }
 
     /// <summary>
     /// Gets the service used to control <see cref="ResourceEventWatchHub"/>s
     /// </summary>
-    protected ResourceWatchEventHubController Controller { get; }
+    protected ResourceWatchEventHubController Controller { get; } = controller;
 
     /// <inheritdoc/>
     public virtual Task Watch(ResourceDefinitionInfo definition, string? @namespace = null) => this.Controller.WatchResourcesAsync(this.Context.ConnectionId, definition, @namespace);

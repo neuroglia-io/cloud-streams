@@ -1,5 +1,5 @@
 ﻿@namespace CloudStreams.Dashboard.Components
-@using Hylo;
+@inject Neuroglia.Serialization.IJsonSerializer JsonSerializer
 
 @if (cloudEvent != null)
 {
@@ -59,7 +59,7 @@
                 @foreach (var attr in cloudEvent.ExtensionAttributes)
                 {
                     <tr>
-                        <td>@attr.Key.ToPascalCase()</td>
+                        <td>@attr.Key</td>
                         <td>@attr.Value</td>
                     </tr>
                 }
@@ -69,7 +69,7 @@
     @if (cloudEvent!.Data != null)
     {
         <pre>
-            @Serializer.Json.Serialize(cloudEvent.Data, true)
+            @JsonSerializer.SerializeToText(cloudEvent.Data)
         </pre>
     }
 }

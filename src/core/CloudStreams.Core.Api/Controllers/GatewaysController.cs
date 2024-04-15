@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,23 +12,17 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Queries.Gateways;
-using CloudStreams.Core.Data;
-using Hylo.Api.Http;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
 
 namespace CloudStreams.Core.Api.Controllers;
 
 /// <summary>
 /// Represents the <see cref="ResourceApiController{TResource}"/> used to manage <see cref="Gateway"/>s
 /// </summary>
+/// <inheritdoc/>
 [Route("api/resources/v1/gateways")]
-public class GatewaysController
-    : ClusterResourceApiController<Gateway>
+public class GatewaysController(IMediator mediator)
+    : ClusterResourceApiController<Gateway>(mediator)
 {
-
-    /// <inheritdoc/>
-    public GatewaysController(IMediator mediator) : base(mediator) { }
 
     /// <summary>
     /// Checks the health of the specified gateway service, if any
@@ -39,7 +33,7 @@ public class GatewaysController
     [HttpGet("{name}/health")]
     public virtual async Task<IActionResult> CheckGatewayHealth(string name, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.Send(new CheckGatewayHealthQuery(name), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new CheckGatewayHealthQuery(name), cancellationToken).ConfigureAwait(false));
     }
 
 }

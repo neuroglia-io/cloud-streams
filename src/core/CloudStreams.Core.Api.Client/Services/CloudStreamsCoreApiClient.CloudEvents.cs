@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
+using Neuroglia;
+using Neuroglia.Eventing.CloudEvents;
+using Neuroglia.Serialization;
 
 namespace CloudStreams.Core.Api.Client.Services;
 
@@ -36,7 +38,7 @@ public partial class CloudStreamsCoreApiClient
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}"), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.DeserializeAsyncEnumerable<string>(responseStream, cancellationToken: cancellationToken);
+        return this.Serializer.DeserializeAsyncEnumerable<string>(responseStream, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -46,7 +48,7 @@ public partial class CloudStreamsCoreApiClient
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}/{id}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<PartitionMetadata>(json);
+        return this.Serializer.Deserialize<PartitionMetadata>(json);
     }
 
     /// <inheritdoc/>
@@ -55,7 +57,7 @@ public partial class CloudStreamsCoreApiClient
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, CloudEventStreamApiPath), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.Deserialize<StreamMetadata>(json)!;
+        return this.Serializer.Deserialize<StreamMetadata>(json)!;
     }
 
     /// <inheritdoc/>
@@ -75,7 +77,7 @@ public partial class CloudStreamsCoreApiClient
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return Serializer.Json.DeserializeAsyncEnumerable<CloudEvent>(responseStream, cancellationToken: cancellationToken);
+        return this.Serializer.DeserializeAsyncEnumerable<CloudEvent>(responseStream, cancellationToken: cancellationToken);
     }
 
 }

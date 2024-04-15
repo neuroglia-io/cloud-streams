@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ public static class CloudEventAuthorizationRuleType
     /// </summary>
     public const string Payload = "payload";
     /// <summary>
-    /// Indicates a policy that grants or refuses accesss based on the time of day
+    /// Indicates a policy that grants or refuses access based on the time of day
     /// </summary>
     public const string TimeOfDay = "timeOfDay";
     /// <summary>

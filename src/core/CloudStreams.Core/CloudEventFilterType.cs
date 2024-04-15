@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,26 +11,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Serialization;
-using Hylo.Serialization.Json;
+using Neuroglia.Serialization.Json.Converters;
 
 namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all cloud event filter types
 /// </summary>
-[TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(JsonStringEnumConverterFactory))]
+[TypeConverter(typeof(EnumMemberTypeConverter))]
+[JsonConverter(typeof(StringEnumConverter))]
 public enum CloudEventFilterType
 {
     /// <summary>
     /// Indicates a context attributes based filter
     /// </summary>
     [EnumMember(Value = "attributes")]
-    Attributes,
+    Attributes = 1,
     /// <summary>
     /// Indicates an expression-based filter
     /// </summary>
     [EnumMember(Value = "expression")]
-    Expression
+    Expression = 2
 }

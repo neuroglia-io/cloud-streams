@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Neuroglia;
+using Neuroglia.Serialization;
 
 namespace CloudStreams.Core.Api.Client.Services;
 
@@ -30,11 +32,13 @@ public partial class CloudStreamsCoreApiClient
     /// </summary>
     /// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
     /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
+    /// <param name="serializer">The service used to serialize/deserialize objects to/from JSON</param>
     /// <param name="httpClient">The service used to perform http requests</param>
-    public CloudStreamsCoreApiClient(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, HttpClient httpClient)
+    public CloudStreamsCoreApiClient(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IJsonSerializer serializer, HttpClient httpClient)
     {
         this.ServiceProvider = serviceProvider;
         this.Logger = loggerFactory.CreateLogger(this.GetType());
+        this.Serializer = serializer;
         this.HttpClient = httpClient;
         foreach(var apiProperty in this.GetType().GetProperties().Where(p => p.CanRead && p.PropertyType.GetGenericType(typeof(IResourceManagementApi<>)) != null))
         {
@@ -56,6 +60,11 @@ public partial class CloudStreamsCoreApiClient
     protected ILogger Logger { get; }
 
     /// <summary>
+    /// Gets the service used to serialize/deserialize objects to/from JSON
+    /// </summary>
+    protected IJsonSerializer Serializer { get; }
+
+    /// <summary>
     /// Gets the service used to perform http requests
     /// </summary>
     protected HttpClient HttpClient { get; }
@@ -74,7 +83,7 @@ public partial class CloudStreamsCoreApiClient
     /// <returns>The processed <see cref="HttpRequestMessage"/></returns>
     protected virtual Task<HttpRequestMessage> ProcessRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
     {
-        if(request == null) throw new ArgumentNullException(nameof(request));
+        ArgumentNullException.ThrowIfNull(request);
         return Task.FromResult(request);
     }
 
@@ -86,7 +95,7 @@ public partial class CloudStreamsCoreApiClient
     /// <returns>The processed <see cref="HttpResponseMessage"/></returns>
     protected virtual async Task<HttpResponseMessage> ProcessResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
-        if (response == null) throw new ArgumentNullException(nameof(response));
+        ArgumentNullException.ThrowIfNull(response);
         if (response.IsSuccessStatusCode) return response;
         var content = string.Empty;
         if (response.Content != null) content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -94,7 +103,7 @@ public partial class CloudStreamsCoreApiClient
         if (!response.IsSuccessStatusCode)
         {
             if (string.IsNullOrWhiteSpace(content)) response.EnsureSuccessStatusCode();
-            else throw new CloudStreamsException(Serializer.Json.Deserialize<ProblemDetails>(content));
+            else throw new ProblemDetailsException(this.Serializer.Deserialize<ProblemDetails>(content)!);
         }
         return response;
     }

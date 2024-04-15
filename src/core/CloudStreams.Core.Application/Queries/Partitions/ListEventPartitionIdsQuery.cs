@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Infrastructure;
-using CloudStreams.Core.Infrastructure.Services;
-using Hylo.Api.Application;
+using CloudStreams.Core.Application.Services;
 using System.ComponentModel.DataAnnotations;
 
 namespace CloudStreams.Core.Application.Queries.Partitions;
@@ -21,45 +19,33 @@ namespace CloudStreams.Core.Application.Queries.Partitions;
 /// <summary>
 /// Represents the <see cref="IQuery{TResult}"/> used to list the ids of event partitions
 /// </summary>
-public class ListEventPartitionIdsQuery
-    : IQuery<IAsyncEnumerable<string>>
+/// <remarks>
+/// Initializes a new <see cref="ListEventPartitionIdsQuery"/>
+/// </remarks>
+/// <param name="partitionType">The type of partitions to list the ids of</param>
+public class ListEventPartitionIdsQuery(CloudEventPartitionType partitionType)
+        : Query<IAsyncEnumerable<string>>
 {
-
-    /// <summary>
-    /// Initializes a new <see cref="ListEventPartitionIdsQuery"/>
-    /// </summary>
-    /// <param name="partitionType">The type of partitions to list the ids of</param>
-    public ListEventPartitionIdsQuery(CloudEventPartitionType partitionType)
-    {
-        this.PartitionType = partitionType;
-    }
 
     /// <summary>
     /// Gets the type of partitions to list the ids of
     /// </summary>
     [Required]
-    public virtual CloudEventPartitionType PartitionType { get; set; }
+    public virtual CloudEventPartitionType PartitionType { get; set; } = partitionType;
 
 }
 
 /// <summary>
 /// Represents the service used to handle <see cref="ListEventPartitionIdsQuery"/> instances
 /// </summary>
-public class ListEventPartitionIdsQueryHandler
+public class ListEventPartitionIdsQueryHandler(ICloudEventStore eventStore)
     : IQueryHandler<ListEventPartitionIdsQuery, IAsyncEnumerable<string>>
 {
 
     /// <inheritdoc/>
-    public ListEventPartitionIdsQueryHandler(IEventStoreProvider eventStoreProvider)
+    public virtual Task<IOperationResult<IAsyncEnumerable<string>>> HandleAsync(ListEventPartitionIdsQuery query, CancellationToken cancellationToken)
     {
-        this._eventStoreProvider = eventStoreProvider;
-    }
-
-    IEventStoreProvider _eventStoreProvider;
-
-    Task<ApiResponse<IAsyncEnumerable<string>>> MediatR.IRequestHandler<ListEventPartitionIdsQuery, ApiResponse<IAsyncEnumerable<string>>>.Handle(ListEventPartitionIdsQuery query, CancellationToken cancellationToken)
-    {
-        return Task.FromResult(this.Ok(this._eventStoreProvider.GetEventStore().ListPartitionIdsAsync(query.PartitionType, cancellationToken)));
+        return Task.FromResult(this.Ok(eventStore.ListPartitionIdsAsync(query.PartitionType, cancellationToken)));
     }
 
 }

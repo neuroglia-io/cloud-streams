@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
+using CloudStreams.Core.Resources;
 using System.Text.RegularExpressions;
 
 namespace CloudStreams.Core;
@@ -30,8 +30,9 @@ public static class CloudEventIngestionConfigurationExtensions
     /// <returns>A boolean indicating whether or not the <see cref="CloudEventIngestionConfiguration"/> applies to the specified <see cref="CloudEvent"/></returns>
     public static bool AppliesTo(this CloudEventIngestionConfiguration configuration, CloudEvent e)
     {
-        if (configuration == null) throw new ArgumentNullException(nameof(configuration));
-        if (e == null) throw new ArgumentNullException(nameof(e));
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(e);
+
         return (configuration.Source.Trim() == "*" || Regex.IsMatch(e.Source.OriginalString, configuration.Source))
             && (configuration.Type.Trim() == "*" || Regex.IsMatch(e.Type, configuration.Type));
     }

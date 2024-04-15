@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
+using CloudStreams.Core;
 using System.Diagnostics.Metrics;
-using CloudStreams.Core.Application;
 
 namespace CloudStreams.Gateway.Application.Services;
 
@@ -24,10 +23,10 @@ public class GatewayMetrics
     : IGatewayMetrics
 {
 
-    private const string MetricsPrefix = "cloud_streams_gateway_";
-    private const string CloudEventMetricsPrefix = MetricsPrefix + "events_";
+    const string MetricsPrefix = "cloud_streams_gateway_";
+    const string CloudEventMetricsPrefix = MetricsPrefix + "events_";
 
-    private bool _Disposed;
+    bool _disposed;
 
     /// <summary>
     /// Initializes a new <see cref="GatewayMetrics"/>
@@ -42,7 +41,7 @@ public class GatewayMetrics
     /// <summary>
     /// Gets the <see cref="System.Diagnostics.Metrics.Meter"/>
     /// </summary>
-    protected Meter Meter { get; } = new(Telemetry.ActivitySource.Name, Telemetry.ActivitySource.Version);
+    protected Meter Meter { get; } = new(CloudStreamsDefaults.Telemetry.ActivitySource.Name, CloudStreamsDefaults.Telemetry.ActivitySource.Version);
 
     /// <summary>
     /// Gets the <see cref="Counter{T}"/> used to keep track of the total amount of ingested <see cref="CloudEvent"/>s
@@ -83,13 +82,13 @@ public class GatewayMetrics
     /// <param name="disposing">A boolean indicating whether or not the <see cref="GatewayMetrics"/> is being disposed of</param>
     protected virtual void Dispose(bool disposing)
     {
-        if (!this._Disposed)
+        if (!this._disposed)
         {
             if (disposing)
             {
                 this.Meter.Dispose();
             }
-            this._Disposed = true;
+            this._disposed = true;
         }
     }
 

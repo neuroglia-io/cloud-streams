@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo;
+using Neuroglia;
 using System.Reactive.Subjects;
 
 namespace CloudStreams.Dashboard.StateManagement;
@@ -30,8 +30,7 @@ public class State<TState>
     /// <param name="value">The <see cref="State{TState}"/>'s value</param>
     public State(TState value)
     {
-        if(value == null)
-            throw new ArgumentNullException(nameof(value));
+        if(value == null) throw new ArgumentNullException(nameof(value));
         this.Value = value;
     }
 
@@ -48,21 +47,21 @@ public class State<TState>
     /// <summary>
     /// Gets a <see cref="Dictionary{TKey, TValue}"/> containing the type/<see cref="IReducer"/>s mappings
     /// </summary>
-    protected Dictionary<Type, List<IReducer<TState>>> Reducers { get; } = new();
+    protected Dictionary<Type, List<IReducer<TState>>> Reducers { get; } = [];
 
     /// <inheritdoc/>
     public virtual void AddReducer(IReducer<TState> reducer)
     {
-        if(reducer == null) throw new ArgumentNullException(nameof(reducer));
+        ArgumentNullException.ThrowIfNull(reducer);
         var reducerGenericType = reducer.GetType().GetGenericType(typeof(IReducer<,>)) ?? throw new Exception($"The specified {nameof(IReducer<TState>)} '{reducer.GetType()}' does not implement the '{typeof(IReducer<,>)}' interface");
         var actionType = reducerGenericType.GetGenericArguments()[1];
         if (this.Reducers.TryGetValue(actionType, out var reducers)) reducers.Add(reducer);
-        else this.Reducers.Add(actionType, new List<IReducer<TState>>() { reducer });
+        else this.Reducers.Add(actionType, [reducer]);
     }
 
     void IState.AddReducer(IReducer reducer)
     {
-        if (reducer == null) throw new ArgumentNullException(nameof(reducer));
+        ArgumentNullException.ThrowIfNull(reducer);
         this.AddReducer((IReducer<TState>)reducer);
     }
 
@@ -72,12 +71,9 @@ public class State<TState>
     /// <inheritdoc/>
     public virtual bool TryDispatch(object action)
     {
-        if (action == null) throw new ArgumentNullException(nameof(action));
+        ArgumentNullException.ThrowIfNull(action);
         if (!this.Reducers.TryGetValue(action.GetType(), out var reducers))return false;
-        foreach(var reducer in reducers)
-        {
-            this.Value = reducer.Reduce(this.Value, action);
-        }
+        foreach(var reducer in reducers) this.Value = reducer.Reduce(this.Value, action);
         this.Stream.OnNext(this.Value!);
         return true;
     }

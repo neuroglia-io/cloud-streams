@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -10,8 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-using Hylo;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -47,27 +45,27 @@ public record ResourceEditorState<TResource>
     public bool Saving { get; set; } = false;
 
     /// <summary>
-    /// Gets/sets the <see cref="ProblemDetails"/> type that occured when trying to save the resource, if any
+    /// Gets/sets the <see cref="ProblemDetails"/> type that occurred when trying to save the resource, if any
     /// </summary>
     public Uri? ProblemType { get; set; } = null;
 
     /// <summary>
-    /// Gets/sets the <see cref="ProblemDetails"/> title that occured when trying to save the resource, if any
+    /// Gets/sets the <see cref="ProblemDetails"/> title that occurred when trying to save the resource, if any
     /// </summary>
     public string ProblemTitle { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets/sets the <see cref="ProblemDetails"/> details that occured when trying to save the resource, if any
+    /// Gets/sets the <see cref="ProblemDetails"/> details that occurred when trying to save the resource, if any
     /// </summary>
     public string ProblemDetail { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets/sets the <see cref="ProblemDetails"/> status that occured when trying to save the resource, if any
+    /// Gets/sets the <see cref="ProblemDetails"/> status that occurred when trying to save the resource, if any
     /// </summary>
     public int ProblemStatus { get; set; } = 0;
 
     /// <summary>
-    /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occured when trying to save the resource, if any
+    /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occurred when trying to save the resource, if any
     /// </summary>
     public IDictionary<string, string[]> ProblemErrors { get; set; } = new Dictionary<string, string[]>();
 }

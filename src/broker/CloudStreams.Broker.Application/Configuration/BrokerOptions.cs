@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 namespace CloudStreams.Broker.Application.Configuration;
 
 /// <summary>
-/// Represents the options used to configure a Cloud Streams cloud event gateway
+/// Represents the options used to configure a Cloud Streams cloud event broker
 /// </summary>
 public class BrokerOptions
 {
@@ -25,12 +25,12 @@ public class BrokerOptions
     public const string EnvironmentVariablePrefix = "CLOUDSTREAMS_BROKER_";
 
     /// <summary>
-    /// Gets/sets the gateway's name
+    /// Gets/sets the broker's name
     /// </summary>
     public virtual string Name { get; set; } = null!;
 
     /// <summary>
-    /// Gets/sets the gateway's namespace
+    /// Gets/sets the broker's namespace
     /// </summary>
     public virtual string? Namespace { get; set; } = null!;
 

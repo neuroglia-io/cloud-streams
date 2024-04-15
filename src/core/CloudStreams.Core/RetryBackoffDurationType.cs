@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,30 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo.Serialization.Json;
+using Neuroglia.Serialization.Json.Converters;
 
 namespace CloudStreams.Core;
 
 /// <summary>
 /// Enumerates all supported retry backoff duration types
 /// </summary>
-[TypeConverter(typeof(StringEnumMemberConverter))]
-[JsonConverter(typeof(JsonStringEnumConverterFactory))]
+[TypeConverter(typeof(EnumMemberTypeConverter))]
+[JsonConverter(typeof(StringEnumConverter))]
 public enum RetryBackoffDurationType
 {
     /// <summary>
     /// Indicates a constant duration
     /// </summary>
     [EnumMember(Value = "constant")]
-    Constant,
+    Constant = 1,
     /// <summary>
     /// Indicates a duration that increments at every retry attempt in a constant fashion
     /// </summary>
     [EnumMember(Value = "incremental")]
-    Incremental,
+    Incremental = 2,
     /// <summary>
     /// Indicates an exponential duration
     /// </summary>
     [EnumMember(Value = "exponential")]
-    Exponential
+    Exponential = 4
 }

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 using BlazorBootstrap;
 using CloudStreams.Dashboard.Components.ResourceManagement;
 using CloudStreams.Dashboard.Pages.CloudEvents.List;
-using Hylo;
 using Microsoft.AspNetCore.Components;
+using Neuroglia.Serialization;
 
 namespace CloudStreams.Dashboard.Components;
 
@@ -34,17 +34,23 @@ public abstract class ResourceManagementComponent<TResource>
     protected MonacoInterop? MonacoInterop { get; set; }
 
     /// <summary>
+    /// Gets the service used to serialize/deserialize objects to/from JSON
+    /// </summary>
+    [Inject]
+    protected IJsonSerializer Serializer { get; set; } = null!;
+
+    /// <summary>
     /// The list of displayed <see cref="Resource"/>s
     /// </summary>
     protected List<TResource>? resources;
     /// <summary>
     /// The <see cref="Offcanvas"/> used to show the <see cref="Resource"/>'s details
     /// </summary>
-    protected Offcanvas? detailsOffcanvas;
+    protected Offcanvas? detailsOffCanvas;
     /// <summary>
     /// The <see cref="Offcanvas"/> used to edit the <see cref="Resource"/>
     /// </summary>
-    protected Offcanvas? editorOffcanvas;
+    protected Offcanvas? editorOffCanvas;
     /// <summary>
     /// The <see cref="ConfirmDialog"/> used to confirm the <see cref="Resource"/>'s deletion
     /// </summary>
@@ -70,7 +76,7 @@ public abstract class ResourceManagementComponent<TResource>
                 this.definition = definition;
                 if (this.definition != null && this.MonacoInterop != null)
                 {
-                    await this.MonacoInterop.AddValidationSchemaAsync(Serializer.Json.Serialize(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(TResource).Name.ToLower()}.json", $"{typeof(TResource).Name.ToLower()}").ConfigureAwait(false);
+                    await this.MonacoInterop.AddValidationSchemaAsync(this.Serializer.SerializeToText(this.definition.Spec.Versions.First().Schema.OpenAPIV3Schema), $"https://cloud-streams.io/schemas/{typeof(TResource).Name.ToLower()}.json", $"{typeof(TResource).Name.ToLower()}").ConfigureAwait(false);
                 }
             }
         }, cancellationToken: this.CancellationTokenSource.Token);
@@ -128,12 +134,12 @@ public abstract class ResourceManagementComponent<TResource>
     /// <param name="resource">The <see cref="Resource"/> to show the details for</param>
     protected Task OnShowResourceDetailsAsync(TResource resource)
     {
-        if (this.detailsOffcanvas == null) return Task.CompletedTask;
+        if (this.detailsOffCanvas == null) return Task.CompletedTask;
         var parameters = new Dictionary<string, object>
         {
             { "Resource", resource }
         };
-        return this.detailsOffcanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
+        return this.detailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
     }
 
     /// <summary>
@@ -142,13 +148,13 @@ public abstract class ResourceManagementComponent<TResource>
     /// <param name="resource">The <see cref="Resource"/> to edit</param>
     protected Task OnShowResourceEditorAsync(TResource? resource = null)
     {
-        if (this.editorOffcanvas == null) return Task.CompletedTask;
+        if (this.editorOffCanvas == null) return Task.CompletedTask;
         var parameters = new Dictionary<string, object>
         {
             { "Resource", resource! }
         };
         string actionType = resource == null ? "creation" : "edition";
-        return this.editorOffcanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
+        return this.editorOffCanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
     }
 
 }

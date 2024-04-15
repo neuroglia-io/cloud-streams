@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@ public class MonacoEditorHelper
     : IMonacoEditorHelper
 {
     /// <inheritdoc />
-    public string PreferedLanguage { get; protected set; } = "yaml";
+    public string PreferredLanguage { get; protected set; } = "yaml";
 
     /// <inheritdoc />
-    public event PreferedLanguageChangedEventHandler? PreferedLanguageChanged;
+    public event PreferredLanguageChangedEventHandler? PreferredLanguageChanged;
 
     /// <inheritdoc />
     public Func<StandaloneCodeEditor, StandaloneEditorConstructionOptions> GetStandaloneEditorConstructionOptions(string value = "", bool readOnly = false, string language = "yaml") {
@@ -49,21 +49,21 @@ public class MonacoEditorHelper
     }
 
     /// <inheritdoc />
-    public async Task ChangePreferedLanguageAsync(string language)
+    public async Task ChangePreferredLanguageAsync(string language)
     {
-        if (!string.IsNullOrEmpty(language) && language != this.PreferedLanguage)
+        if (!string.IsNullOrEmpty(language) && language != this.PreferredLanguage)
         {
-            this.PreferedLanguage = language;
-            await this.OnPreferedLanguageChangeAsync(language);
+            this.PreferredLanguage = language;
+            await this.OnPreferredLanguageChangeAsync(language);
         }
     }
 
     /// <inheritdoc />
-    protected async Task OnPreferedLanguageChangeAsync(string language)
+    protected async Task OnPreferredLanguageChangeAsync(string language)
     {
-        if (this.PreferedLanguageChanged != null)
+        if (this.PreferredLanguageChanged != null)
         {
-            await this.PreferedLanguageChanged.Invoke(language);
+            await this.PreferredLanguageChanged.Invoke(language);
         }
         await Task.CompletedTask;
     }

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,43 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Dashboard.StateManagement;
-using System.Reactive.Linq;
 using CloudStreams.Core.Api.Client.Services;
 using JsonCons.Utilities;
+using Neuroglia;
+using Neuroglia.Data;
+using Neuroglia.Serialization;
+using Neuroglia.Serialization.Yaml;
 using System.Text.Json;
-using Hylo;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
 /// <summary>
 /// Represents a <see cref="ResourceEditor{TResource}"/>'s form <see cref="ComponentStore{TState}"/>
 /// </summary>
-public class ResourceEditorStore<TResource>
-    : ComponentStore<ResourceEditorState<TResource>>
+/// <remarks>
+/// Initializes a new <see cref="ResourceEditorStore{TResource}"/>
+/// </remarks>
+/// <param name="resourceManagementApi">The service used to interact with a Cloud Streams gateway's API</param>
+/// <param name="monacoEditorHelper">The service used to facilitate the Monaco editor interactions</param>
+/// <param name="jsonSerializer">The The service used to serialize/deserialize objects to/from JSON</param>
+/// <param name="yamlSerializer">The service used to serialize/deserialize objects to/from YAML</param>
+public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceManagementApi, IMonacoEditorHelper monacoEditorHelper, IJsonSerializer jsonSerializer, IYamlSerializer yamlSerializer)
+    : ComponentStore<ResourceEditorState<TResource>>(new())
     where TResource : Resource, new()
 {
-    /// <summary>
-    /// The service used to interact with a Cloud Streams gateway's API
-    /// </summary>
-    private ICloudStreamsCoreApiClient resourceManagementApi;
-
-    /// <summary>
-    /// The service used to facilitate the Monaco editor interactions
-    /// </summary>
-    private IMonacoEditorHelper monacoEditorHelper;
-
-    /// <summary>
-    /// Initializes a new <see cref="ResourceEditorStore{TResource}"/>
-    /// </summary>
-    /// <param name="resourceManagementApi">The service used to interact with a Cloud Streams gateway's API</param>
-    /// <param name="monacoEditorHelper">The service used to facilitate the Monaco editor interactions</param>
-    public ResourceEditorStore(ICloudStreamsCoreApiClient resourceManagementApi, IMonacoEditorHelper monacoEditorHelper)
-        : base(new())
-    {
-        this.resourceManagementApi = resourceManagementApi;
-        this.monacoEditorHelper = monacoEditorHelper;
-    }
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.Resource"/> changes
@@ -100,7 +87,7 @@ public class ResourceEditorStore<TResource>
     public IObservable<IDictionary<string, string[]>> ProblemErrors => this.Select(state => state.ProblemErrors).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe comptured <see cref="ProblemDetails"/>
+    /// Gets an <see cref="IObservable{T}"/> used to observe computed <see cref="Neuroglia.ProblemDetails"/>
     /// </summary>
     public IObservable<ProblemDetails?> ProblemDetails => Observable.CombineLatest(
         this.ProblemType,
@@ -124,13 +111,13 @@ public class ResourceEditorStore<TResource>
         await base.InitializeAsync().ConfigureAwait(false);
         this.Resource.Subscribe(resource =>
         {
-            if (this.monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
+            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML)
             {
-                this.SetEditorValue(Serializer.Yaml.Serialize(resource));
+                this.SetEditorValue(YamlSerializer.Default.Serialize(resource));
             }
             else
             {
-                this.SetEditorValue(Serializer.Json.Serialize(resource, true));
+                this.SetEditorValue(YamlSerializer.Default.Serialize(resource));
             }
         }, token: this.CancellationTokenSource.Token);
     }
@@ -216,7 +203,7 @@ public class ResourceEditorStore<TResource>
             ProblemTitle = problem?.Title ?? string.Empty,
             ProblemStatus = problem?.Status ?? 0,
             ProblemDetail = problem?.Detail ?? string.Empty,
-            ProblemErrors = problem?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, string[]>()
+            ProblemErrors = problem?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? []
         });
     }
 
@@ -227,18 +214,18 @@ public class ResourceEditorStore<TResource>
     /// <returns></returns>
     public async Task ChangeTextEditorLanguageAsync(string language)
     {
-        string textEditorValue = this.Get(state => state.TextEditorValue);
+        var textEditorValue = this.Get(state => state.TextEditorValue);
         try
         {
-            string text = language == PreferedLanguage.YAML ?
-                Serializer.Yaml.ConvertFromJson(textEditorValue) :
-                Serializer.Yaml.ConvertToJson(textEditorValue, true);
+            var text = language == PreferredLanguage.YAML ?
+                yamlSerializer.ConvertFromJson(textEditorValue) :
+                yamlSerializer.ConvertToJson(textEditorValue);
             this.SetEditorValue(text);
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
-            await monacoEditorHelper.ChangePreferedLanguageAsync(language == PreferedLanguage.YAML ? PreferedLanguage.JSON : PreferedLanguage.YAML);
+            await monacoEditorHelper.ChangePreferredLanguageAsync(language == PreferredLanguage.YAML ? PreferredLanguage.JSON : PreferredLanguage.YAML);
         }
     }
 
@@ -267,21 +254,18 @@ public class ResourceEditorStore<TResource>
     {
         this.SetProblemDetails(null);
         this.SetSaving(true);
-        string textEditorValue = this.Get(state => state.TextEditorValue);
-        if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
-        {
-            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
-        }
+        var textEditorValue = this.Get(state => state.TextEditorValue);
+        if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
         TResource? resource;
         try
         {
-            resource = Serializer.Json.Deserialize<TResource>(textEditorValue);
-            resource = await this.resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
+            resource = jsonSerializer.Deserialize<TResource>(textEditorValue);
+            resource = await resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
             this.SetResource(resource);
         }
-        catch (CloudStreamsException ex)
+        catch (ProblemDetailsException ex)
         {
-            this.SetProblemDetails(ex.ProblemDetails);
+            this.SetProblemDetails(ex.Problem);
         }
         catch (Exception ex)
         {
@@ -298,29 +282,26 @@ public class ResourceEditorStore<TResource>
     {
         this.SetProblemDetails(null);
         this.SetSaving(true);
-        TResource? resource = this.Get(state => state.Resource);
+        var resource = this.Get(state => state.Resource);
         if (resource == null)
         {
             return;
         }
-        string textEditorValue = this.Get(state => state.TextEditorValue);
-        if (monacoEditorHelper.PreferedLanguage == PreferedLanguage.YAML)
-        {
-            textEditorValue = Serializer.Yaml.ConvertToJson(textEditorValue);
-        }
-        JsonDocument jsonPatch = JsonPatch.FromDiff(Serializer.Json.SerializeToElement(resource)!.Value, Serializer.Json.SerializeToElement(Serializer.Json.Deserialize<TResource>(textEditorValue))!.Value);
-        Json.Patch.JsonPatch? patch = Serializer.Json.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
+        var textEditorValue = this.Get(state => state.TextEditorValue);
+        if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
+        var jsonPatch = JsonPatch.FromDiff(jsonSerializer.SerializeToElement(resource)!.Value, jsonSerializer.SerializeToElement(jsonSerializer.Deserialize<TResource>(textEditorValue))!.Value);
+        var patch = jsonSerializer.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
         if (patch != null)
         {
             var resourcePatch = new Patch(PatchType.JsonPatch, jsonPatch);
             try
             {
-                resource = await this.resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
+                resource = await resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
                 this.SetResource(resource);
             }
-            catch(CloudStreamsException ex)
+            catch(ProblemDetailsException ex)
             {
-                this.SetProblemDetails(ex.ProblemDetails);
+                this.SetProblemDetails(ex.Problem);
             }
             catch (Exception ex)
             {

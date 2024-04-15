@@ -1,43 +1,28 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<GenerateDocumentationFile>True</GenerateDocumentationFile>
-	<OutputType>Library</OutputType>
 	<VersionPrefix>0.14.0</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 	<Copyright>Copyright © 2023-Present The Cloud Streams Authors. All rights reserved.</Copyright>
 	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
 	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Commands\**" />
-    <Content Remove="Commands\**" />
-    <EmbeddedResource Remove="Commands\**" />
-    <None Remove="Commands\**" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\..\..\assets\logo.png" Link="logo.png">
-      <PackagePath>\</PackagePath>
-      <Pack>True</Pack>
-    </None>
-    <None Include="..\..\..\README.md" Link="README.md">
-      <PackagePath>\</PackagePath>
-      <Pack>True</Pack>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Polly" Version="7.2.4" />
+    <PackageReference Include="FluentValidation" Version="11.9.0" />
+    <PackageReference Include="Grpc.Core.Api" Version="2.62.0" />
+	<PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.9.6" />
+    <PackageReference Include="Polly" Version="8.3.1" />
   </ItemGroup>
 
   <ItemGroup>

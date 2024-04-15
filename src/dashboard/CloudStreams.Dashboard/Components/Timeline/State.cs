@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ public record TimelineState
     /// <summary>
     /// Gets/sets the list of <see cref="StreamReadOptions"/> used to populate <see cref="TimelineLane"/>s
     /// </summary>
-    public IEnumerable<StreamReadOptions> StreamsReadOptions { get; set; } = new List<StreamReadOptions>() { new StreamReadOptions(StreamReadDirection.Backwards) };
+    public IEnumerable<StreamReadOptions> StreamsReadOptions { get; set; } = [new StreamReadOptions(StreamReadDirection.Backwards)];
     /// <summary>
     /// Gets/sets the list of <see cref="TimelineLane"/> to build the <see cref="Timeline"/> with
     /// </summary>

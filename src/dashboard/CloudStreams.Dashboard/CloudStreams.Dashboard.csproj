@@ -1,30 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<GenerateDocumentationFile>True</GenerateDocumentationFile>
 	<VersionPrefix>0.14.0</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 	<Copyright>Copyright © 2023-Present The Cloud Streams Authors. All rights reserved.</Copyright>
 	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
 	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Blazor.Bootstrap" Version="1.10.1" />
-    <PackageReference Include="BlazorMonaco" Version="3.1.0" />
+    <PackageReference Include="Blazor.Bootstrap" Version="2.2.0" />
+    <PackageReference Include="BlazorMonaco" Version="3.2.0" />
     <PackageReference Include="JsonCons.Utilities" Version="1.0.0" />
-    <PackageReference Include="JsonPatch.Net" Version="2.1.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="7.0.10" />
-	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="7.0.10" PrivateAssets="all" />
-	<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.10" />
+    <PackageReference Include="JsonPatch.Net" Version="3.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.4" />
+	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.4" PrivateAssets="all" />
+	<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.4" />
   </ItemGroup>
 
   <ItemGroup>

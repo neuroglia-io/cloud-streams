@@ -1,9 +1,9 @@
 ﻿@namespace CloudStreams.Dashboard.Pages.Subscriptions.List
 @page "/subscriptions"
 @using CloudStreams.Core.Api.Client.Services;
-@using Hylo;
 @using Json.Patch;
 @using Json.Pointer;
+@using Neuroglia.Data
 @inherits ResourceManagementComponent<Subscription>
 @inject ICloudStreamsCoreApiClient ApiClient;
 
@@ -101,9 +101,9 @@
 
 <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
 
-<Offcanvas @ref="detailsOffcanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+<Offcanvas @ref="detailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
-<Offcanvas @ref="editorOffcanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+<Offcanvas @ref="editorOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
 <ConfirmDialog @ref="dialog" />
 

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,33 +11,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using CloudStreams.Core.Infrastructure;
-using CloudStreams.Core.Infrastructure.Services;
+using CloudStreams.Core.Application.Services;
 using CloudStreams.Gateway.Application.Services;
-using Hylo.Api.Application;
+using Neuroglia.Mediation;
 using System.ComponentModel.DataAnnotations;
 
 namespace CloudStreams.Gateway.Application.Commands.CloudEvents;
 
 /// <summary>
-/// Represents the <see cref="ICommand"/> used to consume an incoming <see cref="Core.Data.CloudEvent"/>s
+/// Represents the <see cref="ICommand"/> used to consume an incoming <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s
 /// </summary>
 public class ConsumeEventCommand
-    : ICommand
+    : Command
 {
 
     /// <summary>
     /// Initializes a new <see cref="ConsumeEventCommand"/>
     /// </summary>
-    /// <param name="cloudEvent">The <see cref="CloudEvent"/> to consume</param>
+    protected ConsumeEventCommand() { this.CloudEvent = null!; }
+    
+    /// <summary>
+    /// Initializes a new <see cref="ConsumeEventCommand"/>
+    /// </summary>
+    /// <param name="cloudEvent">The <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/> to consume</param>
     public ConsumeEventCommand(CloudEvent cloudEvent)
     {
         this.CloudEvent = cloudEvent;
     }
-
+    
     /// <summary>
-    /// Gets the <see cref="Core.Data.CloudEvent"/> to consume
+    /// Gets the <see cref="CloudEvent"/> to consume
     /// </summary>
     [Required]
     public CloudEvent CloudEvent { get; }
@@ -47,31 +50,20 @@ public class ConsumeEventCommand
 /// <summary>
 /// Represents the service used to handle <see cref="ConsumeEventCommand"/>s
 /// </summary>
-public class ConsumeCloudEventCommandHandler
-    : ICommandHandler<ConsumeEventCommand>
+/// <inheritdoc/>
+public class ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, IGatewayMetrics metrics, ICloudEventStore eventStore)
+        : ICommandHandler<ConsumeEventCommand>
 {
 
-    readonly ICloudEventAdmissionControl _EventAdmissionControl;
-    readonly IGatewayMetrics _Metrics;
-    readonly IEventStoreProvider _EventStoreProvider;
-
     /// <inheritdoc/>
-    public ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAdmissionControl, IGatewayMetrics metrics, IEventStoreProvider eventStoreProvider)
-    {
-        this._EventAdmissionControl = eventAdmissionControl;
-        this._Metrics = metrics;
-        this._EventStoreProvider = eventStoreProvider;
-    }
-
-    /// <inheritdoc/>
-    public async Task<ApiResponse> Handle(ConsumeEventCommand command, CancellationToken cancellationToken)
+    public async Task<IOperationResult> HandleAsync(ConsumeEventCommand command, CancellationToken cancellationToken)
     {
         var e = command.CloudEvent;
-        var admissionResult = await this._EventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
-        if (!admissionResult.IsSuccessStatusCode()) return new ApiResponse(admissionResult.Type!, admissionResult.Title!, admissionResult.Status, admissionResult.Detail, admissionResult.Instance, admissionResult.Errors?.ToDictionary(e => e.Key, e => e.Value), admissionResult.ExtensionData);
-        await this._EventStoreProvider.GetEventStore().AppendAsync(admissionResult.Content!, cancellationToken).ConfigureAwait(false);
-        this._Metrics.IncrementTotalIngestedEvents();
-        return ApiResponse.Accepted();
+        var admissionResult = await eventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
+        if (admissionResult.Data == null || !admissionResult.IsSuccess()) return admissionResult;
+        await eventStore.AppendAsync(admissionResult.Data, cancellationToken).ConfigureAwait(false);
+        metrics.IncrementTotalIngestedEvents();
+        return new OperationResult((int)HttpStatusCode.Accepted);
     }
 
 }

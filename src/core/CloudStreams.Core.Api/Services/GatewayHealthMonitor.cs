@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,13 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo;
-using Hylo.Infrastructure.Services;
-using Json.Patch;
-using Json.Pointer;
+using Neuroglia.Data.Infrastructure.ResourceOriented.Services;
+using Neuroglia.Reactive;
+using Neuroglia.Serialization;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Mime;
 using System.Reactive.Linq;
 using System.Text;
@@ -28,7 +25,15 @@ namespace CloudStreams.Core.Api.Services;
 /// <summary>
 /// Represents a service used to monitor the health of a gateway
 /// </summary>
-public class GatewayHealthMonitor
+/// <remarks>
+/// Initializes a new <see cref="GatewayHealthMonitor"/>
+/// </remarks>
+/// <param name="logger">The service used to perform logging</param>
+/// <param name="serializer">The service used to serialize/deserialize objects to/from JSON</param>
+/// <param name="repository">The service used to manage resources</param>
+/// <param name="monitor">The service used to monitor the handled <see cref="Resources.Gateway"/></param>
+/// <param name="httpClient">The service used to perform HTTP requests</param>
+public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSerializer serializer, IRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient)
     : IHostedService, IDisposable, IAsyncDisposable
 {
 
@@ -36,47 +41,37 @@ public class GatewayHealthMonitor
     bool _disposed;
 
     /// <summary>
-    /// Initializes a new <see cref="GatewayHealthMonitor"/>
-    /// </summary>
-    /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
-    /// <param name="repository">The service used to manage resources</param>
-    /// <param name="monitor">The service used to monitor the handled <see cref="Data.Gateway"/></param>
-    /// <param name="httpClient">The service used to perform HTTP requests</param>
-    public GatewayHealthMonitor(ILoggerFactory loggerFactory, IRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient)
-    {
-        this.Logger = loggerFactory.CreateLogger(this.GetType());
-        this.Repository = repository;
-        this.Monitor = monitor;
-        this.HttpClient = httpClient;
-    }
-
-    /// <summary>
     /// Gets the service used to perform logging
     /// </summary>
-    protected ILogger Logger { get; }
+    protected ILogger Logger { get; } = logger;
+
+    /// <summary>
+    /// Gets the service used to serialize/deserialize objects to/from JSON
+    /// </summary>
+    protected IJsonSerializer Serializer { get; } = serializer;
 
     /// <summary>
     /// Gets the service used to manage resources
     /// </summary>
-    protected IRepository Repository { get; }
+    protected IRepository Repository { get; } = repository;
 
     /// <summary>
-    /// Gets the service used to monitor the handled <see cref="Data.Gateway"/>
+    /// Gets the service used to monitor the handled <see cref="Resources.Gateway"/>
     /// </summary>
-    protected IResourceMonitor<Gateway> Monitor { get; }
+    protected IResourceMonitor<Gateway> Monitor { get; } = monitor;
 
     /// <summary>
     /// Gets the service used to perform HTTP requests
     /// </summary>
-    protected HttpClient HttpClient { get; }
+    protected HttpClient HttpClient { get; } = httpClient;
 
     /// <summary>
-    /// Gets the monitored <see cref="Data.Gateway"/>
+    /// Gets the monitored <see cref="Resources.Gateway"/>
     /// </summary>
     protected Gateway Gateway => this.Monitor.Resource;
 
     /// <summary>
-    /// Gets the <see cref="Timer"/> used to periodically check the health of the <see cref="Gateway"/>
+    /// Gets the <see cref="Timer"/> used to periodically check the health of the <see cref="Resources.Gateway"/>
     /// </summary>
     protected Timer? HealthCheckTimer { get; private set; }
 
@@ -104,7 +99,7 @@ public class GatewayHealthMonitor
     }
 
     /// <summary>
-    /// Handles changes to the <see cref="Gateway"/>'s <see cref="ServiceHealthCheckConfiguration"/>
+    /// Handles changes to the <see cref="Resources.Gateway"/>'s <see cref="ServiceHealthCheckConfiguration"/>
     /// </summary>
     /// <param name="configuration">The updated <see cref="ServiceHealthCheckConfiguration"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
@@ -115,8 +110,8 @@ public class GatewayHealthMonitor
         if (this.Gateway.Spec.Service == null || this.Gateway.Spec.Service.HealthChecks == null) return;
         var delay = this.Gateway.Status?.LastHealthCheckAt.HasValue == true ? DateTimeOffset.Now - this.Gateway.Status.LastHealthCheckAt : TimeSpan.Zero;
         if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
-        if (this.Gateway.Spec.Service.HealthChecks.Interval.HasValue && this.Gateway.Spec.Service.HealthChecks.Interval > delay) delay = this.Gateway.Spec.Service.HealthChecks.Interval;
-        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+        if (this.Gateway.Spec.Service.HealthChecks.Interval != null && this.Gateway.Spec.Service.HealthChecks.Interval > delay) delay = this.Gateway.Spec.Service.HealthChecks.Interval;
+        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
@@ -137,7 +132,7 @@ public class GatewayHealthMonitor
             var uri = $"{hostNameAndPort}{path}";
             using var request = new HttpRequestMessage(new HttpMethod(this.Gateway.Spec.Service.HealthChecks.Request.Method), uri);
             if (this.Gateway.Spec.Service.HealthChecks.Request.Headers != null) this.Gateway.Spec.Service.HealthChecks.Request.Headers!.ToList().ForEach(h => request.Headers.TryAddWithoutValidation(h.Key, h.Value));
-            if (this.Gateway.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(Serializer.Json.Serialize(this.Gateway.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
+            if (this.Gateway.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(this.Serializer.SerializeToText(this.Gateway.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
             HealthCheckResponse? healthCheckResponse = null;
             try
             {
@@ -150,12 +145,12 @@ public class GatewayHealthMonitor
                 {
                     try
                     {
-                        healthCheckResponse = Serializer.Json.Deserialize<HealthCheckResponse>(content)!;
+                        healthCheckResponse = this.Serializer.Deserialize<HealthCheckResponse>(content)!;
                     }
                     catch { }
                     if(healthCheckResponse == null)
                     {
-                        var result = Serializer.Json.Deserialize<JsonObject>(content);
+                        var result = this.Serializer.Deserialize<JsonObject>(content);
                         if (result?.TryGetPropertyValue(nameof(HealthCheckResult.Status).ToCamelCase(), out var node) == true && node != null) healthCheckResponse = new(node.GetValue<string>().ToCamelCase());
                         else healthCheckResponse = new(response.IsSuccessStatusCode ? HealthStatus.Healthy : HealthStatus.Unhealthy);
                     } 
@@ -178,7 +173,7 @@ public class GatewayHealthMonitor
                 patchTarget.Status ??= new GatewayStatus();
                 patchTarget.Status.HealthStatus = healthCheckResponse.Status;
                 patchTarget.Status.LastHealthCheckAt = DateTimeOffset.Now;
-                var patch = new Patch(PatchType.JsonPatch, JsonPatchHelper.CreateJsonPatchFromDiff(patchSource, patchTarget));
+                var patch = new Patch(PatchType.JsonPatch, JsonPatchUtility.CreateJsonPatchFromDiff(patchSource, patchTarget));
                 await this.Repository.PatchStatusAsync<Gateway>(patch, this.Gateway.GetName(), this.Gateway.GetNamespace(), false, this.CancellationTokenSource!.Token).ConfigureAwait(false);
             }
         }
@@ -190,7 +185,7 @@ public class GatewayHealthMonitor
         {
             if (this.Gateway.Spec.Service != null && this.Gateway.Spec.Service.HealthChecks != null)
             {
-                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
             }
         }
     }

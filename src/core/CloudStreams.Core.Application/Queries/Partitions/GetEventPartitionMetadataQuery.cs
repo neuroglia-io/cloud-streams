@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using CloudStreams.Core.Infrastructure.Services;
-using Hylo.Api.Application;
+using CloudStreams.Core.Application.Services;
 using System.ComponentModel.DataAnnotations;
 
 namespace CloudStreams.Core.Application.Queries.Partitions;
@@ -21,45 +19,33 @@ namespace CloudStreams.Core.Application.Queries.Partitions;
 /// <summary>
 /// Represents the <see cref="IQuery{TResult}"/> used to get the metadata of the application's cloud event stream
 /// </summary>
-public class GetEventPartitionMetadataQuery
-    : IQuery<PartitionMetadata>
+/// <remarks>
+/// Initializes a new <see cref="GetEventPartitionMetadataQuery"/>
+/// </remarks>
+/// <param name="partition">The cloud event partition to get metadata for</param>
+public class GetEventPartitionMetadataQuery(PartitionReference partition)
+    : Query<PartitionMetadata>
 {
-
-    /// <summary>
-    /// Initializes a new <see cref="GetEventPartitionMetadataQuery"/>
-    /// </summary>
-    /// <param name="partition">The cloud event partition to get metadata for</param>
-    public GetEventPartitionMetadataQuery(PartitionReference partition)
-    {
-        this.Partition = partition;
-    }
 
     /// <summary>
     /// Gets the cloud event partition to get metadata for
     /// </summary>
     [Required]
-    public virtual PartitionReference Partition { get; protected set; }
+    public virtual PartitionReference Partition { get; protected set; } = partition;
 
 }
 
 /// <summary>
 /// Represents the service used to handle <see cref="GetEventPartitionMetadataQuery"/> instances
 /// </summary>
-public class GetEventStreamMetadataQueryHandler
+public class GetEventStreamMetadataQueryHandler(ICloudEventStore eventStore)
     : IQueryHandler<GetEventPartitionMetadataQuery, PartitionMetadata>
 {
 
     /// <inheritdoc/>
-    public GetEventStreamMetadataQueryHandler(IEventStoreProvider eventStoreProvider)
+    public virtual async Task<IOperationResult<PartitionMetadata>> HandleAsync(GetEventPartitionMetadataQuery query, CancellationToken cancellationToken)
     {
-        this._eventStoreProvider = eventStoreProvider;
-    }
-
-    IEventStoreProvider _eventStoreProvider;
-
-    async Task<ApiResponse<PartitionMetadata>> MediatR.IRequestHandler<GetEventPartitionMetadataQuery, ApiResponse<PartitionMetadata>>.Handle(GetEventPartitionMetadataQuery query, CancellationToken cancellationToken)
-    {
-        return this.Ok(await this._eventStoreProvider.GetEventStore().GetPartitionMetadataAsync(query.Partition, cancellationToken));
+        return this.Ok(await eventStore.GetPartitionMetadataAsync(query.Partition, cancellationToken));
     }
 
 }

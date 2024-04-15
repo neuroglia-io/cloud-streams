@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,5 +11,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-global using CloudStreams.Core;
-global using Hylo;
+global using CloudStreams.Core.Resources;
+global using Neuroglia.Data.Infrastructure.ResourceOriented;

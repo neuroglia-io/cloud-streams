@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@ public static class CloudEventAttributeConflictResolution
 {
 
     /// <summary>
-    /// Indicates that the value of the existing attribute should be overwriten
+    /// Indicates that the value of the existing attribute should be overwritten
     /// </summary>
     public const string Overwrite = "overwrite";
     /// <summary>
-    /// Indicates that the value be writen to a fallback attribute when the target attribute exists
+    /// Indicates that the value be written to a fallback attribute when the target attribute exists
     /// </summary>
     public const string Fallback = "fallback";
 

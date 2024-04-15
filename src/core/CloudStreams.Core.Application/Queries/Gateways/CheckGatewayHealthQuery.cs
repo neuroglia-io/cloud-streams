@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,13 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using CloudStreams.Core.Properties;
-using Hylo;
-using Hylo.Api.Application;
-using Hylo.Infrastructure.Services;
+using Neuroglia.Serialization;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -25,10 +20,10 @@ using System.Text.Json.Nodes;
 namespace CloudStreams.Core.Application.Queries.Gateways;
 
 /// <summary>
-/// Represents the <see cref="IQuery{TResult}"/> used to check the health of a <see cref="Data.Gateway"/>
+/// Represents the <see cref="IQuery{TResult}"/> used to check the health of a <see cref="Gateway"/>
 /// </summary>
 public class CheckGatewayHealthQuery
-    : IQuery<HealthCheckResponse?>
+    : Query<HealthCheckResponse?>
 {
 
     /// <summary>
@@ -55,47 +50,38 @@ public class CheckGatewayHealthQuery
 /// <summary>
 /// Represents the service used to handle <see cref="CheckGatewayHealthQuery"/> instances
 /// </summary>
-public class CheckGatewayHealthQueryHandler
+public class CheckGatewayHealthQueryHandler(IRepository repository, HttpClient httpClient, IJsonSerializer serializer)
     : IQueryHandler<CheckGatewayHealthQuery, HealthCheckResponse?>
 {
 
-    readonly IRepository _repository;
-    readonly HttpClient _httpClient;
-
     /// <inheritdoc/>
-    public CheckGatewayHealthQueryHandler(IRepository repository, HttpClient httpClient)
+    public virtual async Task<IOperationResult<HealthCheckResponse?>> HandleAsync(CheckGatewayHealthQuery query, CancellationToken cancellationToken)
     {
-        this._repository = repository;
-        this._httpClient = httpClient;
-    }
-
-    async Task<ApiResponse<HealthCheckResponse?>> MediatR.IRequestHandler<CheckGatewayHealthQuery, ApiResponse<HealthCheckResponse?>>.Handle(CheckGatewayHealthQuery query, CancellationToken cancellationToken)
-    {
-        var gateway = await this._repository.GetAsync<Gateway>(query.Name, null, cancellationToken).ConfigureAwait(false);
-        if (gateway == null) return new(ProblemTypes.ResourceNotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound);
+        var gateway = await repository.GetAsync<Gateway>(query.Name, null, cancellationToken).ConfigureAwait(false);
+        if (gateway == null) return this.NotFound();
         if (gateway.Spec.Service == null || gateway.Spec.Service.HealthChecks == null) return this.Ok(null);
         using var request = new HttpRequestMessage(new HttpMethod(gateway.Spec.Service.HealthChecks.Request.Method), $"{gateway.Spec.Service.Uri.OriginalString}{gateway.Spec.Service.HealthChecks.Request.Path}");
         if (gateway.Spec.Service.HealthChecks.Request.Headers != null) gateway.Spec.Service.HealthChecks.Request.Headers!.ToList().ForEach(h => request.Headers.TryAddWithoutValidation(h.Key, h.Value));
-        if (gateway.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(Serializer.Json.Serialize(gateway.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
+        if (gateway.Spec.Service.HealthChecks.Request.Body != null) request.Content = new StringContent(serializer.SerializeToText(gateway.Spec.Service.HealthChecks.Request.Body), Encoding.UTF8, MediaTypeNames.Application.Json);
         HealthCheckResponse? healthCheckResponse = null;
         try
         {
             var stopwatch = new Stopwatch();
             stopwatch.Start();
-            using var response = await this._httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             stopwatch.Stop();
             var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 try
                 {
-                    healthCheckResponse = Serializer.Json.Deserialize<HealthCheckResponse>(content)!;
+                    healthCheckResponse = serializer.Deserialize<HealthCheckResponse>(content)!;
                 }
                 catch { }
                 if (healthCheckResponse == null)
                 {
-                    var result = Serializer.Json.Deserialize<JsonObject>(content);
-                    if (result?.TryGetPropertyValue(nameof(Data.HealthCheckResult.Status).ToCamelCase(), out var node) == true && node != null) healthCheckResponse = new(node.GetValue<string>());
+                    var result = serializer.Deserialize<JsonObject>(content);
+                    if (result?.TryGetPropertyValue(nameof(HealthCheckResult.Status).ToCamelCase(), out var node) == true && node != null) healthCheckResponse = new(node.GetValue<string>());
                     else healthCheckResponse = new(response.IsSuccessStatusCode ? HealthStatus.Healthy : HealthStatus.Unhealthy);
                 }
             }

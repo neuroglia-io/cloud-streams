@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,17 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Queries.Streams;
-using CloudStreams.Core.Data;
-using Hylo.Api.Http;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using System.Net;
 
 namespace CloudStreams.Core.Api.Controllers;
 
 /// <summary>
 /// Represents the API controller used to manage the cloud event streams
 /// </summary>
+/// <inheritdoc/>
 [Route("api/core/v1/cloud-events/stream")]
-public class CloudEventStreamController
-    : ApiController
+public class CloudEventStreamController(IMediator mediator)
+    : ApiController(mediator)
 {
-
-    /// <inheritdoc/>
-    public CloudEventStreamController(IMediator mediator) : base(mediator) { }
 
     /// <summary>
     /// Gets the cloud event stream's metadata
@@ -38,11 +31,11 @@ public class CloudEventStreamController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<StreamMetadata>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> GetStreamMetadata(CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send(new GetEventStreamMetadataQuery(), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new GetEventStreamMetadataQuery(), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -53,11 +46,11 @@ public class CloudEventStreamController
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("read")]
     [ProducesResponseType(typeof(IEnumerable<object>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Hylo.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     public virtual async Task<IActionResult> ReadStream([FromQuery] StreamReadOptions options, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.Send(new ReadEventStreamQuery(options), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ReadEventStreamQuery(options), cancellationToken).ConfigureAwait(false));
     }
 
 }

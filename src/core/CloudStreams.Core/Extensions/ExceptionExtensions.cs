@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ public static class ExceptionExtensions
     /// <returns>New <see cref="ProblemDetails"/> that describe the <see cref="Exception"/></returns>
     public static ProblemDetails ToProblemDetails(this Exception exception)
     {
-        if (exception == null) throw new ArgumentNullException(nameof(exception));
-        if (exception is CloudStreamsException csex && csex.ProblemDetails != null) return csex.ProblemDetails;
+        ArgumentNullException.ThrowIfNull(exception);
+        if (exception is ProblemDetailsException problemDetailsExceptions && problemDetailsExceptions.Problem != null) return problemDetailsExceptions.Problem;
         var statusCode = exception switch
         {
             HttpRequestException httpEx => httpEx.StatusCode.HasValue ? (int)httpEx.StatusCode : 500,

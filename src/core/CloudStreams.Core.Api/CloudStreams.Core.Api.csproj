@@ -1,44 +1,43 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <OutputType>Library</OutputType>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
 	<VersionPrefix>0.14.0</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+	<Copyright>Copyright © 2023-Present The Cloud Streams Authors. All rights reserved.</Copyright>
 	<PackageProjectUrl>https://github.com/neuroglia-io/cloud-streams</PackageProjectUrl>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
 	<RepositoryUrl>https://github.com/neuroglia-io/cloud-streams</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
-    <Copyright>Copyright © 2023 - Present The Cloud Streams Authors. All rights reserverd</Copyright>
-    <PackageTags>cloudstreams;core;api;</PackageTags>
-    <Description>Contains the Cloud Streams Core API controllers and services</Description>
-    <PackageIcon>logo.png</PackageIcon>
-	<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-	<IsPackable>True</IsPackable>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+	<DockerFileTag>cloud-streams/broker</DockerFileTag>
+	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	<DockerfileContext>..\..\..</DockerfileContext>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\..\assets\logo.png" Link="logo.png">
-      <PackagePath>\</PackagePath>
-      <Pack>True</Pack>
-    </None>
-    <None Include="..\..\..\README.md" Link="README.md">
-      <PackagePath>\</PackagePath>
-      <Pack>True</Pack>
-    </None>
+	<PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
+	<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
+	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.4" />
+	<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.20.1" />
+	<PackageReference Include="Neuroglia.Mediation.AspNetCore" Version="4.9.6" />
+	<PackageReference Include="Neuroglia.Data.Expressions.JQ" Version="4.9.6" />
+	<PackageReference Include="Neuroglia.Plugins" Version="4.9.6" />
+	<PackageReference Include="Neuroglia.Security.AspNetCore" Version="4.9.6" />
+	<PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.5.0" />
+	<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.5.0" />
+	<PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.8.0" />
+	<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.8.0" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.8.1" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.8.1" />
   </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Hylo.Api.Http" Version="0.7.9" />
-  </ItemGroup>
-
+	
   <ItemGroup>
     <ProjectReference Include="..\CloudStreams.Core.Api.Client\CloudStreams.Core.Api.Client.csproj" />
     <ProjectReference Include="..\CloudStreams.Core.Application\CloudStreams.Core.Application.csproj" />

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,12 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo;
-using Hylo.Api.Application;
-using Hylo.Api.Application.Commands.Resources.Generic;
-using Hylo.Api.Application.Queries.Resources.Generic;
-using Hylo.Infrastructure.Services;
+using CloudStreams.Core.Application.Commands.Resources.Generic;
+using CloudStreams.Core.Application.Queries.Resources.Generic;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CloudStreams.Core.Application;
 
@@ -31,9 +28,9 @@ public static class IServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure</param>
     /// <returns>The configured <see cref="IServiceCollection"/></returns>
-    public static IServiceCollection AddGenericQueryHandlers(this IServiceCollection services)
+    public static IServiceCollection AddCoreApiQueries(this IServiceCollection services)
     {
-        foreach (Type queryableType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Hylo.Resource).IsAssignableFrom(t)))
+        foreach (Type queryableType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Resource).IsAssignableFrom(t)))
         {
             var serviceLifetime = ServiceLifetime.Scoped;
             Type queryType;
@@ -42,32 +39,32 @@ public static class IServiceCollectionExtensions
             Type handlerImplementationType;
 
             queryType = typeof(GetResourceQuery<>).MakeGenericType(queryableType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(queryableType);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(queryableType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             handlerImplementationType = typeof(GetResourceQueryHandler<>).MakeGenericType(queryableType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             queryType = typeof(GetResourceDefinitionQuery<>).MakeGenericType(queryableType);
-            resultType = typeof(ApiResponse<IResourceDefinition>);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            resultType = typeof(IOperationResult<IResourceDefinition>);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             handlerImplementationType = typeof(GetResourceDefinitionQueryHandler<>).MakeGenericType(queryableType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             queryType = typeof(GetResourcesQuery<>).MakeGenericType(queryableType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(typeof(IAsyncEnumerable<>).MakeGenericType(queryableType));
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(typeof(IAsyncEnumerable<>).MakeGenericType(queryableType));
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             handlerImplementationType = typeof(GetResourcesQueryHandler<>).MakeGenericType(queryableType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             queryType = typeof(ListResourcesQuery<>).MakeGenericType(queryableType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(typeof(Hylo.ICollection<>).MakeGenericType(queryableType));
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(typeof(Neuroglia.Data.Infrastructure.ResourceOriented.ICollection<>).MakeGenericType(queryableType));
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             handlerImplementationType = typeof(ListResourcesQueryHandler<>).MakeGenericType(queryableType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             queryType = typeof(WatchResourcesQuery<>).MakeGenericType(queryableType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(typeof(IResourceWatch<>).MakeGenericType(queryableType));
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(queryType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(typeof(IResourceWatch<>).MakeGenericType(queryableType));
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(queryType, resultType);
             handlerImplementationType = typeof(WatchResourcesQueryHandler<>).MakeGenericType(queryableType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
         }
@@ -79,9 +76,9 @@ public static class IServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to configure</param>
     /// <returns>The configured <see cref="IServiceCollection"/></returns>
-    public static IServiceCollection AddGenericCommandHandlers(this IServiceCollection services)
+    public static IServiceCollection AddCoreApiCommands(this IServiceCollection services)
     {
-        foreach (Type resourceType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Hylo.Resource).IsAssignableFrom(t)))
+        foreach (Type resourceType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Resource).IsAssignableFrom(t)))
         {
             var serviceLifetime = ServiceLifetime.Scoped;
             Type commandType;
@@ -90,26 +87,26 @@ public static class IServiceCollectionExtensions
             Type handlerImplementationType;
 
             commandType = typeof(CreateResourceCommand<>).MakeGenericType(resourceType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(resourceType);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(commandType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);
             handlerImplementationType = typeof(CreateResourceCommandHandler<>).MakeGenericType(resourceType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             commandType = typeof(ReplaceResourceCommand<>).MakeGenericType(resourceType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(resourceType);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(commandType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);
             handlerImplementationType = typeof(ReplaceResourceCommandHandler<>).MakeGenericType(resourceType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             commandType = typeof(PatchResourceCommand<>).MakeGenericType(resourceType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(resourceType);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(commandType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);
             handlerImplementationType = typeof(PatchResourceCommandHandler<>).MakeGenericType(resourceType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
             commandType = typeof(DeleteResourceCommand<>).MakeGenericType(resourceType);
-            resultType = typeof(ApiResponse<>).MakeGenericType(resourceType);
-            handlerServiceType = typeof(MediatR.IRequestHandler<,>).MakeGenericType(commandType, resultType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);
             handlerImplementationType = typeof(DeleteResourceCommandHandler<>).MakeGenericType(resourceType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 

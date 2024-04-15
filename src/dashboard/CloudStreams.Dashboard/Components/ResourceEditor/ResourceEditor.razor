@@ -1,15 +1,15 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ResourceEditorStateManagement
-@using Hylo;
 @typeparam TResource where TResource : Resource, new()
 @inherits StatefulComponent<ResourceEditorStore<TResource>, ResourceEditorState<TResource>>
 @inject IMonacoEditorHelper MonacoEditorHelper
+@inject IJSRuntime JSRuntime
 
 <div class="container-fluid d-flex flex-grow flex-column">
     <div class="row flex-grow">
-        <PreferedLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
+        <PreferredLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
         <StandaloneCodeEditor @ref="textBasedEditor"
-            ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(this.textEditorValue, false, this.MonacoEditorHelper.PreferedLanguage)"
+            ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(this.textEditorValue, false, this.MonacoEditorHelper.PreferredLanguage)"
             OnDidInit="OnTextBasedEditorInit"
             OnDidChangeModelContent="OnTextBasedValueChanged" />
         <div class="problems">
@@ -86,7 +86,7 @@
     private bool saving = false;
 
     /// <summary>
-    /// The <see cref="ProblemDetails"/> that occured when trying to save the resource, if any
+    /// The <see cref="ProblemDetails"/> that occurred when trying to save the resource, if any
     /// </summary>
     private ProblemDetails? problemDetails = null;
 
@@ -131,16 +131,13 @@
     }
 
     /// <summary>
-    /// Sets the editor as readonly when saving
+    /// Sets the editor as read-only when saving
     /// </summary>
-    /// <param name="saving">Whevener the resource is in a saving state</param>
+    /// <param name="saving">Whenever the resource is in a saving state</param>
     private void OnSavingChanged(bool saving)
     {
         this.saving = saving;
-        if (this.textBasedEditor != null)
-        {
-            this.textBasedEditor.UpdateOptions(new EditorUpdateOptions() { ReadOnly = saving });
-        }
+        if (this.textBasedEditor != null) this.textBasedEditor.UpdateOptions(new EditorUpdateOptions() { ReadOnly = saving });
         this.StateHasChanged();
     }
 
@@ -150,11 +147,11 @@
     /// <returns>A <see cref="Task"/></returns>
     private async Task OnTextBasedEditorInit()
     {
-        string resourceUri = $"inmemory://{typeof(TResource).Name.ToLower()}";
-        this.textEditorModel = await Global.GetModel(resourceUri);
+        var resourceUri = $"inmemory://{typeof(TResource).Name.ToLower()}";
+        this.textEditorModel = await Global.GetModel(this.JSRuntime, resourceUri);
         if (this.textEditorModel == null)
         {
-            this.textEditorModel = await Global.CreateModel(this.textEditorValue, this.MonacoEditorHelper.PreferedLanguage, resourceUri);
+            this.textEditorModel = await Global.CreateModel(this.JSRuntime, this.textEditorValue, this.MonacoEditorHelper.PreferredLanguage, resourceUri);
             await this.textBasedEditor!.SetModel(this.textEditorModel);
         }
         else
@@ -174,7 +171,7 @@
     {
         if (!this.updating && this.textBasedEditor != null && this.textEditorInput != null)
         {
-            string text = await this.textBasedEditor.GetValue();
+            var text = await this.textBasedEditor.GetValue();
             this.textEditorInput.OnNext(text);
         }
     }
@@ -187,11 +184,8 @@
     {
         if (this.textBasedEditor != null)
         {
-            string editorText = await this.textBasedEditor.GetValue();
-            if (this.textEditorValue != editorText)
-            {
-                await this.textBasedEditor.SetValue(this.textEditorValue);
-            }
+            var editorText = await this.textBasedEditor.GetValue();
+            if (this.textEditorValue != editorText) await this.textBasedEditor.SetValue(this.textEditorValue);
         }
     }
 
@@ -204,7 +198,7 @@
         if (this.textBasedEditor != null && this.textEditorModel != null)
         {
             //TextModel model = await this.textBasedEditor!.GetModel();
-            await Global.SetModelLanguage(this.textEditorModel, this.MonacoEditorHelper.PreferedLanguage);
+            await Global.SetModelLanguage(this.JSRuntime, this.textEditorModel, this.MonacoEditorHelper.PreferredLanguage);
         }
     }
 
@@ -215,9 +209,8 @@
     /// <returns>A <see cref="Task"/></returns>
     private async Task ToggleTextBasedEditorLanguageAsync(string language)
     {
-
-        TextModel model = await this.textBasedEditor!.GetModel();
-        string editorLanguage = await model.GetLanguageId();
+        var model = await this.textBasedEditor!.GetModel();
+        var editorLanguage = await model.GetLanguageId();
         if (editorLanguage != language)
         {
             await this.Store.ChangeTextEditorLanguageAsync(language);
@@ -237,10 +230,7 @@
         {
             if (disposing)
             {
-                if (this.textEditorInput != null)
-                {
-                    this.textEditorInput.Dispose();
-                }
+                if (this.textEditorInput != null) this.textEditorInput.Dispose();
                 if (this.textEditorModel != null)
                 {
                     this.textEditorModel.DisposeModel();

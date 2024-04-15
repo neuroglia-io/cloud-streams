@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Hylo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Neuroglia.Reactive;
 using System.Reactive.Subjects;
 
 namespace CloudStreams.Dashboard.StateManagement;
@@ -62,39 +62,30 @@ public class Store
     /// <summary>
     /// Gets a <see cref="List{T}"/> containing the <see cref="Store"/>'s <see cref="IFeature"/>s
     /// </summary>
-    protected List<IFeature> Features { get; } = new();
+    protected List<IFeature> Features { get; } = [];
 
     /// <summary>
     /// Gets a <see cref="List{T}"/> containing the types of the <see cref="Store"/>'s <see cref="IMiddleware"/>s
     /// </summary>
-    protected List<Type> Middlewares { get; } = new();
+    protected List<Type> Middlewares { get; } = [];
 
     /// <summary>
     /// Gets a <see cref="List{T}"/> containing the <see cref="Store"/>'s <see cref="IEffect"/>s
     /// </summary>
-    protected List<IEffect> Effects { get; } = new();
+    protected List<IEffect> Effects { get; } = [];
 
     /// <inheritdoc/>
-    public virtual object State
-    {
-        get
-        {
-            return this.Features.ToDictionary(f => f.State.GetType().Name, f => f.State);
-        }
-    }
+    public virtual object State => this.Features.ToDictionary(f => f.State.GetType().Name, f => f.State);
 
     IDisposable IObservable<object>.Subscribe(IObserver<object> observer)
     {
-        if (observer == null)
-            throw new ArgumentNullException(nameof(observer));
-        return this.Stream.Subscribe(observer);
+        return observer == null ? throw new ArgumentNullException(nameof(observer)) : this.Stream.Subscribe(observer);
     }
 
     /// <inheritdoc/>
     public virtual void AddFeature<TState>(IFeature<TState> feature)
     {
-        if(feature == null)
-            throw new ArgumentNullException(nameof(feature));
+        ArgumentNullException.ThrowIfNull(feature);
         this.Features.Add(feature);
         feature.Subscribe(this.OnNextState);
     }
@@ -108,8 +99,7 @@ public class Store
     /// <inheritdoc/>
     public virtual void AddEffect(IEffect effect)
     {
-        if (effect == null)
-            throw new ArgumentNullException(nameof(effect));
+        ArgumentNullException.ThrowIfNull(effect);
         this.Effects.Add(effect);
     }
 
@@ -130,7 +120,7 @@ public class Store
             var pipelineBuilder = (DispatchDelegate reducer) => this.Middlewares
                 .AsEnumerable()
                 .Reverse()
-                .Aggregate(reducer, (next, type) => this.InstanciateMiddleware(type, next).InvokeAsync);
+                .Aggregate(reducer, (next, type) => this.InstantiateMiddleware(type, next).InvokeAsync);
             var context = new ActionContext(this.ServiceProvider, this, action);
             foreach (var feature in this.Features
                 .Where(f => f.ShouldReduceStateFor(action)))
@@ -141,7 +131,7 @@ public class Store
         }
         catch(Exception ex)
         {
-            this.Logger.LogError("An error occured while dispatching an action of type '{actionType}': {ex}", action.GetType().Name, ex.ToString());
+            this.Logger.LogError("An error occurred while dispatching an action of type '{actionType}': {ex}", action.GetType().Name, ex.ToString());
             throw;
         }
     }
@@ -149,19 +139,17 @@ public class Store
     /// <summary>
     /// Creates a new instance of the specified <see cref="IMiddleware"/>
     /// </summary>
-    /// <param name="type">The type of <see cref="IMiddleware"/> to instanciate</param>
+    /// <param name="type">The type of <see cref="IMiddleware"/> to instantiate</param>
     /// <param name="next">The next <see cref="DispatchDelegate"/> in the pipeline</param>
     /// <returns>A new <see cref="IMiddleware"/></returns>
-    protected virtual IMiddleware InstanciateMiddleware(Type type, DispatchDelegate next)
+    protected virtual IMiddleware InstantiateMiddleware(Type type, DispatchDelegate next)
     {
-        var constructor = type.GetConstructor(Array.Empty<Type>());
-        if (constructor != null)
-            return (IMiddleware)constructor.Invoke(Array.Empty<object>());
+        var constructor = type.GetConstructor([]);
+        if (constructor != null) return (IMiddleware)constructor.Invoke([]);
         var parameters = new List<object>(1);
         constructor = type.GetConstructors().First();
-        if (constructor.GetParameters().Any(p => p.ParameterType == typeof(DispatchDelegate)))
-            parameters.Add(next);
-        return (IMiddleware)ActivatorUtilities.CreateInstance(this.ServiceProvider, type, parameters.ToArray());
+        if (constructor.GetParameters().Any(p => p.ParameterType == typeof(DispatchDelegate))) parameters.Add(next);
+        return (IMiddleware)ActivatorUtilities.CreateInstance(this.ServiceProvider, type, [.. parameters]);
     }
 
     /// <summary>
@@ -171,10 +159,7 @@ public class Store
     protected virtual void OnApplyEffects(object action)
     {
         var applyEffectTasks = new List<Task>();
-        foreach (var effect in this.Effects)
-        {
-            applyEffectTasks.Add(effect.ApplyAsync(action, new EffectContext(this.ServiceProvider, this.Dispatcher)));
-        }
+        foreach (var effect in this.Effects) applyEffectTasks.Add(effect.ApplyAsync(action, new EffectContext(this.ServiceProvider, this.Dispatcher)));
         var exceptions = new List<Exception>();
         Task.Run(async () =>
         {
@@ -186,8 +171,7 @@ public class Store
             {
                 exceptions.Add(ex);
             }
-            if(exceptions.Any())
-                throw new AggregateException(exceptions);
+            if(exceptions.Count != 0) throw new AggregateException(exceptions);
         });
     }
 

@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,11 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo;
-using Hylo.Infrastructure.Configuration;
-using Hylo.Infrastructure.Services;
 using Microsoft.Extensions.Options;
+using Neuroglia.Data.Infrastructure.ResourceOriented.Configuration;
 using System.Collections.Concurrent;
 
 namespace CloudStreams.Core.Api.Services;
@@ -23,21 +20,15 @@ namespace CloudStreams.Core.Api.Services;
 /// <summary>
 /// Represents a <see cref="ResourceController{TResource}"/> used to control <see cref="Broker"/>s
 /// </summary>
-public class BrokerResourceController
-    : ResourceController<Broker>
+/// <inheritdoc/>
+public class BrokerResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Broker>> controllerOptions, IRepository repository)
+    : ResourceController<Broker>(loggerFactory, controllerOptions, repository)
 {
-
-    /// <inheritdoc/>
-    public BrokerResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Broker>> controllerOptions, IRepository repository) 
-        : base(loggerFactory, controllerOptions, repository)
-    {
-        this.ServiceProvider = serviceProvider;
-    }
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
     /// </summary>
-    protected IServiceProvider ServiceProvider { get; }
+    protected IServiceProvider ServiceProvider { get; } = serviceProvider;
 
     /// <summary>
     /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> containing key/health monitor mappings of managed gateways
@@ -48,10 +39,7 @@ public class BrokerResourceController
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
-        foreach(var gateway in this.Resources.Values)
-        {
-            await this.OnResourceCreatedAsync(gateway, cancellationToken).ConfigureAwait(false);
-        }
+        foreach(var gateway in this.Resources.Values) await this.OnResourceCreatedAsync(gateway, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -79,10 +67,7 @@ public class BrokerResourceController
     {
         await base.DisposeAsync(disposing).ConfigureAwait(false);
         if (!disposing) return;
-        foreach(var kvp in this.HealthMonitors)
-        {
-            await kvp.Value.DisposeAsync().ConfigureAwait(false);
-        }
+        foreach(var kvp in this.HealthMonitors) await kvp.Value.DisposeAsync().ConfigureAwait(false);
         this.HealthMonitors.Clear();
     }
 
@@ -91,10 +76,7 @@ public class BrokerResourceController
     {
         base.Dispose(disposing);
         if (!disposing) return;
-        foreach (var kvp in this.HealthMonitors)
-        {
-            kvp.Value.Dispose();
-        }
+        foreach (var kvp in this.HealthMonitors) kvp.Value.Dispose();
         this.HealthMonitors.Clear();
     }
 

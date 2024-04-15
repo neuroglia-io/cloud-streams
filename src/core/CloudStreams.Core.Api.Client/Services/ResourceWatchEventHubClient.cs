@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using Hylo;
 using Microsoft.AspNetCore.SignalR.Client;
+using Neuroglia.Eventing.CloudEvents;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 
@@ -25,8 +24,8 @@ namespace CloudStreams.Core.Api.Client.Services;
 public class ResourceWatchEventHubClient
     : IAsyncDisposable
 {
-
-    private bool _Disposed;
+    
+    bool _Disposed;
 
     /// <summary>
     /// Initializes a new <see cref="ResourceWatchEventHubClient"/>

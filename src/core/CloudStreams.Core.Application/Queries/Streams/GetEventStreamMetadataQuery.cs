@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -11,9 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Core.Data;
-using CloudStreams.Core.Infrastructure.Services;
-using Hylo.Api.Application;
+using CloudStreams.Core.Application.Services;
 
 namespace CloudStreams.Core.Application.Queries.Streams;
 
@@ -21,7 +19,7 @@ namespace CloudStreams.Core.Application.Queries.Streams;
 /// Represents the <see cref="IQuery{TResult}"/> used to get the metadata of the application's cloud event stream
 /// </summary>
 public class GetEventStreamMetadataQuery
-    : IQuery<StreamMetadata>
+    : Query<StreamMetadata>
 {
 
 
@@ -31,21 +29,14 @@ public class GetEventStreamMetadataQuery
 /// <summary>
 /// Represents the service used to handle <see cref="GetEventStreamMetadataQuery"/> instances
 /// </summary>
-public class GetEventPartitionMetadataQueryHandler
+public class GetEventPartitionMetadataQueryHandler(ICloudEventStore eventStore)
     : IQueryHandler<GetEventStreamMetadataQuery, StreamMetadata>
 {
 
     /// <inheritdoc/>
-    public GetEventPartitionMetadataQueryHandler(IEventStoreProvider eventStoreProvider)
+    public virtual async Task<IOperationResult<StreamMetadata>> HandleAsync(GetEventStreamMetadataQuery query, CancellationToken cancellationToken)
     {
-        this._eventStoreProvider = eventStoreProvider;
-    }
-
-    IEventStoreProvider _eventStoreProvider;
-
-    async Task<ApiResponse<StreamMetadata>> MediatR.IRequestHandler<GetEventStreamMetadataQuery, ApiResponse<StreamMetadata>>.Handle(GetEventStreamMetadataQuery request, CancellationToken cancellationToken)
-    {
-        return this.Ok(await this._eventStoreProvider.GetEventStore().GetStreamMetadataAsync(cancellationToken));
+        return this.Ok(await eventStore.GetStreamMetadataAsync(cancellationToken));
     }
 
 }

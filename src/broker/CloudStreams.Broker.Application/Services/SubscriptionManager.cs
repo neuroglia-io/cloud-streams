@@ -1,4 +1,4 @@
-﻿// Copyright © 2023-Present The Cloud Streams Authors
+﻿// Copyright © 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,47 +12,39 @@
 // limitations under the License.
 
 using CloudStreams.Broker.Application.Configuration;
-using Hylo;
-using Hylo.Infrastructure.Configuration;
-using Hylo.Infrastructure.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Neuroglia.Data.Infrastructure.ResourceOriented.Configuration;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Reactive.Linq;
 
 namespace CloudStreams.Broker.Application.Services;
 
 /// <summary>
 /// Represents a service used to manage <see cref="Subscription"/>s
 /// </summary>
-public class SubscriptionManager
-    : ResourceController<Subscription>
+/// <remarks>
+/// Initializes a new <see cref="SubscriptionManager"/>
+/// </remarks>
+/// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
+/// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
+/// <param name="controllerOptions">The service used to access the current <see cref="IOptions{TOptions}"/></param>
+/// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
+/// <param name="brokerOptions">The service used to access the current <see cref="Configuration.BrokerOptions"/></param>
+public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IRepository repository, IOptions<BrokerOptions> brokerOptions)
+    : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 
-    /// <summary>
-    /// Initializes a new <see cref="SubscriptionManager"/>
-    /// </summary>
-    /// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
-    /// <param name="loggerFactory">The service used to create <see cref="ILogger"/>s</param>
-    /// <param name="controllerOptions">The service used to access the current <see cref="IOptions{TOptions}"/></param>
-    /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-    /// <param name="brokerOptions">The service used to access the current <see cref="Configuration.BrokerOptions"/></param>
-    public SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IRepository repository, IOptions<BrokerOptions> brokerOptions) 
-        : base(loggerFactory, controllerOptions, repository)
-    {
-        this.ServiceProvider = serviceProvider;
-        this.BrokerOptions = brokerOptions.Value;
-    }
+    readonly List<string> _lockedKeys = [];
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
     /// </summary>
-    protected IServiceProvider ServiceProvider { get; }
+    protected IServiceProvider ServiceProvider { get; } = serviceProvider;
 
     /// <summary>
-    /// Gets the running <see cref="Core.Data.Broker"/>'s options
+    /// Gets the running <see cref="Core.Resources.Broker"/>'s options
     /// </summary>
-    protected BrokerOptions BrokerOptions { get; }
+    protected BrokerOptions BrokerOptions { get; } = brokerOptions.Value;
 
     /// <summary>
     /// Gets a <see cref="ConcurrentDictionary{TKey, TValue}"/> containing the key/value mappings of handled <see cref="Subscription"/>s
@@ -60,9 +52,9 @@ public class SubscriptionManager
     protected ConcurrentDictionary<string, SubscriptionHandler> Subscriptions { get; } = new();
 
     /// <summary>
-    /// Gets the service used to monitor the current <see cref="Core.Data.Broker"/>
+    /// Gets the service used to monitor the current <see cref="Core.Resources.Broker"/>
     /// </summary>
-    protected IResourceMonitor<Core.Data.Broker>? Broker { get; private set; }
+    protected IResourceMonitor<Core.Resources.Broker>? Broker { get; private set; }
 
     /// <summary>
     /// Gets the <see cref="SubscriptionManager"/>'s <see cref="System.Threading.CancellationToken"/>
@@ -72,17 +64,17 @@ public class SubscriptionManager
     /// <inheritdoc/>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        Core.Data.Broker? broker = null;
+        Core.Resources.Broker? broker = null;
         try
         {
-            broker = await this.Repository.GetAsync<Core.Data.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken).ConfigureAwait(false);
+            broker = await this.Repository.GetAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken).ConfigureAwait(false);
         }
-        catch (HyloException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
+        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
         finally
         {
             if (broker == null)
             {
-                broker = new Core.Data.Broker(new ResourceMetadata(this.BrokerOptions.Name, this.BrokerOptions.Namespace), new BrokerSpec()
+                broker = new Core.Resources.Broker(new ResourceMetadata(this.BrokerOptions.Name, this.BrokerOptions.Namespace), new BrokerSpec()
                 {
                     Dispatch = new()
                     {
@@ -91,7 +83,7 @@ public class SubscriptionManager
                 });
                 broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false);
             }
-            this.Broker = await this.Repository.MonitorAsync<Core.Data.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, false, cancellationToken).ConfigureAwait(false);
+            this.Broker = await this.Repository.MonitorAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, false, cancellationToken).ConfigureAwait(false);
         }
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
         foreach (var subscription in this.Resources.Values.ToList())
@@ -136,6 +128,7 @@ public class SubscriptionManager
     {
         if (this.Broker == null) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+        if (this._lockedKeys.Contains(key)) return;
         if (this.Options.LabelSelectors == null || this.Options.LabelSelectors.All(s => s.Selects(subscription)) == true)
         {
             if (this.Subscriptions.TryGetValue(key, out _)) return;
@@ -164,9 +157,11 @@ public class SubscriptionManager
     protected virtual async Task OnSubscriptionCreatedAsync(Subscription subscription)
     {
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+        this._lockedKeys.Add(key);
         var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
         await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
         this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
+        this._lockedKeys.Remove(key);
     }
 
     /// <summary>

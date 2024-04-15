@@ -2,7 +2,7 @@
 @using System.Linq.Expressions;
 @using System.Reflection;
 @using System.ComponentModel.DataAnnotations;
-@using Hylo;
+
 @typeparam TData
 
 @code {
@@ -27,7 +27,7 @@
 
     [Parameter] public bool IsFilterable { get; set; } = true;
 
-    [Parameter] public bool IsSorteable { get; set; } = true;
+    [Parameter] public bool IsSortable { get; set; } = true;
 
     [Parameter] public bool IsVisible { get; set; } = true;
 
@@ -99,7 +99,7 @@
 
     public void ToggleSortMode()
     {
-        if (!this.IsSorteable)
+        if (!this.IsSortable)
             return;
         int sortModeValue = (int)this.SortMode;
         sortModeValue++;
