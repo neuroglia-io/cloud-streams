@@ -52,7 +52,7 @@
                             }
                             @if(resource.Status?.Stream?.Fault != null)
                             {
-                                <span class="badge text-dark bg-danger ms-1 cursor-pointer" title="@resource.Status.Stream.Fault.ToString()" @onclick="async e => await OnResumeSubscription(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</span>
+                                <span class="badge text-dark bg-danger ms-1 cursor-pointer" title="@resource.Status.Stream.Fault.ToString()" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</span>
                             }
                         </td>
                         <td class="text-center"><a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a></td>
@@ -89,8 +89,9 @@
                         </td>
                         <td class="text-center">@(resource.Spec?.Stream == null ? "-" : resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
                         <td class="text-end">
-                            <button class="btn btn-outline-primary btn-sm" title="Edit '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
-                            <button class="btn btn-outline-danger btn-sm" title="Delete '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
+                            <button class="btn btn-outline-primary btn-sm" title="Replay all events matching subscription '@resource.Metadata.Name', which implicitly enables streaming." @onclick="async _ => await OnRestartSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.ArrowClockwise" /></button>
+                            <button class="btn btn-outline-primary btn-sm" title="Edit the subscription '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /></button>
+                            <button class="btn btn-outline-danger btn-sm" title="Delete the subscription '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /></button>
                         </td>
                     </tr>
                 </Virtualize>
@@ -110,10 +111,27 @@
 @code
 {
 
-    Task OnResumeSubscription(Subscription subscription)
+    Task OnResumeSubscriptionAsync(Subscription subscription)
     {
         var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
         return this.ApiClient.Resources.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
+    }
+
+    async Task OnRestartSubscriptionAsync(Subscription subscription)
+    {
+        var offset = subscription.Spec.Stream?.Offset;
+        if (offset == StreamPosition.StartOfStream) offset = StreamPosition.EndOfStream;
+        else offset = StreamPosition.StartOfStream;
+        var streamNode = this.Serializer.SerializeToNode(new CloudEventStream() { Offset = offset });
+        var patch = new Patch(PatchType.JsonPatch, new JsonPatch(subscription.Spec.Stream == null
+            ? PatchOperation.Add(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), streamNode)
+            : PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), streamNode)));
+        subscription = await this.ApiClient.Resources.Subscriptions.PatchAsync(patch, subscription.GetName(), subscription.GetNamespace());
+        if (subscription.Spec.Stream?.Offset == StreamPosition.EndOfStream)
+        {
+            patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), this.Serializer.SerializeToNode(new CloudEventStream() { Offset = StreamPosition.StartOfStream }))));
+            await this.ApiClient.Resources.Subscriptions.PatchAsync(patch, subscription.GetName(), subscription.GetNamespace());
+        }
     }
 
 }

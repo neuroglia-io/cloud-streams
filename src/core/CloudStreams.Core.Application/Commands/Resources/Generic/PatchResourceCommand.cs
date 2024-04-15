@@ -11,6 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Json.Patch;
+using Neuroglia.Data.Infrastructure.ResourceOriented;
+using Neuroglia.Data.PatchModel.Services;
+using Neuroglia.Data;
+using System.Xml.Linq;
+using Neuroglia.Serialization.Json;
+
 namespace CloudStreams.Core.Application.Commands.Resources.Generic;
 
 /// <summary>
@@ -32,10 +39,10 @@ public class PatchResourceCommand<TResource>
     public PatchResourceCommand(string name, string? @namespace, Patch patch, bool dryRun)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        Name = name;
-        Namespace = @namespace;
-        Patch = patch ?? throw new ArgumentNullException(nameof(patch));
-        DryRun = dryRun;
+        this.Name = name;
+        this.Namespace = @namespace;
+        this.Patch = patch ?? throw new ArgumentNullException(nameof(patch));
+        this.DryRun = dryRun;
     }
 
     /// <summary>

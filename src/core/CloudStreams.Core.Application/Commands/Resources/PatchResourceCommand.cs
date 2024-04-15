@@ -41,13 +41,13 @@ public class PatchResourceCommand
         if (string.IsNullOrWhiteSpace(version)) throw new ArgumentNullException(nameof(version));
         if (string.IsNullOrWhiteSpace(plural)) throw new ArgumentNullException(nameof(plural));
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        Group = group;
-        Version = version;
-        Plural = plural;
-        Name = name;
-        Namespace = @namespace;
-        Patch = patch ?? throw new ArgumentNullException(nameof(patch));
-        DryRun = dryRun;
+        this.Group = group;
+        this.Version = version;
+        this.Plural = plural;
+        this.Name = name;
+        this.Namespace = @namespace;
+        this.Patch = patch ?? throw new ArgumentNullException(nameof(patch));
+        this.DryRun = dryRun;
     }
 
     /// <summary>

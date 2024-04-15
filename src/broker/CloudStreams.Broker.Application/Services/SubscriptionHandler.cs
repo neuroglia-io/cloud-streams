@@ -196,7 +196,7 @@ public class SubscriptionHandler
             .DistinctUntilChanged()
             .Subscribe(policy => this.DefaultRetryPolicy = policy ?? new HttpClientRetryPolicy(), this.CancellationToken);
         await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Active).ConfigureAwait(false);
-        await this.InitializeCloudEventStreamAsync();
+        _ = this.InitializeCloudEventStreamAsync();
     }
 
     /// <summary>

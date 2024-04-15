@@ -31,7 +31,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
 {
 
     ResourceDefinition? definition;
-    List<TResource>? resources;
+    EquatableList<TResource>? resources;
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
@@ -41,7 +41,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
     /// </summary>
-    public IObservable<List<TResource>?> Resources => this.Select(s => s.Resources);
+    public IObservable<EquatableList<TResource>?> Resources => this.Select(s => s.Resources);
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
     /// </summary>
@@ -94,7 +94,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
         {
             Loading = true
         });
-        this.resources = await (await resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+        this.resources = new EquatableList<TResource>(await (await resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
         this.Reduce(s => s with
         {
             Resources = this.resources,
@@ -136,7 +136,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
             case ResourceWatchEventType.Created:
                 this.Reduce(state =>
                 {
-                    List<TResource> resources = state.Resources == null ? new() : new(state.Resources);
+                    var resources = state.Resources == null ? [] : new EquatableList<TResource>(state.Resources);
                     resources.Add(e.Resource);
                     return state with
                     {
@@ -151,7 +151,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
                     {
                         return state;
                     }
-                    List<TResource> resources = new(state.Resources);
+                    var resources = new EquatableList<TResource>(state.Resources);
                     var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
                     if (resource == null) return state;
                     var index = resources.IndexOf(resource);
@@ -170,7 +170,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
                     {
                         return state;
                     }
-                    List<TResource> resources = new(state.Resources);
+                    var resources = new EquatableList<TResource>(state.Resources);
                     var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
                     if (resource == null) return state;
                     resources.Remove(resource);

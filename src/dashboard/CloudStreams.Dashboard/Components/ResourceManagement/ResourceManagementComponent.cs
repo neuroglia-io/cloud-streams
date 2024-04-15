@@ -42,7 +42,7 @@ public abstract class ResourceManagementComponent<TResource>
     /// <summary>
     /// The list of displayed <see cref="Resource"/>s
     /// </summary>
-    protected List<TResource>? resources;
+    protected EquatableList<TResource>? resources;
     /// <summary>
     /// The <see cref="Offcanvas"/> used to show the <see cref="Resource"/>'s details
     /// </summary>
@@ -99,10 +99,9 @@ public abstract class ResourceManagementComponent<TResource>
     /// Updates the <see cref="ResourceManagementComponent{TResource}.resources"/>
     /// </summary>
     /// <param name="resources"></param>
-    protected void OnResourceCollectionChanged(List<TResource>? resources)
+    protected void OnResourceCollectionChanged(EquatableList<TResource>? resources)
     {
-        if (resources == null) this.resources = null;
-        else this.resources = resources;
+        this.resources = resources;
         this.StateHasChanged();
     }
 
