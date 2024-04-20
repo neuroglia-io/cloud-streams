@@ -109,7 +109,6 @@
     Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
     Virtualize<CloudEvent>? virtualize;
-    bool readOptionsInitialized = false;
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
@@ -121,7 +120,7 @@
             (_, _) => true
         )
         .Throttle(TimeSpan.FromMilliseconds(300))
-        .SubscribeAsync(this.OnReadOptionChangedAsync, null, null, cancellationToken: this.CancellationTokenSource.Token);
+        .SubscribeAsync(this.OnReadOptionChangedAsync, null!, null!, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -139,11 +138,6 @@
     /// </summary>
     private async Task OnReadOptionChangedAsync(bool _)
     {
-        if (!this.readOptionsInitialized)
-        {
-            this.readOptionsInitialized = true;
-            return;
-        }
         if (this.virtualize != null)
         {
             await this.virtualize.RefreshDataAsync();
