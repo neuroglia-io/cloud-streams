@@ -35,6 +35,7 @@ public static class CloudEventExtensions
         {
             string str => ulong.Parse(str),
             ulong num => num,
+            Decimal num => (ulong)num,
             JsonElement jsonElem => Neuroglia.Serialization.Json.JsonSerializer.Default.Deserialize<ulong?>(jsonElem),
             _ => null
         };
