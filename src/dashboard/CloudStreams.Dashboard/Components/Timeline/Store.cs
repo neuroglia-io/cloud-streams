@@ -176,6 +176,7 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                 else
                 {
                     bool fetchMore = true;
+                    ulong length = StreamReadOptions.MaxLength;
                     long offset = options.Offset ?? (options.Direction == StreamReadDirection.Forwards ? 0 : -1);
                     do
                     {
@@ -184,12 +185,13 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                             Direction = options.Direction,
                             Partition = options.Partition,
                             Offset = offset,
-                            Length = StreamReadOptions.MaxLength
+                            Length = length
                         };
                         var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
                         data.AddRange(cloudEvents!);
-                        offset = (long)cloudEvents.Last()!.GetSequence()!;
-                        fetchMore = cloudEvents.Count > 1 && (ulong)data.Count < options!.Length;
+                        offset = (long)cloudEvents.Last()!.GetSequence()! + (options.Direction == StreamReadDirection.Forwards ? 1 : -1);
+                        length = Math.Min(options!.Length - (ulong)data.Count, StreamReadOptions.MaxLength);
+                        fetchMore = cloudEvents.Count > 1 && length != 0;
                     }
                     while(fetchMore);
                 }
