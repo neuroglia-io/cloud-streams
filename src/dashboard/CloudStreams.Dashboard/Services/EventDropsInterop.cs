@@ -45,10 +45,10 @@ public class EventDropsInterop
     /// <param name="dataset">The event-drops dataset</param>
     /// <param name="start">The moment the timeline starts</param>
     /// <param name="end">The moment the timeline starts></param>
-    public async ValueTask RenderTimelineAsync(ElementReference domElement, DotNetObjectReference<Timeline>? dotnetReference, IEnumerable<TimelineLane> dataset, DateTimeOffset start, DateTimeOffset end)
+    public async ValueTask RenderTimelineAsync(ElementReference domElement, DotNetObjectReference<Timeline>? dotnetReference, IEnumerable<TimelineLane> dataset, DateTimeOffset start, DateTimeOffset end, bool keepTimeRange)
     {
         var module = await moduleTask.Value;
-        await module.InvokeVoidAsync("renderTimeline", domElement, dotnetReference, dataset, start, end);
+        await module.InvokeVoidAsync("renderTimeline", domElement, dotnetReference, dataset, start, end, keepTimeRange);
     }
 
     /// <inheritdoc />

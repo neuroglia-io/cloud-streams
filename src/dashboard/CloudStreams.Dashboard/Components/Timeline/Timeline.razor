@@ -25,6 +25,12 @@
                             </div>
                         </div>
                     }
+                    <div class="form-check me-3 pt-2">
+                        <input class="form-check-input" type="checkbox" checked="@keepTimeRange" @onchange="_ => Store.ToggleKeepTimeRange()" id="keep-time-frame">
+                        <label class="form-check-label" for="keep-time-frame">
+                            Keep current time range
+                        </label>
+                    </div>
                     <Button Color="ButtonColor.Light" Outline="true" @onclick="_ => Store.AddStreamsReadOption()" Disabled="loading"><Icon Name="IconName.Plus"></Icon></Button>
                 </div>
             </div>
@@ -87,6 +93,10 @@
     /// </summary>
     private bool loading = false;
     /// <summary>
+    /// Indicates whether to keep the previous chart's time frame or to redraw it with the new data boundaries
+    /// </summary>
+    private bool keepTimeRange = false;
+    /// <summary>
     /// The style applied to the cloud event tooltip
     /// </summary>
     private string cloudEventTooltipStyle = "";
@@ -131,8 +141,8 @@
         await base.OnInitializedAsync().ConfigureAwait(false);
         this.Store.StreamsReadOptions.Subscribe(streamsReadOptions => this.OnStateChanged(cmp => cmp.streamsReadOptions = streamsReadOptions), token: this.CancellationTokenSource.Token);
         this.Store.Loading.Subscribe(processing => this.OnStateChanged(cmp => cmp.loading = processing), token: this.CancellationTokenSource.Token);
-        this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), null, null, cancellationToken: this.CancellationTokenSource.Token);
-
+        this.Store.KeepTimeRange.Subscribe(keepTimeRange => this.OnStateChanged(cmp => cmp.keepTimeRange = keepTimeRange), token: this.CancellationTokenSource.Token);
+        this.Store.TimelineLanes.SubscribeAsync(async timelineLanes => await this.RenderTimelineAsync(timelineLanes), null!, null!, cancellationToken: this.CancellationTokenSource.Token);
     }
 
     /// <inheritdoc/>
@@ -156,20 +166,24 @@
         {
             return;
         }
-        var entries = timelineLanes.SelectMany(lane => lane.Data).OrderBy(data => data.Time!.Value);
-        if (!entries.Any())
+        var timeEntries = timelineLanes
+            .SelectMany(lane => lane.Data)
+            .Where(data => data.Time != null)
+            .Select(data => data.Time!.Value)
+            .OrderBy(time => time);
+        if (!timeEntries.Any())
         {
             return;
         }
-        var start = entries.First().Time!.Value;
-        var end = entries.Last().Time!.Value;
+        var start = timeEntries.First();
+        var end = timeEntries.Last();
         var delta = end.Subtract(start).TotalMilliseconds;
         if (delta == 0)
         {
             delta = 20;
         }
         var margin = delta / 20;
-        await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin));
+        await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin), this.keepTimeRange);
     }
 
     /// <summary>
