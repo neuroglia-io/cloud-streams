@@ -45,6 +45,11 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     /// </summary>
     public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="TimelineState.KeepTimeRange"/> changes
+    /// </summary>
+    public IObservable<bool> KeepTimeRange => this.Select(state => state.KeepTimeRange).DistinctUntilChanged();
+
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
@@ -105,6 +110,16 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         this.Reduce(state => state with
         {
             StreamsReadOptions = streamsReadOptions
+        });
+    }
+
+    /// <summary>
+    /// Toggles the state's <see cref="TimelineState.KeepTimeRange"/>
+    /// </summary>
+    public void ToggleKeepTimeRange()
+    {
+        this.Reduce(state => state with { 
+            KeepTimeRange = !state.KeepTimeRange
         });
     }
 

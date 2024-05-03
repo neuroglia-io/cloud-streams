@@ -14,7 +14,7 @@
 
 let previousChart;
 
-export function renderTimeline(el, dotnetRef, dataset, start, end) {
+export function renderTimeline(el, dotnetRef, dataset, start, end, keepTimeRange) {
     const chart = eventDrops({
         ...baseConfig,
         range: {
@@ -36,8 +36,11 @@ export function renderTimeline(el, dotnetRef, dataset, start, end) {
         .select(el)
         .data([dataset])
         .call(chart);
-    if (!!previousChart) {
+    if (keepTimeRange && !!previousChart) {
         chart.zoomToDomain(previousChart.scale().domain());
+    }
+    else {
+        chart.zoomToDomain(chart.scale().domain());
     }
     previousChart = chart;
 }

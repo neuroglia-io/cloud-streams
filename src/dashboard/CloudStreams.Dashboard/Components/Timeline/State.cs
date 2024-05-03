@@ -30,4 +30,8 @@ public record TimelineState
     /// Gets/sets a boolean value that indicates whether data is currently being gathered
     /// </summary>
     public bool Loading { get; set; } = false;
+    /// <summary>
+    /// Gets/sets a boolean value that indicates whether to keep the previous chart's time frame or to redraw it with the new data boundaries
+    /// </summary>
+    public bool KeepTimeRange { get; set; } = false;
 }
