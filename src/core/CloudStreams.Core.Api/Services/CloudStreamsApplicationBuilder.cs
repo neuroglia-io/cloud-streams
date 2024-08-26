@@ -19,10 +19,10 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi.Models;
 using Neuroglia.Data.Expressions.JQ;
-using Neuroglia.Data.Infrastructure.EventSourcing.Services;
+using Neuroglia.Data.Infrastructure.EventSourcing;
+using Neuroglia.Data.Infrastructure.ResourceOriented.Redis;
 using Neuroglia.Data.PatchModel.Services;
 using Neuroglia.Mediation.Services;
-using Neuroglia.Plugins;
 using Neuroglia.Security.Services;
 using Neuroglia.Serialization.Json;
 using Neuroglia.Serialization.Yaml;
@@ -50,6 +50,8 @@ public class CloudStreamsApplicationBuilder
     /// <param name="logging">The service used to configure and build logging</param>
     public CloudStreamsApplicationBuilder(ConfigurationManager configuration, IHostEnvironment environment, IServiceCollection services, ILoggingBuilder logging)
     {
+        var esdbConnectionString = configuration.GetConnectionString("eventstore")!;
+        var redisConnectionString = configuration.GetConnectionString("redis")!;
         this.Configuration = configuration;
         this.Environment = environment;
         this.Services = services;
@@ -71,10 +73,16 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         this.Services.AddSingleton<IUserAccessor, HttpContextUserAccessor>();
         this.Services.AddSingleton<IUserInfoProvider, UserInfoProvider>();
-        this.Services.AddPluginProvider(this.Configuration);
-        this.Services.AddPlugin<IEventStore>();
-        this.Services.AddPlugin<IProjectionManager>();
-        this.Services.AddPlugin<IDatabase>();
+        //this.Services.AddPluginProvider(this.Configuration);
+        //this.Services.AddPlugin<IEventStore>();
+        //this.Services.AddPlugin<IProjectionManager>();
+        //this.Services.AddPlugin<IDatabase>();
+        this.Services.AddEventStoreClient(esdbConnectionString);
+        this.Services.AddEventStorePersistentSubscriptionsClient(esdbConnectionString);
+        this.Services.AddEventStoreProjectionManagementClient(esdbConnectionString);
+        this.Services.AddEsdbEventStore();
+        this.Services.AddEsdbProjectionManager();
+        this.Services.AddRedisDatabase(redisConnectionString);
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());
