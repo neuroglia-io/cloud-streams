@@ -21,7 +21,7 @@ namespace CloudStreams.Core.Api.Services;
 /// Represents a <see cref="ResourceController{TResource}"/> used to control <see cref="Gateway"/>s
 /// </summary>
 /// <inheritdoc/>
-public class GatewayResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Gateway>> controllerOptions, IRepository repository)
+public class GatewayResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Gateway>> controllerOptions, IResourceRepository repository)
     : ResourceController<Gateway>(loggerFactory, controllerOptions, repository)
 {
 

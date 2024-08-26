@@ -45,7 +45,7 @@ public class ReplaceResourceCommand<TResource>(TResource resource, bool dryRun)
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to replace</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class ReplaceResourceCommandHandler<TResource>(IRepository repository)
+public class ReplaceResourceCommandHandler<TResource>(IResourceRepository repository)
     : ICommandHandler<ReplaceResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {

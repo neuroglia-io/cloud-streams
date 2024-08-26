@@ -21,7 +21,7 @@ namespace CloudStreams.Core.Api.Services;
 /// Represents a <see cref="ResourceController{TResource}"/> used to control <see cref="Broker"/>s
 /// </summary>
 /// <inheritdoc/>
-public class BrokerResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Broker>> controllerOptions, IRepository repository)
+public class BrokerResourceController(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Broker>> controllerOptions, IResourceRepository repository)
     : ResourceController<Broker>(loggerFactory, controllerOptions, repository)
 {
 

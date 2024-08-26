@@ -26,14 +26,14 @@ namespace CloudStreams.Core.Api.Services;
 /// </remarks>
 /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
 /// <param name="hubContext">The current <see cref="IResourceEventWatchHubClient"/>'s <see cref="IHubContext{THub, T}"/></param>
-public class ResourceWatchEventHubController(IRepository resources, IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> hubContext)
+public class ResourceWatchEventHubController(IResourceRepository resources, IHubContext<ResourceEventWatchHub, IResourceEventWatchHubClient> hubContext)
     : BackgroundService
 {
 
     /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IRepository Resources { get; } = resources;
+    protected IResourceRepository Resources { get; } = resources;
 
     /// <summary>
     /// Gets the current <see cref="IResourceEventWatchHubClient"/>'s <see cref="IHubContext{THub, T}"/>

@@ -44,7 +44,7 @@
             {
                 <div class="card">
                     <div class="card-header text-primary">
-                        @cloudEvent.Time?.LocalDateTime.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="Size.Small" @onclick="_ => DeselectCloudEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
+                        @cloudEvent.Time?.LocalDateTime.ToString("R") <Button Color="ButtonColor.Light" Outline="true" Size="ButtonSize.Small" @onclick="_ => DeselectCloudEvent(cloudEvent)" Class="float-end"><Icon Name="IconName.X" /></Button>
                     </div>
                     <div class="card-body">
                         <TimelineCloudEventDetails CloudEvent="cloudEvent" OnPartitionClick="Store.TryAddPartitionReadOption"/>
@@ -81,7 +81,7 @@
     /// </summary>
     private DotNetObjectReference<Timeline>? dotnetReference = null;
     /// <summary>
-    /// Indicates whether or not the componenet has been disposed
+    /// Indicates whether or not the component has been disposed
     /// </summary>
     private bool disposed = false;
     /// <summary>

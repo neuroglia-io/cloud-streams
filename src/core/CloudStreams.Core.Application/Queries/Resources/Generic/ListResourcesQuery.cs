@@ -56,7 +56,7 @@ public class ListResourcesQuery<TResource>(string? @namespace, IEnumerable<Label
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/>s to list</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class ListResourcesQueryHandler<TResource>(IRepository repository)
+public class ListResourcesQueryHandler<TResource>(IResourceRepository repository)
     : IQueryHandler<ListResourcesQuery<TResource>, Neuroglia.Data.Infrastructure.ResourceOriented.ICollection<TResource>>
     where TResource : class, IResource, new()
 {

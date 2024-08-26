@@ -51,7 +51,7 @@ public class GetResourceQuery<TResource>
 /// </summary>
 /// <typeparam name="TResource">The type of the <see cref="IResource"/> to replace</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class GetResourceQueryHandler<TResource>(IRepository repository)
+public class GetResourceQueryHandler<TResource>(IResourceRepository repository)
     : IQueryHandler<GetResourceQuery<TResource>, TResource>
      where TResource : class, IResource, new()
 {

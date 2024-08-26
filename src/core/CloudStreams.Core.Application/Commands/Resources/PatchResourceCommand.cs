@@ -91,14 +91,14 @@ public class PatchResourceCommand
 /// Represents the service used to handle <see cref="PatchResourceCommand"/>s
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class PatchResourceCommandHandler(IRepository repository)
+public class PatchResourceCommandHandler(IResourceRepository repository)
     : ICommandHandler<PatchResourceCommand, IResource>
 {
 
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<IResource>> HandleAsync(PatchResourceCommand command, CancellationToken cancellationToken)
     {
-        var resource = await repository.PatchAsync(command.Patch, command.Group, command.Version, command.Plural, command.Name, command.Namespace, command.DryRun, cancellationToken).ConfigureAwait(false);
+        var resource = await repository.PatchAsync(command.Patch, command.Group, command.Version, command.Plural, command.Name, command.Namespace, null, command.DryRun, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }
 

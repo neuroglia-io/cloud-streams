@@ -17,12 +17,6 @@ using CloudStreams.Dashboard.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Neuroglia.Serialization;
-using Neuroglia.Serialization.Json.Converters;
-using Neuroglia.Serialization.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json;
-using Microsoft.Extensions.Options;
-using System.Text.Json.Nodes;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 

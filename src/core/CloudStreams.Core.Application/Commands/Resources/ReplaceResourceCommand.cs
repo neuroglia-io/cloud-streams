@@ -72,7 +72,7 @@ public class ReplaceResourceCommand
 /// Represents the service used to handle <see cref="ReplaceResourceCommand"/>s
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class ReplaceResourceCommandHandler(IRepository repository)
+public class ReplaceResourceCommandHandler(IResourceRepository repository)
     : ICommandHandler<ReplaceResourceCommand, IResource>
 {
 

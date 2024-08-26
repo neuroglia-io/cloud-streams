@@ -43,7 +43,7 @@ public class GetResourcesQuery<TResource>(string? @namespace, IEnumerable<LabelS
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to get</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class GetResourcesQueryHandler<TResource>(IRepository repository)
+public class GetResourcesQueryHandler<TResource>(IResourceRepository repository)
     : IQueryHandler<GetResourcesQuery<TResource>, IAsyncEnumerable<TResource>>
     where TResource : class, IResource, new()
 {

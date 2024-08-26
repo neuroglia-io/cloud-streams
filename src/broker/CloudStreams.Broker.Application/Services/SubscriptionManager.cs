@@ -30,7 +30,7 @@ namespace CloudStreams.Broker.Application.Services;
 /// <param name="controllerOptions">The service used to access the current <see cref="IOptions{TOptions}"/></param>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
 /// <param name="brokerOptions">The service used to access the current <see cref="Configuration.BrokerOptions"/></param>
-public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IRepository repository, IOptions<BrokerOptions> brokerOptions)
+public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IResourceRepository repository, IOptions<BrokerOptions> brokerOptions)
     : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 

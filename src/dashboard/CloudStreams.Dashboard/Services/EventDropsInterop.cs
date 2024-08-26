@@ -20,22 +20,15 @@ namespace CloudStreams.Dashboard.Services;
 /// <summary>
 /// The service used to build a bridge with event drops
 /// </summary>
-public class EventDropsInterop
-    : IAsyncDisposable
+/// <remarks>
+/// Constructs a new <see cref="EventDropsInterop"/>
+/// </remarks>
+/// <param name="jsRuntime">The service used to interop with JS</param>
+public class EventDropsInterop(IJSRuntime jsRuntime)
+        : IAsyncDisposable
 {
-    /// <summary>
-    /// A reference to the js interop module
-    /// </summary>
-    private readonly Lazy<Task<IJSObjectReference>> moduleTask;
 
-    /// <summary>
-    /// Constructs a new <see cref="EventDropsInterop"/>
-    /// </summary>
-    /// <param name="jsRuntime">The service used to interop with JS</param>
-    public EventDropsInterop(IJSRuntime jsRuntime)
-    {
-        moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/event-drops-interop.js").AsTask());
-    }
+    readonly Lazy<Task<IJSObjectReference>> moduleTask = new(() => jsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/event-drops-interop.js").AsTask());
 
     /// <summary>
     /// Renders a <see cref="Timeline"/> using event-drops
@@ -45,6 +38,7 @@ public class EventDropsInterop
     /// <param name="dataset">The event-drops dataset</param>
     /// <param name="start">The moment the timeline starts</param>
     /// <param name="end">The moment the timeline starts></param>
+    /// <param name="keepTimeRange">A boolean indicating whether or not to keep the time range</param>
     public async ValueTask RenderTimelineAsync(ElementReference domElement, DotNetObjectReference<Timeline>? dotnetReference, IEnumerable<TimelineLane> dataset, DateTimeOffset start, DateTimeOffset end, bool keepTimeRange)
     {
         var module = await moduleTask.Value;
@@ -60,5 +54,7 @@ public class EventDropsInterop
             await module.InvokeVoidAsync("dispose");
             await module.DisposeAsync();
         }
+        GC.SuppressFinalize(this);
     }
+
 }

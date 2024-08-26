@@ -79,7 +79,7 @@ public class DeleteResourceCommand
 /// Represents the service used to handle <see cref="DeleteResourceCommand"/>s
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class DeleteResourceCommandHandler(IRepository repository)
+public class DeleteResourceCommandHandler(IResourceRepository repository)
     : ICommandHandler<DeleteResourceCommand, IResource>
 {
 

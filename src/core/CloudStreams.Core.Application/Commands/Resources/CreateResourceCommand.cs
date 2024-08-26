@@ -71,7 +71,7 @@ public class CreateResourceCommand
 /// Represents the service used to handle <see cref="CreateResourceCommand"/>s
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class CreateResourceCommandHandler(IRepository repository)
+public class CreateResourceCommandHandler(IResourceRepository repository)
     : ICommandHandler<CreateResourceCommand, IResource>
 {
 

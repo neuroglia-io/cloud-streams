@@ -90,7 +90,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IRepository Resources => this.ServiceProvider.GetRequiredService<IRepository>();
+    protected IResourceRepository Resources => this.ServiceProvider.GetRequiredService<IResourceRepository>();
 
     /// <summary>
     /// Gets the service used to evaluate runtime expressions

@@ -58,7 +58,7 @@ public class DeleteResourceCommand<TResource>
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to create</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class DeleteResourceCommandHandler<TResource>(IRepository repository)
+public class DeleteResourceCommandHandler<TResource>(IResourceRepository repository)
     : ICommandHandler<DeleteResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {

@@ -43,7 +43,7 @@ public class WatchResourcesQuery<TResource>(string? @namespace, IEnumerable<Labe
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to get</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class WatchResourcesQueryHandler<TResource>(IRepository repository)
+public class WatchResourcesQueryHandler<TResource>(IResourceRepository repository)
     : IQueryHandler<WatchResourcesQuery<TResource>, IResourceWatch<TResource>>
     where TResource : class, IResource, new()
 {

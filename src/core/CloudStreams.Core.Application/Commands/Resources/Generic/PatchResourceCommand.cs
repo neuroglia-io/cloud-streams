@@ -72,7 +72,7 @@ public class PatchResourceCommand<TResource>
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to patch</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class PatchResourceCommandHandler<TResource>(IRepository repository)
+public class PatchResourceCommandHandler<TResource>(IResourceRepository repository)
     : ICommandHandler<PatchResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {
@@ -80,7 +80,7 @@ public class PatchResourceCommandHandler<TResource>(IRepository repository)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(PatchResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
-        var resource = await repository.PatchAsync<TResource>(command.Patch, command.Name, command.Namespace, command.DryRun, cancellationToken).ConfigureAwait(false);
+        var resource = await repository.PatchAsync<TResource>(command.Patch, command.Name, command.Namespace, null, command.DryRun, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }
 

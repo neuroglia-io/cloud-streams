@@ -71,7 +71,7 @@ public class WatchResourcesQuery
 /// Represents the service used to handle <see cref="WatchResourcesQuery"/> instances
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class WatchResourcesQueryHandler(IRepository repository)
+public class WatchResourcesQueryHandler(IResourceRepository repository)
     : IQueryHandler<WatchResourcesQuery, IResourceWatch>
 {
 
