@@ -81,7 +81,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddHostedService<Application.Services.DatabaseInitializer>();
         this.Services.AddSingleton<IAdmissionControl, AdmissionControl>();
         this.Services.AddSingleton<IVersionControl, VersionControl>();
-        this.Services.AddSingleton<IRepository, Repository>();
+        this.Services.AddSingleton<IResourceRepository, ResourceRepository>();
         this.Services.AddSingleton<IPatchHandler, JsonMergePatchHandler>();
         this.Services.AddSingleton<IPatchHandler, JsonPatchHandler>();
         this.Services.AddSingleton<IPatchHandler, JsonStrategicMergePatchHandler>();

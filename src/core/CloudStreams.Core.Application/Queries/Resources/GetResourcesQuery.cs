@@ -71,7 +71,7 @@ public class GetResourcesQuery
 /// Represents the service used to handle <see cref="GetResourcesQuery"/> instances
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class GetResourcesQueryHandler(IRepository repository)
+public class GetResourcesQueryHandler(IResourceRepository repository)
     : IQueryHandler<GetResourcesQuery, IAsyncEnumerable<IResource>>
 {
 

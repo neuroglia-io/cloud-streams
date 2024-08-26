@@ -44,7 +44,7 @@ public class SubscriptionHandler
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
     /// <param name="subscription">The <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
-    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
+    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
         IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
@@ -85,7 +85,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the service used to manage <see cref="IResource"/>s
     /// </summary>
-    protected IRepository ResourceRepository { get; }
+    protected IResourceRepository ResourceRepository { get; }
 
     /// <summary>
     /// Gets the service used to control <see cref="Core.Resources.Subscription"/> resources
@@ -530,7 +530,7 @@ public class SubscriptionHandler
         resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -546,7 +546,7 @@ public class SubscriptionHandler
         resource.Status.Phase = phase;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -586,7 +586,7 @@ public class SubscriptionHandler
                 if (resource.Status.Stream == null) resource.Status.Stream = new();
                 resource.Status.Stream.Fault = null;
                 var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
+                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
                 return;
             }
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
@@ -650,7 +650,7 @@ public class SubscriptionHandler
         if (resource.Status.Stream == null) resource.Status.Stream = new();
         resource.Status.Stream.Fault = ex.ToProblemDetails();
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), false, this.CancellationToken).ConfigureAwait(false);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

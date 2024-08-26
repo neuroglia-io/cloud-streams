@@ -85,7 +85,7 @@ public class ListResourcesQuery
 /// Represents the service used to handle <see cref="ListResourcesQuery"/> instances
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class ListResourcesQueryHandler(IRepository repository)
+public class ListResourcesQueryHandler(IResourceRepository repository)
     : IQueryHandler<ListResourcesQuery, ICollection>
 {
 

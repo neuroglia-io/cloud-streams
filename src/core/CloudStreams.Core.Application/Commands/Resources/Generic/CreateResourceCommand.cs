@@ -44,7 +44,7 @@ public class CreateResourceCommand<TResource>(TResource resource, bool dryRun)
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to create</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class CreateResourceCommandHandler<TResource>(IRepository repository)
+public class CreateResourceCommandHandler<TResource>(IResourceRepository repository)
     : ICommandHandler<CreateResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {

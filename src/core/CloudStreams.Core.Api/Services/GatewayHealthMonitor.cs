@@ -33,7 +33,7 @@ namespace CloudStreams.Core.Api.Services;
 /// <param name="repository">The service used to manage resources</param>
 /// <param name="monitor">The service used to monitor the handled <see cref="Resources.Gateway"/></param>
 /// <param name="httpClient">The service used to perform HTTP requests</param>
-public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSerializer serializer, IRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient)
+public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSerializer serializer, IResourceRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient)
     : IHostedService, IDisposable, IAsyncDisposable
 {
 
@@ -53,7 +53,7 @@ public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSer
     /// <summary>
     /// Gets the service used to manage resources
     /// </summary>
-    protected IRepository Repository { get; } = repository;
+    protected IResourceRepository Repository { get; } = repository;
 
     /// <summary>
     /// Gets the service used to monitor the handled <see cref="Resources.Gateway"/>
@@ -86,7 +86,7 @@ public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSer
         this.CancellationTokenSource = new();
         if (this.Gateway.Spec.Service == null || this.Gateway.Spec.Service.HealthChecks == null) return Task.CompletedTask;
         this.Monitor.Select(e => e.Resource.Spec.Service?.HealthChecks).DistinctUntilChanged().SubscribeAsync(this.OnHealthChecksConfigurationChangedAsync, this.CancellationTokenSource.Token);
-        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
+        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalElapsedAsync, null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
         return Task.CompletedTask;
     }
 
@@ -111,14 +111,14 @@ public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSer
         var delay = this.Gateway.Status?.LastHealthCheckAt.HasValue == true ? DateTimeOffset.Now - this.Gateway.Status.LastHealthCheckAt : TimeSpan.Zero;
         if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
         if (this.Gateway.Spec.Service.HealthChecks.Interval != null && this.Gateway.Spec.Service.HealthChecks.Interval > delay) delay = this.Gateway.Spec.Service.HealthChecks.Interval;
-        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+        this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalElapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>
     /// Handles ticks of the <see cref="HealthCheckTimer"/>
     /// </summary>
     /// <param name="state">The timer's async state</param>
-    protected virtual async void OnHealthCheckIntervalEllapsedAsync(object? state)
+    protected virtual async void OnHealthCheckIntervalElapsedAsync(object? state)
     {
         try
         {
@@ -163,7 +163,7 @@ public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSer
             }
             catch (Exception ex)
             {
-                this.Logger.LogWarning("An error occured while performing health check of gateway '{gateway}': {ex}", this.Gateway.GetQualifiedName(), ex);
+                this.Logger.LogWarning("An error occurred while performing health check of gateway '{gateway}': {ex}", this.Gateway.GetQualifiedName(), ex);
                 healthCheckResponse = new(HealthStatus.Unhealthy);
             }
             if (healthCheckResponse.Status != this.Gateway.Status?.HealthStatus)
@@ -174,18 +174,18 @@ public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSer
                 patchTarget.Status.HealthStatus = healthCheckResponse.Status;
                 patchTarget.Status.LastHealthCheckAt = DateTimeOffset.Now;
                 var patch = new Patch(PatchType.JsonPatch, JsonPatchUtility.CreateJsonPatchFromDiff(patchSource, patchTarget));
-                await this.Repository.PatchStatusAsync<Gateway>(patch, this.Gateway.GetName(), this.Gateway.GetNamespace(), false, this.CancellationTokenSource!.Token).ConfigureAwait(false);
+                await this.Repository.PatchStatusAsync<Gateway>(patch, this.Gateway.GetName(), this.Gateway.GetNamespace(), null, false, this.CancellationTokenSource!.Token).ConfigureAwait(false);
             }
         }
         catch(Exception ex)
         {
-            this.Logger.LogError("An error occured while checking health of gateway '{gateway}': {ex}", this.Gateway.GetQualifiedName(), ex);
+            this.Logger.LogError("An error occurred while checking health of gateway '{gateway}': {ex}", this.Gateway.GetQualifiedName(), ex);
         }
         finally
         {
             if (this.Gateway.Spec.Service != null && this.Gateway.Spec.Service.HealthChecks != null)
             {
-                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalEllapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
+                this.HealthCheckTimer = new Timer(this.OnHealthCheckIntervalElapsedAsync, null, this.Gateway.Spec.Service.HealthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval), Timeout.InfiniteTimeSpan);
             }
         }
     }

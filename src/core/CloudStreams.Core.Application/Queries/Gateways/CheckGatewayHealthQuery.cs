@@ -50,7 +50,7 @@ public class CheckGatewayHealthQuery
 /// <summary>
 /// Represents the service used to handle <see cref="CheckGatewayHealthQuery"/> instances
 /// </summary>
-public class CheckGatewayHealthQueryHandler(IRepository repository, HttpClient httpClient, IJsonSerializer serializer)
+public class CheckGatewayHealthQueryHandler(IResourceRepository repository, HttpClient httpClient, IJsonSerializer serializer)
     : IQueryHandler<CheckGatewayHealthQuery, HealthCheckResponse?>
 {
 

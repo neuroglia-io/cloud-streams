@@ -72,7 +72,7 @@ public class GetResourceQuery
 /// Represents the service used to handle <see cref="GetResourceQuery"/>s
 /// </summary>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class GetResourceQueryHandler(IRepository repository)
+public class GetResourceQueryHandler(IResourceRepository repository)
     : IQueryHandler<GetResourceQuery, IResource>
 {
 
