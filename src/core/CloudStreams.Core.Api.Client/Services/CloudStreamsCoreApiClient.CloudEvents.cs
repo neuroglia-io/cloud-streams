@@ -68,8 +68,8 @@ public partial class CloudStreamsCoreApiClient
         var queryParameters = new Dictionary<string, object>() { { $"{nameof(options.Direction)}".ToCamelCase(), options.Direction.ToString() } };
         if (options.Partition != null)
         {
-            queryParameters.Add($"{nameof(options.Partition)}.{nameof(options.Partition.Type)}".ToCamelCase(), options.Partition.Type.ToString());
-            queryParameters.Add($"{nameof(options.Partition)}.{nameof(options.Partition.Id)}".ToCamelCase(), options.Partition.Id);
+            queryParameters.Add($"{nameof(options.Partition).ToCamelCase()}.{nameof(options.Partition.Type).ToCamelCase()}", options.Partition.Type.ToString());
+            queryParameters.Add($"{nameof(options.Partition).ToCamelCase()}.{nameof(options.Partition.Id).ToCamelCase()}", options.Partition.Id);
         }
         if (options.Offset.HasValue) queryParameters.Add(nameof(options.Offset).ToCamelCase(), options.Offset.Value);
         queryParameters.Add(nameof(options.Length).ToCamelCase(), options.Length);
