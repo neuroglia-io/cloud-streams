@@ -46,10 +46,10 @@ public class CloudEventPartitionsController(IMediator mediator)
     /// <param name="id">The id of the partition to get the metadata of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
-    [HttpGet("{type}/{id}")]
+    [HttpGet("{type}/byId")]
     [ProducesResponseType(typeof(PartitionMetadata), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> GetPartitionMetadata(CloudEventPartitionType type, string id, CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> GetPartitionMetadata(CloudEventPartitionType type, [FromQuery]string id, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         return this.Process(await this.Mediator.ExecuteAsync(new GetEventPartitionMetadataQuery(new(type, id)), cancellationToken).ConfigureAwait(false));

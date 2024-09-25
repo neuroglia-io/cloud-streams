@@ -13,7 +13,6 @@
 
 using Neuroglia;
 using Neuroglia.Eventing.CloudEvents;
-using Neuroglia.Serialization;
 
 namespace CloudStreams.Core.Api.Client.Services;
 
@@ -45,7 +44,7 @@ public partial class CloudStreamsCoreApiClient
     public virtual async Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}/{id}"), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}/byId?id={Uri.EscapeDataString(id)}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<PartitionMetadata>(json);
