@@ -30,7 +30,7 @@ public static class CloudEventRecordExtensions
     public static CloudEvent ToCloudEvent(this CloudEventDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        var e = (JsonObject)JsonSerializer.Default.SerializeToNode(descriptor.Metadata.ContextAttributes)!;
+        var e = (JsonObject)JsonSerializer.Default.SerializeToNode(descriptor.Metadata.ContextAttributes.Where(a => a.Key.IsLowercased() && a.Key.IsAlphanumeric()))!;
         var data = JsonSerializer.Default.SerializeToNode(descriptor.Data);
         e[CloudEventAttributes.Data] = data;
         return JsonSerializer.Default.Deserialize<CloudEvent>(e)!;
