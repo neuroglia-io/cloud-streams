@@ -35,14 +35,23 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Dashboard.Stat
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{129B2507-0C27-4324-AFC9-2C802E25E51D}"
 	ProjectSection(SolutionItems) = preProject
-		LICENSE = LICENSE
 		code-of-conduct.md = code-of-conduct.md
+		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "deployments", "deployments", "{990DE5C0-9BDB-417C-91D9-B3883C5FCA3E}"
 EndProject
 Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "deployments\docker-compose\docker-compose.dcproj", "{0050C106-97E3-40BD-8C2C-34503B5757DF}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{9EDAC21F-3617-413B-8C54-469851036E9B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "issue_template", "issue_template", "{63F334BA-8ECE-42CC-8948-A15E9CCFF4CE}"
+	ProjectSection(SolutionItems) = preProject
+		.github\ISSUE_TEMPLATE\bug.yml = .github\ISSUE_TEMPLATE\bug.yml
+		.github\ISSUE_TEMPLATE\config.yml = .github\ISSUE_TEMPLATE\config.yml
+		.github\ISSUE_TEMPLATE\feature.yml = .github\ISSUE_TEMPLATE\feature.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -114,6 +123,7 @@ Global
 		{DEF277AF-8024-49D8-BD80-338A79431F8C} = {BDA26004-D077-442C-A4F7-F389D5AC9FE5}
 		{7BD5FCBA-1D5A-4DF2-BDC3-5672D3507C06} = {BDA26004-D077-442C-A4F7-F389D5AC9FE5}
 		{0050C106-97E3-40BD-8C2C-34503B5757DF} = {990DE5C0-9BDB-417C-91D9-B3883C5FCA3E}
+		{63F334BA-8ECE-42CC-8948-A15E9CCFF4CE} = {9EDAC21F-3617-413B-8C54-469851036E9B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5E10D9D7-D5B5-4C0B-B7AC-AC10FF33DA3F}

@@ -37,6 +37,7 @@ builder.UseCloudStreams(builder =>
 });
 
 builder.Services.Configure<GatewayOptions>(builder.Configuration);
+builder.Services.AddHostedService<DatabaseProvisioner>();
 builder.Services.AddSingleton<CloudEventAdmissionControl>();
 builder.Services.AddSingleton<ICloudEventAdmissionControl>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
 builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
