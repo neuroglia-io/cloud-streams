@@ -104,6 +104,12 @@ public static class IServiceCollectionExtensions
             handlerImplementationType = typeof(PatchResourceCommandHandler<>).MakeGenericType(resourceType);
             services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
 
+            commandType = typeof(PatchResourceStatusCommand<>).MakeGenericType(resourceType);
+            resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
+            handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);
+            handlerImplementationType = typeof(PatchResourceStatusCommandHandler<>).MakeGenericType(resourceType);
+            services.Add(new ServiceDescriptor(handlerServiceType, handlerImplementationType, serviceLifetime));
+
             commandType = typeof(DeleteResourceCommand<>).MakeGenericType(resourceType);
             resultType = typeof(IOperationResult<>).MakeGenericType(resourceType);
             handlerServiceType = typeof(IRequestHandler<,>).MakeGenericType(commandType, resultType);

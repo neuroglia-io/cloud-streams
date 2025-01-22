@@ -128,9 +128,10 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     public virtual async Task<TResource> PatchStatusAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
+        var uri = string.IsNullOrWhiteSpace(@namespace) ? $"{this.Path}/{name}/status" : $"{this.Path}/namespace/{@namespace}/{name}/status";
         var json = this.Serializer.SerializeToText(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, $"{this.Path}/status") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, uri) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<TResource>(json)!;

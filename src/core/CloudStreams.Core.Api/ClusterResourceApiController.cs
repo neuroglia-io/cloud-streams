@@ -58,6 +58,23 @@ public abstract class ClusterResourceApiController<TResource>(IMediator mediator
     }
 
     /// <summary>
+    /// Patches the specified resource status
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    /// <param name="name">The name of the resource to patch</param>
+    /// <param name="dryRun">A boolean indicating whether or not to persist changes</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpPatch("{name}/status")]
+    [ProducesResponseType(typeof(IAsyncEnumerable<Resource>), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> PatchResourceStatus(string name, [FromBody] Patch patch, bool dryRun = false, CancellationToken cancellationToken = default)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.ExecuteAsync(new PatchResourceStatusCommand<TResource>(name, null, patch, dryRun), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Deletes the specified resource
     /// </summary>
     /// <param name="name">The name of the resource to delete</param>
