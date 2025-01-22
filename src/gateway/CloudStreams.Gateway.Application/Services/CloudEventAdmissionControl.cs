@@ -142,7 +142,19 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
             this._metrics.IncrementTotalRejectedEvents();
-            return result.OfType<CloudEventDescriptor>();
+            if (result.Status == (int)HttpStatusCode.Conflict) 
+            {
+                return (this.Configuration?.Resource.Spec.SplitHorizon?.LoopAction) switch
+                {
+                    LoopAction.Ignore => new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted),
+                    _ => result.OfType<CloudEventDescriptor>()
+                };
+            }
+            else
+            {
+                return result.OfType<CloudEventDescriptor>();
+            }
+
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
@@ -168,6 +180,30 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     {
         ArgumentNullException.ThrowIfNull(e);
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
+        var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
+        if (splitHorizon != null && e.ExtensionAttributes?.TryGetValue(splitHorizon.OriginAttribute, out var origin) == true)
+        {
+            var origins = origin.ToString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var lastOrigin = origins.LastOrDefault();
+            var reject = false;
+            if (!string.IsNullOrWhiteSpace(lastOrigin) && ((splitHorizon.AllowedOrigins != null && !splitHorizon.AllowedOrigins.Contains(lastOrigin)) || (splitHorizon.ExcludedOrigins != null && splitHorizon.ExcludedOrigins.Contains(lastOrigin)))) reject = true;
+            else
+            {
+                var gatewayName = this.Configuration!.Resource.GetQualifiedName();
+                reject = (!splitHorizon.MaxChainLength.HasValue || origins.Length <= splitHorizon.MaxChainLength.Value) && splitHorizon.EvaluationMode switch
+                {
+                    HorizonEvaluationMode.Last => origins.LastOrDefault() == gatewayName,
+                    HorizonEvaluationMode.Contains => origins.Contains(gatewayName),
+                    HorizonEvaluationMode.Single => origins.Length == 1 && origins[0] == gatewayName,
+                    _ => throw new NotSupportedException($"The specified {nameof(HorizonEvaluationMode)} '{EnumHelper.Stringify(splitHorizon.EvaluationMode)}' is not supported")
+                };
+            }
+            if (reject)
+            {
+                this.Logger.LogDebug("The cloud event with id '{eventId}' has been rejected because the configured split-horizon policy detected a loop", e.Id);
+                return new((int)HttpStatusCode.Conflict);
+            }
+        }
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? this.Configuration?.Resource.Spec.Authorization;
         if (policy == null) return new((int)HttpStatusCode.OK);
         var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
@@ -247,6 +283,14 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         ArgumentNullException.ThrowIfNull(e);
         if (!e.Time.HasValue) e.Time = DateTimeOffset.Now;
         var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+        var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
+        if (splitHorizon != null)
+        {
+            var origins = new List<string>();
+            if (e.ExtensionAttributes?.TryGetValue(splitHorizon.OriginAttribute, out var origin) == true) origins = [.. origin.ToString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+            origins.Add(this.Configuration!.Resource.GetQualifiedName());
+            metadata.ContextAttributes[splitHorizon.OriginAttribute] = string.Join(' ', origins);
+        }
         var ingestionConfiguration = this.Configuration?.Resource.Spec.Events?.LastOrDefault(c => c.AppliesTo(e));
         if (ingestionConfiguration == null || ingestionConfiguration.Metadata?.Properties == null) return metadata;
         foreach (var property in ingestionConfiguration.Metadata.Properties)

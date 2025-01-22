@@ -45,9 +45,15 @@ public record GatewaySpec
     public virtual List<CloudEventIngestionConfiguration>? Events { get; set; }
 
     /// <summary>
+    /// Gets/sets the gateway's split-horizon policy, if any
+    /// </summary>
+    [DataMember(Order = 5, Name = "splitHorizon"), JsonPropertyOrder(5), JsonPropertyName("splitHorizon"), YamlMember(Order = 5, Alias = "splitHorizon")]
+    public virtual SplitHorizonPolicy? SplitHorizon { get; set; } = new();
+
+    /// <summary>
     /// Gets/sets an object used to configure the gateway service, if any
     /// </summary>
-    [DataMember(Order = 5, Name = "service"), JsonPropertyOrder(5), JsonPropertyName("service"), YamlMember(Order = 5, Alias = "service")]
+    [DataMember(Order = 6, Name = "service"), JsonPropertyOrder(6), JsonPropertyName("service"), YamlMember(Order = 6, Alias = "service")]
     public virtual ServiceConfiguration? Service { get; set; }
 
 }

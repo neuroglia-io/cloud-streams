@@ -1,0 +1,41 @@
+﻿// Copyright © 2024-Present The Cloud Streams Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License"),
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using Neuroglia.Serialization.Json.Converters;
+
+namespace CloudStreams.Core;
+
+/// <summary>
+/// Enumerates all supported horizon evaluation modes
+/// </summary>
+[TypeConverter(typeof(EnumMemberTypeConverter))]
+[JsonConverter(typeof(StringEnumConverter))]
+public enum HorizonEvaluationMode
+{
+    /// <summary>
+    /// Rejects events if the most recent origin is the ingesting gateway.<para></para>Note that if <see cref="HorizonTrackingMode"/> has been set to <see cref="HorizonTrackingMode.Single"/>, this has the same effect than <see cref="HorizonEvaluationMode.Single"/>
+    /// </summary>
+    [EnumMember(Value = "last")]
+    Last = 1,
+    /// <summary>
+    /// Rejects events with a chain of origins that contains the ingesting gateway
+    /// </summary>
+    [EnumMember(Value = "contains")]
+    Contains = 2,
+    /// <summary>
+    /// Rejects events with a single origin that matches the ingesting gateway
+    /// </summary>
+    [EnumMember(Value = "single")]
+    Single = 4
+
+}

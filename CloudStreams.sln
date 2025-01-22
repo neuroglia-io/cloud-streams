@@ -45,12 +45,25 @@ EndProject
 Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "deployments\docker-compose\docker-compose.dcproj", "{0050C106-97E3-40BD-8C2C-34503B5757DF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{9EDAC21F-3617-413B-8C54-469851036E9B}"
+	ProjectSection(SolutionItems) = preProject
+		.github\PULL_REQUEST_TEMPLATE.md = .github\PULL_REQUEST_TEMPLATE.md
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "issue_template", "issue_template", "{63F334BA-8ECE-42CC-8948-A15E9CCFF4CE}"
 	ProjectSection(SolutionItems) = preProject
 		.github\ISSUE_TEMPLATE\bug.yml = .github\ISSUE_TEMPLATE\bug.yml
 		.github\ISSUE_TEMPLATE\config.yml = .github\ISSUE_TEMPLATE\config.yml
 		.github\ISSUE_TEMPLATE\feature.yml = .github\ISSUE_TEMPLATE\feature.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{3B93410E-F6AA-4ADB-88E0-A8D3DBF6885C}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\build-dotnet.yml = .github\workflows\build-dotnet.yml
+		.github\workflows\ci-pipeline.yml = .github\workflows\ci-pipeline.yml
+		.github\workflows\publish.yml = .github\workflows\publish.yml
+		.github\workflows\release.yml = .github\workflows\release.yml
+		.github\workflows\test-dotnet.yml = .github\workflows\test-dotnet.yml
+		.github\workflows\versioning.yml = .github\workflows\versioning.yml
 	EndProjectSection
 EndProject
 Global
@@ -124,6 +137,7 @@ Global
 		{7BD5FCBA-1D5A-4DF2-BDC3-5672D3507C06} = {BDA26004-D077-442C-A4F7-F389D5AC9FE5}
 		{0050C106-97E3-40BD-8C2C-34503B5757DF} = {990DE5C0-9BDB-417C-91D9-B3883C5FCA3E}
 		{63F334BA-8ECE-42CC-8948-A15E9CCFF4CE} = {9EDAC21F-3617-413B-8C54-469851036E9B}
+		{3B93410E-F6AA-4ADB-88E0-A8D3DBF6885C} = {9EDAC21F-3617-413B-8C54-469851036E9B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5E10D9D7-D5B5-4C0B-B7AC-AC10FF33DA3F}

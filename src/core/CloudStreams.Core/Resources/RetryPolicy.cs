@@ -21,7 +21,6 @@ public record RetryPolicy
 {
 
     static readonly RetryBackoffDuration DefaultRetryBackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(3));
-    const int DefaultMaxAttempts = 5;
 
     /// <summary>
     /// Initializes a new <see cref="RetryPolicy"/>
