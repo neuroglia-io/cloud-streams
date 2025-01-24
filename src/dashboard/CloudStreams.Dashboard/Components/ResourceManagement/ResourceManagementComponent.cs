@@ -145,15 +145,16 @@ public abstract class ResourceManagementComponent<TResource>
     /// Opens the targeted <see cref="Resource"/>'s edition
     /// </summary>
     /// <param name="resource">The <see cref="Resource"/> to edit</param>
-    protected Task OnShowResourceEditorAsync(TResource? resource = null)
+    protected async Task OnShowResourceEditorAsync(TResource? resource = null)
     {
-        if (this.editorOffCanvas == null) return Task.CompletedTask;
+        if (this.editorOffCanvas == null) return;
         var parameters = new Dictionary<string, object>
         {
             { "Resource", resource! }
         };
         string actionType = resource == null ? "creation" : "edition";
-        return this.editorOffCanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
+        await this.editorOffCanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType); // Force reset parameters to trigger OnParametersSetAsync
+        await this.editorOffCanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
     }
 
 }
