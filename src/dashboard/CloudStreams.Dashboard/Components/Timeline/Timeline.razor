@@ -4,6 +4,7 @@
 @implements IAsyncDisposable
 
 <div class="timeline-container">
+    <AutoRefreshForm OnRefresh="async () => await this.Store.GatherCloudEventsAsync()" />
     <div class="controls">
         @if (streamsReadOptions != null)
         {
