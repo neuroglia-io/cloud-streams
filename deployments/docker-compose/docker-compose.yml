@@ -18,11 +18,11 @@ services:
     image: redis:latest
 
   gateway:
-    # image: cloud-streams/gateway
-    image: ${DOCKER_REGISTRY-}gateway
-    build:
-      context: ../../
-      dockerfile: ./src/gateway/CloudStreams.Gateway.Api/Dockerfile
+    image: cloud-streams/gateway
+    # image: ${DOCKER_REGISTRY-}gateway
+    # build:
+    #   context: ../../
+    #   dockerfile: ./src/gateway/CloudStreams.Gateway.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 80
@@ -38,11 +38,11 @@ services:
       - eventstore
 
   broker:
-    image: cloud-streams/broker
-    # image: ${DOCKER_REGISTRY-}broker
-    # build:
-    #   context: ../../
-    #   dockerfile: ./src/broker/CloudStreams.Broker.Api/Dockerfile
+    # image: cloud-streams/broker
+    image: ${DOCKER_REGISTRY-}broker
+    build:
+      context: ../../
+      dockerfile: ./src/broker/CloudStreams.Broker.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 80
