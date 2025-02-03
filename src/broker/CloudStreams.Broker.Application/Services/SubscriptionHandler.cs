@@ -222,20 +222,13 @@ public class SubscriptionHandler
                 this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
                 if (this.Subscription.Spec.Partition == null)
                 {
-                    try
-                    {
-                        this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
-                    }
-                    catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
-                    {
-                        this.StreamOffset = 0;
-                    }
-                    if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                     while (true)
                     {
                         try
                         {
                             this.CloudEventStream = await this.EventStore.ObserveAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                            if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                             break;
                         }
                         catch (StreamNotFoundException)
@@ -248,20 +241,13 @@ public class SubscriptionHandler
                 }
                 else
                 {
-                    try
-                    {
-                        this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
-                    }
-                    catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
-                    {
-                        this.StreamOffset = 0;
-                    }
-                    if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                     while (true)
                     {
                         try
                         {
                             this.CloudEventStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                            this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                            if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                             break;
                         }
                         catch (StreamNotFoundException)
@@ -273,7 +259,7 @@ public class SubscriptionHandler
                     }
                 }
                 this.SubscriptionHandle = this.CloudEventStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
-                if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) _ = this.CatchUpAsync().ConfigureAwait(false);
+                if (this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset)) _ = this.CatchUpAsync().ConfigureAwait(false);
             }
             catch (Exception ex) when(ex is OperationCanceledException or TaskCanceledException) { }
             catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex); }

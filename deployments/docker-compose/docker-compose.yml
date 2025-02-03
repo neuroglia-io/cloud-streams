@@ -29,6 +29,8 @@ services:
       CONNECTIONSTRINGS__REDIS: ${REDIS_URI}
       CONNECTIONSTRINGS__EVENTSTORE: ${EVENTSTORE_URI}
       CLOUDSTREAMS_GATEWAY_NAME: gateway-1
+    volumes:
+      - ./config/subscriptions:/app/data/seed/subscriptions
     ports:
       - 8080:80
     depends_on:
