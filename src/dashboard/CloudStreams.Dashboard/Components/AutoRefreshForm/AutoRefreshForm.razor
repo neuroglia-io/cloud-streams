@@ -1,0 +1,65 @@
+﻿@namespace CloudStreams.Dashboard.Components
+@using CloudStreams.Dashboard.Components.AutoRefreshFormStateManagement
+@inherits StatefulComponent<AutoRefreshFormStore, AutoRefreshFormState>
+
+<div id="@(id + "auto-refresh-form")" class="input-group mb-3">
+    <div class="flex-grow-1 d-flex align-items-center form-check form-switch">
+        <input id="@(id + "enabled")" class="form-check-input" type="checkbox" @onchange="e => Store.SetEnabled(!enabled)" checked="@enabled" />
+        <label for="@(id + "enabled")" class="form-check-label ms-3">Enable Auto Refresh</label>
+    </div>
+    <div class="form-floating">
+        <select id="@(id + "interval")" class="form-select" name="partitionType" @onchange='e => Store.SetInterval(int.Parse(((string?)e.Value) ?? "5"))' disabled="@(!enabled)">
+            <option value="1" selected="@(interval == 1)">1s</option>
+            <option value="3" selected="@(interval == 3)">3s</option>
+            <option value="5" selected="@(interval == 5)">5s</option>
+            <option value="10" selected="@(interval == 10)">10s</option>
+            <option value="30" selected="@(interval == 30)">30s</option>
+            <option value="60" selected="@(interval == 60)">1m</option>
+            <option value="@(60*5)" selected="@(interval == 60*5)">5m</option>
+            <option value="@(60*15)" selected="@(interval == 60*15)">15m</option>
+        </select>
+        <label for="@(id + "partitionType")">Refresh Interval</label>
+    </div>
+</div>
+
+@code {
+
+    /// <summary>
+    /// The <see cref="EventCallback"/> emitted each time a refresh is triggered
+    /// </summary>
+    [Parameter] public EventCallback OnRefresh { get; set; }
+
+    /// <summary>
+    /// Reflects the <see cref="AutoRefreshFormStore.Enabled"/>
+    /// </summary>
+    private bool enabled = false;
+
+    /// <summary>
+    /// Reflects the <see cref="AutoRefreshFormStore.Interval"/>
+    /// </summary>
+    private int interval = 5;
+
+    /// <summary>
+    /// A random id
+    /// </summary>
+    private string id = Guid.NewGuid().ToString();
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Enabled.Subscribe(enabled => this.OnStateChanged(cmp => cmp.enabled = enabled), token: this.CancellationTokenSource.Token);
+        this.Store.Interval.Subscribe(interval => this.OnStateChanged(cmp => cmp.interval = interval), token: this.CancellationTokenSource.Token);
+        this.Store.Refresh.SubscribeAsync(async (long _) => await this.OnRefresh.InvokeAsync(), cancellationToken: this.CancellationTokenSource.Token);
+    }
+
+    /// <summary>
+    /// Patches the <see cref="AutoRefreshForm"/>'s fields after a <see cref="AutoRefreshFormStore"/>'s change
+    /// </summary>
+    /// <param name="patch">The patch to apply</param>
+    private void OnStateChanged(Action<AutoRefreshForm> patch)
+    {
+        patch(this);
+        this.StateHasChanged();
+    }
+}
