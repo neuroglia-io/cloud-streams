@@ -222,7 +222,7 @@ public class SubscriptionHandler
                 this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
                 if (this.Subscription.Spec.Partition == null)
                 {
-                    while (true)
+                    while (true && this.StreamInitializationCancellationTokenSource != null && !this.StreamInitializationCancellationTokenSource.IsCancellationRequested)
                     {
                         try
                         {
@@ -241,7 +241,7 @@ public class SubscriptionHandler
                 }
                 else
                 {
-                    while (true)
+                    while (true && this.StreamInitializationCancellationTokenSource != null && !this.StreamInitializationCancellationTokenSource.IsCancellationRequested)
                     {
                         try
                         {
@@ -261,7 +261,7 @@ public class SubscriptionHandler
                 this.SubscriptionHandle = this.CloudEventStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
                 if (this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset)) _ = this.CatchUpAsync().ConfigureAwait(false);
             }
-            catch (Exception ex) when(ex is OperationCanceledException or TaskCanceledException) { }
+            catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
             catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex); }
         }
         finally { this.InitLock.Release(); }
@@ -510,7 +510,11 @@ public class SubscriptionHandler
         resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotModified) { }
     }
 
     /// <summary>
@@ -525,7 +529,7 @@ public class SubscriptionHandler
             {
                 await this.StreamSynchronizationTaskCompletionSource.Task.ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+            catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         }
         this.StreamInitializationCancellationTokenSource?.Dispose();
         this.StreamInitializationCancellationTokenSource = null;
@@ -581,7 +585,7 @@ public class SubscriptionHandler
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
             await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
@@ -597,7 +601,7 @@ public class SubscriptionHandler
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
             if (fault == null) await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
@@ -614,7 +618,7 @@ public class SubscriptionHandler
             if (this.Subscription.Status?.Stream?.Fault != null || !this.SubscriberAvailable || this.SubscriptionOutOfSync) return;
             await this.DispatchAsync(e, true, true).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
@@ -628,7 +632,7 @@ public class SubscriptionHandler
         try
         {
             this.StreamInitializationCancellationTokenSource?.Cancel();
-            this.Logger.LogError("An error occurred while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription, ex);
+            this.Logger.LogError("An error occurred while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription.GetQualifiedName(), ex);
             var resource = this.Subscription.Clone()!;
             if (resource.Spec.Stream == null) return;
             if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
@@ -637,7 +641,7 @@ public class SubscriptionHandler
             var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
             await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
         }
-        catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException || (inner is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         
     }
 
