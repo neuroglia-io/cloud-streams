@@ -13,10 +13,10 @@
 
 using FluentValidation;
 using Grpc.Core;
-using Polly;
 using Polly.CircuitBreaker;
-using System.Reactive.Threading.Tasks;
+using Polly;
 using System.Text.RegularExpressions;
+using System.Reactive.Threading.Tasks;
 
 namespace CloudStreams.Broker.Application.Services;
 
@@ -24,11 +24,9 @@ namespace CloudStreams.Broker.Application.Services;
 /// Represents a service used to handle a <see cref="Core.Resources.Subscription"/>
 /// </summary>
 public class SubscriptionHandler
-    : IAsyncDisposable
 {
 
-    IDisposable? _Subscription;
-    bool _Disposed;
+    bool _disposed;
 
     /// <summary>
     /// Initializes a new <see cref="SubscriptionHandler"/>
@@ -44,7 +42,7 @@ public class SubscriptionHandler
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
     /// <param name="subscription">The <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
-    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController, 
+    public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController,
         IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
@@ -88,6 +86,11 @@ public class SubscriptionHandler
     protected IResourceRepository ResourceRepository { get; }
 
     /// <summary>
+    /// Gets the service used to evaluate runtime expressions
+    /// </summary>
+    protected IExpressionEvaluator ExpressionEvaluator { get; }
+
+    /// <summary>
     /// Gets the service used to control <see cref="Core.Resources.Subscription"/> resources
     /// </summary>
     protected IResourceController<Subscription> SubscriptionController { get; }
@@ -96,11 +99,6 @@ public class SubscriptionHandler
     /// Gets the service used to monitor the current <see cref="Core.Resources.Broker"/>
     /// </summary>
     protected IResourceMonitor<Core.Resources.Broker> Broker { get; }
-
-    /// <summary>
-    /// Gets the service used to evaluate runtime expressions
-    /// </summary>
-    protected IExpressionEvaluator ExpressionEvaluator { get; }
 
     /// <summary>
     /// Gets an <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s
@@ -123,14 +121,19 @@ public class SubscriptionHandler
     protected HttpClientRetryPolicy DefaultRetryPolicy { get; private set; }
 
     /// <summary>
+    /// Gets the offset of the last filtered <see cref="CloudEvent"/> in the stream
+    /// </summary>
+    protected ulong? StreamOffset { get; private set; }
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe consumed <see cref="CloudEvent"/>s
+    /// </summary>
+    protected IObservable<CloudEventRecord> CloudEventStream { get; private set; } = null!;
+
+    /// <summary>
     /// Gets the <see cref="SubscriptionHandler"/>'s <see cref="System.Threading.CancellationTokenSource"/>
     /// </summary>
     protected CancellationTokenSource CancellationTokenSource { get; private set; } = null!;
-
-    /// <summary>
-    /// Gets the <see cref="SubscriptionHandler"/>'s <see cref="System.Threading.CancellationToken"/>
-    /// </summary>
-    protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
     /// <summary>
     /// Gets the <see cref="System.Threading.CancellationTokenSource"/> used to cancel an ongoing stream synchronization loop
@@ -140,27 +143,22 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the <see cref="TaskCompletionSource"/> used to await the completion of an ongoing stream synchronization loop
     /// </summary>
-    protected TaskCompletionSource? StreamInitializationTaskCompletionSource { get; private set; }
+    protected TaskCompletionSource? StreamSynchronizationTaskCompletionSource { get; private set; }
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe consumed <see cref="CloudEvent"/>s
+    /// Gets an <see cref="IDisposable"/> used to dispose of the active <see cref="CloudEvent"/> subscription, if any
     /// </summary>
-    protected IObservable<CloudEventRecord> CloudEventStream { get; private set; } = null!;
+    protected IDisposable? SubscriptionHandle { get; private set; }
+
+    /// <summary>
+    /// Gets the <see cref="SemaphoreSlim"/> used to lock the initialization process and ensures a maximum of one active subscription at all times
+    /// </summary>
+    protected SemaphoreSlim InitLock { get; } = new(1, 1);
 
     /// <summary>
     /// Gets a boolean indicating whether or not the subscriber is available
     /// </summary>
     protected bool SubscriberAvailable { get; private set; } = true;
-
-    /// <summary>
-    /// Gets the offset of the last acked <see cref="CloudEvent"/>
-    /// </summary>
-    protected ulong? AckedOffset => this.Subscription.Status?.Stream?.AckedOffset;
-
-    /// <summary>
-    /// Gets the offset of the last filtered <see cref="CloudEvent"/> in the stream
-    /// </summary>
-    protected ulong? StreamOffset { get; private set; }
 
     /// <summary>
     /// Gets a boolean indicating whether or not the subscription is out of sync with the stream's last offset
@@ -188,103 +186,85 @@ public class SubscriptionHandler
                 shared.Where(s => s.Status != null && s.Status.Stream != null)
                     .Select(s => s.Status!.Stream!.Fault)
                     .DistinctUntilChanged()
+                    .Where(fault => fault != null)
                     .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable())
             ))
-            .Subscribe(this.CancellationToken);
+            .Subscribe(this.CancellationTokenSource.Token);
         this.Broker
             .Select(e => e.Resource.Spec.Dispatch?.RetryPolicy)
             .DistinctUntilChanged()
-            .Subscribe(policy => this.DefaultRetryPolicy = policy ?? new HttpClientRetryPolicy(), this.CancellationToken);
+            .Subscribe(policy => this.DefaultRetryPolicy = policy ?? new HttpClientRetryPolicy(), this.CancellationTokenSource.Token);
         await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Active).ConfigureAwait(false);
         _ = this.InitializeCloudEventStreamAsync();
     }
 
     /// <summary>
-    /// Initializes the <see cref="SubscriptionHandler"/>'s <see cref="Core.Resources.CloudEventStream"/>
+    /// Initializes the <see cref="SubscriptionHandler"/>
     /// </summary>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task InitializeCloudEventStreamAsync()
     {
+        if (this.Subscription.Status?.Stream?.Fault != null) return;
+        await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
         try
         {
-            this.StreamInitializationCancellationTokenSource ??= CancellationTokenSource.CreateLinkedTokenSource(this.CancellationToken);
-            this._Subscription?.Dispose();
-            if (this.Subscription.Status?.Stream?.Fault != null) return;
-            if (this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration 
+            if (this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration
                 && this.Subscription.Spec.Stream?.Offset != (long?)this.Subscription.Status?.Stream?.AckedOffset)
             {
                 await this.CommitOffsetAsync(null).ConfigureAwait(false);
             }
-            var offset = this.Subscription.GetOffset();
-            this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
-            if (this.Subscription.Spec.Partition == null)
+            this.SubscriptionHandle?.Dispose();
+            this.SubscriptionHandle = null;
+            this.StreamInitializationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
+            try
             {
-                try
+                var offset = this.Subscription.GetOffset();
+                this.Logger.LogDebug("Initializing the cloud event stream of subscription '{subscription}' at offset '{offset}'", this.Subscription, offset);
+                if (this.Subscription.Spec.Partition == null)
                 {
-                    this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
-                }
-                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
-                {
-                    this.StreamOffset = 0;
-                }
-                if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
-                while (true)
-                {
-                    try
+                    while (true)
                     {
-                        this.CloudEventStream = await this.EventStore.ObserveAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
-                        break;
-                    }
-                    catch (StreamNotFoundException)
-                    {
-                        var delay = 5000;
-                        this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
-                        await Task.Delay(delay).ConfigureAwait(false);
+                        try
+                        {
+                            this.CloudEventStream = await this.EventStore.ObserveAsync(offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                            this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                            if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
+                            break;
+                        }
+                        catch (StreamNotFoundException)
+                        {
+                            var delay = 5000;
+                            this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
+                            await Task.Delay(delay).ConfigureAwait(false);
+                        }
                     }
                 }
+                else
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            this.CloudEventStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
+                            this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
+                            if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
+                            break;
+                        }
+                        catch (StreamNotFoundException)
+                        {
+                            var delay = 5000;
+                            this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
+                            await Task.Delay(delay).ConfigureAwait(false);
+                        }
+                    }
+                }
+                this.SubscriptionHandle = this.CloudEventStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
+                if (this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset)) _ = this.CatchUpAsync().ConfigureAwait(false);
             }
-            else
-            {
-                try
-                {
-                    this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false)).Length;
-                }
-                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound)
-                {
-                    this.StreamOffset = 0;
-                }
-                if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
-                while (true)
-                {
-                    try
-                    {
-                        this.CloudEventStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, this.StreamInitializationCancellationTokenSource.Token).ConfigureAwait(false);
-                        break;
-                    }
-                    catch (StreamNotFoundException)
-                    {
-                        var delay = 5000;
-                        this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
-                        await Task.Delay(delay).ConfigureAwait(false);
-                    }
-                }  
-            }
-            this._Subscription = this.CloudEventStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
-            if (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset) _ = this.CatchUpAsync().ConfigureAwait(false);
+            catch (Exception ex) when(ex is OperationCanceledException or TaskCanceledException) { }
+            catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex); }
         }
-        catch (Exception ex) when (ex is ObjectDisposedException || ex is TaskCanceledException || ex is OperationCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) 
-        {
-            if (this.StreamInitializationTaskCompletionSource?.Task.IsCompleted == false && this.StreamInitializationCancellationTokenSource != null && !this.StreamInitializationCancellationTokenSource.IsCancellationRequested) this.StreamInitializationCancellationTokenSource.Cancel();
-        }
-        catch (Exception ex)
-        {
-            if (this.StreamInitializationTaskCompletionSource?.Task.IsCompleted == false)
-            {
-                if (this.StreamInitializationCancellationTokenSource != null && !this.StreamInitializationCancellationTokenSource.IsCancellationRequested) this.StreamInitializationCancellationTokenSource.Cancel();
-                this.StreamInitializationTaskCompletionSource?.SetResult();
-            }
-            await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
-        }
+        finally { this.InitLock.Release(); }
     }
 
     /// <summary>
@@ -319,7 +299,7 @@ public class SubscriptionHandler
         {
             if (!attributes.TryGetValue(attributeFilter.Key, out var attributeValue) || string.IsNullOrWhiteSpace(attributeValue)) return false;
             if (string.IsNullOrWhiteSpace(attributeFilter.Value)) continue;
-            if (attributeValue.IsRuntimeExpression() && !await this.ExpressionEvaluator.EvaluateConditionAsync(attributeFilter.Value, attributeValue, cancellationToken: this.CancellationToken).ConfigureAwait(false)) return false;
+            if (attributeValue.IsRuntimeExpression() && !await this.ExpressionEvaluator.EvaluateConditionAsync(attributeFilter.Value, attributeValue, cancellationToken: this.CancellationTokenSource.Token).ConfigureAwait(false)) return false;
             else if (!Regex.IsMatch(attributeValue, attributeFilter.Value)) return false;
         }
         return true;
@@ -335,7 +315,7 @@ public class SubscriptionHandler
     {
         ArgumentNullException.ThrowIfNull(e);
         if (string.IsNullOrWhiteSpace(expression)) throw new ArgumentNullException(nameof(expression));
-        return await this.ExpressionEvaluator.EvaluateConditionAsync(expression, e, cancellationToken: this.CancellationToken).ConfigureAwait(false);
+        return await this.ExpressionEvaluator.EvaluateConditionAsync(expression, e, cancellationToken: this.CancellationTokenSource.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -346,7 +326,7 @@ public class SubscriptionHandler
     protected virtual async Task<CloudEvent> MutateAsync(CloudEvent e)
     {
         ArgumentNullException.ThrowIfNull(e);
-        if(this.Subscription.Spec.Mutation == null) return e.Clone()!;
+        if (this.Subscription.Spec.Mutation == null) return e.Clone()!;
         var mutated = this.Subscription.Spec.Mutation.Type switch
         {
             CloudEventMutationType.Expression => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Expression!).ConfigureAwait(false),
@@ -384,10 +364,10 @@ public class SubscriptionHandler
         using var requestContent = e.ToHttpContent();
         using var request = new HttpRequestMessage(HttpMethod.Post, webhook.ServiceUri) { Content = requestContent };
         request.Headers.Accept.Add(new(MediaTypeNames.Application.Json));
-        using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
-        var responseContent = await response.Content.ReadAsStringAsync(this.CancellationToken).ConfigureAwait(false);
+        using var response = await this.HttpClient.SendAsync(request, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        var responseContent = await response.Content.ReadAsStringAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        if (response.Content.Headers.ContentType?.MediaType == MediaTypeNames.Application.Json) throw new Exception($"Unexpected HTTP response's content type: {response.Content.Headers.ContentType?.MediaType}"); //todo: better feedback
+        if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Json) throw new Exception($"Unexpected HTTP response's content type: {response.Content.Headers.ContentType?.MediaType}");
         return this.Serializer.Deserialize<CloudEvent>(responseContent);
     }
 
@@ -399,7 +379,7 @@ public class SubscriptionHandler
     protected virtual async Task ValidateAsync(CloudEvent e)
     {
         ArgumentNullException.ThrowIfNull(e);
-        var validationTasks = this.CloudEventValidators.Select(v => v.ValidateAsync(e, this.CancellationToken));
+        var validationTasks = this.CloudEventValidators.Select(v => v.ValidateAsync(e, this.CancellationTokenSource.Token));
         await Task.WhenAll(validationTasks).ConfigureAwait(false);
         if (validationTasks.Any(t => !t.Result.IsValid)) throw new FormatException("Failed to validate the specified cloud event"); //todo: better feedback
     }
@@ -432,7 +412,7 @@ public class SubscriptionHandler
     {
         using var requestContent = e.ToHttpContent();
         using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
-        using var response = await this.HttpClient.SendAsync(request, this.CancellationToken).ConfigureAwait(false);
+        using var response = await this.HttpClient.SendAsync(request, this.CancellationTokenSource.Token).ConfigureAwait(false);
         if (retryOnError && !response.IsSuccessStatusCode)
         {
             await this.RetryDispatchAsync(e, offset, catchUpWhenAvailable);
@@ -459,24 +439,24 @@ public class SubscriptionHandler
             this.SubscriberAvailable = false;
             this.SubscriptionOutOfSync = true;
             var policyConfiguration = this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy;
-            var exceptionPredicate = (HttpRequestException ex) => policyConfiguration.StatusCodes == null || policyConfiguration.StatusCodes.Count == 0 || (ex.StatusCode.HasValue && ex.StatusCode.HasValue && policyConfiguration.StatusCodes.Contains((int)ex.StatusCode.Value));
+            bool exceptionPredicate(HttpRequestException ex) => policyConfiguration.StatusCodes == null || policyConfiguration.StatusCodes.Count == 0 || (ex.StatusCode.HasValue && ex.StatusCode.HasValue && policyConfiguration.StatusCodes.Contains((int)ex.StatusCode.Value));
 
-            AsyncCircuitBreakerPolicy? circuitBreakerPolicy = policyConfiguration.CircuitBreaker == null ? null : Policy.Handle(exceptionPredicate)
+            AsyncCircuitBreakerPolicy? circuitBreakerPolicy = policyConfiguration.CircuitBreaker == null ? null : Policy.Handle((Func<HttpRequestException, bool>)exceptionPredicate)
                 .CircuitBreakerAsync(policyConfiguration.CircuitBreaker.BreakAfter, policyConfiguration.CircuitBreaker.BreakDuration.ToTimeSpan());
 
             AsyncPolicy retryPolicy = policyConfiguration.MaxAttempts.HasValue ?
-                Policy.Handle(exceptionPredicate)
+                Policy.Handle((Func<HttpRequestException, bool>)exceptionPredicate)
                     .WaitAndRetryAsync(policyConfiguration.MaxAttempts.Value, attempt => policyConfiguration.BackoffDuration == null ? TimeSpan.FromSeconds(3) : policyConfiguration.BackoffDuration.ForAttempt(attempt))
-                : Policy.Handle(exceptionPredicate)
+                : Policy.Handle((Func<HttpRequestException, bool>)exceptionPredicate)
                     .WaitAndRetryForeverAsync(attempt => policyConfiguration.BackoffDuration == null ? TimeSpan.FromSeconds(3) : policyConfiguration.BackoffDuration.ForAttempt(attempt));
 
             retryPolicy = circuitBreakerPolicy == null ? retryPolicy : retryPolicy.WrapAsync(circuitBreakerPolicy);
-            await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, offset, false, catchUpWhenAvailable), this.CancellationToken).ConfigureAwait(false);
+            await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, offset, false, catchUpWhenAvailable), this.CancellationTokenSource.Token).ConfigureAwait(false);
 
             this.SubscriberAvailable = true;
             if (catchUpWhenAvailable) await this.CatchUpAsync().ConfigureAwait(false);
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
         }
@@ -491,7 +471,7 @@ public class SubscriptionHandler
         try
         {
             this.SubscriptionOutOfSync = true;
-            this.StreamInitializationTaskCompletionSource ??= new();
+            this.StreamSynchronizationTaskCompletionSource ??= new();
             var currentOffset = this.Subscription.GetOffset();
             if (currentOffset == StreamPosition.EndOfStream) currentOffset = this.Subscription.Spec.Partition == null ?
                     (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence
@@ -513,7 +493,7 @@ public class SubscriptionHandler
             this.SubscriptionOutOfSync = false;
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is TaskCanceledException || ex is OperationCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
-        finally { this.StreamInitializationTaskCompletionSource?.SetResult(); }
+        finally { this.StreamSynchronizationTaskCompletionSource?.SetResult(); }
     }
 
     /// <summary>
@@ -530,7 +510,28 @@ public class SubscriptionHandler
         resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Cancels the subscription's ongoing synchronization loop, if any
+    /// </summary>
+    public async Task CancelSynchronizationLoopAsync()
+    {
+        this.StreamInitializationCancellationTokenSource?.Cancel();
+        if (this.StreamSynchronizationTaskCompletionSource != null)
+        {
+            try
+            {
+                await this.StreamSynchronizationTaskCompletionSource.Task.ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        }
+        this.StreamInitializationCancellationTokenSource?.Dispose();
+        this.StreamInitializationCancellationTokenSource = null;
+        this.StreamSynchronizationTaskCompletionSource = null;
+        this.SubscriptionHandle?.Dispose();
+        this.SubscriptionHandle = null;
     }
 
     /// <summary>
@@ -546,19 +547,7 @@ public class SubscriptionHandler
         resource.Status.Phase = phase;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Cancels the subscription's ongoing synchronization loop, if any
-    /// </summary>
-    protected virtual async Task CancelSynchronizationLoopAsync()
-    {
-        this.StreamInitializationCancellationTokenSource?.Cancel();
-        if (this.StreamInitializationTaskCompletionSource != null) await this.StreamInitializationTaskCompletionSource.Task.ConfigureAwait(false);
-        this.StreamInitializationCancellationTokenSource?.Dispose();
-        this.StreamInitializationCancellationTokenSource = null;
-        this.StreamInitializationTaskCompletionSource = null;
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -579,23 +568,21 @@ public class SubscriptionHandler
     {
         try
         {
-            if(this.Subscription.Status?.Stream?.Fault != null)
+            if (this.Subscription.Status?.Stream?.Fault != null)
             {
                 var resource = this.Subscription.Clone()!;
                 if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
                 if (resource.Status.Stream == null) resource.Status.Stream = new();
                 resource.Status.Stream.Fault = null;
                 var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
+                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
                 return;
             }
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
             await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
-        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
     /// <summary>
@@ -610,10 +597,8 @@ public class SubscriptionHandler
             await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
             if (fault == null) await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
-        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
     /// <summary>
@@ -629,10 +614,8 @@ public class SubscriptionHandler
             if (this.Subscription.Status?.Stream?.Fault != null || !this.SubscriberAvailable || this.SubscriptionOutOfSync) return;
             await this.DispatchAsync(e, true, true).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
-        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
     /// <summary>
@@ -642,15 +625,20 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task OnSubscriptionErrorAsync(Exception ex)
     {
-        this.StreamInitializationCancellationTokenSource?.Cancel();
-        this.Logger.LogError("An error occurred while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription, ex);
-        var resource = this.Subscription.Clone()!;
-        if (resource.Spec.Stream == null) return;
-        if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-        if (resource.Status.Stream == null) resource.Status.Stream = new();
-        resource.Status.Stream.Fault = ex.ToProblemDetails();
-        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationToken).ConfigureAwait(false);
+        try
+        {
+            this.StreamInitializationCancellationTokenSource?.Cancel();
+            this.Logger.LogError("An error occurred while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription, ex);
+            var resource = this.Subscription.Clone()!;
+            if (resource.Spec.Stream == null) return;
+            if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+            if (resource.Status.Stream == null) resource.Status.Stream = new();
+            resource.Status.Stream.Fault = ex.ToProblemDetails();
+            var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
+            await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException) { }
+        
     }
 
     /// <summary>
@@ -659,14 +647,14 @@ public class SubscriptionHandler
     /// <param name="disposing">A boolean indicating whether or not the <see cref="SubscriptionHandler"/> is being disposed of</param>
     protected virtual ValueTask DisposeAsync(bool disposing)
     {
-        if (!this._Disposed)
+        if (!this._disposed)
         {
             if (disposing)
             {
-                this._Subscription?.Dispose();
+                this.SubscriptionHandle?.Dispose();
                 this.CancellationTokenSource.Dispose();
             }
-            this._Disposed = true;
+            this._disposed = true;
         }
         return ValueTask.CompletedTask;
     }
@@ -675,7 +663,9 @@ public class SubscriptionHandler
     public async ValueTask DisposeAsync()
     {
         await this.DisposeAsync(disposing: true);
+#pragma warning disable CA1816 // Dispose methods should call SuppressFinalize
         GC.SuppressFinalize(this);
+#pragma warning restore CA1816 // Dispose methods should call SuppressFinalize
     }
 
 }
