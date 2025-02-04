@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Commands.Subscriptions;
+
 namespace CloudStreams.Core.Api.Controllers;
 
 /// <summary>
@@ -21,4 +23,20 @@ namespace CloudStreams.Core.Api.Controllers;
 public class SubscriptionsController(IMediator mediator)
     : ClusterResourceApiController<Subscription>(mediator)
 {
+
+    /// <summary>
+    /// Exports the specified subscription
+    /// </summary>
+    /// <param name="name">The name of the resource to get</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    [HttpGet("{name}/export")]
+    [ProducesResponseType(typeof(IAsyncEnumerable<Resource>), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> ExportSubscription(string name, CancellationToken cancellationToken = default)
+    {
+        var stream = (await this.Mediator.ExecuteAsync(new ExportSubscriptionCommand(name), cancellationToken).ConfigureAwait(false)).Data!;
+        return this.File(stream, "application/x-yaml", $"{name}.yaml");
+    }
+
 }

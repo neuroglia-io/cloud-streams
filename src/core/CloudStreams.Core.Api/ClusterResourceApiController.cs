@@ -27,7 +27,7 @@ public abstract class ClusterResourceApiController<TResource>(IMediator mediator
 {
 
     /// <summary>
-    /// Gets the specified cluster resourced
+    /// Gets the specified cluster resource
     /// </summary>
     /// <param name="name">The name of the resource to get</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
