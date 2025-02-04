@@ -47,7 +47,7 @@
                                     <span class="badge text-dark bg-primary">active</span>
                                     break;
                                 case SubscriptionStatusPhase.Inactive:
-                                    <span class="badge text-dark bg-secondary">inactive</span>
+                                    <span class="badge bg-secondary">inactive</span>
                                     break;
                             }
                             @if(resource.Status?.Stream?.Fault != null)
@@ -55,7 +55,13 @@
                                 <span class="badge text-dark bg-danger ms-1 cursor-pointer" title="@resource.Status.Stream.Fault.ToString()" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</span>
                             }
                         </td>
-                        <td class="text-center"><a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a></td>
+                        <td class="text-center">
+                            <a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a>
+                            &nbsp;
+                            <span class="badge @GetSubscriberStatusClass(resource)">
+                                @((resource.Status?.Subscriber?.State ?? SubscriberState.Unknown).ToString().ToLower())
+                            </span>
+                        </td>
                         <td class="text-center">@(resource.Spec.Subscriber.RateLimit.HasValue ? resource.Spec.Subscriber.RateLimit.Value.ToString() : "-")</td>
                         <td class="text-center">
                             @if (resource.Spec?.Filter == null)
@@ -134,4 +140,11 @@
         }
     }
 
+    string GetSubscriberStatusClass(Subscription subscription) => subscription?.Status?.Subscriber?.State switch
+    {
+        SubscriberState.Unknown => "bg-secondary",
+        SubscriberState.Reachable => "text-dark bg-primary",
+        SubscriberState.Unreachable => "bg-danger",
+        _ => "bg-secondary"
+    };
 }
