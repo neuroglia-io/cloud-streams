@@ -24,19 +24,25 @@ public record SubscriptionStatus
     /// Gets/sets the status phase of the described subscription
     /// </summary>
     [Required, DefaultValue(SubscriptionStatusPhase.Inactive)]
-    [DataMember(Order = 1, Name = "phase"), JsonPropertyName("phase"), YamlMember(Alias = "phase")]
+    [DataMember(Order = 1, Name = "phase"), JsonPropertyName("phase"), JsonPropertyOrder(1), YamlMember(Alias = "phase", Order = 1)]
     public virtual SubscriptionStatusPhase Phase { get; set; }
 
     /// <summary>
     /// Gets/sets the observed generation of the subscription's spec the status describes. Divergence between resource and observed generation values should be handled during a reconciliation loop
     /// </summary>
-    [DataMember(Order = 2, Name = "observedGeneration"), JsonPropertyName("observedGeneration"), YamlMember(Alias = "observedGeneration")]
+    [DataMember(Order = 2, Name = "observedGeneration"), JsonPropertyName("observedGeneration"), JsonPropertyOrder(2), YamlMember(Alias = "observedGeneration", Order = 2)]
     public virtual ulong? ObservedGeneration { get; set; }
 
     /// <summary>
     /// Gets/sets an object used to describe the status of the subscription's cloud event stream
     /// </summary>
-    [DataMember(Order = 3, Name = "stream"), JsonPropertyName("stream"), YamlMember(Alias = "stream")]
+    [DataMember(Order = 3, Name = "stream"), JsonPropertyName("stream"), JsonPropertyOrder(3), YamlMember(Alias = "stream", Order = 3)]
     public virtual CloudEventStreamStatus? Stream { get; set; }
+
+    /// <summary>
+    /// Gets/sets the subscriber's status
+    /// </summary>
+    [DataMember(Order = 4, Name = "subscriber"), JsonPropertyName("subscriber"), JsonPropertyOrder(4), YamlMember(Alias = "subscriber", Order = 4)]
+    public virtual SubscriberStatus? Subscriber { get; set; }
 
 }

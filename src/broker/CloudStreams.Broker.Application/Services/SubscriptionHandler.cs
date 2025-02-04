@@ -17,6 +17,7 @@ using Polly.CircuitBreaker;
 using Polly;
 using System.Text.RegularExpressions;
 using System.Reactive.Threading.Tasks;
+using System.Numerics;
 
 namespace CloudStreams.Broker.Application.Services;
 
@@ -154,11 +155,6 @@ public class SubscriptionHandler
     /// Gets the <see cref="SemaphoreSlim"/> used to lock the initialization process and ensures a maximum of one active subscription at all times
     /// </summary>
     protected SemaphoreSlim InitLock { get; } = new(1, 1);
-
-    /// <summary>
-    /// Gets a boolean indicating whether or not the subscriber is available
-    /// </summary>
-    protected bool SubscriberAvailable { get; private set; } = true;
 
     /// <summary>
     /// Gets a boolean indicating whether or not the subscription is out of sync with the stream's last offset
@@ -410,18 +406,31 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task DispatchAsync(CloudEvent e, ulong offset, bool retryOnError, bool catchUpWhenAvailable)
     {
-        using var requestContent = e.ToHttpContent();
-        using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
-        using var response = await this.HttpClient.SendAsync(request, this.CancellationTokenSource.Token).ConfigureAwait(false);
-        if (retryOnError && !response.IsSuccessStatusCode)
+        try
         {
-            await this.RetryDispatchAsync(e, offset, catchUpWhenAvailable);
+            using var requestContent = e.ToHttpContent();
+            using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
+            using var response = await this.HttpClient.SendAsync(request, this.CancellationTokenSource.Token).ConfigureAwait(false);
+            if (retryOnError && !response.IsSuccessStatusCode)
+            {
+                var reason = $"The server responded with a non-success status code '{response.StatusCode}'";
+                var responseContent = await response.Content.ReadAsStringAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(responseContent)) reason = $"{reason}: {responseContent}";
+                await this.RetryDispatchAsync(e, offset, catchUpWhenAvailable, reason).ConfigureAwait(false);
+            }
+            else
+            {
+                response.EnsureSuccessStatusCode();
+                if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
+                if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value), this.CancellationTokenSource.Token).ConfigureAwait(false);
+            }
         }
-        else
+        catch (HttpRequestException ex)
         {
-            response.EnsureSuccessStatusCode();
-            if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
-            if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value));
+            var reason = ex.InnerException == null 
+                ? $"The server responded with a non-success status code '{ex.StatusCode}'"
+                : ex.InnerException.Message;
+            await this.RetryDispatchAsync(e, offset, catchUpWhenAvailable, reason).ConfigureAwait(false);
         }
     }
 
@@ -431,12 +440,13 @@ public class SubscriptionHandler
     /// <param name="e">The <see cref="CloudEvent"/> to dispatch</param>
     /// <param name="offset">The offset of the <see cref="CloudEvent"/> to dispatch</param>
     /// <param name="catchUpWhenAvailable">A boolean indicating whether or not to catch up events when the subscribe becomes available again</param>
+    /// <param name="statusReason">The reason why the initial dispatch attempt has failed</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task RetryDispatchAsync(CloudEvent e, ulong offset, bool catchUpWhenAvailable)
+    protected virtual async Task RetryDispatchAsync(CloudEvent e, ulong offset, bool catchUpWhenAvailable, string statusReason)
     {
         try
         {
-            this.SubscriberAvailable = false;
+            await this.SetSubscriberStateAsync(SubscriberState.Unreachable, statusReason).ConfigureAwait(false);
             this.SubscriptionOutOfSync = true;
             var policyConfiguration = this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy;
             bool exceptionPredicate(HttpRequestException ex) => policyConfiguration.StatusCodes == null || policyConfiguration.StatusCodes.Count == 0 || (ex.StatusCode.HasValue && ex.StatusCode.HasValue && policyConfiguration.StatusCodes.Contains((int)ex.StatusCode.Value));
@@ -453,13 +463,11 @@ public class SubscriptionHandler
             retryPolicy = circuitBreakerPolicy == null ? retryPolicy : retryPolicy.WrapAsync(circuitBreakerPolicy);
             await retryPolicy.ExecuteAsync(async _ => await this.DispatchAsync(e, offset, false, catchUpWhenAvailable), this.CancellationTokenSource.Token).ConfigureAwait(false);
 
-            this.SubscriberAvailable = true;
+            await this.SetSubscriberStateAsync(SubscriberState.Reachable).ConfigureAwait(false);
             if (catchUpWhenAvailable) await this.CatchUpAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
-        }
+        catch (Exception ex) when (ex is ObjectDisposedException || ex is TaskCanceledException || ex is OperationCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
     }
 
     /// <summary>
@@ -474,8 +482,8 @@ public class SubscriptionHandler
             this.StreamSynchronizationTaskCompletionSource ??= new();
             var currentOffset = this.Subscription.GetOffset();
             if (currentOffset == StreamPosition.EndOfStream) currentOffset = this.Subscription.Spec.Partition == null ?
-                    (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence
-                    : (long)(await this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, this.StreamInitializationCancellationTokenSource!.Token).SingleAsync(this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence;
+                (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence
+                : (long)(await this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, this.StreamInitializationCancellationTokenSource!.Token).SingleAsync(this.StreamInitializationCancellationTokenSource!.Token).ConfigureAwait(false))!.Sequence;
             do
             {
                 var record = this.Subscription.Spec.Partition == null ?
@@ -489,7 +497,7 @@ public class SubscriptionHandler
                 await this.DispatchAsync(record, true, false).ConfigureAwait(false);
                 currentOffset++;
             }
-            while (!this.StreamInitializationCancellationTokenSource.Token.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
+            while (this.StreamInitializationCancellationTokenSource != null && !this.StreamInitializationCancellationTokenSource.Token.IsCancellationRequested && (ulong)currentOffset <= this.StreamOffset);
             this.SubscriptionOutOfSync = false;
         }
         catch (Exception ex) when (ex is ObjectDisposedException || ex is TaskCanceledException || ex is OperationCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
@@ -549,6 +557,25 @@ public class SubscriptionHandler
         if (resource.Status == null) resource.Status = new();
         else if (resource.Status.Phase == phase) return;
         resource.Status.Phase = phase;
+        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
+        if (!patch.Operations.Any()) return;
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sets the subscriber's state
+    /// </summary>
+    /// <param name="state">The state to set</param>
+    /// <param name="reason">The reason why, if any, the subscriber is in the specified state</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task SetSubscriberStateAsync(SubscriberState state, string? reason = null)
+    {
+        if (this.Subscription.Status?.Subscriber?.State == state && this.Subscription.Status?.Subscriber?.Reason == reason) return;
+        var resource = this.Subscription.Clone()!;
+        resource.Status ??= new();
+        resource.Status.Subscriber ??= new();
+        resource.Status.Subscriber.State = state;
+        resource.Status.Subscriber.Reason = reason;
         var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
         if (!patch.Operations.Any()) return;
         await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -615,7 +642,7 @@ public class SubscriptionHandler
         try
         {
             this.StreamOffset = e.Sequence;
-            if (this.Subscription.Status?.Stream?.Fault != null || !this.SubscriberAvailable || this.SubscriptionOutOfSync) return;
+            if (this.Subscription.Status?.Stream?.Fault != null || this.Subscription?.Status?.Subscriber?.State ==  SubscriberState.Unreachable || this.SubscriptionOutOfSync) return;
             await this.DispatchAsync(e, true, true).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
@@ -667,9 +694,7 @@ public class SubscriptionHandler
     public async ValueTask DisposeAsync()
     {
         await this.DisposeAsync(disposing: true);
-#pragma warning disable CA1816 // Dispose methods should call SuppressFinalize
         GC.SuppressFinalize(this);
-#pragma warning restore CA1816 // Dispose methods should call SuppressFinalize
     }
 
 }
