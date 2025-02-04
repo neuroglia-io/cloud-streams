@@ -16,20 +16,25 @@ using Neuroglia.Serialization.Json.Converters;
 namespace CloudStreams.Core;
 
 /// <summary>
-/// Enumerates subscription status phases
+/// Enumerates subscriber reachability statuses
 /// </summary>
 [TypeConverter(typeof(EnumMemberTypeConverter))]
 [JsonConverter(typeof(StringEnumConverter))]
-public enum SubscriptionStatusPhase
+public enum SubscriberState
 {
     /// <summary>
-    /// Indicates that the subscription is inactive because its broker is inactive, or because the later did not pick it up
+    /// Indicates that the subscriber's reachability is not currently known.
     /// </summary>
-    [EnumMember(Value = "inactive")]
-    Inactive = 1,
+    [EnumMember(Value = "unknown")]
+    Unknown = 1,
     /// <summary>
-    /// Indicates that the subscription is being monitored by its broker
+    /// Indicates that the subscriber is reachable.
     /// </summary>
-    [EnumMember(Value = "active")]
-    Active = 2
+    [EnumMember(Value = "reachable")]
+    Reachable = 2,
+    /// <summary>
+    /// Indicates that the subscriber is currently unreachable.
+    /// </summary>
+    [EnumMember(Value = "unreachable")]
+    Unreachable = 4
 }
