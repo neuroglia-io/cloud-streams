@@ -4,7 +4,6 @@
 @implements IAsyncDisposable
 
 <div class="timeline-container">
-    <AutoRefreshForm OnRefresh="async () => await this.Store.GatherCloudEventsAsync()" />
     <div class="controls">
         @if (streamsReadOptions != null)
         {
@@ -13,7 +12,7 @@
                 {
                     int optionIndex = i;
                     <div class="d-flex">
-                        <ReadOptionsForm StreamReadOptions="streamsReadOptions.ElementAt(i)" Compact="false" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
+                        <ReadOptionsForm StreamReadOptions="streamsReadOptions.ElementAt(i)" Compact="false" Refresher="autoRefreshForm" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
                         <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
                     </div>
                 }
@@ -37,6 +36,7 @@
             </div>
         }
     </div>
+    <AutoRefreshForm @ref="autoRefreshForm" />
     <div @ref="timeline" class="timeline pt-5"></div>
     @if (selectedCloudEvents.Any())
     {
@@ -78,7 +78,7 @@
     /// </summary>
     private ElementReference timeline;
     /// <summary>
-    /// A Dotnet reference of the current component, used for interop
+    /// A dotNET reference of the current component, used for interop
     /// </summary>
     private DotNetObjectReference<Timeline>? dotnetReference = null;
     /// <summary>
@@ -122,6 +122,8 @@
     /// </summary>
     private List<CloudEvent> selectedCloudEvents = new List<CloudEvent>();
 
+    AutoRefreshForm? autoRefreshForm;
+
     /// <summary>
     /// An instance of the <see cref="EventDropsInterop" /> service scope to the lifetime of the component
     /// </summary>
@@ -152,7 +154,6 @@
         if (firstRender)
         {
             this.dotnetReference = DotNetObjectReference.Create(this);
-            await Store.GatherCloudEventsAsync();
         }
         await base.OnAfterRenderAsync(firstRender);
     }

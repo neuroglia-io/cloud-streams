@@ -62,6 +62,12 @@
     [Parameter] public StreamReadOptions? StreamReadOptions { get; set; }
 
     /// <summary>
+    /// The <see cref="Refresher"/> used to forcefully refresh the component's contextual data
+    /// </summary>
+    private Refresher? _refresher = null;
+    [Parameter] public Refresher? Refresher { get; set; }
+
+    /// <summary>
     /// The <see cref="StreamReadOptions"/> emitted by the form
     /// </summary>
     [Parameter] public EventCallback<StreamReadOptions> OnChange { get; set; }
@@ -133,6 +139,14 @@
             }
             this.Store.SetReadOptions(this._streamReadOptions);
         }
+        if (this._refresher != this.Refresher)
+        {
+            this._refresher = this.Refresher;
+            if (this._refresher != null)
+            {
+                this._refresher.Refreshed += OnRefreshAsync;
+            }
+        }
     }
 
     /// <summary>
@@ -144,6 +158,15 @@
     {
         this.Store.SetPartitionType(type);
         this.Store.SetPartitionId(id);
+    }
+
+    /// <summary>
+    /// Updates the stored metadata for the current stream/partition
+    /// </summary>
+    /// <returns></returns>
+    private async Task OnRefreshAsync(object? sender)
+    {
+        await this.Store.UpdateMetadataAsync((this.partitionType, this.partitionId));
     }
 
     /// <summary>
@@ -166,5 +189,18 @@
         this.Store.SetDirection(StreamReadDirection.Backwards);
         this.Store.SetOffset(null);
         this.Store.SetLength(null);
+    }
+
+    /// <inheritdoc/>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            if (this._refresher != null)
+            {
+                this._refresher.Refreshed -= OnRefreshAsync;
+            }
+        }
+        base.Dispose(disposing);
     }
 }

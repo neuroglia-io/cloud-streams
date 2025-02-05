@@ -110,7 +110,8 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         {
             readOptions = readOptions with { Partition = null };
         }
-        var totalCount = (int?)this.Get(state => state.TotalCount) ?? 0;
+        var totalCount = (int?)this.Get(state => state.TotalCount);
+        if (totalCount == null) return new ItemsProviderResult<CloudEvent>([], 0);
         if (readOptions.Direction == StreamReadDirection.Forwards)
         {
             readOptions.Offset = (readOptions.Offset ?? 0) + request.StartIndex;
@@ -118,7 +119,7 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         else
         {
             if ((readOptions.Offset??0) == 0 && request.StartIndex == 0) readOptions.Offset = -1;
-            else readOptions.Offset = Math.Max((readOptions.Offset ?? totalCount) - request.StartIndex, 0);
+            else readOptions.Offset = Math.Max((readOptions.Offset ?? totalCount ?? 0) - request.StartIndex, 0);
         }
         readOptions.Length = (ulong)request.Count;
         var fetchedCloudEvents = new List<CloudEvent>();
@@ -143,6 +144,6 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
             while (fetchMore);
         }
         this.SetLoading(false);
-        return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount);
+        return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount ?? 0);
     }
 }

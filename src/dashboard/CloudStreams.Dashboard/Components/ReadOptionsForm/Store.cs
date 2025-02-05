@@ -101,7 +101,8 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         this.PartitionId,
         this.Offset,
         this.Length,
-        (direction, partitionType, partitionId, offset, length) =>
+        this.StreamLength,
+        (direction, partitionType, partitionId, offset, length, _) =>
         {
             var options = new StreamReadOptions()
             {
@@ -269,12 +270,8 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     /// Updates <see cref="ReadOptionsFormState.StreamLength"/> based on the stream/partition's metadata
     /// </summary>
     /// <param name="partition">A (<see cref="CloudEventPartitionType"/>, string) tuple to gather the partition for, if any </param>
-    protected async Task UpdateMetadataAsync((CloudEventPartitionType?, string?) partition)
+    public async Task UpdateMetadataAsync((CloudEventPartitionType?, string?) partition)
     {
-        this.Reduce(state => state with
-        {
-            StreamLength = null
-        });
         try { 
             (CloudEventPartitionType? type, string? id) = partition;
             if (!type.HasValue || string.IsNullOrWhiteSpace(id))

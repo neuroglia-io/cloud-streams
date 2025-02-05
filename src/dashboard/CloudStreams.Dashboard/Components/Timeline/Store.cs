@@ -173,19 +173,27 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
             for(int optionsIndex = 0, c = streamsReadOptions.Count(); optionsIndex < c; optionsIndex++)
             {
                 var options = streamsReadOptions.ElementAt(optionsIndex);
+                if (options == null) continue;
+                var readOptions = new StreamReadOptions
+                {
+                    Direction = options.Direction,
+                    Offset = options.Offset,
+                    Length = options.Length
+                };
                 string name;
                 var data = new List<CloudEvent>();
-                if (options?.Partition?.Type == null || options?.Partition?.Id == null)
+                if (options.Partition?.Type == null || options.Partition?.Id == null)
                 {
                     name = $"{optionsIndex+1}. All";
                 }
                 else
                 {
+                    readOptions.Partition = options.Partition;
                     name = $"{optionsIndex+1}. {options.Partition.Type} | {options.Partition.Id}";
                 }
-                if (options!.Length <= StreamReadOptions.MaxLength)
+                if (readOptions.Length <= StreamReadOptions.MaxLength)
                 {
-                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(options, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
                     data.AddRange(cloudEvents!);
                 }
                 else
@@ -195,17 +203,12 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                     long offset = options.Offset ?? (options.Direction == StreamReadDirection.Forwards ? 0 : -1);
                     do
                     {
-                        var readOptions = new StreamReadOptions
-                        {
-                            Direction = options.Direction,
-                            Partition = options.Partition,
-                            Offset = offset,
-                            Length = length
-                        };
+                        readOptions.Offset = offset;
+                        readOptions.Length = length;
                         var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
                         data.AddRange(cloudEvents!);
                         offset = (long)cloudEvents.Last()!.GetSequence()! + (options.Direction == StreamReadDirection.Forwards ? 1 : -1);
-                        length = Math.Min(options!.Length - (ulong)data.Count, StreamReadOptions.MaxLength);
+                        length = Math.Min(options.Length - (ulong)data.Count, StreamReadOptions.MaxLength);
                         fetchMore = cloudEvents.Count > 1 && length != 0;
                     }
                     while(fetchMore);
