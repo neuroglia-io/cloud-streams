@@ -36,4 +36,14 @@ public record ResourceManagementComponentState<TResource>
     /// </summary>
     public bool Loading { get; set; } = false;
 
+    /// <summary>
+    /// Gets/sets a <see cref="List{T}"/> that contains all selected <see cref="IResource"/>s
+    /// </summary>
+    public EquatableList<string> SelectedResourceNames { get; set; } = [];
+
+    /// <summary>
+    /// Gets/sets the search term, if any, used to filter the resources to list
+    /// </summary>
+    public string? SearchTerm { get; set; }
+
 }

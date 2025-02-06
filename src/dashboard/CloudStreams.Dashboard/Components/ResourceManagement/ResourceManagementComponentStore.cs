@@ -34,20 +34,6 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     EquatableList<TResource>? resources;
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
-    /// </summary>
-    public IObservable<ResourceDefinition?> Definition => this.Select(s => s.Definition);
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
-    /// </summary>
-    public IObservable<EquatableList<TResource>?> Resources => this.Select(s => s.Resources);
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
-    /// </summary>
-    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
-
-    /// <summary>
     /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
     /// </summary>
     protected ResourceWatchEventHubClient ResourceEventHub { get; } = resourceEventHub;
@@ -61,6 +47,101 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// Gets an <see cref="IDisposable"/> that represents the store's <see cref="ResourceWatch"/> subscription
     /// </summary>
     protected IDisposable ResourceWatchSubscription { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
+    /// </summary>
+    public IObservable<ResourceDefinition?> Definition => this.Select(s => s.Definition);
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
+    /// </summary>
+    protected IObservable<EquatableList<TResource>?> InternalResources => this.Select(s => s.Resources);
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
+    /// </summary>
+    public IObservable<EquatableList<TResource>?> Resources => Observable.CombineLatest(
+            this.InternalResources,
+            this.SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
+            (resources, searchTerm) =>
+            {
+                if (resources == null)
+                {
+                    return [];
+                }
+                if (string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    return resources!;
+                }
+                return new EquatableList<TResource>(resources!.Where(r => r.GetName().Contains(searchTerm)));
+            }
+         )
+        .DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
+    /// </summary>
+    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourceManagementComponentState{TResource}.SelectedResourceNames"/> changes
+    /// </summary>
+    public IObservable<EquatableList<string>> SelectedResourceNames => this.Select(s => s.SelectedResourceNames).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the  <see cref="ResourceManagementComponentState{TResource}.SearchTerm"/> changes
+    /// </summary>
+    public IObservable<string?> SearchTerm => this.Select(state => state.SearchTerm).DistinctUntilChanged();
+
+
+    /// <summary>
+    /// Toggles the resources selection
+    /// </summary>
+    /// <param name="name">The name of the resource to select, or all if none is provided</param>
+    public virtual void ToggleResourceSelection(string? name = null)
+    {
+        this.Reduce(state =>
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                if (state.SelectedResourceNames.Count > 0)
+                {
+                    return state with
+                    {
+                        SelectedResourceNames = []
+                    };
+                }
+                return state with
+                {
+                    SelectedResourceNames = [.. state.Resources?.Select(resource => resource.GetName()) ?? []]
+                };
+            }
+            if (state.SelectedResourceNames.Contains(name))
+            {
+                return state with
+                {
+                    SelectedResourceNames = [.. state.SelectedResourceNames.Where(n => n != name)]
+                };
+            }
+            return state with
+            {
+                SelectedResourceNames = [.. state.SelectedResourceNames, name]
+            };
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="ResourceManagementComponentState{TResource}.SearchTerm" />
+    /// </summary>
+    /// <param name="searchTerm">The new search term</param>
+    public virtual void SetSearchTerm(string? searchTerm)
+    {
+        this.Reduce(state => state with
+        {
+            SearchTerm = searchTerm
+        });
+    }
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
@@ -121,6 +202,24 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
         this.Reduce(s => s with
         {
             Resources = this.resources
+        });
+    }
+
+    /// <summary>
+    /// Deletes the selected <see cref="IResource"/>s
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public async Task DeleteSelectedResourcesAsync()
+    {
+        var selectedResourcesNames = this.Get(state => state.SelectedResourceNames);
+        var resources = (this.Get(state => state.Resources) ?? []).Where(resource => selectedResourcesNames.Contains(resource.GetName()));
+        foreach (var resource in resources)
+        {
+            await this.DeleteResourceAsync(resource);
+        }
+        this.Reduce(state => state with
+        {
+            SelectedResourceNames = []
         });
     }
 
