@@ -10,16 +10,13 @@ on:
       - 'deployments/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  #test:
-  #  # Skip if it's not running in the main branch of the `neuroglia-io/cloud-streams` repo
-  #  if: github.repository == 'neuroglia-io/cloud-streams' && github.ref_name == 'main'
-  #  uses: ./.github/workflows/test-dotnet.yml
-  #  secrets: inherit
 
   versioning:
-    #needs: [test]
-    if: github.repository == 'neuroglia-io/cloud-streams' && github.ref_name == 'main' # comment if test are turned on
+    if: github.repository == 'neuroglia-io/cloud-streams' && github.ref_name == 'main'
     uses: ./.github/workflows/versioning.yml
     secrets: inherit
 
