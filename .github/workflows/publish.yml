@@ -1,4 +1,4 @@
-name: Manual publish of .NET packages
+name: .NET
 
 on:
   release:
@@ -9,8 +9,13 @@ env:
   SOLUTION: ./CloudStreams.sln
   REGISTRY: ghcr.io
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   publish-packages:
+    name: Publish Packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
