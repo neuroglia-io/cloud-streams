@@ -12,8 +12,8 @@
             <tr>
                 <td>Source</td>
                 <td>
-                    <a href="#" @onclick="async (_) => await OnPartitionClick.InvokeAsync(new PartitionReference(CloudEventPartitionType.BySource, cloudEvent.Source.ToString()))" @onclick:preventDefault @onclick:stopPropagation>
-                        @cloudEvent.Source
+                    <a href="#" @onclick="async (_) => await OnPartitionClick.InvokeAsync(new PartitionReference(CloudEventPartitionType.BySource, cloudEvent.Source.OriginalString))" @onclick:preventDefault @onclick:stopPropagation>
+                        @(cloudEvent.Source.OriginalString)
                     </a>
                 </td>
             </tr>

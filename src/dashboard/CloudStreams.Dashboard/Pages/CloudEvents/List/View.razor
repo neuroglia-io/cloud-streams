@@ -45,8 +45,8 @@
                         </td>
                         <td>
                             <div class="contained">
-                                <a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySource, e.Source.ToString())">
-                                    @e.Source
+                                <a href="#by-source" @onclick:preventDefault @onclick:stopPropagation @onclick="_ => OnReadCloudEventPartitionClicked(CloudEventPartitionType.BySource, e.Source.OriginalString)">
+                                    @(e.Source.OriginalString)
                                 </a>
                             </div>
                         </td>
