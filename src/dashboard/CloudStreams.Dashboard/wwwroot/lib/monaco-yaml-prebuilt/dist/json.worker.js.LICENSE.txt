@@ -1,6 +1,1446 @@
+/*! ../../../../../base/common/arrays.js */
+
+/*! ../../../../../base/common/errors.js */
+
+/*! ../../../../../base/common/event.js */
+
+/*! ../../../../../base/common/lifecycle.js */
+
+/*! ../../../../../base/common/strings.js */
+
+/*! ../../../../base/common/arrays.js */
+
+/*! ../../../../base/common/arraysFind.js */
+
+/*! ../../../../base/common/assert.js */
+
+/*! ../../../../base/common/async.js */
+
+/*! ../../../../base/common/cache.js */
+
+/*! ../../../../base/common/color.js */
+
+/*! ../../../../base/common/errors.js */
+
+/*! ../../../../base/common/event.js */
+
+/*! ../../../../base/common/lifecycle.js */
+
+/*! ../../../../base/common/map.js */
+
+/*! ../../../../base/common/strings.js */
+
+/*! ../../../../base/common/uri.js */
+
+/*! ../../../../nls.js */
+
+/*! ../../../../platform/theme/common/themeService.js */
+
+/*! ../../../base/common/arrays.js */
+
+/*! ../../../base/common/arraysFind.js */
+
+/*! ../../../base/common/assert.js */
+
+/*! ../../../base/common/async.js */
+
+/*! ../../../base/common/buffer.js */
+
+/*! ../../../base/common/cancellation.js */
+
+/*! ../../../base/common/collections.js */
+
+/*! ../../../base/common/color.js */
+
+/*! ../../../base/common/diff/diff.js */
+
+/*! ../../../base/common/errors.js */
+
+/*! ../../../base/common/event.js */
+
+/*! ../../../base/common/glob.js */
+
+/*! ../../../base/common/hash.js */
+
+/*! ../../../base/common/iterator.js */
+
+/*! ../../../base/common/keyCodes.js */
+
+/*! ../../../base/common/lifecycle.js */
+
+/*! ../../../base/common/linkedList.js */
+
+/*! ../../../base/common/map.js */
+
+/*! ../../../base/common/mime.js */
+
+/*! ../../../base/common/network.js */
+
+/*! ../../../base/common/numbers.js */
+
+/*! ../../../base/common/objects.js */
+
+/*! ../../../base/common/observable.js */
+
+/*! ../../../base/common/path.js */
+
+/*! ../../../base/common/platform.js */
+
+/*! ../../../base/common/resources.js */
+
+/*! ../../../base/common/severity.js */
+
+/*! ../../../base/common/stopwatch.js */
+
+/*! ../../../base/common/strings.js */
+
+/*! ../../../base/common/themables.js */
+
+/*! ../../../base/common/types.js */
+
+/*! ../../../base/common/uint.js */
+
+/*! ../../../base/common/uri.js */
+
+/*! ../../../core/cursorColumns.js */
+
+/*! ../../../core/offsetRange.js */
+
+/*! ../../../core/range.js */
+
+/*! ../../../core/textLength.js */
+
+/*! ../../../encodedTokenAttributes.js */
+
+/*! ../../../nls.js */
+
+/*! ../../../platform/configuration/common/configuration.js */
+
+/*! ../../../platform/configuration/common/configurationRegistry.js */
+
+/*! ../../../platform/environment/common/environment.js */
+
+/*! ../../../platform/files/common/files.js */
+
+/*! ../../../platform/instantiation/common/extensions.js */
+
+/*! ../../../platform/instantiation/common/instantiation.js */
+
+/*! ../../../platform/log/common/log.js */
+
+/*! ../../../platform/markers/common/markers.js */
+
+/*! ../../../platform/registry/common/platform.js */
+
+/*! ../../../platform/theme/common/colorRegistry.js */
+
+/*! ../../../platform/theme/common/themeService.js */
+
+/*! ../../../platform/undoRedo/common/undoRedo.js */
+
+/*! ../../../textModelBracketPairs.js */
+
+/*! ../../base/common/codicons.js */
+
+/*! ../../base/common/event.js */
+
+/*! ../../base/common/glob.js */
+
+/*! ../../base/common/lifecycle.js */
+
+/*! ../../base/common/objects.js */
+
+/*! ../../base/common/path.js */
+
+/*! ../../base/common/uri.js */
+
+/*! ../../contextkey/common/contextkey.js */
+
+/*! ../../core/editorColorRegistry.js */
+
+/*! ../../core/eolCounter.js */
+
+/*! ../../core/lineRange.js */
+
+/*! ../../core/offsetRange.js */
+
+/*! ../../core/position.js */
+
+/*! ../../core/range.js */
+
+/*! ../../core/stringBuilder.js */
+
+/*! ../../core/textChange.js */
+
+/*! ../../core/wordHelper.js */
+
+/*! ../../editor/editor.worker.js */
+
+/*! ../../instantiation/common/instantiation.js */
+
+/*! ../../jsonschemas/common/jsonContributionRegistry.js */
+
+/*! ../../languages/supports.js */
+
+/*! ../../languages/supports/richEditBrackets.js */
+
+/*! ../../model.js */
+
+/*! ../../model/mirrorTextModel.js */
+
+/*! ../../nls.js */
+
+/*! ../../registry/common/platform.js */
+
+/*! ../assert.js */
+
+/*! ../base/common/worker/simpleWorker.js */
+
+/*! ../colorUtils.js */
+
+/*! ../core/characterClassifier.js */
+
+/*! ../core/cursorColumns.js */
+
+/*! ../core/editorColorRegistry.js */
+
+/*! ../core/eolCounter.js */
+
+/*! ../core/indentation.js */
+
+/*! ../core/lineRange.js */
+
+/*! ../core/offsetRange.js */
+
+/*! ../core/position.js */
+
+/*! ../core/range.js */
+
+/*! ../core/selection.js */
+
+/*! ../core/textChange.js */
+
+/*! ../core/textEdit.js */
+
+/*! ../core/textModelDefaults.js */
+
+/*! ../core/wordCharacterClassifier.js */
+
+/*! ../core/wordHelper.js */
+
+/*! ../diff/linesDiffComputers.js */
+
+/*! ../encodedTokenAttributes.js */
+
+/*! ../equals.js */
+
+/*! ../errors.js */
+
+/*! ../event.js */
+
+/*! ../hash.js */
+
+/*! ../languageConfiguration.js */
+
+/*! ../languageFeatureRegistry.js */
+
+/*! ../languages.js */
+
+/*! ../languages/defaultDocumentColorsComputer.js */
+
+/*! ../languages/language.js */
+
+/*! ../languages/languageConfigurationRegistry.js */
+
+/*! ../languages/linkComputer.js */
+
+/*! ../languages/modesRegistry.js */
+
+/*! ../languages/nullTokenize.js */
+
+/*! ../languages/supports/inplaceReplaceSupport.js */
+
+/*! ../lifecycle.js */
+
+/*! ../linesDiffComputer.js */
+
+/*! ../model.js */
+
+/*! ../model/editStack.js */
+
+/*! ../model/textModel.js */
+
+/*! ../model/textModelSearch.js */
+
+/*! ../network.js */
+
+/*! ../platform.js */
+
+/*! ../rangeMapping.js */
+
+/*! ../services/treeSitterParserService.js */
+
+/*! ../standalone/standaloneEnums.js */
+
+/*! ../strings.js */
+
+/*! ../supports.js */
+
+/*! ../textModelEvents.js */
+
+/*! ../textModelGuides.js */
+
+/*! ../textModelSearch.js */
+
+/*! ../tokens/contiguousMultilineTokensBuilder.js */
+
+/*! ../tokens/contiguousTokensStore.js */
+
+/*! ../tokens/lineTokens.js */
+
+/*! ../tokens/sparseMultilineTokens.js */
+
+/*! ../tokens/sparseTokensStore.js */
+
+/*! ../utils.js */
+
+/*! ./algorithms/diffAlgorithm.js */
+
+/*! ./algorithms/dynamicProgrammingDiffing.js */
+
+/*! ./algorithms/myersDiffAlgorithm.js */
+
+/*! ./arrays.js */
+
+/*! ./ast.js */
+
+/*! ./async.js */
+
+/*! ./autorun.js */
+
+/*! ./base.js */
+
+/*! ./baseColors.js */
+
+/*! ./beforeEditPositionMapper.js */
+
+/*! ./bracketPairsTextModelPart/bracketPairsImpl.js */
+
+/*! ./bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.js */
+
+/*! ./bracketPairsTree/bracketPairsTree.js */
+
+/*! ./brackets.js */
+
+/*! ./cache.js */
+
+/*! ./cancellation.js */
+
+/*! ./characterClassifier.js */
+
+/*! ./codicons.js */
+
+/*! ./codiconsLibrary.js */
+
+/*! ./codiconsUtil.js */
+
+/*! ./colorUtils.js */
+
+/*! ./colors/baseColors.js */
+
+/*! ./colors/chartsColors.js */
+
+/*! ./colors/editorColors.js */
+
+/*! ./colors/inputColors.js */
+
+/*! ./colors/listColors.js */
+
+/*! ./colors/menuColors.js */
+
+/*! ./colors/minimapColors.js */
+
+/*! ./colors/miscColors.js */
+
+/*! ./colors/quickpickColors.js */
+
+/*! ./colors/searchColors.js */
+
+/*! ./combineTextEditInfos.js */
+
+/*! ./common/services/editorSimpleWorker.js */
+
+/*! ./common/services/editorWorkerHost.js */
+
+/*! ./computeMovedLines.js */
+
+/*! ./concat23Trees.js */
+
+/*! ./configuration.js */
+
+/*! ./contiguousMultilineTokens.js */
+
+/*! ./contiguousTokensEditing.js */
+
+/*! ./core/range.js */
+
+/*! ./cursorColumns.js */
+
+/*! ./debugName.js */
+
+/*! ./defaultLinesDiffComputer/defaultLinesDiffComputer.js */
+
+/*! ./derived.js */
+
+/*! ./descriptors.js */
+
+/*! ./diffAlgorithm.js */
+
+/*! ./diffChange.js */
+
+/*! ./editStack.js */
+
+/*! ./editorBaseApi.js */
+
+/*! ./editorColors.js */
+
+/*! ./editorWorkerHost.js */
+
+/*! ./errors.js */
+
+/*! ./event.js */
+
+/*! ./extpath.js */
+
+/*! ./findSectionHeaders.js */
+
+/*! ./fixedArray.js */
+
+/*! ./functional.js */
+
+/*! ./guidesTextModelPart.js */
+
+/*! ./heuristicSequenceOptimizations.js */
+
+/*! ./indentationGuesser.js */
+
+/*! ./inputColors.js */
+
+/*! ./intervalTree.js */
+
+/*! ./iterator.js */
+
+/*! ./language.js */
+
+/*! ./languageConfiguration.js */
+
+/*! ./languageFeatures.js */
+
+/*! ./languageSelector.js */
+
+/*! ./languagesAssociations.js */
+
+/*! ./languagesRegistry.js */
+
+/*! ./lazy.js */
+
+/*! ./lazyObservableValue.js */
+
+/*! ./legacyLinesDiffComputer.js */
+
+/*! ./length.js */
+
+/*! ./lifecycle.js */
+
+/*! ./lineSequence.js */
+
+/*! ./lineTokens.js */
+
+/*! ./linesDiffComputer.js */
+
+/*! ./linesSliceCharSequence.js */
+
+/*! ./linkedList.js */
+
+/*! ./listColors.js */
+
+/*! ./logging.js */
+
+/*! ./map.js */
+
+/*! ./minimapColors.js */
+
+/*! ./miscColors.js */
+
+/*! ./model.js */
+
+/*! ./modesRegistry.js */
+
+/*! ./network.js */
+
+/*! ./nls.messages.js */
+
+/*! ./nodeReader.js */
+
+/*! ./observableInternal/api.js */
+
+/*! ./observableInternal/autorun.js */
+
+/*! ./observableInternal/base.js */
+
+/*! ./observableInternal/derived.js */
+
+/*! ./observableInternal/logging.js */
+
+/*! ./observableInternal/promise.js */
+
+/*! ./observableInternal/utils.js */
+
+/*! ./offsetRange.js */
+
+/*! ./parser.js */
+
+/*! ./path.js */
+
+/*! ./pieceTreeBase.js */
+
+/*! ./pieceTreeTextBuffer.js */
+
+/*! ./pieceTreeTextBuffer/pieceTreeTextBuffer.js */
+
+/*! ./pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js */
+
+/*! ./platform.js */
+
+/*! ./position.js */
+
+/*! ./positionToOffset.js */
+
+/*! ./prefixSumComputer.js */
+
+/*! ./process.js */
+
+/*! ./range.js */
+
+/*! ./rangeMapping.js */
+
+/*! ./rbTreeBase.js */
+
+/*! ./richEditBrackets.js */
+
+/*! ./scanner.js */
+
+/*! ./semanticTokensProviderStyling.js */
+
+/*! ./semanticTokensStyling.js */
+
+/*! ./smallImmutableSet.js */
+
+/*! ./stopwatch.js */
+
+/*! ./stringBuilder.js */
+
+/*! ./strings.js */
+
+/*! ./supports/characterPair.js */
+
+/*! ./supports/electricCharacter.js */
+
+/*! ./supports/indentRules.js */
+
+/*! ./supports/languageBracketsConfiguration.js */
+
+/*! ./supports/onEnter.js */
+
+/*! ./supports/richEditBrackets.js */
+
+/*! ./symbols.js */
+
+/*! ./textLength.js */
+
+/*! ./textModelPart.js */
+
+/*! ./textModelSearch.js */
+
+/*! ./textModelSync/textModelSync.impl.js */
+
+/*! ./textModelTokens.js */
+
+/*! ./textResourceConfiguration.js */
+
+/*! ./theme.js */
+
+/*! ./tokenizationRegistry.js */
+
+/*! ./tokenizationTextModelPart.js */
+
+/*! ./tokenizer.js */
+
+/*! ./tokens.js */
+
+/*! ./treeSitterTokens.js */
+
+/*! ./treeViewsDnd.js */
+
+/*! ./types.js */
+
+/*! ./unicodeTextModelHighlighter.js */
+
+/*! ./uri.js */
+
+/*! ./utils.js */
+
+/*!**************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/nls.js ***!
+  \**************************************************/
+
+/*!***********************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/nls.messages.js ***!
+  \***********************************************************/
+
+/*!**************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/map.js ***!
+  \**************************************************************/
+
+/*!**************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/uri.js ***!
+  \**************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/glob.js ***!
+  \***************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/hash.js ***!
+  \***************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/lazy.js ***!
+  \***************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/mime.js ***!
+  \***************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/path.js ***!
+  \***************************************************************/
+
+/*!***************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/uint.js ***!
+  \***************************************************************/
+
+/*!****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/async.js ***!
+  \****************************************************************/
+
+/*!****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/cache.js ***!
+  \****************************************************************/
+
+/*!****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/color.js ***!
+  \****************************************************************/
+
+/*!****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/event.js ***!
+  \****************************************************************/
+
+/*!****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/types.js ***!
+  \****************************************************************/
+
+/*!*****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/arrays.js ***!
+  \*****************************************************************/
+
+/*!*****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/assert.js ***!
+  \*****************************************************************/
+
+/*!*****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/buffer.js ***!
+  \*****************************************************************/
+
+/*!*****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/equals.js ***!
+  \*****************************************************************/
+
+/*!*****************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/errors.js ***!
+  \*****************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/extpath.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/network.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/numbers.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/objects.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/process.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/strings.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/symbols.js ***!
+  \******************************************************************/
+
+/*!******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model.js ***!
+  \******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/codicons.js ***!
+  \*******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/iterator.js ***!
+  \*******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/keyCodes.js ***!
+  \*******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/platform.js ***!
+  \*******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/severity.js ***!
+  \*******************************************************************/
+
+/*!*******************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/editor.worker.js ***!
+  \*******************************************************************/
+
+/*!********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/diff/diff.js ***!
+  \********************************************************************/
+
+/*!********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/lifecycle.js ***!
+  \********************************************************************/
+
+/*!********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/resources.js ***!
+  \********************************************************************/
+
+/*!********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/stopwatch.js ***!
+  \********************************************************************/
+
+/*!********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/themables.js ***!
+  \********************************************************************/
+
+/*!*********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/arraysFind.js ***!
+  \*********************************************************************/
+
+/*!*********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/functional.js ***!
+  \*********************************************************************/
+
+/*!*********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/linkedList.js ***!
+  \*********************************************************************/
+
+/*!*********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observable.js ***!
+  \*********************************************************************/
+
+/*!**********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/collections.js ***!
+  \**********************************************************************/
+
+/*!**********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages.js ***!
+  \**********************************************************************/
+
+/*!**********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/log/common/log.js ***!
+  \**********************************************************************/
+
+/*!***********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/cancellation.js ***!
+  \***********************************************************************/
+
+/*!***********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/codiconsUtil.js ***!
+  \***********************************************************************/
+
+/*!***********************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/range.js ***!
+  \***********************************************************************/
+
+/*!************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/utils.js ***!
+  \************************************************************************/
+
+/*!************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/language/json/json.worker.js ***!
+  \************************************************************************/
+
+/*!*************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/tokens.js ***!
+  \*************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/codiconsLibrary.js ***!
+  \**************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/diff/diffChange.js ***!
+  \**************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/position.js ***!
+  \**************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/textEdit.js ***!
+  \**************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/files/common/files.js ***!
+  \**************************************************************************/
+
+/*!**************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/theme.js ***!
+  \**************************************************************************/
+
+/*!***************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/lineRange.js ***!
+  \***************************************************************************/
+
+/*!***************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/selection.js ***!
+  \***************************************************************************/
+
+/*!***************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/model.js ***!
+  \***************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/eolCounter.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/textChange.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/textLength.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/wordHelper.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/editStack.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/textModel.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/textModelEvents.js ***!
+  \****************************************************************************/
+
+/*!****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/textModelGuides.js ***!
+  \****************************************************************************/
+
+/*!*****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/indentation.js ***!
+  \*****************************************************************************/
+
+/*!*****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/offsetRange.js ***!
+  \*****************************************************************************/
+
+/*!*****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languageSelector.js ***!
+  \*****************************************************************************/
+
+/*!*****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/fixedArray.js ***!
+  \*****************************************************************************/
+
+/*!*****************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/ sync ^.*$ ***!
+  \*****************************************************************************/
+
+/*!******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/worker/simpleWorker.js ***!
+  \******************************************************************************/
+
+/*!******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/rangeMapping.js ***!
+  \******************************************************************************/
+
+/*!******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/lineTokens.js ***!
+  \******************************************************************************/
+
+/*!******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/markers/common/markers.js ***!
+  \******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/cursorColumns.js ***!
+  \*******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/stringBuilder.js ***!
+  \*******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/language.js ***!
+  \*******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports.js ***!
+  \*******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/intervalTree.js ***!
+  \*******************************************************************************/
+
+/*!*******************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colorUtils.js ***!
+  \*******************************************************************************/
+
+/*!********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/textModelPart.js ***!
+  \********************************************************************************/
+
+/*!********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/registry/common/platform.js ***!
+  \********************************************************************************/
+
+/*!********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/undoRedo/common/undoRedo.js ***!
+  \********************************************************************************/
+
+/*!*********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/api.js ***!
+  \*********************************************************************************/
+
+/*!*********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokenizationRegistry.js ***!
+  \*********************************************************************************/
+
+/*!*********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/contextkey/common/scanner.js ***!
+  \*********************************************************************************/
+
+/*!*********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/themeService.js ***!
+  \*********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/base.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/positionToOffset.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/mirrorTextModel.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/textModelSearch.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/textModelTokens.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/editorWorker.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/modelService.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/treeViewsDnd.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/textModelBracketPairs.js ***!
+  \**********************************************************************************/
+
+/*!**********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colorRegistry.js ***!
+  \**********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/utils.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/textModelDefaults.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/linesDiffComputer.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/encodedTokenAttributes.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/linkComputer.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/nullTokenize.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/treeSitterTokens.js ***!
+  \***********************************************************************************/
+
+/*!***********************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/editorBaseApi.js ***!
+  \***********************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/linesDiffComputers.js ***!
+  \************************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languageFeatureRegistry.js ***!
+  \************************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/modesRegistry.js ***!
+  \************************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/prefixSumComputer.js ***!
+  \************************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/getIconClasses.js ***!
+  \************************************************************************************/
+
+/*!************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/contextkey/common/contextkey.js ***!
+  \************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/autorun.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/derived.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/logging.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/promise.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/characterClassifier.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/editorColorRegistry.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/indentationGuesser.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languageService.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/resolverService.js ***!
+  \*************************************************************************************/
+
+/*!*************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/sparseTokensStore.js ***!
+  \*************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/guidesTextModelPart.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/editorWorkerHost.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languageFeatures.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/environment/common/environment.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/baseColors.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/listColors.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/menuColors.js ***!
+  \**************************************************************************************/
+
+/*!**************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/miscColors.js ***!
+  \**************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/debugName.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/onEnter.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languagesRegistry.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/markerDecorations.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/semanticTokensDto.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/instantiation/common/extensions.js ***!
+  \***************************************************************************************/
+
+/*!***************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/inputColors.js ***!
+  \***************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/editorSimpleWorker.js ***!
+  \****************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/findSectionHeaders.js ***!
+  \****************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/instantiation/common/descriptors.js ***!
+  \****************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/chartsColors.js ***!
+  \****************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/editorColors.js ***!
+  \****************************************************************************************/
+
+/*!****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/searchColors.js ***!
+  \****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/core/wordCharacterClassifier.js ***!
+  \*****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/legacyLinesDiffComputer.js ***!
+  \*****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/treeViewsDndService.js ***!
+  \*****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/contiguousTokensStore.js ***!
+  \*****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/sparseMultilineTokens.js ***!
+  \*****************************************************************************************/
+
+/*!*****************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/minimapColors.js ***!
+  \*****************************************************************************************/
+
+/*!******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/worker/ lazy ^.*$ namespace object ***!
+  \******************************************************************************************/
+
+/*!******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/configuration/common/configuration.js ***!
+  \******************************************************************************************/
+
+/*!******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/instantiation/common/instantiation.js ***!
+  \******************************************************************************************/
+
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/indentRules.js ***!
+  \*******************************************************************************************/
+
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languagesAssociations.js ***!
+  \*******************************************************************************************/
+
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/semanticTokensStyling.js ***!
+  \*******************************************************************************************/
+
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/contiguousTokensEditing.js ***!
+  \*******************************************************************************************/
+
+/*!*******************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/theme/common/colors/quickpickColors.js ***!
+  \*******************************************************************************************/
+
+/*!********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/languageConfiguration.js ***!
+  \********************************************************************************************/
+
+/*!********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/tokenizationTextModelPart.js ***!
+  \********************************************************************************************/
+
+/*!*********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/characterPair.js ***!
+  \*********************************************************************************************/
+
+/*!*********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languageFeatureDebounce.js ***!
+  \*********************************************************************************************/
+
+/*!*********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/languageFeaturesService.js ***!
+  \*********************************************************************************************/
+
+/*!*********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/treeSitterParserService.js ***!
+  \*********************************************************************************************/
+
+/*!*********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/contiguousMultilineTokens.js ***!
+  \*********************************************************************************************/
+
+/*!**********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/ lazy ^.*$ namespace object ***!
+  \**********************************************************************************************/
+
+/*!**********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/markerDecorationsService.js ***!
+  \**********************************************************************************************/
+
+/*!***********************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/textResourceConfiguration.js ***!
+  \***********************************************************************************************/
+
+/*!************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/utils.js ***!
+  \************************************************************************************************/
+
+/*!************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/richEditBrackets.js ***!
+  \************************************************************************************************/
+
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/base/common/observableInternal/lazyObservableValue.js ***!
+  \*************************************************************************************************/
+
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/electricCharacter.js ***!
+  \*************************************************************************************************/
+
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/pieceTreeTextBuffer/rbTreeBase.js ***!
+  \*************************************************************************************************/
+
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/unicodeTextModelHighlighter.js ***!
+  \*************************************************************************************************/
+
+/*!**************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/semanticTokensStylingService.js ***!
+  \**************************************************************************************************/
+
+/*!**************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/configuration/common/configurationRegistry.js ***!
+  \**************************************************************************************************/
+
+/*!***************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/semanticTokensProviderStyling.js ***!
+  \***************************************************************************************************/
+
+/*!***************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/platform/jsonschemas/common/jsonContributionRegistry.js ***!
+  \***************************************************************************************************/
+
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/defaultDocumentColorsComputer.js ***!
+  \****************************************************************************************************/
+
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/languageConfigurationRegistry.js ***!
+  \****************************************************************************************************/
+
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/pieceTreeTextBuffer/pieceTreeBase.js ***!
+  \****************************************************************************************************/
+
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/tokens/contiguousMultilineTokensBuilder.js ***!
+  \****************************************************************************************************/
+
+/*!*****************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/inplaceReplaceSupport.js ***!
+  \*****************************************************************************************************/
+
+/*!******************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/textModelSync/textModelSync.impl.js ***!
+  \******************************************************************************************************/
+
+/*!*******************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.js ***!
+  \*******************************************************************************************************/
+
+/*!**********************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js ***!
+  \**********************************************************************************************************/
+
+/*!**********************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/services/textModelSync/textModelSync.protocol.js ***!
+  \**********************************************************************************************************/
+
+/*!************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/computeMovedLines.js ***!
+  \************************************************************************************************************/
+
+/*!*************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/languages/supports/languageBracketsConfiguration.js ***!
+  \*************************************************************************************************************/
+
+/*!*************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsImpl.js ***!
+  \*************************************************************************************************************/
+
+/*!*****************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.js ***!
+  \*****************************************************************************************************************/
+
+/*!*****************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/ast.js ***!
+  \*****************************************************************************************************************/
+
+/*!*****************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js ***!
+  \*****************************************************************************************************************/
+
+/*!*******************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.js ***!
+  \*******************************************************************************************************************/
+
+/*!*******************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js ***!
+  \*******************************************************************************************************************/
+
+/*!********************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/length.js ***!
+  \********************************************************************************************************************/
+
+/*!********************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/parser.js ***!
+  \********************************************************************************************************************/
+
+/*!**********************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/brackets.js ***!
+  \**********************************************************************************************************************/
+
+/*!***********************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/tokenizer.js ***!
+  \***********************************************************************************************************************/
+
+/*!************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.js ***!
+  \************************************************************************************************************************/
+
+/*!************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/nodeReader.js ***!
+  \************************************************************************************************************************/
+
+/*!*************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.js ***!
+  \*************************************************************************************************************************/
+
+/*!***************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/concat23Trees.js ***!
+  \***************************************************************************************************************************/
+
+/*!******************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/bracketPairsTree.js ***!
+  \******************************************************************************************************************************/
+
+/*!*******************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.js ***!
+  \*******************************************************************************************************************************/
+
+/*!*******************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/smallImmutableSet.js ***!
+  \*******************************************************************************************************************************/
+
+/*!**********************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/combineTextEditInfos.js ***!
+  \**********************************************************************************************************************************/
+
+/*!************************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.js ***!
+  \************************************************************************************************************************************/
+
+/*!**************************************************************************************************************************************!*\
+  !*** ./node_modules/monaco-editor/esm/vs/editor/common/model/bracketPairsTextModelPart/bracketPairsTree/beforeEditPositionMapper.js ***!
+  \**************************************************************************************************************************************/
+
 /*!-----------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation. All rights reserved.
- * Version: 0.34.1(547870b6881302c5b4ff32173c16d06009e3588f)
+ * Version: 0.52.2(404545bded1df6ffa41ea0af4e8ddb219018c6c1)
  * Released under the MIT license
  * https://github.com/microsoft/monaco-editor/blob/main/LICENSE.txt
  *-----------------------------------------------------------------------------*/
