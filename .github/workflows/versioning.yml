@@ -1,10 +1,14 @@
-name: Auto Versioning .NET
+name: .NET
 
 on:
   workflow_call:
 
+permissions:
+  contents: write
+
 jobs:
-  increment-version:
+  version:
+    name: Version
     runs-on: windows-latest
 
     steps:

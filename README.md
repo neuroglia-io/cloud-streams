@@ -15,7 +15,7 @@
 - [Contributing](#contributing)
 	+ [How to contribute](#how-to-contribute)
 	+ [Types of contributions](#types-of-contributions)
-	+ [Code of conduct](#code-of-conduct)
+	+ [Code of conduct](#CODE_OF_CONDUCT)
 	+ [Get in touch](#get-in-touch)
 	+ [Let's build together](#lets-build-together)
 ## About
@@ -167,7 +167,7 @@ We're thrilled that you're interested in contributing to our project on GitHub. 
 
 ### Code of Conduct
 
-Please review and adhere to our [Code of Conduct](code-of-conduct.md) while participating in this project.
+Please review and adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) while participating in this project.
 
 ### Get in Touch
 

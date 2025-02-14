@@ -35,9 +35,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.Dashboard.Stat
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{129B2507-0C27-4324-AFC9-2C802E25E51D}"
 	ProjectSection(SolutionItems) = preProject
-		code-of-conduct.md = code-of-conduct.md
+		CODEOWNERS = CODEOWNERS
+		CONTRIBUTING.md = CONTRIBUTING.md
 		LICENSE = LICENSE
+		CODE_OF_CONDUCT.md = CODE_OF_CONDUCT.md
 		README.md = README.md
+		SECURITY.md = SECURITY.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "deployments", "deployments", "{990DE5C0-9BDB-417C-91D9-B3883C5FCA3E}"

@@ -1,4 +1,4 @@
-name: Test .NET
+name: .NET
 
 on:
   pull_request:
@@ -10,11 +10,15 @@ on:
       - 'deployments/**'
   workflow_call:
 
+permissions:
+  contents: read
+
 env:
   SOLUTION: ./CloudStreams.sln
 
 jobs:
-  build:
+  test:
+    name: Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
