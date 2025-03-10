@@ -39,6 +39,7 @@
                 <th class="sticky-header text-center">Created At</th>
                 <th class="sticky-header text-center">Status</th>
                 <th class="sticky-header text-center">Subscriber</th>
+                <th class="sticky-header text-center">Subscriber Status</th>
                 <th class="sticky-header text-center">Rate Limit</th>
                 <th class="sticky-header text-center">Filter</th>
                 <th class="sticky-header text-center">Stream</th>
@@ -74,7 +75,8 @@
                         </td>
                         <td class="text-center">
                             <a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a>
-                            &nbsp;
+                        </td>
+                        <td class="text-center">
                             <span class="badge @GetSubscriberStatusClass(resource)">
                                 @((resource.Status?.Subscriber?.State ?? SubscriberState.Unknown).ToString().ToLower())
                             </span>
