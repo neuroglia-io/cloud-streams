@@ -6,7 +6,7 @@
 <div id="@(id + "auto-refresh-form")" class="d-flex justify-content-end mb-3">
     <div class="col-2 d-flex align-items-center justify-content-end form-check form-switch me-3">
         <input id="@(id + "enabled")" class="form-check-input" type="checkbox" @onchange="e => Store.SetEnabled(!enabled)" checked="@enabled" />
-        <label for="@(id + "enabled")" class="ps-3">auto refresh</label>
+        <label for="@(id + "enabled")" class="ps-3">Auto refresh</label>
     </div>
     <div style="width: 100px;">
         <select id="@(id + "interval")" class="form-select" name="partitionType" @onchange='e => Store.SetInterval(int.Parse(((string?)e.Value) ?? "5"))' disabled="@(!enabled)">
