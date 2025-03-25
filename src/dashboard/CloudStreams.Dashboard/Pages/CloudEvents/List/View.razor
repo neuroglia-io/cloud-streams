@@ -3,7 +3,7 @@
 @using CloudStreams.Dashboard.Pages.CloudEvents.List
 @using System.Reactive.Linq
 @using CloudStreams.Dashboard.StateManagement
-@inherits StatefulComponent<CloudEventListStore, CloudEventListState>
+@inherits StatefulComponent<View, CloudEventListStore, CloudEventListState>
 
 <ApplicationTitle>Events</ApplicationTitle>
 
@@ -122,17 +122,8 @@
             (_, _) => true
         )
         .Throttle(TimeSpan.FromMilliseconds(300))
-        .SubscribeAsync(async(_) => await this.RefreshList(), null!, null!, cancellationToken: this.CancellationTokenSource.Token);
-    }
-
-    /// <summary>
-    /// Patches the <see cref="View"/>'s fields after a <see cref="CloudEventListStore"/>'s change
-    /// </summary>
-    /// <param name="patch">The patch to apply</param>
-    private void OnStateChanged(Action<View> patch)
-    {
-        patch(this);
-        this.StateHasChanged();
+        .SubscribeAsync(async(_) => await this.RefreshList(), null!, null!, CancellationTokenSource.Token);
+        //Store.Loading.Subscribe(_ => OnStateChanged(), CancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -144,7 +135,7 @@
         {
             await this.virtualize.RefreshDataAsync();
         }
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>

@@ -4,7 +4,7 @@
 @using Json.Patch;
 @using Json.Pointer;
 @using Neuroglia.Data
-@inherits ResourceManagementComponent<Subscription>
+@inherits ResourceManagementComponent<View, SubscriptionListStore, SubscriptionListState, Subscription>
 @inject ICloudStreamsCoreApiClient ApiClient;
 
 <ApplicationTitle>Subscriptions</ApplicationTitle>
@@ -45,6 +45,7 @@
                 <th class="sticky-header text-center">Stream</th>
                 <th class="sticky-header text-center">Mutate</th>
                 <th class="sticky-header text-center">Offset</th>
+                <th class="sticky-header text-center">Length</th>
                 <th class="sticky-header"></th>
                 <th class="sticky-header text-center align-middle">
                     <input @ref="CheckboxAll" type="checkbox" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
@@ -52,9 +53,9 @@
             </tr>
         </thead>
         <tbody>
-            @if (Resources != null && Resources.Any())
+            @if (subscriptions.Count > 0)
             {
-                <Virtualize Context="resource" Items="@Resources">
+                <Virtualize Context="resource" Items="@subscriptions">
                     <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer">
                         <td>@resource.Metadata.Name</td>
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.ToString("R")</td>
@@ -113,6 +114,7 @@
                             }
                         </td>
                         <td class="text-center">@(resource.Spec?.Stream == null ? "-" : resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
+                        <td class="text-center">@(resource.StreamLength)</td>
                         <td class="text-end">
                             <div class="dropdown">
                                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
@@ -152,6 +154,14 @@
 
 @code
 {
+    EquatableList<SubscriptionListItem> subscriptions = [];
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Subscriptions.Subscribe(value => OnStateChanged(_ => subscriptions = value), CancellationTokenSource.Token);
+        await base.OnInitializedAsync().ConfigureAwait(false);
+    }
 
     Task OnResumeSubscriptionAsync(Subscription subscription)
     {

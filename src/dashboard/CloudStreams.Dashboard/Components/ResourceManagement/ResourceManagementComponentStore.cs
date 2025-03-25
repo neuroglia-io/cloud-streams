@@ -12,26 +12,35 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
-using CloudStreams.Dashboard.Pages.CloudEvents.List;
 
 namespace CloudStreams.Dashboard.Components.ResourceManagement;
 
 /// <summary>
 /// Represents a <see cref="ComponentStore{TState}"/> used to manage Cloud Streams <see cref="IResource"/>s of the specified type
 /// </summary>
+
+/// <typeparam name="TState">The type of the state managed by the component store</typeparam>
 /// <typeparam name="TResource">The type of <see cref="IResource"/>s to manage</typeparam>
 /// <remarks>
 /// Initializes a new <see cref="ResourceManagementComponentStore{TResource}"/>
 /// </remarks>
+/// <param name="logger">The service used to perform logging</param>
 /// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
 /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
-public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
-    : ComponentStore<ResourceManagementComponentState<TResource>>(new())
+public class ResourceManagementComponentStore<TState, TResource>(ILogger<ResourceManagementComponentStore<TState, TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
+     : ComponentStore<TState>(new())
     where TResource : Resource, new()
+    where TState : ResourceManagementComponentState<TResource>, new()
 {
+    /// <summary>
+    /// Gets the service used to perform logging
+    /// </summary>
+    protected ILogger<ResourceManagementComponentStore<TState, TResource>> Logger { get; } = logger;
 
-    ResourceDefinition? definition;
-    EquatableList<TResource>? resources;
+    /// <summary>
+    /// Gets the service used to interact with the CloudStreams API
+    /// </summary>
+    protected ICloudStreamsCoreApiClient ResourceManagementApi { get; } = resourceManagementApi;
 
     /// <summary>
     /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
@@ -48,22 +57,53 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// </summary>
     protected IDisposable ResourceWatchSubscription { get; private set; } = null!;
 
+    #region Selectors
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceDefinition"/>s of the specified type
     /// </summary>
-    public IObservable<ResourceDefinition?> Definition => this.Select(s => s.Definition);
+    public IObservable<ResourceDefinition?> Definition => this.Select(s => s.Definition).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
+    /// Gets an <see cref="IObservable{T}"/> used to observe unfiltered <see cref="IResource"/>s of the specified type
     /// </summary>
-    protected IObservable<EquatableList<TResource>?> InternalResources => this.Select(s => s.Resources);
+    protected IObservable<EquatableList<TResource>?> InternalResources => this.Select(s => s.Resources).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourceManagementComponentState{TResource}.SelectedResourceNames"/> changes
+    /// </summary>
+    public IObservable<EquatableList<string>> SelectedResourceNames => this.Select(s => s.SelectedResourceNames).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="Namespace"/>s
+    /// </summary>
+    public IObservable<EquatableList<Namespace>?> Namespaces => this.Select(s => s.Namespaces).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe current namespace
+    /// </summary>
+    public IObservable<string?> Namespace => this.Select(s => s.Namespace).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the  <see cref="ResourceManagementComponentState{TResource}.SearchTerm"/> changes
+    /// </summary>
+    public IObservable<string?> SearchTerm => this.Select(state => state.SearchTerm).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourceManagementComponentState{TResource}.LabelSelectors"/> changes
+    /// </summary>
+    public IObservable<EquatableList<LabelSelector>?> LabelSelectors => this.Select(state => state.LabelSelectors).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe changes
+    /// </summary>
+    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
     /// </summary>
     public IObservable<EquatableList<TResource>?> Resources => Observable.CombineLatest(
-            this.InternalResources,
-            this.SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
+            InternalResources,
+            SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
             (resources, searchTerm) =>
             {
                 if (resources == null)
@@ -80,20 +120,122 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
         .DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="CloudEventListState.Loading"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourcesFilter"/> 
     /// </summary>
-    public IObservable<bool> Loading => this.Select(state => state.Loading).DistinctUntilChanged();
+    protected virtual IObservable<ResourcesFilter> Filter => Observable.CombineLatest(
+            Namespace,
+            LabelSelectors,
+            (@namespace, labelSelectors) => new ResourcesFilter()
+            {
+                Namespace = @namespace,
+                LabelSelectors = labelSelectors
+            }
+        )
+        .DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourceManagementComponentState{TResource}.SelectedResourceNames"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourceManagementComponentState{TResource}.ActiveResourceName"/> changes
     /// </summary>
-    public IObservable<EquatableList<string>> SelectedResourceNames => this.Select(s => s.SelectedResourceNames).DistinctUntilChanged();
+    public virtual IObservable<string> ActiveResourceName => this.Select(state => state.ActiveResourceName).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the  <see cref="ResourceManagementComponentState{TResource}.SearchTerm"/> changes
+    /// Gets an <see cref="IObservable{T}"/> used to observe the active resource changes
     /// </summary>
-    public IObservable<string?> SearchTerm => this.Select(state => state.SearchTerm).DistinctUntilChanged();
+    public virtual IObservable<TResource?> ActiveResource => Observable.CombineLatest(
+        Resources.Where(resources => resources != null),
+        ActiveResourceName.Where(name => !string.IsNullOrWhiteSpace(name)),
+        (resources, name) => resources!.FirstOrDefault(r => r.GetName() == name)
+    )
+        .DistinctUntilChanged();
+    #endregion
 
+    #region Setters
+    /// <summary>
+    /// Sets the <see cref="NamespacedResourceManagementComponentState{TResource}.Namespace"/>
+    /// </summary>
+    /// <param name="namespace">The new namespace</param>
+    public void SetNamespace(string? @namespace)
+    {
+        Reduce(state => state with
+        {
+            Namespace = @namespace
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="ResourceManagementComponentState{TResource}.SearchTerm" />
+    /// </summary>
+    /// <param name="searchTerm">The new search term</param>
+    public virtual void SetSearchTerm(string? searchTerm)
+    {
+        Reduce(state => state with
+        {
+            SearchTerm = searchTerm
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="ResourceManagementComponentState{TResource}.ActiveResourceName" />
+    /// </summary>
+    /// <param name="activeResourceName">The new value</param>
+    public virtual void SetActiveResourceName(string activeResourceName)
+    {
+        Reduce(state => state with
+        {
+            ActiveResourceName = activeResourceName ?? string.Empty
+        });
+    }
+
+    /// <summary>
+    /// Sets the <see cref="ResourceManagementComponentState{TResource}.LabelSelectors" />
+    /// </summary>
+    /// <param name="labelSelectors">The new label selectors</param>
+    public virtual void SetLabelSelectors(EquatableList<LabelSelector>? labelSelectors)
+    {
+        Reduce(state => state with
+        {
+            LabelSelectors = new EquatableList<LabelSelector>(labelSelectors ?? [])
+        });
+    }
+
+    /// <summary>
+    /// Adds a single <see cref="LabelSelector" />
+    /// </summary>
+    /// <param name="labelSelector">The label selector to add</param>
+    public virtual void AddLabelSelector(LabelSelector labelSelector)
+    {
+        if (labelSelector == null)
+        {
+            return;
+        }
+        var labelSelectors = new EquatableList<LabelSelector>(Get(state => state.LabelSelectors) ?? []);
+        var existingSelector = labelSelectors.FirstOrDefault(selector => selector.Key == labelSelector.Key);
+        if (existingSelector != null)
+        {
+            labelSelectors.Remove(existingSelector);
+        }
+        labelSelectors.Add(labelSelector);
+        SetLabelSelectors(labelSelectors);
+    }
+
+    /// <summary>
+    /// Removes a single <see cref="LabelSelector" /> by key
+    /// </summary>
+    /// <param name="labelSelectorKey">The label selector key to remove</param>
+    public void RemoveLabelSelector(string labelSelectorKey)
+    {
+        if (string.IsNullOrWhiteSpace(labelSelectorKey))
+        {
+            return;
+        }
+        var labelSelectors = new EquatableList<LabelSelector>(Get(state => state.LabelSelectors) ?? []);
+        var existingSelector = labelSelectors.FirstOrDefault(selector => selector.Key == labelSelectorKey);
+        if (existingSelector != null)
+        {
+            labelSelectors.Remove(existingSelector);
+        }
+        SetLabelSelectors(labelSelectors);
+    }
 
     /// <summary>
     /// Toggles the resources selection
@@ -101,7 +243,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// <param name="name">The name of the resource to select, or all if none is provided</param>
     public virtual void ToggleResourceSelection(string? name = null)
     {
-        this.Reduce(state =>
+        Reduce(state =>
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -130,57 +272,30 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
             };
         });
     }
-
-    /// <summary>
-    /// Sets the <see cref="ResourceManagementComponentState{TResource}.SearchTerm" />
-    /// </summary>
-    /// <param name="searchTerm">The new search term</param>
-    public virtual void SetSearchTerm(string? searchTerm)
-    {
-        this.Reduce(state => state with
-        {
-            SearchTerm = searchTerm
-        });
-    }
+    #endregion
 
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
-        await this.ResourceEventHub.StartAsync().ConfigureAwait(false);
-        this.ResourceWatch = await this.ResourceEventHub.WatchAsync<TResource>().ConfigureAwait(false);
-        this.ResourceWatch.SubscribeAsync(OnResourceWatchEventAsync, onErrorAsync: ex => Task.Run(() => Console.WriteLine(ex)));
+        await ListNamespacesAsync().ConfigureAwait(false);
+        await GetResourceDefinitionAsync().ConfigureAwait(false);
+        await ResourceEventHub.StartAsync().ConfigureAwait(false);
+        ResourceWatch = await ResourceEventHub.WatchAsync<TResource>().ConfigureAwait(false);
+        ResourceWatch
+            .Do(e => Logger.LogTrace("ResourceWatch received event '{type}' for '{name}'", e.Type.ToString(), e.Resource.GetName()))
+            .SubscribeAsync(
+                onNextAsync: OnResourceWatchEventAsync,
+                onErrorAsync: ex => Task.Run(() => Logger.LogError("ResourceWatch exception: {exception}", ex.ToString())),
+                onCompletedAsync: () => Task.CompletedTask,
+                cancellationToken: CancellationTokenSource.Token
+            );
+        Filter.Throttle(TimeSpan.FromMilliseconds(10)).SubscribeAsync(
+            onNextAsync: ListResourcesAsync,
+            onErrorAsync: ex => Task.Run(() => Logger.LogError("Resource filter exception: {exception}", ex.ToString())),
+            onCompletedAsync: () => Task.CompletedTask,
+            cancellationToken: CancellationTokenSource.Token
+        );
         await base.InitializeAsync();
-    }
-
-    /// <summary>
-    /// Fetches the definition of the managed <see cref="IResource"/> type
-    /// </summary>
-    /// <returns>A new awaitable <see cref="Task"/></returns>
-    public virtual async Task GetResourceDefinitionAsync()
-    {
-        this.definition = await resourceManagementApi.Manage<TResource>().GetDefinitionAsync().ConfigureAwait(false);
-        this.Reduce(s => s with
-        {
-            Definition = this.definition
-        });
-    }
-
-    /// <summary>
-    /// Lists all the channels managed by Cloud Streams
-    /// </summary>
-    /// <returns>A new awaitable <see cref="Task"/></returns>
-    public virtual async Task ListResourcesAsync()
-    {
-        this.Reduce(state => state with
-        {
-            Loading = true
-        });
-        this.resources = new EquatableList<TResource>(await (await resourceManagementApi.Manage<TResource>().ListAsync().ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
-        this.Reduce(s => s with
-        {
-            Resources = this.resources,
-            Loading = false
-        });
     }
 
     /// <summary>
@@ -190,18 +305,11 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task DeleteResourceAsync(TResource resource)
     {
-        await resourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
-        var match = this.resources?.ToList().FirstOrDefault(r => r.GetName() == resource.GetName() && r.GetNamespace() == resource.GetNamespace());
-        var resourceCollectionChanged = false;
-        if (match != null)
+        await ResourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
+        var resources = new EquatableList<TResource>(Get().Resources.Where(r => r.GetName() != resource.GetName() && r.GetNamespace() != resource.GetNamespace()));
+        Reduce(s => s with
         {
-            this.resources!.Remove(match);
-            resourceCollectionChanged = true;
-        }
-        if (!resourceCollectionChanged) return;
-        this.Reduce(s => s with
-        {
-            Resources = this.resources
+            Resources = resources
         });
     }
 
@@ -211,16 +319,69 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public async Task DeleteSelectedResourcesAsync()
     {
-        var selectedResourcesNames = this.Get(state => state.SelectedResourceNames);
-        var resources = (this.Get(state => state.Resources) ?? []).Where(resource => selectedResourcesNames.Contains(resource.GetName()));
+        var selectedResourcesNames = Get(state => state.SelectedResourceNames);
+        var resources = (Get(state => state.Resources) ?? []).Where(resource => selectedResourcesNames.Contains(resource.GetName()));
         foreach (var resource in resources)
         {
-            await this.DeleteResourceAsync(resource);
+            await DeleteResourceAsync(resource);
         }
-        this.Reduce(state => state with
+        Reduce(state => state with
         {
             SelectedResourceNames = []
         });
+    }
+
+    /// <summary>
+    /// Fetches the definition of the managed <see cref="IResource"/> type
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public virtual async Task GetResourceDefinitionAsync()
+    {
+        var definition = await ResourceManagementApi.Manage<TResource>().GetDefinitionAsync().ConfigureAwait(false);
+        Reduce(s => s with
+        {
+            Definition = definition
+        });
+    }
+
+    /// <summary>
+    /// Lists all available <see cref="Namespace"/>s
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public virtual async Task ListNamespacesAsync()
+    {
+        await Task.CompletedTask;
+        //var namespaceList = new EquatableList<Namespace>(await (await ResourceManagementApi.Namespaces.ListAsync().ConfigureAwait(false)).OrderBy(ns => ns.GetQualifiedName()).ToListAsync().ConfigureAwait(false));
+        //Reduce(s => s with
+        //{
+        //    Namespaces = namespaceList
+        //});
+    }
+
+    /// <summary>
+    /// Lists all the resources managed by CloudStreams
+    /// </summary>
+    /// <param name="filter">The <see cref="ResourcesFilter" />, if any, to list the resources of</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public virtual async Task ListResourcesAsync(ResourcesFilter? filter = null)
+    {
+        try
+        {
+        Reduce(state => state with
+        {
+            Loading = true
+        });
+        var resources = new EquatableList<TResource>(await (await ResourceManagementApi.Manage<TResource>().ListAsync(filter?.Namespace, filter?.LabelSelectors).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
+        Reduce(s => s with
+        {
+            Resources = resources,
+            Loading = false
+        });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Unable to list resources: {exception}", ex.ToString());
+        }
     }
 
     /// <summary>
@@ -230,12 +391,35 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual Task OnResourceWatchEventAsync(IResourceWatchEvent<TResource> e)
     {
+        var labelSelectors = Get(state => state.LabelSelectors);
+        if (labelSelectors != null && labelSelectors.Count > 0 && !labelSelectors.All(selector => {
+            if (e.Resource?.Metadata?.Labels == null || e.Resource.Metadata.Labels.Count == 0 || !e.Resource.Metadata.Labels.TryGetValue(selector.Key, out string? value))
+            {
+                return false;
+            }
+            var label = value;
+            return selector.Operator switch
+            {
+                LabelSelectionOperator.Equals => !string.IsNullOrWhiteSpace(selector.Value) && selector.Value.Equals(label),
+                LabelSelectionOperator.NotEquals => !string.IsNullOrWhiteSpace(selector.Value) && !selector.Value.Equals(label),
+                LabelSelectionOperator.Contains => selector.Values != null && selector.Values.Contains(label),
+                LabelSelectionOperator.NotContains => selector.Values != null && !selector.Values.Contains(label),
+                _ => false,
+            };
+        }))
+        {
+            return Task.CompletedTask;
+        }
         switch (e.Type)
         {
             case ResourceWatchEventType.Created:
-                this.Reduce(state =>
+                Reduce(state =>
                 {
                     var resources = state.Resources == null ? [] : new EquatableList<TResource>(state.Resources);
+                    if (resources.Any(r => r.GetQualifiedName() == e.Resource.GetQualifiedName()))
+                    {
+                        return state;
+                    }
                     resources.Add(e.Resource);
                     return state with
                     {
@@ -244,12 +428,9 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
                 });
                 break;
             case ResourceWatchEventType.Updated:
-                this.Reduce(state =>
+                Reduce(state =>
                 {
-                    if (state.Resources == null)
-                    {
-                        return state;
-                    }
+                    if (state.Resources == null) return state;
                     var resources = new EquatableList<TResource>(state.Resources);
                     var resource = resources.FirstOrDefault(r => r.GetQualifiedName() == e.Resource.GetQualifiedName());
                     if (resource == null) return state;
@@ -263,7 +444,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
                 });
                 break;
             case ResourceWatchEventType.Deleted:
-                this.Reduce(state =>
+                Reduce(state =>
                 {
                     if (state.Resources == null)
                     {
@@ -289,7 +470,7 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     protected override void Dispose(bool disposing)
     {
         if (!disposing) return;
-        this.ResourceWatchSubscription?.Dispose();
+        ResourceWatchSubscription?.Dispose();
         base.Dispose(disposing);
     }
 
@@ -297,9 +478,28 @@ public class ResourceManagementComponentStore<TResource>(ICloudStreamsCoreApiCli
     protected override async ValueTask DisposeAsync(bool disposing)
     {
         if (!disposing) return;
-        await this.ResourceWatch.DisposeAsync().ConfigureAwait(false);
-        this.ResourceWatchSubscription.Dispose();
+        await ResourceWatch.DisposeAsync().ConfigureAwait(false);
+        ResourceWatchSubscription.Dispose();
         base.Dispose(disposing);
     }
+
+}
+
+/// <summary>
+/// Represents a <see cref="ComponentStore{TState}"/> used to manage CloudStreams <see cref="IResource"/>s of the specified type
+/// </summary>
+/// <typeparam name="TResource">The type of <see cref="IResource"/>s to manage</typeparam>
+/// <remarks>
+/// Initializes a new <see cref="ResourceManagementComponentStore{TResource}"/>
+/// </remarks>
+/// <param name="logger">The service used to perform logging</param>
+/// <param name="resourceManagementApi">The service used to interact with the CloudStreams API</param>
+/// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
+public class ResourceManagementComponentStore<TResource>(ILogger<ResourceManagementComponentStore<TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
+     : ResourceManagementComponentStore<ResourceManagementComponentState<TResource>, TResource>(logger, resourceManagementApi, resourceEventHub)
+    where TResource : Resource, new()
+{
+
+
 
 }

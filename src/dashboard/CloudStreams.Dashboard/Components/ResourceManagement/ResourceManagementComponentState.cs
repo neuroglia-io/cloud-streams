@@ -22,19 +22,24 @@ public record ResourceManagementComponentState<TResource>
 {
 
     /// <summary>
-    /// Gets the definition of the managed resource type
+    /// Gets/sets the definition of the managed resource type
     /// </summary>
     public ResourceDefinition? Definition { get; set; }
 
     /// <summary>
-    /// Gets a <see cref="List{T}"/> that contains all cached <see cref="IResource"/>s
+    /// Gets/sets a <see cref="List{T}"/> that contains all <see cref="IResource"/>s
     /// </summary>
-    public EquatableList<TResource>? Resources { get; set; }
+    public EquatableList<TResource> Resources { get; set; } = [];
 
     /// <summary>
-    /// Gets/sets a boolean value that indicates whether data is currently being gathered
+    /// Gets a <see cref="EquatableList{T}"/> that contains all <see cref="Neuroglia.Data.Infrastructure.ResourceOriented.Namespace"/>s
     /// </summary>
-    public bool Loading { get; set; } = false;
+    public EquatableList<Namespace>? Namespaces { get; set; }
+
+    /// <summary>
+    /// Gets the <see cref="Neuroglia.Data.Infrastructure.ResourceOriented.Namespace"/> the (namespaced) resources to list belong to, if any
+    /// </summary>
+    public string? Namespace { get; set; }
 
     /// <summary>
     /// Gets/sets a <see cref="List{T}"/> that contains all selected <see cref="IResource"/>s
@@ -42,8 +47,22 @@ public record ResourceManagementComponentState<TResource>
     public EquatableList<string> SelectedResourceNames { get; set; } = [];
 
     /// <summary>
+    /// Gets/sets a list that contains the label selectors, if any, used to filter the resources to list
+    /// </summary>
+    public EquatableList<LabelSelector>? LabelSelectors { get; set; } = [];
+
+    /// <summary>
     /// Gets/sets the search term, if any, used to filter the resources to list
     /// </summary>
     public string? SearchTerm { get; set; }
 
+    /// <summary>
+    /// Gets/sets a boolean value that indicates whether data is currently being gathered
+    /// </summary>
+    public bool Loading { get; set; } = true;
+
+    /// <summary>
+    /// Gets/sets the name of the selected resource
+    /// </summary>
+    public string ActiveResourceName { get; set; } = string.Empty;
 }
