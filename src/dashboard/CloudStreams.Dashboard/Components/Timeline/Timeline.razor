@@ -1,6 +1,6 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.TimelineStateManagement
-@inherits StatefulComponent<TimelineStore, TimelineState>
+@inherits StatefulComponent<Timeline, TimelineStore, TimelineState>
 @implements IAsyncDisposable
 
 <div class="timeline-container">
@@ -186,16 +186,6 @@
         }
         var margin = delta / 20;
         await this.eventDropsInterop.RenderTimelineAsync(this.timeline, this.dotnetReference, timelineLanes, start, end.AddMilliseconds(margin), this.keepTimeRange);
-    }
-
-    /// <summary>
-    /// Patches the <see cref="Timeline"/>'s fields after a <see cref="TimelineStore"/>'s change
-    /// </summary>
-    /// <param name="patch">The patch to apply</param>
-    private void OnStateChanged(Action<Timeline> patch)
-    {
-        patch(this);
-        this.StateHasChanged();
     }
 
     /// <summary>

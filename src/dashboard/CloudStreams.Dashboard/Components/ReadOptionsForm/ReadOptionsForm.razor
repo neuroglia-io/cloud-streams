@@ -1,6 +1,6 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement
-@inherits StatefulComponent<ReadOptionsFormStore, ReadOptionsFormState>
+@inherits StatefulComponent<ReadOptionsForm, ReadOptionsFormStore, ReadOptionsFormState>
 
 <div id="@(id + "read-options-form")" class="input-group mb-3">
     <div class="form-floating">
@@ -167,16 +167,6 @@
     private async Task OnRefreshAsync(object? sender)
     {
         await this.Store.UpdateMetadataAsync((this.partitionType, this.partitionId));
-    }
-
-    /// <summary>
-    /// Patches the <see cref="ReadOptionsForm"/>'s fields after a <see cref="ReadOptionsFormStore"/>'s change
-    /// </summary>
-    /// <param name="patch">The patch to apply</param>
-    private void OnStateChanged(Action<ReadOptionsForm> patch)
-    {
-        patch(this);
-        this.StateHasChanged();
     }
 
     /// <summary>

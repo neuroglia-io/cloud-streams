@@ -1,6 +1,6 @@
 ﻿@namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Dashboard.Components.AutoRefreshFormStateManagement
-@inherits StatefulComponent<AutoRefreshFormStore, AutoRefreshFormState>
+@inherits StatefulComponent<AutoRefreshForm, AutoRefreshFormStore, AutoRefreshFormState>
 @implements Refresher
 
 <div id="@(id + "auto-refresh-form")" class="d-flex justify-content-end mb-3">
@@ -60,15 +60,5 @@
             this.Refreshed?.Invoke(this);
             if (this.OnRefresh.HasDelegate) await this.OnRefresh.InvokeAsync();
         }, cancellationToken: this.CancellationTokenSource.Token);
-    }
-
-    /// <summary>
-    /// Patches the <see cref="AutoRefreshForm"/>'s fields after a <see cref="AutoRefreshFormStore"/>'s change
-    /// </summary>
-    /// <param name="patch">The patch to apply</param>
-    private void OnStateChanged(Action<AutoRefreshForm> patch)
-    {
-        patch(this);
-        this.StateHasChanged();
     }
 }
