@@ -18,6 +18,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Enumerates all supported read output formats
 /// </summary>
+[Description("Enumerates all supported read output formats")]
 [TypeConverter(typeof(EnumMemberTypeConverter))]
 [JsonConverter(typeof(StringEnumConverter))]
 public enum StreamReadOutputFormat
@@ -25,11 +26,13 @@ public enum StreamReadOutputFormat
     /// <summary>
     /// Specifies that the stream should output cloud events
     /// </summary>
+    [Description("Specifies that the stream should output cloud events")]
     [EnumMember(Value = "event")]
     Event = 1,
     /// <summary>
     /// Specifies that the stream should output cloud event records
     /// </summary>
+    [Description("Specifies that the stream should output cloud event records")]
     [EnumMember(Value = "record")]
     Record = 2
 }
