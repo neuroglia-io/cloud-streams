@@ -73,6 +73,7 @@ app.UseSwaggerUI(builder =>
 app.MapControllers();
 app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch");
 app.MapHub<CloudEventHub>("api/ws/events");
+app.MapMcp("mcp");
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();

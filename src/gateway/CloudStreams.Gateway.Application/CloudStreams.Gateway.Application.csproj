@@ -20,7 +20,7 @@
 
   <ItemGroup>
 	<PackageReference Include="FluentValidation" Version="11.11.0" />
-    <PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.19.2" />
+    <PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.21.0" />
   </ItemGroup>
 
   <ItemGroup>

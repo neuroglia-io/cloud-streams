@@ -52,6 +52,7 @@ app.UseSwaggerUI(builder =>
 
 app.MapControllers();
 app.MapHub<ResourceEventWatchHub>("api/resources/v1/ws/watch");
+app.MapMcp("mcp");
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync().ConfigureAwait(false);

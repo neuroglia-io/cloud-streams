@@ -19,7 +19,7 @@ namespace CloudStreams.Core;
 /// <summary>
 /// Represents an object used to configure the options of a query used to read a cloud event stream
 /// </summary>
-[DataContract]
+[DataContract, Description("Represents an object used to configure the options of a query used to read a cloud event stream")]
 public record StreamReadOptions
 {
 
@@ -56,17 +56,20 @@ public record StreamReadOptions
     /// <param name="direction">The direction in which to read the stream of cloud events</param>
     /// <param name="offset">The offset starting from which to read the stream</param>
     /// <param name="length">The amount of events to read from the stream</param>
-    public StreamReadOptions(StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength) : this(null!, direction, offset, length) { }
+    /// <param name="outputFormat">The expected output format</param>
+    public StreamReadOptions(StreamReadDirection direction = StreamReadDirection.Forwards, long? offset = null, ulong length = MaxLength, StreamReadOutputFormat outputFormat = StreamReadOutputFormat.Event) : this(null!, direction, offset, length, outputFormat) { }
 
     /// <summary>
     /// Gets/sets a reference to the cloud event partition to read, if any
     /// </summary>
+    [Description("A reference to the cloud event partition to read, if any")]
     [DataMember(Order = 1, Name = "partition"), JsonPropertyName("partition"), YamlMember(Alias = "partition")]
     public virtual PartitionReference? Partition { get; set; }
 
     /// <summary>
     /// Gets/sets the direction in which to read the stream of cloud events
     /// </summary>
+    [Description("The direction in which to read the stream of cloud events")]
     [DefaultValue(StreamReadDirection.Forwards)]
     [DataMember(Order = 2, Name = "direction"), JsonPropertyName("direction"), YamlMember(Alias = "direction")]
     public virtual StreamReadDirection Direction { get; set; } = StreamReadDirection.Forwards;
@@ -74,12 +77,14 @@ public record StreamReadOptions
     /// <summary>
     /// Gets/sets the offset starting from which to read the stream
     /// </summary>
+    [Description("The offset starting from which to read the stream")]
     [DataMember(Order = 3, Name = "offset"), JsonPropertyName("offset"), YamlMember(Alias = "offset")]
     public virtual long? Offset { get; set; }
 
     /// <summary>
     /// Gets/sets the amount of events to read from the stream
     /// </summary>
+    [Description("The amount of events to read from the stream")]
     [DefaultValue(MaxLength), Range(1, MaxLength)]
     [DataMember(Order = 4, Name = "length"), JsonPropertyName("length"), YamlMember(Alias = "length")]
     public virtual ulong Length { get; set; } = MaxLength;
@@ -87,6 +92,7 @@ public record StreamReadOptions
     /// <summary>
     /// Gets/sets the expected output format
     /// </summary>
+    [Description("The expected output format")]
     [DefaultValue(StreamReadOutputFormat.Event)]
     [DataMember(Order = 5, Name = "outputFormat"), JsonPropertyName("outputFormat"), YamlMember(Alias = "outputFormat")]
     public virtual StreamReadOutputFormat Format { get; set; } = StreamReadOutputFormat.Event;

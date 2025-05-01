@@ -17,6 +17,7 @@ namespace CloudStreams.Core;
 /// Represents an object used to describe a recorded cloud event
 /// </summary>
 [DataContract]
+[Description("Represents an object used to describe a recorded cloud event")]
 public record CloudEventRecord
     : CloudEventDescriptor
 {
@@ -44,12 +45,14 @@ public record CloudEventRecord
     /// <summary>
     /// Gets/sets the id of the stream the recorded cloud event belongs to
     /// </summary>
+    [Description("The id of the stream the recorded cloud event belongs to")]
     [DataMember(Order = 1, Name = "streamId"), JsonPropertyName("streamId"), YamlMember(Alias = "streamId")]
     public virtual string StreamId { get; set; } = null!;
 
     /// <summary>
     /// Gets/sets the sequence of the recorded cloud event in the stream it belongs to
     /// </summary>
+    [Description("The sequence of the recorded cloud event in the stream it belongs to")]
     [DataMember(Order = 2, Name = "sequence"), JsonPropertyName("sequence"), YamlMember(Alias = "sequence")]
     public virtual ulong Sequence { get; set; }
 
