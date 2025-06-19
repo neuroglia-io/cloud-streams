@@ -13,11 +13,11 @@
 
 using FluentValidation;
 using Grpc.Core;
-using Polly.CircuitBreaker;
 using Polly;
-using System.Text.RegularExpressions;
-using System.Reactive.Threading.Tasks;
+using Polly.CircuitBreaker;
 using System.Numerics;
+using System.Reactive.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace CloudStreams.Broker.Application.Services;
 
@@ -167,6 +167,7 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     public virtual async Task InitializeAsync(CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.Initialize");
         this.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         this.SubscriptionController.Where(e => e.Type == ResourceWatchEventType.Updated && e.Resource.GetName() == this.Subscription.GetName() && e.Resource.GetNamespace() == this.Subscription.GetNamespace()).Select(e => e.Resource)
             .Select(subscription =>
@@ -200,6 +201,7 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task InitializeCloudEventStreamAsync()
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.InitializeStream");
         if (this.Subscription.Status?.Stream?.Fault != null) return;
         await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
         try
@@ -375,6 +377,11 @@ public class SubscriptionHandler
     protected virtual async Task ValidateAsync(CloudEvent e)
     {
         ArgumentNullException.ThrowIfNull(e);
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.Validate");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("event.id", e.Id);
+        activity?.SetTag("event.source", e.Source);
+        activity?.SetTag("event.type", e.Type);
         var validationTasks = this.CloudEventValidators.Select(v => v.ValidateAsync(e, this.CancellationTokenSource.Token));
         await Task.WhenAll(validationTasks).ConfigureAwait(false);
         if (validationTasks.Any(t => !t.Result.IsValid)) throw new FormatException("Failed to validate the specified cloud event"); //todo: better feedback
@@ -389,6 +396,16 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task DispatchAsync(CloudEventRecord e, bool retryOnError, bool catchUpWhenAvailable)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.DispatchRecord");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("record.stream.id", e.StreamId);
+        activity?.SetTag("record.sequence", e.Sequence);
+        if (e.Metadata.ContextAttributes.TryGetValue(CloudEventAttributes.Id, out var id)) activity?.SetTag("event.id", id.ToString());
+        if (e.Metadata.ContextAttributes.TryGetValue(CloudEventAttributes.Source, out var source)) activity?.SetTag("event.source", source.ToString());
+        if (e.Metadata.ContextAttributes.TryGetValue(CloudEventAttributes.Type, out var type)) activity?.SetTag("event.type", type.ToString());
+        if (e.Metadata.ContextAttributes.TryGetValue(CloudEventAttributes.Subject, out var subject)) activity?.SetTag("event.subject", subject.ToString());
+        activity?.SetTag("retry", retryOnError);
+        activity?.SetTag("catchup", catchUpWhenAvailable);
         ArgumentNullException.ThrowIfNull(e);
         var cloudEvent = e.ToCloudEvent(this.Broker.Resource.Spec.Dispatch?.Sequencing);
         if (!await this.FiltersAsync(e).ConfigureAwait(false)) return;
@@ -444,6 +461,15 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task RetryDispatchAsync(CloudEvent e, ulong offset, bool catchUpWhenAvailable, string statusReason)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.RetryDispatch");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("event.id", e.Id);
+        activity?.SetTag("event.source", e.Source);
+        activity?.SetTag("event.type", e.Type);
+        if (!string.IsNullOrWhiteSpace(e.Subject)) activity?.SetTag("event.subject", e.Subject);
+        activity?.SetTag("offset", offset);
+        activity?.SetTag("catchup", catchUpWhenAvailable);
+        activity?.SetTag("reason", statusReason);
         try
         {
             await this.SetSubscriberStateAsync(SubscriberState.Unreachable, statusReason).ConfigureAwait(false);
@@ -476,6 +502,8 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task CatchUpAsync()
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.CatchUp");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
         try
         {
             this.SubscriptionOutOfSync = true;
@@ -511,6 +539,9 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task CommitOffsetAsync(ulong? offset)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.CommitOffset");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("offset", offset);
         var resource = this.Subscription.Clone()!;
         if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
         if (resource.Status.Stream == null) resource.Status.Stream = new();
@@ -553,6 +584,9 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task SetStatusPhaseAsync(SubscriptionStatusPhase phase)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.SetStatusPhase");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("phase", EnumHelper.GetDisplayName(phase));
         var resource = this.Subscription.Clone()!;
         if (resource.Status == null) resource.Status = new();
         else if (resource.Status.Phase == phase) return;
@@ -570,6 +604,10 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task SetSubscriberStateAsync(SubscriberState state, string? reason = null)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.SetStatusPhase");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("state", EnumHelper.GetDisplayName(state));
+        if(!string.IsNullOrWhiteSpace(reason)) activity?.SetTag("reason", reason);
         if (this.Subscription.Status?.Subscriber?.State == state && this.Subscription.Status?.Subscriber?.Reason == reason) return;
         var resource = this.Subscription.Clone()!;
         resource.Status ??= new();

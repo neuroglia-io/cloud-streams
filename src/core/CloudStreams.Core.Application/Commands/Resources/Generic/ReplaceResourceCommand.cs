@@ -53,6 +53,11 @@ public class ReplaceResourceCommandHandler<TResource>(IResourceRepository reposi
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(ReplaceResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("ReplaceResource");
+        activity?.SetTag("resource.kind", new TResource().Definition.Kind);
+        activity?.SetTag("resource.name", command.Resource.GetName());
+        activity?.SetTag("resource.namespace", command.Resource.GetNamespace());
+        activity?.SetTag("dryRun", command.DryRun);
         var resource = await repository.ReplaceAsync(command.Resource, command.DryRun, cancellationToken).ConfigureAwait(false);
         return new OperationResult<TResource>((int)HttpStatusCode.OK, resource);
     }

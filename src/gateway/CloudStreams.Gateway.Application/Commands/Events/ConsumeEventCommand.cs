@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core;
 using CloudStreams.Core.Application.Services;
 using CloudStreams.Gateway.Application.Services;
 using Neuroglia.Mediation;
@@ -58,6 +59,11 @@ public class ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAd
     /// <inheritdoc/>
     public async Task<IOperationResult> HandleAsync(ConsumeEventCommand command, CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("ConsumeEvent");
+        activity?.SetTag("event.id", command.CloudEvent.Id);
+        activity?.SetTag("event.source", command.CloudEvent.Source.ToString());
+        activity?.SetTag("event.type", command.CloudEvent.Type);
+        if(!string.IsNullOrWhiteSpace(command.CloudEvent.Subject)) activity?.SetTag("event.subject", command.CloudEvent.Subject);
         var e = command.CloudEvent;
         var admissionResult = await eventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
         if (admissionResult.Data == null || !admissionResult.IsSuccess()) return admissionResult;

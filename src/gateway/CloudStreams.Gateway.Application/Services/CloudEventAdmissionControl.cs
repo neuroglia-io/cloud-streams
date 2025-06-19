@@ -110,6 +110,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Execute");
         Core.Resources.Gateway? gateway = null;
         try
         {
@@ -126,6 +127,11 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <inheritdoc/>
     public virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Evaluate");
+        activity?.SetTag("event.id", e.Id);
+        activity?.SetTag("event.source", e.Source.ToString());
+        activity?.SetTag("event.type", e.Type);
+        if(!string.IsNullOrWhiteSpace(e.Subject)) activity?.SetTag("event.subject", e.Subject);
         var validationResults = new List<FluentValidation.Results.ValidationResult>(this.Validators.Count());
         foreach (var validator in this.Validators) validationResults.Add(await validator.ValidateAsync(e, cancellationToken).ConfigureAwait(false));
         if (!validationResults.All(r => r.IsValid))
