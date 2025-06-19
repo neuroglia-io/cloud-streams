@@ -17,6 +17,15 @@ services:
   redis:
     image: redis:latest
 
+  otel-lgtm:
+    image: grafana/otel-lgtm
+    ports:
+      - 3000:3000
+      - 4317:4317
+    volumes:
+      - ./config/prometheus/prometheus.yml:/otel-lgtm/prometheus.yaml
+      - ./config/grafana/provisioning:/otel-lgtm/grafana/conf/provisioning
+
   gateway:
     # image: cloud-streams/gateway
     image: ${DOCKER_REGISTRY-}gateway
@@ -29,13 +38,16 @@ services:
       CONNECTIONSTRINGS__REDIS: ${REDIS_URI}
       CONNECTIONSTRINGS__EVENTSTORE: ${EVENTSTORE_URI}
       CLOUDSTREAMS_GATEWAY_NAME: gateway-1
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_EXPORTER_ENDPOINT}
     volumes:
       - ./config/subscriptions:/app/data/seed/subscriptions
     ports:
       - 8080:80
     depends_on:
-      - redis
       - eventstore
+      - redis
+      - otel-lgtm
+     
 
   broker:
     image: cloud-streams/broker
@@ -49,6 +61,8 @@ services:
       CONNECTIONSTRINGS__REDIS: ${REDIS_URI}
       CONNECTIONSTRINGS__EVENTSTORE: ${EVENTSTORE_URI}
       CLOUDSTREAMS_BROKER_NAME: broker-1
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_EXPORTER_ENDPOINT}
     depends_on:
-      - redis
       - eventstore
+      - redis
+      - otel-lgtm

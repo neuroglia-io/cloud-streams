@@ -151,7 +151,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
 
     #region Setters
     /// <summary>
-    /// Sets the <see cref="NamespacedResourceManagementComponentState{TResource}.Namespace"/>
+    /// Sets the <see cref="ResourceManagementComponentState{TResource}.Namespace"/>
     /// </summary>
     /// <param name="namespace">The new namespace</param>
     public void SetNamespace(string? @namespace)

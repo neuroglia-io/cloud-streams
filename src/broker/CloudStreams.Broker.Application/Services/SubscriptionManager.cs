@@ -65,6 +65,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         Core.Resources.Broker? broker = null;
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.Start");
         try
         {
             broker = await this.Repository.GetAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken).ConfigureAwait(false);
@@ -98,10 +99,11 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     }
 
     /// <inheritdoc/>
-    protected override Task ReconcileAsync(CancellationToken cancellationToken = default)
+    protected override async Task ReconcileAsync(CancellationToken cancellationToken = default)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.Reconcile");
         this.Options.LabelSelectors = this.Broker?.Resource.Spec.Selector?.Select(s => new LabelSelector(s.Key, LabelSelectionOperator.Equals, s.Value)).ToList();
-        return base.ReconcileAsync(cancellationToken);
+        await base.ReconcileAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -117,7 +119,11 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     /// </summary>
     /// <param name="selector">A key/value mapping of the labels the subscriptions to select must define</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual Task OnBrokerSelectorChangedAsync(IDictionary<string, string>? selector) => this.ReconcileAsync(this.CancellationToken);
+    protected virtual async Task OnBrokerSelectorChangedAsync(IDictionary<string, string>? selector)
+    {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.OnBrokerSelectorChanged");
+        await this.ReconcileAsync(this.CancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Handles changes to the specified subscription's labels
@@ -126,6 +132,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual async Task OnSubscriptionLabelChangedAsync(Subscription subscription)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.OnSubscriptionLabelChanged");
+        activity?.SetTag("subscription.name", subscription.GetName());
+        activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         if (this.Broker == null) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
         if (this._lockedKeys.Contains(key)) return;
@@ -156,6 +165,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     /// <param name="subscription">The newly created <see cref="Subscription"/></param>
     protected virtual async Task OnSubscriptionCreatedAsync(Subscription subscription)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.OnSubscriptionCreated");
+        activity?.SetTag("subscription.name", subscription.GetName());
+        activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
         this._lockedKeys.Add(key);
         var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
@@ -170,6 +182,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     /// <param name="subscription">The newly deleted <see cref="Subscription"/></param>
     protected virtual async Task OnSubscriptionDeletedAsync(Subscription subscription)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.OnSubscriptionDeleted");
+        activity?.SetTag("subscription.name", subscription.GetName());
+        activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
         if (this.Subscriptions.Remove(key, out var handler) && handler != null) await handler.DisposeAsync().ConfigureAwait(false);
     }

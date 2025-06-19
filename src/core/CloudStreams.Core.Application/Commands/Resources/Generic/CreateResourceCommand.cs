@@ -52,6 +52,11 @@ public class CreateResourceCommandHandler<TResource>(IResourceRepository reposit
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(CreateResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CreateResource");
+        activity?.SetTag("resource.kind", new TResource().Definition.Kind);
+        activity?.SetTag("resource.name", command.Resource.GetName());
+        activity?.SetTag("resource.namespace", command.Resource.GetNamespace());
+        activity?.SetTag("dryRun", command.DryRun);
         var resource = await repository.AddAsync(command.Resource, command.DryRun, cancellationToken);
         return new OperationResult<TResource>((int)HttpStatusCode.Created, resource);
     }

@@ -66,6 +66,11 @@ public class DeleteResourceCommandHandler<TResource>(IResourceRepository reposit
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(DeleteResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("DeleteResource");
+        activity?.SetTag("resource.kind", new TResource().Definition.Kind);
+        activity?.SetTag("resource.name", command.Name);
+        activity?.SetTag("resource.namespace", command.Namespace);
+        activity?.SetTag("dryRun", command.DryRun);
         var resource = await repository.RemoveAsync<TResource>(command.Name, command.Namespace, command.DryRun, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }

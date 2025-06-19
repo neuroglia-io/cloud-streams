@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include=".env" />
+    <None Include="config\grafana\provisioning\datasources\datasources.yml" />
+    <None Include="config\prometheus\prometheus.yml" />
     <None Include="config\subscriptions\all.yaml" />
     <None Include="docker-compose.yml" />
     <None Include=".dockerignore" />

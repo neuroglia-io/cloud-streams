@@ -73,6 +73,12 @@ public class PatchResourceCommandHandler<TResource>(IResourceRepository reposito
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(PatchResourceCommand<TResource> command, CancellationToken cancellationToken)
     {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("PatchResource");
+        activity?.SetTag("resource.kind", new TResource().Definition.Kind);
+        activity?.SetTag("resource.name", command.Name);
+        activity?.SetTag("resource.namespace", command.Namespace);
+        activity?.SetTag("dryRun", command.DryRun);
+        activity?.SetTag("patch.type", command.Patch.Type);
         var resource = await repository.PatchAsync<TResource>(command.Patch, command.Name, command.Namespace, null, command.DryRun, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }

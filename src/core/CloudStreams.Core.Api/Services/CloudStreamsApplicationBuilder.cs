@@ -14,6 +14,7 @@
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
 using CloudStreams.Core.Application.Services;
+using EventStore.Client.Extensions.OpenTelemetry;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -235,15 +236,21 @@ public class CloudStreamsApplicationBuilder
         telemetry = telemetry.WithTracing(builder =>
         {
             builder
+                .AddSource("*")
                 .AddSource(this.ServiceName)
+                .AddSource("Neuroglia.Data.Infrastructure.ResourceOriented")
+                .AddSource("Neuroglia.Mediation")
                 .SetResourceBuilder(resourceBuilder)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
+                .AddRedisInstrumentation()
+                .AddEventStoreClientInstrumentation()
                 .AddOtlpExporter();
         });
         telemetry = telemetry.WithMetrics(builder =>
         {
             builder
+                .AddMeter("*")
                 .AddMeter(this.ServiceName)
                 .SetResourceBuilder(resourceBuilder)
                 .AddAspNetCoreInstrumentation()
