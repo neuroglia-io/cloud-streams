@@ -34,6 +34,7 @@ builder.UseCloudStreams(builder =>
     builder.UseCoreApi();
     builder.RegisterApplicationPart<EventsController>();
     builder.RegisterMediationAssembly<ConsumeEventCommand>();
+    builder.WithServiceName("cloud-streams-gateway");
 });
 
 builder.Services.Configure<GatewayOptions>(builder.Configuration);
