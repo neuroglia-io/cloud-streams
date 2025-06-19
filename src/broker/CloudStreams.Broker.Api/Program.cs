@@ -22,7 +22,10 @@ CloudStreamsDefaults.Telemetry.ActivitySource = new("Cloud Streams Broker");
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariablePrefix);
-builder.UseCloudStreams(builder => { });
+builder.UseCloudStreams(builder => 
+{
+    builder.WithServiceName("cloud-streams-broker");
+});
 
 builder.Services.Configure<BrokerOptions>(builder.Configuration);
 builder.Services.AddSingleton<SubscriptionManager>();
