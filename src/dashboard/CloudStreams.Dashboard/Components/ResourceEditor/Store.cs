@@ -13,11 +13,9 @@
 
 using CloudStreams.Core.Api.Client.Services;
 using JsonCons.Utilities;
-using Neuroglia;
 using Neuroglia.Data;
 using Neuroglia.Serialization;
 using Neuroglia.Serialization.Yaml;
-using System.Text.Json;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -203,7 +201,8 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
             ProblemTitle = problem?.Title ?? string.Empty,
             ProblemStatus = problem?.Status ?? 0,
             ProblemDetail = problem?.Detail ?? string.Empty,
-            ProblemErrors = problem?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? []
+            ProblemErrors = problem?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? [],
+
         });
     }
 
@@ -224,7 +223,6 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
             await monacoEditorHelper.ChangePreferredLanguageAsync(language == PreferredLanguage.YAML ? PreferredLanguage.JSON : PreferredLanguage.YAML);
         }
     }
@@ -255,21 +253,29 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
         this.SetProblemDetails(null);
         this.SetSaving(true);
         var textEditorValue = this.Get(state => state.TextEditorValue);
-        if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
-        TResource? resource;
         try
         {
-            resource = jsonSerializer.Deserialize<TResource>(textEditorValue);
-            resource = await resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
-            this.SetResource(resource);
-        }
-        catch (ProblemDetailsException ex)
-        {
-            this.SetProblemDetails(ex.Problem);
+            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
+            TResource? resource;
+            try
+            {
+                resource = jsonSerializer.Deserialize<TResource>(textEditorValue);
+                resource = await resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
+                this.SetResource(resource);
+            }
+            catch (ProblemDetailsException ex)
+            {
+                this.SetProblemDetails(ex.Problem);
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString()); // todo: improve logging
+            this.SetProblemDetails(new ProblemDetails(
+                ProblemTypes.SchemaValidationFailed,
+                "Update failed",
+                400,
+                ex.Message
+            ));
         }
         this.SetSaving(false);
     }
@@ -287,26 +293,34 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
         {
             return;
         }
-        var textEditorValue = this.Get(state => state.TextEditorValue);
-        if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
-        var jsonPatch = JsonPatch.FromDiff(jsonSerializer.SerializeToElement(resource)!.Value, jsonSerializer.SerializeToElement(jsonSerializer.Deserialize<TResource>(textEditorValue))!.Value);
-        var patch = jsonSerializer.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
-        if (patch != null)
+        try
         {
-            var resourcePatch = new Patch(PatchType.JsonPatch, jsonPatch);
-            try
+            var textEditorValue = this.Get(state => state.TextEditorValue);
+            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
+            var jsonPatch = JsonPatch.FromDiff(jsonSerializer.SerializeToElement(resource)!.Value, jsonSerializer.SerializeToElement(jsonSerializer.Deserialize<TResource>(textEditorValue))!.Value);
+            var patch = jsonSerializer.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
+            if (patch != null)
             {
-                resource = await resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
-                this.SetResource(resource);
+                var resourcePatch = new Patch(PatchType.JsonPatch, jsonPatch);
+                try
+                {
+                    resource = await resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
+                    this.SetResource(resource);
+                }
+                catch (ProblemDetailsException ex)
+                {
+                    this.SetProblemDetails(ex.Problem);
+                }
             }
-            catch(ProblemDetailsException ex)
-            {
-                this.SetProblemDetails(ex.Problem);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString()); // todo: improve logging
-            }
+        }
+        catch (Exception ex)
+        {
+            this.SetProblemDetails(new ProblemDetails(
+                ProblemTypes.SchemaValidationFailed,
+                "Update failed",
+                400,
+                ex.Message
+            ));
         }
         this.SetSaving(false);
     }

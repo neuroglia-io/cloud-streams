@@ -210,7 +210,7 @@
             left = $"calc({x - 500}px + 1rem)";
         }
         this.cloudEventTooltipStyle = $"opacity: 1; left: {left}; top: calc({y}px + 1rem)";
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>
@@ -221,7 +221,7 @@
     {
         this.cloudEventTooltipStyle = "opacity: 0;";
         this.cloudEvent = null;
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>
@@ -235,7 +235,7 @@
     {
         this.label = label;
         this.labelTooltipStyle = $"opacity: 1; top: calc({y}px - 40px)";
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     [JSInvokable]
@@ -243,7 +243,7 @@
     {
         this.labelTooltipStyle = "opacity: 0;";
         this.label = "";
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>
@@ -254,7 +254,7 @@
     public void SelectCloudEventOnClick(CloudEvent cloudEvent)
     {
         this.selectedCloudEvents.Add(cloudEvent);
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>

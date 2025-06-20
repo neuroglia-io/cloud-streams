@@ -13,7 +13,6 @@
 
 using BlazorBootstrap;
 using CloudStreams.Dashboard.Components.ResourceManagement;
-using Json.Schema;
 using Microsoft.AspNetCore.Components;
 using Neuroglia.Serialization;
 
@@ -231,12 +230,13 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// <param name="resource">The <see cref="Resource"/> to show the details for</param>
     protected virtual Task OnShowResourceDetailsAsync(TResource resource)
     {
-        if (DetailsOffCanvas == null) return Task.CompletedTask;
-        var parameters = new Dictionary<string, object>
-        {
-            { nameof(ResourceDetails<TResource>.Resource), resource }
-        };
-        return DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
+        //if (DetailsOffCanvas == null) return Task.CompletedTask;
+        //var parameters = new Dictionary<string, object>
+        //{
+        //    { nameof(ResourceDetails<TResource>.Resource), resource }
+        //};
+        //return DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
+        return OnShowResourceEditorAsync(resource);
     }
 
     /// <summary>
