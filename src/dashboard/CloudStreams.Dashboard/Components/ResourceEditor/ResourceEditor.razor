@@ -94,9 +94,9 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync().ConfigureAwait(false);
+        this.Store.Saving.Subscribe(saving => this.OnStateChanged(cmp  => this.OnSavingChanged(saving)), token: this.CancellationTokenSource.Token);
         this.Store.Resource.Subscribe(resource => this.OnStateChanged(cmp => cmp.resource = resource), token: this.CancellationTokenSource.Token);
         this.Store.Updating.Subscribe(updating => this.OnStateChanged(cmp => cmp.updating = updating), token: this.CancellationTokenSource.Token);
-        this.Store.Saving.Subscribe(OnSavingChanged, token: this.CancellationTokenSource.Token);
         this.Store.ProblemDetails.Subscribe(problemDetails => this.OnStateChanged(cmp => cmp.problemDetails = problemDetails), token: this.CancellationTokenSource.Token);
         this.textEditorInput
             .Throttle(TimeSpan.FromMilliseconds(300))
@@ -128,7 +128,6 @@
     {
         this.saving = saving;
         if (this.textBasedEditor != null) this.textBasedEditor.UpdateOptions(new EditorUpdateOptions() { ReadOnly = saving });
-        this.StateHasChanged();
     }
 
     /// <summary>
@@ -149,7 +148,7 @@
             await this.SetTextEditorValueAsync();
             await this.SetTextBasedEditorLanguageAsync();
         }
-        this.StateHasChanged();
+        this.OnStateChanged();
     }
 
     /// <summary>

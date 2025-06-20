@@ -39,7 +39,7 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="IResource"/>s of the specified type
     /// </summary>
-    public IObservable<EquatableList<SubscriptionListItem>> Subscriptions => Observable.CombineLatest(
+    public IObservable<EquatableDictionary<string, ulong>> SubscriptionLengths => Observable.CombineLatest(
             InternalResources,
             SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
             GlobalStreamLength,
@@ -54,15 +54,21 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
                 {
                     resources = [..resources.Where(r => r.GetName().Contains(searchTerm))];
                 }
-                return new EquatableList<SubscriptionListItem>([.. resources.Select(r => {
-                    if (r.Spec?.Partition == null || string.IsNullOrEmpty(r.Spec.Partition.Id)) 
-                    {
-                        return new SubscriptionListItem(r, globalStreamLength);
-                    }
-                    var key = GetPartitionKey(r.Spec.Partition.Type, r.Spec.Partition.Id);
-                    if (!partitionLengths.ContainsKey(key)) return new SubscriptionListItem(r);
-                    return new SubscriptionListItem(r, partitionLengths[key]);
-                })]);
+                return new EquatableDictionary<string, ulong>([.. 
+                    resources.ToDictionary(r => 
+                        r.GetName(), 
+                        r =>
+                        {
+                            if (r.Spec?.Partition == null || string.IsNullOrEmpty(r.Spec.Partition.Id))
+                            {
+                                return globalStreamLength;
+                            }
+                            var key = GetPartitionKey(r.Spec.Partition.Type, r.Spec.Partition.Id);
+                            if (!partitionLengths.ContainsKey(key)) return (ulong)0;
+                            return partitionLengths[key];
+                        }
+                    )
+                ]);
             }
          )
         .DistinctUntilChanged();

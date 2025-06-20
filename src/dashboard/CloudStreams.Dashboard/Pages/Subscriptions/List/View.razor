@@ -41,6 +41,8 @@
                 <th class="sticky-header text-center">Subscriber</th>
                 <th class="sticky-header text-center">Subscriber Status</th>
                 <th class="sticky-header text-center">Rate Limit</th>
+                <th class="sticky-header text-center">Partition Type</th>
+                <th class="sticky-header text-center">Partition ID</th>
                 <th class="sticky-header text-center">Filter</th>
                 <th class="sticky-header text-center">Stream</th>
                 <th class="sticky-header text-center">Mutate</th>
@@ -53,10 +55,13 @@
             </tr>
         </thead>
         <tbody>
-            @if (subscriptions.Count > 0)
+            @if (Resources?.Count > 0)
             {
-                <Virtualize Context="resource" Items="@subscriptions">
-                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer">
+                <Virtualize Context="resource" Items="@Resources">
+                    @{
+                        var streamLength = subscriptionLengths.Keys.Contains(resource.GetName()) ? subscriptionLengths[resource.GetName()] : (ulong)0;
+                    }
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer @( ((resource.Status?.Stream?.AckedOffset ?? 0) < streamLength) ? "warning-row" : "")">
                         <td>@resource.Metadata.Name</td>
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.ToString("R")</td>
                         <td class="text-center">
@@ -83,6 +88,8 @@
                             </span>
                         </td>
                         <td class="text-center">@(resource.Spec.Subscriber.RateLimit.HasValue ? resource.Spec.Subscriber.RateLimit.Value.ToString() : "-")</td>
+                        <td class="text-center">@resource.Spec?.Partition?.Type</td>
+                        <td class="text-center">@resource.Spec?.Partition?.Id</td>
                         <td class="text-center">
                             @if (resource.Spec?.Filter == null)
                             {
@@ -114,7 +121,7 @@
                             }
                         </td>
                         <td class="text-center">@(resource.Spec?.Stream == null ? "-" : resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
-                        <td class="text-center">@(resource.StreamLength)</td>
+                        <td class="text-center">@(streamLength)</td>
                         <td class="text-end">
                             <div class="dropdown">
                                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
@@ -154,12 +161,12 @@
 
 @code
 {
-    EquatableList<SubscriptionListItem> subscriptions = [];
+    EquatableDictionary<string, ulong> subscriptionLengths = [];
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        Store.Subscriptions.Subscribe(value => OnStateChanged(_ => subscriptions = value), CancellationTokenSource.Token);
+        Store.SubscriptionLengths.Subscribe(value => OnStateChanged(_ => subscriptionLengths = value), CancellationTokenSource.Token);
         await base.OnInitializedAsync().ConfigureAwait(false);
     }
 
