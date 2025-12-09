@@ -30,8 +30,8 @@ public static class IWebApplicationBuilderExtensions
     /// <returns>The configured <see cref="WebApplicationBuilder"/></returns>
     public static WebApplicationBuilder UseCloudStreams(this WebApplicationBuilder app, Action<ICloudStreamsApplicationBuilder> setup)
     {
-        if (app == null) throw new ArgumentNullException(nameof(app));
-        if (setup == null) throw new ArgumentNullException(nameof(setup));
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(setup);
         var builder = new CloudStreamsApplicationBuilder(app.Configuration, app.Environment, app.Services, app.Logging);
         setup(builder);
         builder.Build();

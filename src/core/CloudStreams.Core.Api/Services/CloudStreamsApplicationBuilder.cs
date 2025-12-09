@@ -231,6 +231,10 @@ public class CloudStreamsApplicationBuilder
             builder.ParseStateValues = true;
             builder.AddOtlpExporter();
         });
+        this.Logging.Configure(options =>
+        {
+            options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId;
+        });
 
         var telemetry = this.Services.AddOpenTelemetry();
         telemetry = telemetry.WithTracing(builder =>
