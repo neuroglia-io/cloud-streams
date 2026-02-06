@@ -1,4 +1,4 @@
-// Copyright © 2024-Present The Cloud Streams Authors
+// Copyright ï¿½ 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -29,12 +29,26 @@ CloudStreamsDefaults.Telemetry.ActivitySource = new("Cloud Streams Gateway");
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables(GatewayOptions.EnvironmentVariablePrefix);
+
+// Read gateway name from environment (CLOUDSTREAMS_GATEWAY_NAME)
+var gatewayOptions = new GatewayOptions();
+builder.Configuration.Bind(gatewayOptions);
+
 builder.UseCloudStreams(builder =>
 {
     builder.UseCoreApi();
     builder.RegisterApplicationPart<EventsController>();
     builder.RegisterMediationAssembly<ConsumeEventCommand>();
-    builder.WithServiceName("cloud-streams-gateway");
+    
+    // Use pod-specific name for OpenTelemetry (e.g., gateway-mozart, gateway-content)
+    if (!string.IsNullOrWhiteSpace(gatewayOptions.Name))
+    {
+        builder.WithServiceName(gatewayOptions.Name);
+    }
+    else
+    {
+        builder.WithServiceName("cloud-streams-gateway");
+    }
 });
 
 builder.Services.Configure<GatewayOptions>(builder.Configuration);

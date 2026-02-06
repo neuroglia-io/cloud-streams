@@ -1,4 +1,4 @@
-// Copyright © 2024-Present The Cloud Streams Authors
+// Copyright ï¿½ 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,22 @@ CloudStreamsDefaults.Telemetry.ActivitySource = new("Cloud Streams Broker");
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariablePrefix);
+
+// Read broker name from environment (CLOUDSTREAMS_BROKER_NAME)
+var brokerOptions = new BrokerOptions();
+builder.Configuration.Bind(brokerOptions);
+
 builder.UseCloudStreams(builder => 
 {
-    builder.WithServiceName("cloud-streams-broker");
+    // Use pod-specific name for OpenTelemetry (e.g., broker-mozart, broker-content)
+    if (!string.IsNullOrWhiteSpace(brokerOptions.Name))
+    {
+        builder.WithServiceName(brokerOptions.Name);
+    }
+    else
+    {
+        builder.WithServiceName("cloud-streams-broker");
+    }
 });
 
 builder.Services.Configure<BrokerOptions>(builder.Configuration);
