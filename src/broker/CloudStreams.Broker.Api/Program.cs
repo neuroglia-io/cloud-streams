@@ -41,6 +41,7 @@ builder.UseCloudStreams(builder =>
 });
 
 builder.Services.Configure<BrokerOptions>(builder.Configuration);
+builder.Services.AddSingleton<IBrokerMetrics, BrokerMetrics>();
 builder.Services.AddSingleton<SubscriptionManager>();
 builder.Services.AddSingleton<IResourceController<Subscription>>(provider => provider.GetRequiredService<SubscriptionManager>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());

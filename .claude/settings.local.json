@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs:*)",
+      "Bash(ls \"C:\\\\Dev\\\\Neuroglia\\\\cloud-streams\\\\src\\\\broker\\\\CloudStreams.Broker.Application\\\\Services\\\\Interfaces\"\" 2>nul || echo \"Directory does not exist \")",
+      "Bash(find:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}
