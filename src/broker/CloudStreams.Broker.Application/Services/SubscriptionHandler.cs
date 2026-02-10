@@ -42,9 +42,10 @@ public class SubscriptionHandler
     /// <param name="expressionEvaluator">The service used to evaluate runtime expressions</param>
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
+    /// <param name="metrics">The service used to track broker metrics</param>
     /// <param name="subscription">The <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
     public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController,
-        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, Subscription subscription)
+        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.HostApplicationLifetime = hostApplicationLifetime;
@@ -56,6 +57,7 @@ public class SubscriptionHandler
         this.ExpressionEvaluator = expressionEvaluator;
         this.CloudEventValidators = cloudEventValidators;
         this.HttpClient = httpClient;
+        this.Metrics = metrics;
         this.Subscription = subscription;
         this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
         hostApplicationLifetime.ApplicationStopping.Register(async () => await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Inactive).ConfigureAwait(false));
@@ -110,6 +112,11 @@ public class SubscriptionHandler
     /// Gets the service used to perform HTTP requests
     /// </summary>
     protected HttpClient HttpClient { get; }
+
+    /// <summary>
+    /// Gets the service used to track broker metrics
+    /// </summary>
+    protected IBrokerMetrics Metrics { get; }
 
     /// <summary>
     /// Gets the <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to
@@ -438,6 +445,9 @@ public class SubscriptionHandler
             else
             {
                 response.EnsureSuccessStatusCode();
+                var streamName = this.Subscription.Spec.Partition != null ? this.Subscription.Spec.Partition.GetStreamName() : "All";
+                var subscriberUri = this.Subscription.Spec.Subscriber.Uri.ToString();
+                this.Metrics.IncrementTotalPublishedEvents(streamName, subscriberUri);
                 if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
                 if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value), this.CancellationTokenSource.Token).ConfigureAwait(false);
             }
@@ -473,6 +483,9 @@ public class SubscriptionHandler
         try
         {
             await this.SetSubscriberStateAsync(SubscriberState.Unreachable, statusReason).ConfigureAwait(false);
+            var streamName = this.Subscription.Spec.Partition != null ? this.Subscription.Spec.Partition.GetStreamName() : "All";
+            var subscriberUri = this.Subscription.Spec.Subscriber.Uri.ToString();
+            this.Metrics.IncrementTotalDeliveryFailures(streamName, subscriberUri);
             this.SubscriptionOutOfSync = true;
             var policyConfiguration = this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy;
             bool exceptionPredicate(HttpRequestException ex) => policyConfiguration.StatusCodes == null || policyConfiguration.StatusCodes.Count == 0 || (ex.StatusCode.HasValue && ex.StatusCode.HasValue && policyConfiguration.StatusCodes.Contains((int)ex.StatusCode.Value));

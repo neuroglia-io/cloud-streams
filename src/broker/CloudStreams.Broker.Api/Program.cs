@@ -1,4 +1,4 @@
-// Copyright © 2024-Present The Cloud Streams Authors
+// Copyright ï¿½ 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ builder.UseCloudStreams(builder =>
 });
 
 builder.Services.Configure<BrokerOptions>(builder.Configuration);
+builder.Services.AddSingleton<IBrokerMetrics, BrokerMetrics>();
 builder.Services.AddSingleton<SubscriptionManager>();
 builder.Services.AddSingleton<IResourceController<Subscription>>(provider => provider.GetRequiredService<SubscriptionManager>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
