@@ -169,7 +169,12 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         activity?.SetTag("subscription.name", subscription.GetName());
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (!this._lockedKeys.TryAdd(key, 0)) return;
+        while (true)
+        {
+            if (this.Subscriptions.TryGetValue(key, out _)) return;
+            if (this._lockedKeys.TryAdd(key, 0)) break;
+            await Task.Delay(50, this.CancellationToken).ConfigureAwait(false);
+        }
         try
         {
             var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);

@@ -320,7 +320,7 @@ public class SubscriptionHandler
             if (observedStream == null)
             {
                 initializationOutcome = StreamInitializationOutcomes.Failed;
-                return;
+                throw new InvalidOperationException($"Failed to initialize the cloud event stream of subscription '{this.Subscription.GetQualifiedName()}': observed stream is null while initialization token is not canceled (session: {streamInitializationSessionId}, offset: {offset}).");
             }
             if (!this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
             {
