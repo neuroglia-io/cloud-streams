@@ -34,7 +34,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 
-    readonly List<string> _lockedKeys = [];
+    readonly ConcurrentDictionary<string, byte> _lockedKeys = new();
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
@@ -137,7 +137,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         if (this.Broker == null) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (this._lockedKeys.Contains(key)) return;
+        if (this._lockedKeys.ContainsKey(key)) return;
         if (this.Options.LabelSelectors == null || this.Options.LabelSelectors.All(s => s.Selects(subscription)) == true)
         {
             if (this.Subscriptions.TryGetValue(key, out _)) return;
@@ -169,11 +169,17 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         activity?.SetTag("subscription.name", subscription.GetName());
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
-        this._lockedKeys.Add(key);
-        var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
-        await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
-        this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
-        this._lockedKeys.Remove(key);
+        if (!this._lockedKeys.TryAdd(key, 0)) return;
+        try
+        {
+            var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
+            await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
+            this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
+        }
+        finally
+        {
+            this._lockedKeys.TryRemove(key, out _);
+        }
     }
 
     /// <summary>

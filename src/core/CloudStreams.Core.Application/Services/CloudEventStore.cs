@@ -159,17 +159,26 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
             offset,
             cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+        if (subscription == null)
+        {
+            throw new InvalidOperationException($"The underlying event store returned a null observable while observing stream '{Streams.All}' at offset '{offset}'.");
+        }
         return subscription.Select(this.ReadRecord);
     }
 
     /// <inheritdoc/>
     public virtual async Task<IObservable<CloudEventRecord>> ObservePartitionAsync(PartitionReference partition, long offset = -1, CancellationToken cancellationToken = default)
     {
+        var streamName = partition.GetStreamName();
         var subscription = await this.EventStore.ObserveAsync(
-           partition.GetStreamName(),
+           streamName,
            offset,
            cancellationToken: cancellationToken)
            .ConfigureAwait(false);
+        if (subscription == null)
+        {
+            throw new InvalidOperationException($"The underlying event store returned a null observable while observing partition stream '{streamName}' at offset '{offset}'.");
+        }
         return subscription.Select(this.ReadRecord);
     }
 
