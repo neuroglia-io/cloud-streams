@@ -27,6 +27,15 @@ namespace CloudStreams.Broker.Application.Services;
 public class SubscriptionHandler
 {
 
+    static class StreamInitializationOutcomes
+    {
+        public const string Initialized = "initialized";
+        public const string Failed = "failed";
+        public const string Canceled = "canceled";
+        public const string Superseded = "superseded";
+        public const string StreamNotFoundRetry = "stream_not_found_retry";
+    }
+
     bool _disposed;
     long _streamInitializationSessionId;
 
@@ -218,7 +227,7 @@ public class SubscriptionHandler
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.InitializeStream");
         if (this.Subscription.Status?.Stream?.Fault != null) return;
         var initializationAttemptId = Guid.NewGuid().ToString("N");
-        var initializationOutcome = "failed";
+        var initializationOutcome = StreamInitializationOutcomes.Failed;
         var streamInitializationSessionId = 0L;
         CancellationTokenSource? streamInitializationCancellationTokenSource = null;
         CancellationTokenSource? previousStreamInitializationCancellationTokenSource = null;
@@ -276,7 +285,7 @@ public class SubscriptionHandler
                     }
                     catch (StreamNotFoundException) when (!streamInitializationToken.IsCancellationRequested)
                     {
-                        initializationOutcome = "stream_not_found_retry";
+                        initializationOutcome = StreamInitializationOutcomes.StreamNotFoundRetry;
                         var delay = 5000;
                         this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds... (attempt: {attemptId}, session: {sessionId})", delay, initializationAttemptId, streamInitializationSessionId);
                         await Task.Delay(delay, streamInitializationToken).ConfigureAwait(false);
@@ -296,7 +305,7 @@ public class SubscriptionHandler
                     }
                     catch (StreamNotFoundException) when (!streamInitializationToken.IsCancellationRequested)
                     {
-                        initializationOutcome = "stream_not_found_retry";
+                        initializationOutcome = StreamInitializationOutcomes.StreamNotFoundRetry;
                         var delay = 5000;
                         this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds... (attempt: {attemptId}, session: {sessionId})", delay, initializationAttemptId, streamInitializationSessionId);
                         await Task.Delay(delay, streamInitializationToken).ConfigureAwait(false);
@@ -305,17 +314,17 @@ public class SubscriptionHandler
             }
             if (streamInitializationToken.IsCancellationRequested)
             {
-                initializationOutcome = "canceled";
+                initializationOutcome = StreamInitializationOutcomes.Canceled;
                 return;
             }
             if (observedStream == null)
             {
-                initializationOutcome = "failed";
+                initializationOutcome = StreamInitializationOutcomes.Failed;
                 return;
             }
             if (!this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
             {
-                initializationOutcome = "superseded";
+                initializationOutcome = StreamInitializationOutcomes.Superseded;
                 return;
             }
             var subscriptionHandle = observedStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
@@ -325,34 +334,34 @@ public class SubscriptionHandler
             {
                 if (streamInitializationToken.IsCancellationRequested)
                 {
-                    initializationOutcome = "canceled";
+                    initializationOutcome = StreamInitializationOutcomes.Canceled;
                 }
                 else if (!this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
                 {
-                    initializationOutcome = "superseded";
+                    initializationOutcome = StreamInitializationOutcomes.Superseded;
                 }
                 else
                 {
                     this.CloudEventStream = observedStream;
                     this.SubscriptionHandle = subscriptionHandle;
                     shouldCatchUp = this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset);
-                    initializationOutcome = "initialized";
+                    initializationOutcome = StreamInitializationOutcomes.Initialized;
                     subscriptionHandle = null;
                 }
             }
             finally { this.InitLock.Release(); }
             subscriptionHandle?.Dispose();
-            if (initializationOutcome == "initialized" && shouldCatchUp) _ = this.CatchUpAsync().ConfigureAwait(false);
+            if (initializationOutcome == StreamInitializationOutcomes.Initialized && shouldCatchUp) _ = this.CatchUpAsync().ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled))
         {
-            initializationOutcome = this.IsStreamInitializationSessionCurrent(streamInitializationSessionId) ? "canceled" : "superseded";
+            initializationOutcome = this.IsStreamInitializationSessionCurrent(streamInitializationSessionId) ? StreamInitializationOutcomes.Canceled : StreamInitializationOutcomes.Superseded;
         }
         catch (Exception ex)
         {
             if (streamInitializationSessionId > 0 && !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
             {
-                initializationOutcome = "superseded";
+                initializationOutcome = StreamInitializationOutcomes.Superseded;
                 return;
             }
             await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false);
