@@ -137,6 +137,8 @@ spec:
                               type: string
                             exponent:
                               type: number
+                            maxPeriod:
+                              type: string
                           oneOf:
                             - properties:
                                 type:
@@ -179,6 +181,17 @@ spec:
                     - disabled
                 observedGeneration:
                   type: number
+                subscriber:
+                  type: object
+                  properties:
+                    state:
+                      type: string
+                      enum:
+                        - unknown
+                        - reachable
+                        - unreachable
+                    reason:
+                      type: string
                 stream:
                   type: object
                   properties:

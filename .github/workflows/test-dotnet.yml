@@ -36,10 +36,11 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore "${{ env.SOLUTION }}"
 
-      # - name: Test
-      #   run: dotnet test "${{ env.SOLUTION }}" --no-restore --verbosity normal"
+      - name: Build
+        run: dotnet build "${{ env.SOLUTION }}" --no-restore
 
-      # Test "per domain" for ease of readability
       - name: Test Core
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Core"
-      # ...
+        run: dotnet test "${{ env.SOLUTION }}" --no-build --filter "FullyQualifiedName~Cases.Core"
+
+      - name: Test Broker
+        run: dotnet test "${{ env.SOLUTION }}" --no-build --filter "FullyQualifiedName~Cases.Broker"

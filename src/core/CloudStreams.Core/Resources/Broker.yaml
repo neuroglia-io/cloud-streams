@@ -55,6 +55,8 @@ spec:
                               type: string
                             exponent:
                               type: number
+                            maxPeriod:
+                              type: string
                           oneOf:
                             - properties:
                                 type:

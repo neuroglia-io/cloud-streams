@@ -31,13 +31,17 @@ public static class RetryBackoffDurationExtensions
     {
         ArgumentNullException.ThrowIfNull(duration);
         var timeSpan = duration.Period.ToTimeSpan();
-        return duration.Type switch
+        var computed = duration.Type switch
         {
             RetryBackoffDurationType.Constant => timeSpan,
-            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent!.Value) * timeSpan,
+            //note that this raises the attempt number to the exponent, so growth is polynomial rather than exponential
+            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent ?? throw new ArgumentException($"The specified {nameof(RetryBackoffDuration)} declares type '{nameof(RetryBackoffDurationType.Exponential)}' but does not set an '{nameof(RetryBackoffDuration.Exponent)}'", nameof(duration))) * timeSpan,
             RetryBackoffDurationType.Incremental => attemptNumber * timeSpan,
             _ => throw new NotSupportedException($"The specified {nameof(RetryBackoffDurationType)} '{duration.Type}' is not supported")
         };
+        if (duration.MaxPeriod == null) return computed;
+        var maxPeriod = duration.MaxPeriod.ToTimeSpan();
+        return computed > maxPeriod ? maxPeriod : computed;
     }
 
 }

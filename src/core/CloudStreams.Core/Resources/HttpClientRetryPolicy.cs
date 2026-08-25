@@ -22,6 +22,29 @@ public record HttpClientRetryPolicy
 {
 
     /// <summary>
+    /// The number of delivery attempts performed by <see cref="Default"/>
+    /// </summary>
+    public const int DefaultMaxAttempts = 5;
+
+    /// <summary>
+    /// Gets the <see cref="HttpClientRetryPolicy"/> that applies when neither the subscription nor the broker declares one.
+    /// <para>
+    /// It is deliberately <b>bounded</b>: an unbounded default is chosen by nobody, is invisible in the resource, and never
+    /// exhausts — so it never records a fault an operator can see or alert on. Once these attempts are spent, the delivery
+    /// fails, the offset is not acknowledged, and the event is replayed when the subscription is resumed.
+    /// </para>
+    /// <para>
+    /// A new instance is returned on every access: the properties of a <see cref="RetryPolicy"/> are settable, so a shared
+    /// static instance would be mutable state observable by every subscription in the process.
+    /// </para>
+    /// </summary>
+    public static HttpClientRetryPolicy Default => new()
+    {
+        BackoffDuration = RetryBackoffDuration.Exponential(Duration.FromSeconds(3), 2, Duration.FromSeconds(60)),
+        MaxAttempts = DefaultMaxAttempts
+    };
+
+    /// <summary>
     /// Initializes a new <see cref="HttpClientRetryPolicy"/>
     /// </summary>
     public HttpClientRetryPolicy() { }

@@ -69,6 +69,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 		.github\workflows\versioning.yml = .github\workflows\versioning.yml
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-B389-037BE0695223}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudStreams.UnitTests", "tests\CloudStreams.UnitTests\CloudStreams.UnitTests.csproj", "{30E9B5E6-B2D4-48A6-B876-FCF8158733B3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -119,6 +123,10 @@ Global
 		{0050C106-97E3-40BD-8C2C-34503B5757DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0050C106-97E3-40BD-8C2C-34503B5757DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0050C106-97E3-40BD-8C2C-34503B5757DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30E9B5E6-B2D4-48A6-B876-FCF8158733B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30E9B5E6-B2D4-48A6-B876-FCF8158733B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30E9B5E6-B2D4-48A6-B876-FCF8158733B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30E9B5E6-B2D4-48A6-B876-FCF8158733B3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -141,6 +149,7 @@ Global
 		{0050C106-97E3-40BD-8C2C-34503B5757DF} = {990DE5C0-9BDB-417C-91D9-B3883C5FCA3E}
 		{63F334BA-8ECE-42CC-8948-A15E9CCFF4CE} = {9EDAC21F-3617-413B-8C54-469851036E9B}
 		{3B93410E-F6AA-4ADB-88E0-A8D3DBF6885C} = {9EDAC21F-3617-413B-8C54-469851036E9B}
+		{30E9B5E6-B2D4-48A6-B876-FCF8158733B3} = {0AB3BF05-4346-4AA6-B389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5E10D9D7-D5B5-4C0B-B7AC-AC10FF33DA3F}

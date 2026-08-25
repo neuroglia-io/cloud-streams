@@ -62,6 +62,13 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     protected CancellationToken CancellationToken => this.CancellationTokenSource.Token;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A <see cref="Core.Resources.Broker"/> created here declares <see cref="HttpClientRetryPolicy.Default"/> explicitly rather
+    /// than leaving it to the handler's fallback, so the effective policy is visible on the resource and can be edited. This is
+    /// a create-time initialiser: a broker resource that already exists keeps whatever it has, and a null
+    /// <c>spec.dispatch.retryPolicy</c> still resolves to the same bounded default in the handler - correct, but invisible to an
+    /// operator reading the resource.
+    /// </remarks>
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         Core.Resources.Broker? broker = null;
@@ -79,7 +86,8 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
                 {
                     Dispatch = new()
                     {
-                        Sequencing = CloudEventSequencingConfiguration.Default
+                        Sequencing = CloudEventSequencingConfiguration.Default,
+                        RetryPolicy = HttpClientRetryPolicy.Default
                     }
                 });
                 broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false);

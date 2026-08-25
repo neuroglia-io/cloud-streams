@@ -41,6 +41,13 @@ public record RetryBackoffDuration
     public virtual double? Exponent { get; set; }
 
     /// <summary>
+    /// Gets/sets the maximum period of time to wait between retry attempts, if any. If not set, an <see cref="RetryBackoffDurationType.Incremental"/> or
+    /// <see cref="RetryBackoffDurationType.Exponential"/> duration grows without bound, which is only defensible for a retry sequence that is itself bounded
+    /// </summary>
+    [DataMember(Order = 4, Name = "maxPeriod"), JsonPropertyName("maxPeriod"), YamlMember(Alias = "maxPeriod")]
+    public virtual Duration? MaxPeriod { get; set; }
+
+    /// <summary>
     /// Creates a new constant <see cref="RetryBackoffDuration"/>
     /// </summary>
     /// <param name="period">The constant period of time to wait between retry attempts</param>
@@ -51,15 +58,17 @@ public record RetryBackoffDuration
     /// Creates a new multiplier-based <see cref="RetryBackoffDuration"/>
     /// </summary>
     /// <param name="period">The constant period of time to wait between retry attempts</param>
+    /// <param name="maxPeriod">The maximum period of time to wait between retry attempts, if any</param>
     /// <returns>A new multiplier-based <see cref="RetryBackoffDuration"/></returns>
-    public static RetryBackoffDuration Incremental(Duration period) => new() { Type = RetryBackoffDurationType.Incremental, Period = period };
+    public static RetryBackoffDuration Incremental(Duration period, Duration? maxPeriod = null) => new() { Type = RetryBackoffDurationType.Incremental, Period = period, MaxPeriod = maxPeriod };
 
     /// <summary>
     /// Creates a new exponential <see cref="RetryBackoffDuration"/>
     /// </summary>
     /// <param name="period">The constant period of time to wait between retry attempts</param>
     /// <param name="exponent">The value representing the power to which the specified period of time is to be raised to obtain the time to wait between each retry attempts</param>
+    /// <param name="maxPeriod">The maximum period of time to wait between retry attempts, if any</param>
     /// <returns>A new exponential <see cref="RetryBackoffDuration"/></returns>
-    public static RetryBackoffDuration Exponential(Duration period, double exponent) => new() { Type = RetryBackoffDurationType.Exponential, Period = period, Exponent = exponent };
+    public static RetryBackoffDuration Exponential(Duration period, double exponent, Duration? maxPeriod = null) => new() { Type = RetryBackoffDurationType.Exponential, Period = period, Exponent = exponent, MaxPeriod = maxPeriod };
 
 }

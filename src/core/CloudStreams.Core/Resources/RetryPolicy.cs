@@ -46,7 +46,13 @@ public record RetryPolicy
     public virtual RetryBackoffDuration BackoffDuration { get; set; } = null!;
 
     /// <summary>
-    /// Gets/sets the maximum retry attempts to perform. If not set, it will retry forever
+    /// Gets/sets the maximum number of delivery attempts to perform for a single event, <b>including the first</b>.
+    /// A value of 3 therefore means 3 requests separated by 2 backoff waits.
+    /// <para>
+    /// If not set, delivery is attempted forever. Note that this applies to a policy that is explicitly declared: the policy
+    /// used when neither the subscription nor the broker declares one is <see cref="HttpClientRetryPolicy.Default"/>, which
+    /// is bounded.
+    /// </para>
     /// </summary>
     [DataMember(Order = 2, Name = "maxAttempts"), JsonPropertyName("maxAttempts"), YamlMember(Alias = "maxAttempts")]
     public virtual int? MaxAttempts { get; set; }
