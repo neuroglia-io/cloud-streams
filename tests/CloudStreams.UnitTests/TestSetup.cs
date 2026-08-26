@@ -23,7 +23,7 @@ internal static class TestSetup
 {
 
     /// <summary>
-    /// Assigns the shared <see cref="ActivitySource"/>. Production code assigns it in <c>Program.cs</c> and dereferences it unguarded, so tests must do the same or every call sites throws
+    /// Assigns the shared <see cref="ActivitySource"/>. Production code assigns it in <c>Program.cs</c> and dereferences it unguarded, so tests must do the same or every call site throws
     /// </summary>
     [ModuleInitializer]
     internal static void Initialize() => CloudStreamsDefaults.Telemetry.ActivitySource ??= new("Cloud Streams Tests", "0.0.0");

@@ -111,7 +111,7 @@ public class StubHttpMessageHandler(Func<HttpRequestMessage, int, CancellationTo
     /// </summary>
     /// <param name="Index">The zero-based index of the attempt</param>
     /// <param name="RequestUri">The uri the attempt was sent to</param>
-    /// <param name="Elapsed">The time elapsed since the handler was created, used to assert backoff</param>
+    /// <param name="Elapsed">The time elapsed since the <em>first</em> attempt, so setup time is never counted. Zero for the first attempt. Prefer <see cref="IntervalsBetweenAttempts"/> when asserting backoff</param>
     public record RecordedAttempt(int Index, Uri? RequestUri, TimeSpan Elapsed);
 
 }
