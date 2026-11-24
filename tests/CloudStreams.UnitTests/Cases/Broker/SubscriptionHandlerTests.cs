@@ -96,7 +96,9 @@ public class SubscriptionHandlerTests
         context.EventStore.Publish();
 
         // assert
-        await WaitUntilAsync(() => context.Http.AttemptCount == 1, "the published event to be dispatched");
+        // the attempt is recorded when the request is sent, while the metric and the offset are only updated once the response has been handled
+        await WaitUntilAsync(() => context.Http.AttemptCount == 1 && context.Metrics.TotalPublishedEvents == 1 && context.Patches.OffsetsWrittenTo().Contains(3ul), "the published event to be dispatched and acknowledged");
+        Assert.Equal(1, context.Http.AttemptCount);
         Assert.Equal(1, context.Metrics.TotalPublishedEvents);
         Assert.Contains(3ul, context.Patches.OffsetsWrittenTo());
     }

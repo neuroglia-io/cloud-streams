@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using Neuroglia.Serialization;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -33,10 +34,14 @@ public static class CloudEventExtensions
         if (!e.TryGetAttribute(CloudEventExtensionAttributes.Sequence, out var value) || value == null) return null;
         return value switch
         {
-            string str => ulong.Parse(str),
+            string str => ulong.TryParse(str, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : null,
             ulong num => num,
-            Decimal num => (ulong)num,
-            JsonElement jsonElem => Neuroglia.Serialization.Json.JsonSerializer.Default.Deserialize<ulong?>(jsonElem),
+            long num => num >= 0 ? (ulong)num : null,
+            int num => num >= 0 ? (ulong)num : null,
+            uint num => num,
+            decimal num => num >= 0 && num <= ulong.MaxValue && decimal.Truncate(num) == num ? (ulong)num : null,
+            JsonElement { ValueKind: JsonValueKind.Number } jsonElem => jsonElem.TryGetUInt64(out var number) ? number : null,
+            JsonElement { ValueKind: JsonValueKind.String } jsonElem => ulong.TryParse(jsonElem.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : null,
             _ => null
         };
     }

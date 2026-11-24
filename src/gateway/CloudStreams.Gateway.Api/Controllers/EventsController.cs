@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Gateway.Application.Commands.CloudEvents;
 using Microsoft.AspNetCore.Authorization;
@@ -47,7 +48,11 @@ public class EventsController(IMediator mediator)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false);
-        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
+        if (result.Status is < 200 or >= 300) return this.Process(result);
+        // the gateway always answers '204 No Content' on success, so that a subscription bridging two instances never mistakes it for a deferred acknowledgement.
+        // Whether the event has been stored or ignored by the split-horizon policy is conveyed by a header (see #179)
+        this.Response.Headers[CloudStreamsHeaders.Outcome] = result.Status == (int)HttpStatusCode.Accepted ? CloudStreamsHeaders.Outcomes.Ignored : CloudStreamsHeaders.Outcomes.Stored;
+        return this.NoContent();
     }
 
 }

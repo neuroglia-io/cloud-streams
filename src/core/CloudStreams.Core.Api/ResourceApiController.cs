@@ -100,9 +100,8 @@ public abstract class ResourceApiController<TResource>(IMediator mediator)
     {
         if (!this.TryParseLabelSelectors(labelSelector, out var labelSelectors)) return this.InvalidLabelSelector(labelSelector!);
         var response = await this.Mediator.ExecuteAsync(new WatchResourcesQuery<TResource>(null, labelSelectors), cancellationToken).ConfigureAwait(false);
-        if (response.Status >=200 && response.Status < 300) return this.Process(response);
-        var watch = response.Data!;
-        return this.Ok(watch.ToAsyncEnumerable());
+        if (response.Status is < 200 or >= 300 || response.Data == null) return this.Process(response);
+        return this.Ok(response.Data.ToAsyncEnumerable());
     }
 
     /// <summary>

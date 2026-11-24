@@ -68,8 +68,10 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         try
         {
-            var firstEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-            var lastEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+            var firstEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            var lastEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            // a stream that exists but holds no event, e.g. after it has been truncated, is described like a stream that does not exist yet
+            if (firstEvent == null || lastEvent == null) return new();
             return new()
             {
                 FirstEvent = firstEvent.Timestamp,
@@ -89,8 +91,9 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         try
         {
             var streamName = partition.GetStreamName();
-            var firstEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
-            var lastEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).Single();
+            var firstEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            var lastEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            if (firstEvent == null || lastEvent == null) throw PartitionStreamNotFound(partition.Type, streamName);
             return new()
             {
                 Id = partition.Id,
@@ -124,10 +127,8 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     public virtual async IAsyncEnumerable<CloudEventRecord> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var streamName = Streams.All;
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken); }
-        catch (StreamNotFoundException) { yield break; }
-        await foreach (var record in records) yield return this.ReadRecord(record);
+        // an empty store has no stream yet: reading it yields nothing
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, null, cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <inheritdoc/>
@@ -136,7 +137,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         switch (partition.Type)
         {
             case CloudEventPartitionType.BySource:
-                if (!Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out var source)) throw new Exception();
+                if (!Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out var source)) throw new ProblemDetailsException(new ProblemDetails(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, $"The id '{partition.Id}' of a partition of type '{EnumHelper.Stringify(CloudEventPartitionType.BySource)}' must be a valid URI"));
                 return this.ReadBySourceAsync(readDirection, source, offset, length, cancellationToken);
             case CloudEventPartitionType.BySubject:
                 return this.ReadBySubjectAsync(readDirection, partition.Id, offset, length, cancellationToken);
@@ -150,6 +151,48 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
                 throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partition.Type}' is not supported");
         }
     }
+
+    /// <summary>
+    /// Reads the records of the specified stream
+    /// </summary>
+    /// <param name="streamName">The name of the stream to read</param>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="offset">The offset starting from which to read records</param>
+    /// <param name="length">The amount of records to read</param>
+    /// <param name="notFound">A function that creates the exception to throw if the stream does not exist. If not set, reading a stream that does not exist yields nothing</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the records read from the stream</returns>
+    /// <remarks>
+    /// The underlying store reports a missing stream while the records are being enumerated, not when the read is requested, so the enumeration itself is guarded
+    /// </remarks>
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadStreamAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        IAsyncEnumerator<IEventRecord> enumerator;
+        try { enumerator = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken).GetAsyncEnumerator(cancellationToken); }
+        catch (StreamNotFoundException) when (notFound != null) { throw notFound(); }
+        catch (StreamNotFoundException) { yield break; }
+        await using (enumerator.ConfigureAwait(false))
+        {
+            while (true)
+            {
+                bool hasNext;
+                try { hasNext = await enumerator.MoveNextAsync().ConfigureAwait(false); }
+                catch (StreamNotFoundException) when (notFound != null) { throw notFound(); }
+                catch (StreamNotFoundException) { hasNext = false; }
+                if (!hasNext) yield break;
+                yield return this.ReadRecord(enumerator.Current);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="ProblemDetailsException"/> describing that the stream of the specified partition does not exist
+    /// </summary>
+    /// <param name="partitionType">The type of the partition whose stream does not exist</param>
+    /// <param name="streamName">The name of the stream that does not exist</param>
+    /// <returns>A new <see cref="ProblemDetailsException"/></returns>
+    protected static ProblemDetailsException PartitionStreamNotFound(CloudEventPartitionType partitionType, string streamName) => new(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound,
+        $"Failed to find the stream '{streamName}' that belongs to the partition of type '{EnumHelper.Stringify(partitionType)}'. Either no event has been published to the partition yet, or the related projection does not exist or has not been properly configured"));
 
     /// <inheritdoc/>
     public virtual async Task<IObservable<CloudEventRecord>> ObserveAsync(long offset = -1, CancellationToken cancellationToken = default)
@@ -260,13 +303,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         ArgumentNullException.ThrowIfNull(source);
         var streamName = Streams.ByCloudEventSource(source);
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken); }
-        catch (StreamNotFoundException)
-        {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream that belongs to the partition of type '{EnumHelper.Stringify(CloudEventPartitionType.BySource)}'. Related projection does not exist or has not been properly configured"));
-        }
-        await foreach (var record in records) { yield return this.ReadRecord(record); }
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.BySource, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>
@@ -283,13 +320,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         if (string.IsNullOrWhiteSpace(subject)) throw new ArgumentNullException(nameof(subject));
         var streamName = Streams.ByCloudEventSubject(subject);
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken); }
-        catch (StreamNotFoundException)
-        {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream that belongs to the partition of type '{EnumHelper.Stringify(CloudEventPartitionType.BySubject)}'. Related projection does not exist or has not been properly configured"));
-        }
-        await foreach (var record in records) yield return this.ReadRecord(record);
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.BySubject, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>
@@ -306,16 +337,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
         var streamName = Streams.ByCloudEventType(type);
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken: cancellationToken); }
-        catch (StreamNotFoundException)
-        {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream that belongs to the partition of type '{EnumHelper.Stringify(CloudEventPartitionType.ByType)}'. Related projection does not exist or has not been properly configured"));
-        }
-        await foreach (var record in records)
-        {
-            yield return this.ReadRecord(record);
-        }
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByType, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>
@@ -331,13 +353,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
         var streamName = Streams.ByCorrelationId(correlationId);
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken: cancellationToken); }
-        catch (StreamNotFoundException)
-        {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream that belongs to the partition of type '{EnumHelper.Stringify(CloudEventPartitionType.ByCorrelationId)}'. Related projection does not exist or has not been properly configured"));
-        }
-        await foreach (var record in records) yield return this.ReadRecord(record);
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByCorrelationId, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>
@@ -353,13 +369,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     {
         if (string.IsNullOrWhiteSpace(causationId)) throw new ArgumentNullException(nameof(causationId));
         var streamName = Streams.ByCausationId(causationId);
-        IAsyncEnumerable<IEventRecord> records;
-        try { records = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken: cancellationToken); }
-        catch (StreamNotFoundException)
-        {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream that belongs to the partition of type '{EnumHelper.Stringify(CloudEventPartitionType.ByCausationId)}'. Related projection does not exist or has not been properly configured"));
-        }
-        await foreach (var record in records) yield return this.ReadRecord(record);
+        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByCausationId, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>

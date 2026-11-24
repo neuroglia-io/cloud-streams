@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\broker\CloudStreams.Broker.Application\CloudStreams.Broker.Application.csproj" />
     <ProjectReference Include="..\..\src\core\CloudStreams.Core\CloudStreams.Core.csproj" />
     <ProjectReference Include="..\..\src\core\CloudStreams.Core.Api\CloudStreams.Core.Api.csproj" />
+    <ProjectReference Include="..\..\src\gateway\CloudStreams.Gateway.Application\CloudStreams.Gateway.Application.csproj" />
   </ItemGroup>
 
 </Project>

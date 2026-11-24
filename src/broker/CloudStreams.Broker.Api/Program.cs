@@ -15,6 +15,7 @@ using CloudStreams.Broker.Application.Configuration;
 using CloudStreams.Broker.Application.Services;
 using CloudStreams.Core;
 using CloudStreams.Core.Api;
+using CloudStreams.Core.Application.Validation;
 using CloudStreams.Core.Resources;
 using Neuroglia.Data.Infrastructure.ResourceOriented.Services;
 
@@ -27,8 +28,10 @@ builder.Configuration.AddEnvironmentVariables(BrokerOptions.EnvironmentVariableP
 var brokerOptions = new BrokerOptions();
 builder.Configuration.Bind(brokerOptions);
 
-builder.UseCloudStreams(builder => 
+builder.UseCloudStreams(builder =>
 {
+    // validates the cloud events produced by subscription mutations
+    builder.RegisterValidationAssembly<CloudEventValidator>();
     // Use pod-specific name for OpenTelemetry (e.g., broker-mozart, broker-content)
     if (!string.IsNullOrWhiteSpace(brokerOptions.Name))
     {

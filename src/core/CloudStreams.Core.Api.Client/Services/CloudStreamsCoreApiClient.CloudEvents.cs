@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using Neuroglia;
+using System.Globalization;
 using Neuroglia.Eventing.CloudEvents;
 
 namespace CloudStreams.Core.Api.Client.Services;
@@ -77,7 +78,8 @@ public partial class CloudStreamsCoreApiClient
         }
         if (options.Offset.HasValue) queryParameters.Add(nameof(options.Offset).ToCamelCase(), options.Offset.Value);
         queryParameters.Add(nameof(options.Length).ToCamelCase(), options.Length);
-        uri += $"?{string.Join('&', queryParameters.Select(p => $"{p.Key}={p.Value}"))}";
+        // values are escaped: partition ids are often URIs, which carry their own query strings (see #178)
+        uri += $"?{string.Join('&', queryParameters.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(Convert.ToString(p.Value, CultureInfo.InvariantCulture) ?? string.Empty)}"))}";
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);

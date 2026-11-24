@@ -96,8 +96,9 @@ public class SubscriptionsController(IMediator mediator)
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
     public virtual async Task<IActionResult> ExportSubscription(string name, CancellationToken cancellationToken = default)
     {
-        var stream = (await this.Mediator.ExecuteAsync(new ExportSubscriptionCommand(name), cancellationToken).ConfigureAwait(false)).Data!;
-        return this.File(stream, "application/x-yaml", $"{name}.yaml");
+        var result = await this.Mediator.ExecuteAsync(new ExportSubscriptionCommand(name), cancellationToken).ConfigureAwait(false);
+        if (result.Status is < 200 or >= 300 || result.Data == null) return this.Process(result);
+        return this.File(result.Data, "application/x-yaml", $"{name}.yaml");
     }
 
 }

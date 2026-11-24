@@ -69,7 +69,8 @@ public class ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAd
         if (admissionResult.Data == null || !admissionResult.IsSuccess()) return admissionResult;
         await eventStore.AppendAsync(admissionResult.Data, cancellationToken).ConfigureAwait(false);
         metrics.IncrementTotalIngestedEvents();
-        return new OperationResult((int)HttpStatusCode.Accepted);
+        // '202 Accepted' is reserved for events that have been accepted but ignored (see CloudEventAdmissionControl)
+        return new OperationResult((int)HttpStatusCode.Created);
     }
 
 }

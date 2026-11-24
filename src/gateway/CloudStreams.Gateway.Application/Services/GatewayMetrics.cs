@@ -36,6 +36,18 @@ public class GatewayMetrics
         this.TotalIngestedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ingested_count", "Cloud Event", "The total amount of ingested cloud events");
         this.TotalInvalidEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}invalid_count", "Cloud Event", "The total amount of invalid cloud events");
         this.TotalRejectedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}rejected_count", "Cloud Event", "The total amount of rejected cloud events");
+        this.TotalIgnoredEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ignored_count", "Cloud Event", "The total amount of cloud events ignored by the split-horizon policy");
+    }
+
+    /// <summary>
+    /// Gets the <see cref="Counter{T}"/> used to count the cloud events ignored by the split-horizon policy
+    /// </summary>
+    protected Counter<int> TotalIgnoredEvents { get; }
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalIgnoredEvents()
+    {
+        this.TotalIgnoredEvents.Add(1);
     }
 
     /// <summary>

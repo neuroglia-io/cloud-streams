@@ -15,6 +15,7 @@ using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Api.Hubs;
 using CloudStreams.Core.Application.Services;
+using CloudStreams.Core.Application.Validation;
 using CloudStreams.Gateway.Api.Hubs;
 using CloudStreams.Gateway.Api.Services;
 using CloudStreams.Gateway.Application.Commands.CloudEvents;
@@ -39,6 +40,7 @@ builder.UseCloudStreams(builder =>
     builder.UseCoreApi();
     builder.RegisterApplicationPart<EventsController>();
     builder.RegisterMediationAssembly<ConsumeEventCommand>();
+    builder.RegisterValidationAssembly<CloudEventValidator>();
     
     // Use pod-specific name for OpenTelemetry (e.g., gateway-mozart, gateway-content)
     if (!string.IsNullOrWhiteSpace(gatewayOptions.Name))

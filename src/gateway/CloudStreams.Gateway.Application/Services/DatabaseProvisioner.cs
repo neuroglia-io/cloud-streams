@@ -124,7 +124,7 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
     {
         ArgumentNullException.ThrowIfNull(resources);
         var stopwatch = new Stopwatch();
-        var directory = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "data", "seed", "gateways"));
+        var directory = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "data", "seed", "brokers"));
         if (!directory.Exists) return;
         this.Logger.LogInformation("Starting importing brokers from directory '{directory}'...", directory.FullName);
         var pattern = "*.*";

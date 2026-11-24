@@ -70,24 +70,31 @@ public class ResourceWatchEventHubController(IResourceRepository resources, IHub
         if (string.IsNullOrWhiteSpace(connectionId)) throw new ArgumentNullException(nameof(connectionId));
         ArgumentNullException.ThrowIfNull(definition);
         var subscriptionKey = this.GetSubscriptionKey(definition, @namespace);
-        if (this.Connections.TryGetValue(connectionId, out var subscriptions) && subscriptions != null && subscriptions.TryGetValue(subscriptionKey, out var watch) && watch != null) return;
-        if (subscriptions == null)
+        // the watches of a connection are registered atomically, so that concurrent calls never orphan a set of watches that would outlive the connection (see #181)
+        var subscriptions = this.Connections.GetOrAdd(connectionId, _ => new());
+        if (subscriptions.ContainsKey(subscriptionKey)) return;
+        if (subscriptions.Count >= MaxWatchesPerConnection) throw new HubException($"A connection cannot watch more than {MaxWatchesPerConnection} resource types at once");
+        var watch = await this.Resources.WatchAsync(definition.Group, definition.Version, definition.Plural, @namespace, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (!subscriptions.TryAdd(subscriptionKey, watch))
         {
-            subscriptions = new();
-            this.Connections.AddOrUpdate(connectionId, subscriptions, (key, current) =>
-            {
-                current.Values.ToList().ForEach(d => d.Dispose());
-                return subscriptions;
-            });
+            // a concurrent call has registered the same watch in the meantime
+            watch.Dispose();
+            return;
         }
-        watch = await this.Resources.WatchAsync(definition.Group, definition.Version, definition.Plural, @namespace, cancellationToken: cancellationToken).ConfigureAwait(false);
-        watch.SubscribeAsync(e => this.OnResourceWatchEventAsync(connectionId, e));
-        subscriptions.AddOrUpdate(subscriptionKey, watch, (key, current) =>
+        if (!this.Connections.TryGetValue(connectionId, out var current) || !ReferenceEquals(current, subscriptions))
         {
-            current.Dispose();
-            return watch;
-        });
+            // the connection has been released in the meantime
+            subscriptions.TryRemove(subscriptionKey, out _);
+            watch.Dispose();
+            return;
+        }
+        watch.SubscribeAsync(e => this.OnResourceWatchEventAsync(connectionId, e));
     }
+
+    /// <summary>
+    /// Gets the maximum number of resource types a single connection may watch at once
+    /// </summary>
+    public const int MaxWatchesPerConnection = 16;
 
     /// <summary>
     /// Stop watching resources of the specified type
