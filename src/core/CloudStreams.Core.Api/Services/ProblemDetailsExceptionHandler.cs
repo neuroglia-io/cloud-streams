@@ -31,7 +31,7 @@ public class ProblemDetailsExceptionHandler(ILogger<ProblemDetailsExceptionHandl
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         if (exception is not ProblemDetailsException problemDetailsException || httpContext.Response.HasStarted) return false;
-        var problem = problemDetailsException.Problem;
+        var problem = problemDetailsException.Problem.Normalize();
         var status = problem.Status is >= 400 and < 600 ? problem.Status : (int)HttpStatusCode.InternalServerError;
         if (status >= 500) logger.LogError(exception, "An error occurred while processing the request: {problem}", problem.Detail ?? problem.Title);
         else logger.LogDebug("The request was rejected with status {status}: {problem}", status, problem.Detail ?? problem.Title);

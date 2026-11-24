@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Validation;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using CloudStreams.Core.Application.Configuration;
 using CloudStreams.Core.Api.Configuration;
@@ -87,6 +88,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.Configure<ManagementApiOptions>(configuration.GetSection(ManagementApiOptions.ConfigurationSection));
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
+        this.Services.AddSingleton<IResourceValidator, CloudStreamsResourceValidator>();
         this.Services.AddCoreApiQueries();
         this.Services.AddSerialization();
         this.Services.AddJsonSerializer();

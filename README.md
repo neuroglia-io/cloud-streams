@@ -284,6 +284,18 @@ SchemaRegistry:
   CacheSize: 1000
 ```
 
+### Resource validation
+
+Subscriptions, brokers and gateways are validated when they are created, replaced or patched, and rejected with `400 Bad Request` if their spec could only fail at runtime. The response names each invalid field, e.g. *"'spec.subscriber.rateLimit' must be greater than '0'"*. The checks cover:
+
+- **Regular expressions** that don't compile: attribute filters (unless they are runtime expressions), authorization rules, and gateway event patterns.
+- **URIs:** subscriber, webhook, acknowledgement callback and service URIs must be absolute HTTP(S) URIs.
+- **Retry policies:** a backoff is required, an exponential backoff needs a positive exponent, `maxAttempts` must be positive or `-1`, and `statusCodes` must be HTTP status codes.
+- **Required fields:** a filter's expression, a mutation's expression or webhook, a partition's id, an attribute sequencing strategy's attribute name, a payload rule's maximum size, and the bounds of time-based rules (with `from` not after `to`).
+- **Numbers:** positive rate limits and split-horizon chain lengths, and stream offsets of at least `-1`.
+
+Status updates are never validated, so a broker can still record the state of a subscription that was stored before these checks existed.
+
 ### Partitions
 
 `GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`.
