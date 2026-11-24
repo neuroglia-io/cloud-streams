@@ -14,6 +14,12 @@ permissions:
   contents: write
   packages: write
 
+# Every run pushes a version commit to main, so two runs triggered by merges landing close together must never
+# version concurrently: the second push would be rejected as non-fast-forward. Runs are queued, never cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
 
   versioning:
