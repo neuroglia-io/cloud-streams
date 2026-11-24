@@ -32,12 +32,17 @@ public partial class CloudStreamsCoreApiClient
     ICloudEventStreamApi ICloudEventsApi.Stream => this;
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<string?>> ListPartitionsByTypeAsync(CloudEventPartitionType type, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionIdCollection> ListPartitionsByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
     {
-        var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}"), cancellationToken).ConfigureAwait(false);
-        var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
-        var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return this.Serializer.DeserializeAsyncEnumerable<string>(responseStream, cancellationToken: cancellationToken);
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(prefix)) query.Add($"prefix={Uri.EscapeDataString(prefix)}");
+        if (maxResults.HasValue) query.Add($"maxResults={maxResults.Value}");
+        if (!string.IsNullOrWhiteSpace(continuationToken)) query.Add($"continuationToken={Uri.EscapeDataString(continuationToken)}");
+        var uri = $"{CloudEventPartitionsApiPath}{type}{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}";
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<PartitionIdCollection>(json)!;
     }
 
     /// <inheritdoc/>

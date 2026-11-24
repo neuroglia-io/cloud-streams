@@ -25,18 +25,21 @@ public class CloudEventPartitionsController(IMediator mediator)
 {
 
     /// <summary>
-    /// Lists the ids of the cloud event partitions of the specified type
+    /// Lists, page by page, the ids of the cloud event partitions of the specified type, sorted alphabetically
     /// </summary>
     /// <param name="type">The type of the partitions to get the id of</param>
+    /// <param name="prefix">The prefix, matched case-insensitively, the ids to list must start with, if any</param>
+    /// <param name="maxResults">The maximum amount of ids to return, between 1 and 1000. Defaults to 100</param>
+    /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{type}")]
-    [ProducesResponseType(typeof(IEnumerable<string>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(PartitionIdCollection), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> ListPartitionsByType(CloudEventPartitionType type, CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> ListPartitionsByType(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type, prefix, maxResults, continuationToken), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>

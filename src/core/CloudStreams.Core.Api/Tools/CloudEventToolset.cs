@@ -71,20 +71,26 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     }
 
     /// <summary>
-    /// Lists the ids of the cloud event partitions of the specified type
+    /// Lists, page by page, the ids of the cloud event partitions of the specified type, sorted alphabetically
     /// </summary>
     /// <param name="type">The type of the partitions to list the ids of</param>
+    /// <param name="prefix">The prefix, matched case-insensitively, the ids to list must start with, if any</param>
+    /// <param name="maxResults">The maximum amount of ids to return</param>
+    /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IEnumerable{T}"/> containing the ids of the partitions of the specified type</returns>
+    /// <returns>A new <see cref="PartitionIdCollection"/> containing the requested page of partition ids</returns>
     [HttpGet("{type}")]
-    [ProducesResponseType(typeof(IEnumerable<string>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(PartitionIdCollection), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IEnumerable<string>> ListPartitionsByType(
-        [Description("The type of the partitions to list the ids of")]  CloudEventPartitionType type, 
-        CancellationToken cancellationToken)
+    public virtual async Task<PartitionIdCollection> ListPartitionsByType(
+        [Description("The type of the partitions to list the ids of")] CloudEventPartitionType type,
+        [Description("The prefix, matched case-insensitively, the ids to list must start with, if any")] string? prefix = null,
+        [Description("The maximum amount of ids to return, between 1 and 1000. Defaults to 100")] int? maxResults = null,
+        [Description("The continuation token returned with the previous page, used to get the next one, if any")] string? continuationToken = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = ProcessResult(await Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type), cancellationToken).ConfigureAwait(false));
-        return await result.Data!.ToListAsync(cancellationToken).ConfigureAwait(false);
+        var result = ProcessResult(await Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type, prefix, maxResults, continuationToken), cancellationToken).ConfigureAwait(false));
+        return result.Data!;
     }
 
     /// <summary>

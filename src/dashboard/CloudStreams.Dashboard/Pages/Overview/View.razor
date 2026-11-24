@@ -44,9 +44,13 @@
                                 <select class="form-control">
                                     @if(sourcePartitions != null)
                                     {
-                                        @foreach(var partition in this.sourcePartitions)
+                                        @foreach(var partition in this.sourcePartitions.Items)
                                         {
                                             <option>@partition</option>
+                                        }
+                                        @if (this.sourcePartitions.ContinuationToken != null)
+                                        {
+                                            <option disabled>more partitions: use the events page to search them</option>
                                         }
                                     }
                                 </select>
@@ -63,17 +67,13 @@
 @code{
 
     StreamMetadata? stream;
-    List<string>? sourcePartitions;
-    List<string>? typePartitions;
-    List<string>? subjectPartitions;
+    PartitionIdCollection? sourcePartitions;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         this.stream = await this.CloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync().ConfigureAwait(false);
-        this.sourcePartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
-        this.typePartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
-        this.subjectPartitions = (await (await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySubject).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false))!;
+        this.sourcePartitions = await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource, maxResults: PartitionIdCollection.MaxResultsLimit).ConfigureAwait(false);
     }
 
-}
+}

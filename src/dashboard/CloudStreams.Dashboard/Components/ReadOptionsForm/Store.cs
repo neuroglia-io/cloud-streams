@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Reactive.Subjects;
 using CloudStreams.Core.Api.Client.Services;
 
 namespace CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement;
@@ -140,6 +141,10 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     {
         await base.InitializeAsync();
         this.PartitionType.SubscribeAsync(this.UpdatePartitionsAsync, cancellationToken: this.CancellationTokenSource.Token);
+        this.partitionSearch
+            .Throttle(TimeSpan.FromMilliseconds(300))
+            .DistinctUntilChanged()
+            .SubscribeAsync(prefix => this.SearchPartitionsAsync(this.Get(state => state.PartitionType), prefix), cancellationToken: this.CancellationTokenSource.Token);
         this.Partition.SubscribeAsync(this.UpdateMetadataAsync, cancellationToken: this.CancellationTokenSource.Token);
     }
 
@@ -249,7 +254,32 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     /// </summary>
     /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="ReadOptionsFormState.Partitions"/> with</param>
     /// <returns></returns>
-    protected async Task UpdatePartitionsAsync(CloudEventPartitionType? partitionType)
+    protected Task UpdatePartitionsAsync(CloudEventPartitionType? partitionType) => this.SearchPartitionsAsync(partitionType, null);
+
+    /// <summary>
+    /// The maximum amount of partition ids suggested at once
+    /// </summary>
+    const int MaxSuggestedPartitions = 50;
+
+    /// <summary>
+    /// The <see cref="Subject{T}"/> used to observe what is typed in the partition id field, to suggest matching ids
+    /// </summary>
+    readonly Subject<string?> partitionSearch = new();
+
+    /// <summary>
+    /// Suggests the partition ids that start with the specified text
+    /// </summary>
+    /// <param name="text">The text typed in the partition id field</param>
+    public void SearchPartitions(string? text) => this.partitionSearch.OnNext(text);
+
+    /// <summary>
+    /// Gathers and sets the <see cref="ReadOptionsFormState.Partitions"/> of the specified type that start with the specified prefix
+    /// </summary>
+    /// <param name="partitionType">The <see cref="CloudEventPartitionType"/> to gather the <see cref="ReadOptionsFormState.Partitions"/> with</param>
+    /// <param name="prefix">The prefix the ids to suggest must start with, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>Only the first ids, sorted alphabetically, are suggested: a partition type may hold far too many ids to suggest them all</remarks>
+    protected async Task SearchPartitionsAsync(CloudEventPartitionType? partitionType, string? prefix)
     {
         if (!partitionType.HasValue)
         {
@@ -259,11 +289,18 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
             });
             return;
         }
-        var partitions = await (await cloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
-        this.Reduce(state => state with
+        try
         {
-            Partitions = partitions!
-        });
+            var page = await cloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, prefix, MaxSuggestedPartitions, null, this.CancellationTokenSource.Token).ConfigureAwait(false);
+            this.Reduce(state => state with
+            {
+                Partitions = page.Items
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Console.WriteLine(ex.ToString()); // todo: improve logging
+        }
     }
 
     /// <summary>
