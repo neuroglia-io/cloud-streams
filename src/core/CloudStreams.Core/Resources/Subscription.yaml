@@ -31,6 +31,8 @@ spec:
                         - by-source
                         - by-type
                         - by-subject
+                        - by-correlation-id
+                        - by-causation-id
                     id:
                       type: string
                   required:
@@ -72,7 +74,8 @@ spec:
                         - expression
                         - webhook
                     expression:
-                      type: string
+                      type: [ string, object ]
+                      description: A runtime expression that evaluates to the mutated cloud event, or an object whose values may be runtime expressions
                     webhook:
                       type: object
                       properties:
@@ -138,6 +141,11 @@ spec:
                               type: string
                             exponent:
                               type: number
+                              exclusiveMinimum: 0
+                              description: The exponent of an exponential backoff. Required by exponential backoffs
+                            maxDelay:
+                              type: string
+                              description: The maximum amount of time, as an ISO 8601 duration, to wait between two retry attempts. Defaults to PT1H
                           oneOf:
                             - properties:
                                 type:
@@ -188,7 +196,6 @@ spec:
                   enum:
                     - inactive
                     - active
-                    - disabled
                 observedGeneration:
                   type: number
                 stream:
@@ -219,6 +226,35 @@ spec:
                         - type
                         - title
                         - status
+                subscriber:
+                  type: object
+                  properties:
+                    state:
+                      type: string
+                      enum:
+                        - unknown
+                        - reachable
+                        - unreachable
+                    reason:
+                      type: string
+                    pendingAck:
+                      type: object
+                      description: The cloud event whose acknowledgement the subscriber has deferred, if any
+                      properties:
+                        offset:
+                          type: number
+                        token:
+                          type: string
+                        expiresAt:
+                          type: string
+                          format: date-time
+                      required:
+                        - offset
+                        - token
+                        - expiresAt
+                    lastAcknowledgedAt:
+                      type: string
+                      format: date-time
           required:
             - spec
       subresources:

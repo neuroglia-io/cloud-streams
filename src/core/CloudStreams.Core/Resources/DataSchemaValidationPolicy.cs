@@ -24,7 +24,9 @@ public record DataSchemaValidationPolicy
     /// Gets/sets a boolean indicating whether or not inbound cloud events should define a valid data schema
     /// </summary>
     [DefaultValue(true)]
-    [DataMember(Order = 1, Name = "required"), JsonPropertyName("required"), YamlMember(Alias = "required")]
+    [DataMember(Order = 1, Name = "required"), JsonPropertyName("required"), YamlMember(Alias = "required", DefaultValuesHandling = DefaultValuesHandling.Preserve)]
+    // always written: the serializers omit 'false', the default value of its type, which would then be read back as 'true'
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public virtual bool Required { get; set; } = true;
 
     /// <summary>

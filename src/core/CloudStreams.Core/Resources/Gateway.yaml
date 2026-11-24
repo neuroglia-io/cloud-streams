@@ -81,7 +81,7 @@ spec:
                 validation:
                   type: object
                   properties:
-                    skipValidation:
+                    skip:
                       type: boolean
                     validationStrategy:
                       type: string
@@ -165,7 +165,7 @@ spec:
                       validation:
                        type: object
                        properties:
-                         skipValidation:
+                         skip:
                            type: boolean
                          validationStrategy:
                            type: string
@@ -235,6 +235,43 @@ spec:
                     required:
                       - source
                       - type
+                splitHorizon:
+                  type: object
+                  description: Configures how the gateway detects and handles events that loop between gateways
+                  properties:
+                    originAttribute:
+                      type: string
+                      pattern: '^[a-z0-9]+$'
+                      description: The name of the extension attribute used to track the gateways an event went through. Defaults to 'origin'
+                    trackingMode:
+                      type: string
+                      enum:
+                        - single
+                        - chain
+                    evaluationMode:
+                      type: string
+                      enum:
+                        - last
+                        - contains
+                        - single
+                    loopAction:
+                      type: string
+                      enum:
+                        - ignore
+                        - reject
+                        - forward
+                    maxChainLength:
+                      type: integer
+                      minimum: 1
+                      description: The maximum amount of gateways an event may have gone through. Only applies when 'trackingMode' is 'chain'
+                    allowedOrigins:
+                      type: array
+                      items:
+                        type: string
+                    excludedOrigins:
+                      type: array
+                      items:
+                        type: string
                 service:
                   type: object
                   properties:
@@ -260,12 +297,18 @@ spec:
                           required: [ method, path ]
                         interval:
                           type: string
-                          pattern: '/^P([0-9]+(?:[,\.][0-9]+)?Y)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?D)?(?:T([0-9]+(?:[,\.][0-9]+)?H)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?S)?)?$/'
+                          pattern: '^P([0-9]+(?:[,\.][0-9]+)?Y)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?D)?(?:T([0-9]+(?:[,\.][0-9]+)?H)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?S)?)?$'
                       required: [ request ]
                   required:
                     - uri
             status:
               type: object
+              properties:
+                healthStatus:
+                  type: string
+                lastHealthCheckAt:
+                  type: string
+                  format: date-time
           required:
             - spec
       subresources:
