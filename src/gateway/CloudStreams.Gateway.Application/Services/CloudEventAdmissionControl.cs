@@ -105,7 +105,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <summary>
     /// Gets the service used to manage the state of the current <see cref="Core.Resources.Gateway"/>
     /// </summary>
-    protected IResourceMonitor<Core.Resources.Gateway>? Configuration { get; private set; }
+    protected IResourceMonitor<Core.Resources.Gateway>? Configuration { get; set; }
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -147,20 +147,14 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         if (!result.IsSuccess())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
+            // an ignored loop is a success without data: the publisher is told it has been ignored, and it is counted as such rather than as rejected (see #179)
+            if (result.Status == (int)HttpStatusCode.Conflict && this.Configuration?.Resource.Spec.SplitHorizon?.LoopAction == LoopAction.Ignore)
+            {
+                this._metrics.IncrementTotalIgnoredEvents();
+                return new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted);
+            }
             this._metrics.IncrementTotalRejectedEvents();
-            if (result.Status == (int)HttpStatusCode.Conflict) 
-            {
-                return (this.Configuration?.Resource.Spec.SplitHorizon?.LoopAction) switch
-                {
-                    LoopAction.Ignore => new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted),
-                    _ => result.OfType<CloudEventDescriptor>()
-                };
-            }
-            else
-            {
-                return result.OfType<CloudEventDescriptor>();
-            }
-
+            return result.OfType<CloudEventDescriptor>();
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
@@ -196,13 +190,16 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             else
             {
                 var gatewayName = this.Configuration!.Resource.GetQualifiedName();
-                reject = (!splitHorizon.MaxChainLength.HasValue || origins.Length <= splitHorizon.MaxChainLength.Value) && splitHorizon.EvaluationMode switch
+                var loopDetected = splitHorizon.EvaluationMode switch
                 {
                     HorizonEvaluationMode.Last => origins.LastOrDefault() == gatewayName,
                     HorizonEvaluationMode.Contains => origins.Contains(gatewayName),
                     HorizonEvaluationMode.Single => origins.Length == 1 && origins[0] == gatewayName,
                     _ => throw new NotSupportedException($"The specified {nameof(HorizonEvaluationMode)} '{EnumHelper.Stringify(splitHorizon.EvaluationMode)}' is not supported")
                 };
+                // an event that went through more gateways than allowed is treated as potentially looping, whether or not this gateway is part of its chain (see #173)
+                var chainTooLong = splitHorizon.TrackingMode == HorizonTrackingMode.Chain && splitHorizon.MaxChainLength.HasValue && origins.Length > splitHorizon.MaxChainLength.Value;
+                reject = loopDetected || chainTooLong;
             }
             if (reject)
             {

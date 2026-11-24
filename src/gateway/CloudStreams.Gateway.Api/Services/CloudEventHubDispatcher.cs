@@ -55,26 +55,70 @@ public class CloudEventHubDispatcher(IServiceProvider serviceProvider, ILogger<C
     protected IHubContext<CloudEventHub, ICloudEventHubClient> HubContext { get; } = hubContext;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// When the observed stream faults or completes, the dispatcher resubscribes with exponential backoff, from the position after the last dispatched event, so
+    /// that a transient failure of the event store does not stop streaming until the gateway restarts (see #182)
+    /// </remarks>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        ulong? nextOffset = null;
+        var consecutiveFailures = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
+            IDisposable? subscription = null;
             try
             {
-                (await this.EventStore
-                    .ObserveAsync(cancellationToken: stoppingToken))
-                    .Select(e => e.ToCloudEvent(default))
-                    .SubscribeAsync(e => this.HubContext.Clients.All.StreamEvent(e, stoppingToken), cancellationToken: stoppingToken);
-                break;
+                var completion = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var stream = await this.EventStore.ObserveAsync(nextOffset.HasValue ? (long)nextOffset.Value : StreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false);
+                subscription = stream.SubscribeAsync(
+                    async record =>
+                    {
+                        nextOffset = record.Sequence + 1;
+                        consecutiveFailures = 0;
+                        try { await this.HubContext.Clients.All.StreamEvent(record.ToCloudEvent(default), stoppingToken).ConfigureAwait(false); }
+                        catch (Exception ex) when (ex is not OperationCanceledException) { this.Logger.LogWarning(ex, "Failed to dispatch the cloud event at offset '{offset}' to hub clients", record.Sequence); }
+                    },
+                    onErrorAsync: ex =>
+                    {
+                        completion.TrySetResult(ex);
+                        return Task.CompletedTask;
+                    },
+                    onCompletedAsync: () =>
+                    {
+                        completion.TrySetResult(null);
+                        return Task.CompletedTask;
+                    });
+                Exception? error;
+                using (stoppingToken.Register(() => completion.TrySetCanceled(stoppingToken))) error = await completion.Task.ConfigureAwait(false);
+                if (error == null) this.Logger.LogWarning("The observed cloud event stream completed unexpectedly");
+                else this.Logger.LogWarning(error, "An error occurred while observing the cloud event stream");
             }
             catch (StreamNotFoundException)
             {
-                var delay = 5000;
-                this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds...", delay);
-                await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
+                var delay = TimeSpan.FromSeconds(5);
+                this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay}...", delay);
+                try { await Task.Delay(delay, stoppingToken).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+                continue;
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                this.Logger.LogError(ex, "Failed to observe the cloud event stream");
+            }
+            finally
+            {
+                subscription?.Dispose();
+            }
+            consecutiveFailures++;
+            var backoff = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, consecutiveFailures - 1), 60));
+            this.Logger.LogInformation("Resubscribing to the cloud event stream in {delay}...", backoff);
+            try { await Task.Delay(backoff, stoppingToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
         }
-
     }
 
 }

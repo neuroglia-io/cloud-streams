@@ -58,9 +58,11 @@ public class JsonSchemaGenerator(IJsonSerializer serializer)
         var schemaBuilder = new JsonSchemaBuilder().Type(SchemaValueType.Array);
         if (!string.IsNullOrWhiteSpace(options?.Id)) schemaBuilder = schemaBuilder.Id(options.Id);
         if (!string.IsNullOrWhiteSpace(options?.Title)) schemaBuilder = schemaBuilder.Title(options.Title);
-        var schema = await this.GenerateAsync(items.First(), null, cancellationToken);
-        if (schema == null) return null;
-        if (items.Any()) schemaBuilder = schemaBuilder.Items(schema);
+        // the items of an empty array, or of an array of nulls, cannot be described: the array itself still can (see #177)
+        var firstItem = items.FirstOrDefault();
+        if (firstItem == null) return schemaBuilder.Build();
+        var schema = await this.GenerateAsync(firstItem, null, cancellationToken);
+        if (schema != null) schemaBuilder = schemaBuilder.Items(schema);
         return schemaBuilder.Build();
     }
 

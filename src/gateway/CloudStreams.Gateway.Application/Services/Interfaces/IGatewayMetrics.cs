@@ -35,4 +35,9 @@ public interface IGatewayMetrics
     /// </summary>
     void IncrementTotalIngestedEvents();
 
+    /// <summary>
+    /// Increments the total count of cloud events ignored by the gateway's split-horizon policy
+    /// </summary>
+    void IncrementTotalIgnoredEvents();
+
 }

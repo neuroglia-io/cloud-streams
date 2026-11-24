@@ -47,4 +47,7 @@ jobs:
 
       - name: Test Broker
         run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Broker"
+
+      - name: Test Gateway
+        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Gateway"
       # ...
