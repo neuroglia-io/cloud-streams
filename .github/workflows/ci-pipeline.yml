@@ -32,7 +32,12 @@ jobs:
     uses: ./.github/workflows/build-dotnet.yml
     secrets: inherit
 
+  test:
+    needs: [versioning]
+    uses: ./.github/workflows/test-dotnet.yml
+    secrets: inherit
+
   release:
-    needs: [build]
+    needs: [build, test]
     uses: ./.github/workflows/release.yml
     secrets: inherit

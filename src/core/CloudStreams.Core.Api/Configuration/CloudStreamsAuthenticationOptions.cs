@@ -80,6 +80,12 @@ public class OidcAuthenticationOptions
     public virtual string? Authority { get; set; }
 
     /// <summary>
+    /// Gets/sets the address of the authority's discovery document, if it must be retrieved from another address than the <see cref="Authority"/>'s. Useful when the
+    /// application reaches the authority through an internal address, such as a container's name, while users reach it through a public one
+    /// </summary>
+    public virtual string? MetadataAddress { get; set; }
+
+    /// <summary>
     /// Gets/sets the id of the client the dashboard signs users in with
     /// </summary>
     public virtual string? ClientId { get; set; }

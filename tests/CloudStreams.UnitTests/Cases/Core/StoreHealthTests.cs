@@ -91,6 +91,26 @@ public class StoreHealthTests
         await manager.Received(1).CreateAsync(Projections.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task A_Projection_Created_Concurrently_By_Another_Application_Should_Not_Be_Reported_Missing()
+    {
+        // arrange: the projection does not exist when checked, creating it conflicts with another application's creation, and it exists afterwards
+        var created = false;
+        var manager = Substitute.For<IProjectionManager>();
+        manager.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(call.ArgAt<string>(0) == Projections.PartitionBySubject && created ? Substitute.For<IProjectionStatus>() : null!));
+        manager.CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>())
+            .Returns(_ => { created = true; return Task.FromException(new InvalidOperationException("Envelope callback expected Updated, received Conflict instead")); });
+        var store = Store(manager);
+
+        // act
+        var missing = await store.SetupProjectionsAsync();
+
+        // assert
+        Assert.Empty(missing);
+        Assert.Empty(store.MissingProjections);
+    }
+
     // ---------- #187 ----------
 
     [Fact]

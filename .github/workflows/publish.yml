@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Log in to the Container registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
@@ -143,9 +143,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Setup
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
       - name: Restore
@@ -153,8 +153,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          tag=$(git describe --tags --abbrev=0)
-          release_name="cloud-streams-broker-${{ matrix.target }}"
+          release_name="cloud-streams-api-${{ matrix.target }}"
           # Publish
           dotnet publish src/core/CloudStreams.Core.Api/CloudStreams.Core.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
           # Pack
@@ -192,9 +191,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Setup
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
       - name: Restore
@@ -202,7 +201,6 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          tag=$(git describe --tags --abbrev=0)
           release_name="cloud-streams-broker-${{ matrix.target }}"
           # Publish
           dotnet publish src/broker/CloudStreams.Broker.Api/CloudStreams.Broker.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"
@@ -241,9 +239,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Setup
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
       - name: Restore
@@ -251,7 +249,6 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          tag=$(git describe --tags --abbrev=0)
           release_name="cloud-streams-gateway-${{ matrix.target }}"
           # Publish
           dotnet publish src/gateway/CloudStreams.Gateway.Api/CloudStreams.Gateway.Api.csproj --runtime "${{ matrix.target }}" -c Release -o "$release_name"

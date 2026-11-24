@@ -1,24 +1,41 @@
-version: '3.4'
+# A local Cloud Streams stack: a gateway (with the dashboard, on http://localhost:8080), a broker, EventStoreDB, Redis and Grafana's OpenTelemetry stack.
+#
+#   docker compose up --build
+#
+# This stack is meant for development: EventStoreDB runs without TLS, and nothing is authenticated. To run it secured (EventStoreDB over TLS, users signing in to the
+# dashboard with Keycloak, and publishers presenting an API key), add the secure overlay:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.secure.yml up --build
 
 services:
 
   eventstore:
-    image: eventstore/eventstore:latest
+    image: eventstore/eventstore:24.10.6
     environment:
-      - EVENTSTORE_INSECURE=true
-      - EVENTSTORE_HTTP_PORT=2113
-      - EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true
-      - EVENTSTORE_RUN_PROJECTIONS=all
-      - EVENTSTORE_START_STANDARD_PROJECTIONS=true
+      EVENTSTORE_INSECURE: "true"
+      EVENTSTORE_HTTP_PORT: 2113
+      EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP: "true"
+      EVENTSTORE_RUN_PROJECTIONS: all
+      EVENTSTORE_START_STANDARD_PROJECTIONS: "true"
     ports:
-      - "1113:1113"
-      - "2113:2113"
+      - 2113:2113
+    healthcheck:
+      test: [ "CMD-SHELL", "curl --fail --silent http://localhost:2113/health/live || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   redis:
-    image: redis:latest
+    image: redis:7.4-alpine
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   otel-lgtm:
-    image: grafana/otel-lgtm
+    image: grafana/otel-lgtm:0.11.0
     ports:
       - 3000:3000
       - 4317:4317
@@ -27,7 +44,6 @@ services:
       - ./config/grafana/provisioning:/otel-lgtm/grafana/conf/provisioning
 
   gateway:
-    # image: cloud-streams/gateway
     image: ${DOCKER_REGISTRY-}gateway
     build:
       context: ../../
@@ -44,17 +60,18 @@ services:
     ports:
       - 8080:80
     depends_on:
-      - eventstore
-      - redis
-      - otel-lgtm
-     
+      eventstore:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-lgtm:
+        condition: service_started
 
   broker:
-    image: cloud-streams/broker
-    # image: ${DOCKER_REGISTRY-}broker
-    # build:
-    #   context: ../../
-    #   dockerfile: ./src/broker/CloudStreams.Broker.Api/Dockerfile
+    image: ${DOCKER_REGISTRY-}broker
+    build:
+      context: ../../
+      dockerfile: ./src/broker/CloudStreams.Broker.Api/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 80
@@ -63,6 +80,9 @@ services:
       CLOUDSTREAMS_BROKER_NAME: broker-1
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_EXPORTER_ENDPOINT}
     depends_on:
-      - eventstore
-      - redis
-      - otel-lgtm
+      eventstore:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-lgtm:
+        condition: service_started

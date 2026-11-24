@@ -1,0 +1,72 @@
+{
+  "realm": "cloud-streams",
+  "enabled": true,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      {
+        "name": "cloud-streams-user",
+        "description": "May sign in to the Cloud Streams dashboard"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "cloud-streams-dashboard",
+      "name": "Cloud Streams dashboard",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [ "http://localhost:8080/signin-oidc" ],
+      "webOrigins": [ "http://localhost:8080" ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/signout-callback-oidc"
+      },
+      "protocolMappers": [
+        {
+          "name": "cloud-streams-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "cloud-streams",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "demo",
+      "enabled": true,
+      "email": "demo@cloud-streams.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${CLOUDSTREAMS_DEMO_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [ "cloud-streams-user" ]
+    }
+  ]
+}

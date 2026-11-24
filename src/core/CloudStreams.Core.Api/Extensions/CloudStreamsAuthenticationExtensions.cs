@@ -95,6 +95,7 @@ public static class CloudStreamsAuthenticationExtensions
             authentication.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, jwt =>
             {
                 jwt.Authority = options.Oidc.Authority;
+                if (!string.IsNullOrWhiteSpace(options.Oidc.MetadataAddress)) jwt.MetadataAddress = options.Oidc.MetadataAddress;
                 jwt.Audience = options.Oidc.Audience;
                 jwt.RequireHttpsMetadata = options.Oidc.RequireHttpsMetadata;
                 jwt.MapInboundClaims = false;
@@ -146,6 +147,7 @@ public static class CloudStreamsAuthenticationExtensions
                 {
                     oidc.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
                     oidc.Authority = options.Oidc.Authority;
+                    if (!string.IsNullOrWhiteSpace(options.Oidc.MetadataAddress)) oidc.MetadataAddress = options.Oidc.MetadataAddress;
                     oidc.ClientId = options.Oidc.ClientId;
                     oidc.ClientSecret = options.Oidc.ClientSecret;
                     oidc.RequireHttpsMetadata = options.Oidc.RequireHttpsMetadata;

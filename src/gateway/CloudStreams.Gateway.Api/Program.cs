@@ -80,8 +80,9 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
-app.UseAuthorization();
+// health checks run before authorization, which would otherwise apply the policy of the dashboard's fallback page to them, and redirect probes to sign in
 app.UseCloudStreamsHealthChecks();
+app.UseAuthorization();
 app.UseSwagger(builder =>
 {
     builder.RouteTemplate = "api/{documentName}/doc/oas.{json|yaml}";
