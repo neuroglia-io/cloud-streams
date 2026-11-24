@@ -115,6 +115,8 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddSingleton<AtomicRedisDatabase>();
         this.Services.AddSingleton<RedisDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
         this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
+        // a single process at a time monitors the health of each gateway and broker (see #180)
+        this.Services.TryAddSingleton<IHealthMonitorLeaseManager, RedisHealthMonitorLeaseManager>();
         this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());

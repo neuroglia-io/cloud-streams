@@ -381,6 +381,8 @@ Gateways, brokers and the API expose two health endpoints, suited to liveness an
 
 When the dashboard requires users to sign in, anonymous callers of `/healthz` only get the overall status, without the details of each check.
 
+Gateways and brokers whose `spec.service.healthChecks` is set are probed at the configured interval, and their `status.healthStatus` updated. Every gateway replica, and the standalone API, monitors every gateway and broker, but only the process that holds the resource's lease in Redis probes it. The others take over when that process stops, or within twice the interval plus 10 seconds if it dies.
+
 `GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
 
 Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `Warning` by default. Set `Logging__LogLevel__System.Net.Http.HttpClient.OtlpTraceExporter` (or `OtlpMetricExporter`/`OtlpLogExporter`) to restore them.

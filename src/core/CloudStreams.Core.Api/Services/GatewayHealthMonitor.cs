@@ -25,8 +25,9 @@ namespace CloudStreams.Core.Api.Services;
 /// <param name="repository">The service used to manage resources</param>
 /// <param name="monitor">The service used to monitor the handled <see cref="Resources.Gateway"/></param>
 /// <param name="httpClient">The service used to perform HTTP requests</param>
-public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSerializer serializer, IResourceRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient)
-    : ServiceHealthMonitor<Gateway>(logger, serializer, repository, monitor, httpClient)
+/// <param name="leases">The service used to manage the leases that let a single process at a time monitor the health of a resource</param>
+public class GatewayHealthMonitor(ILogger<GatewayHealthMonitor> logger, IJsonSerializer serializer, IResourceRepository repository, IResourceMonitor<Gateway> monitor, HttpClient httpClient, IHealthMonitorLeaseManager leases)
+    : ServiceHealthMonitor<Gateway>(logger, serializer, repository, monitor, httpClient, leases)
 {
 
     /// <inheritdoc/>

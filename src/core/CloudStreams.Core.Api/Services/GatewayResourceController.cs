@@ -54,6 +54,17 @@ public class GatewayResourceController(IServiceProvider serviceProvider, ILogger
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Health monitors are stopped while the application is still running, so that they release their leases and another process takes over at once, rather than
+    /// once the leases expire (see #180)
+    /// </remarks>
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await Task.WhenAll(this.HealthMonitors.Values.Select(m => m.StopAsync(cancellationToken))).ConfigureAwait(false);
+        await base.StopAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
     protected override async Task OnResourceDeletedAsync(Gateway gateway, CancellationToken cancellationToken = default)
     {
         await base.OnResourceDeletedAsync(gateway, cancellationToken).ConfigureAwait(false);
