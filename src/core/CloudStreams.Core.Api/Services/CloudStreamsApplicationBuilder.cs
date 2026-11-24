@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Validation;
 using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
@@ -80,6 +81,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddCloudStreamsAuthentication(configuration);
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
+        this.Services.AddSingleton<IResourceValidator, CloudStreamsResourceValidator>();
         this.Services.AddCoreApiQueries();
         this.Services.AddSerialization();
         this.Services.AddJsonSerializer();

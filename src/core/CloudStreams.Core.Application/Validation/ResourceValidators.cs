@@ -1,0 +1,264 @@
+// Copyright © 2024-Present The Cloud Streams Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License"),
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using FluentValidation;
+using Neuroglia.Data.Infrastructure.EventSourcing;
+using Neuroglia.Data.Expressions;
+using System.Text.RegularExpressions;
+
+namespace CloudStreams.Core.Application.Validation;
+
+/// <summary>
+/// Defines rules shared by the validators of Cloud Streams resources
+/// </summary>
+/// <remarks>
+/// Resource definitions only describe the shape of resources. These rules catch the values that are well-formed but cannot work, and would otherwise only fail at
+/// runtime, faulting subscriptions or crashing handlers: regular expressions that do not compile, incomplete backoffs, non-positive rates, and so on (see #170)
+/// </remarks>
+public static class ResourceValidationRules
+{
+
+    /// <summary>
+    /// Determines whether the specified value is a valid regular expression
+    /// </summary>
+    /// <param name="pattern">The pattern to check</param>
+    /// <returns>A boolean indicating whether or not the specified value is a valid regular expression</returns>
+    public static bool IsValidRegex(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern)) return true;
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the specified value is either a runtime expression or a valid regular expression
+    /// </summary>
+    /// <param name="value">The value to check</param>
+    /// <returns>A boolean indicating whether or not the specified value is either a runtime expression or a valid regular expression</returns>
+    public static bool IsValidFilterValue(string? value) => string.IsNullOrEmpty(value) || value.IsRuntimeExpression() || IsValidRegex(value);
+
+    /// <summary>
+    /// Determines whether the specified URI is an absolute HTTP or HTTPS URI
+    /// </summary>
+    /// <param name="uri">The URI to check</param>
+    /// <returns>A boolean indicating whether or not the specified URI is an absolute HTTP or HTTPS URI</returns>
+    public static bool IsHttpUri(Uri? uri) => uri != null && uri.IsAbsoluteUri && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="HttpClientRetryPolicy"/> instances
+/// </summary>
+public class HttpClientRetryPolicyValidator
+    : AbstractValidator<HttpClientRetryPolicy>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="HttpClientRetryPolicyValidator"/>
+    /// </summary>
+    public HttpClientRetryPolicyValidator()
+    {
+        this.RuleFor(p => p.MaxAttempts).GreaterThanOrEqualTo(-1).When(p => p.MaxAttempts.HasValue).OverridePropertyName("maxAttempts").WithName("maxAttempts").WithMessage("'maxAttempts' must be positive, or -1 to retry forever");
+        this.RuleForEach(p => p.StatusCodes).InclusiveBetween(100, 599).OverridePropertyName("statusCodes").WithName("statusCodes").WithMessage("'statusCodes' must only contain HTTP status codes, between 100 and 599");
+        this.RuleFor(p => p.BackoffDuration).NotNull().OverridePropertyName("backoffDuration").WithName("backoffDuration");
+        this.RuleFor(p => p.BackoffDuration).SetValidator(new RetryBackoffDurationValidator()!).When(p => p.BackoffDuration != null).OverridePropertyName("backoffDuration").WithName("backoffDuration");
+        this.When(p => p.CircuitBreaker != null, () =>
+        {
+            this.RuleFor(p => p.CircuitBreaker!.BreakAfter).GreaterThan(0).OverridePropertyName("circuitBreaker.breakAfter").WithName("circuitBreaker.breakAfter");
+            this.RuleFor(p => p.CircuitBreaker!.BreakDuration).NotNull().OverridePropertyName("circuitBreaker.breakDuration").WithName("circuitBreaker.breakDuration");
+        });
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="RetryBackoffDuration"/>s
+/// </summary>
+public class RetryBackoffDurationValidator
+    : AbstractValidator<RetryBackoffDuration>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="RetryBackoffDurationValidator"/>
+    /// </summary>
+    public RetryBackoffDurationValidator()
+    {
+        this.RuleFor(d => d.Period).NotNull().OverridePropertyName("period").WithName("period").WithMessage("'period' is required");
+        this.RuleFor(d => d.Exponent).Must(e => e is > 0).When(d => d.Type == RetryBackoffDurationType.Exponential).OverridePropertyName("exponent").WithName("exponent").WithMessage("'exponent' is required, and must be positive, for exponential backoffs");
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="ServiceConfiguration"/>s
+/// </summary>
+public class ServiceConfigurationValidator
+    : AbstractValidator<ServiceConfiguration>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="ServiceConfigurationValidator"/>
+    /// </summary>
+    public ServiceConfigurationValidator()
+    {
+        this.RuleFor(s => s.Uri).Must(ResourceValidationRules.IsHttpUri).WithMessage("'uri' must be an absolute HTTP or HTTPS URI");
+        this.When(s => s.HealthChecks != null, () =>
+        {
+            this.RuleFor(s => s.HealthChecks!.Request).NotNull().OverridePropertyName("healthChecks.request").WithName("healthChecks.request");
+            this.RuleFor(s => s.HealthChecks!.Request.Method).NotEmpty().When(s => s.HealthChecks!.Request != null).OverridePropertyName("healthChecks.request.method").WithName("healthChecks.request.method");
+            this.RuleFor(s => s.HealthChecks!.Request.Path).NotEmpty().When(s => s.HealthChecks!.Request != null).OverridePropertyName("healthChecks.request.path").WithName("healthChecks.request.path");
+        });
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="Subscription"/>s
+/// </summary>
+public class SubscriptionValidator
+    : AbstractValidator<Subscription>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="SubscriptionValidator"/>
+    /// </summary>
+    public SubscriptionValidator()
+    {
+        this.RuleFor(s => s.Spec).NotNull();
+        this.When(s => s.Spec != null, () =>
+        {
+            this.RuleFor(s => s.Spec.Subscriber).NotNull().OverridePropertyName("spec.subscriber").WithName("spec.subscriber");
+            this.When(s => s.Spec.Subscriber != null, () =>
+            {
+                this.RuleFor(s => s.Spec.Subscriber.Uri).Must(ResourceValidationRules.IsHttpUri).OverridePropertyName("spec.subscriber.uri").WithName("spec.subscriber.uri").WithMessage("'spec.subscriber.uri' must be an absolute HTTP or HTTPS URI");
+                this.RuleFor(s => s.Spec.Subscriber.RateLimit).GreaterThan(0).When(s => s.Spec.Subscriber.RateLimit.HasValue).OverridePropertyName("spec.subscriber.rateLimit").WithName("spec.subscriber.rateLimit");
+                this.RuleFor(s => s.Spec.Subscriber.RetryPolicy!).SetValidator(new HttpClientRetryPolicyValidator()).When(s => s.Spec.Subscriber.RetryPolicy != null).OverridePropertyName("spec.subscriber.retryPolicy").WithName("spec.subscriber.retryPolicy");
+            });
+            this.When(s => s.Spec.Partition != null, () =>
+            {
+                this.RuleFor(s => s.Spec.Partition!.Id).NotEmpty().OverridePropertyName("spec.partition.id").WithName("spec.partition.id");
+                this.RuleFor(s => s.Spec.Partition!.Id).Must(id => Uri.TryCreate(id, UriKind.RelativeOrAbsolute, out _)).When(s => s.Spec.Partition!.Type == CloudEventPartitionType.BySource && !string.IsNullOrEmpty(s.Spec.Partition.Id))
+                    .OverridePropertyName("spec.partition.id").WithName("spec.partition.id").WithMessage("The id of a 'by-source' partition must be a URI");
+            });
+            this.When(s => s.Spec.Filter != null, () =>
+            {
+                this.RuleFor(s => s.Spec.Filter!.Attributes).NotEmpty().When(s => s.Spec.Filter!.Type == CloudEventFilterType.Attributes).OverridePropertyName("spec.filter.attributes").WithName("spec.filter.attributes");
+                this.RuleForEach(s => s.Spec.Filter!.Attributes).Must(a => ResourceValidationRules.IsValidFilterValue(a.Value)).OverridePropertyName("spec.filter.attributes").WithName("spec.filter.attributes")
+                    .When(s => s.Spec.Filter!.Type == CloudEventFilterType.Attributes && s.Spec.Filter.Attributes != null)
+                    .WithMessage((_, a) => $"The filter of attribute '{a.Key}' is neither a runtime expression nor a valid regular expression");
+                this.RuleFor(s => s.Spec.Filter!.Expression).NotEmpty().When(s => s.Spec.Filter!.Type == CloudEventFilterType.Expression).OverridePropertyName("spec.filter.expression").WithName("spec.filter.expression");
+            });
+            this.When(s => s.Spec.Mutation != null, () =>
+            {
+                this.RuleFor(s => s.Spec.Mutation!.Expression).NotNull().When(s => s.Spec.Mutation!.Type == CloudEventMutationType.Expression).OverridePropertyName("spec.mutation.expression").WithName("spec.mutation.expression");
+                this.RuleFor(s => s.Spec.Mutation!.Webhook).NotNull().When(s => s.Spec.Mutation!.Type == CloudEventMutationType.Webhook).OverridePropertyName("spec.mutation.webhook").WithName("spec.mutation.webhook");
+                this.RuleFor(s => s.Spec.Mutation!.Webhook!.ServiceUri).Must(ResourceValidationRules.IsHttpUri).When(s => s.Spec.Mutation!.Type == CloudEventMutationType.Webhook && s.Spec.Mutation.Webhook != null)
+                    .OverridePropertyName("spec.mutation.webhook.serviceUri").WithName("spec.mutation.webhook.serviceUri").WithMessage("'spec.mutation.webhook.serviceUri' must be an absolute HTTP or HTTPS URI");
+            });
+            this.RuleFor(s => s.Spec.Stream!.Offset).GreaterThanOrEqualTo(StreamPosition.EndOfStream).When(s => s.Spec.Stream?.Offset != null).OverridePropertyName("spec.stream.offset").WithName("spec.stream.offset");
+        });
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="Broker"/>s
+/// </summary>
+public class BrokerValidator
+    : AbstractValidator<Broker>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="BrokerValidator"/>
+    /// </summary>
+    public BrokerValidator()
+    {
+        this.RuleFor(b => b.Spec).NotNull();
+        this.When(b => b.Spec != null, () =>
+        {
+            this.RuleFor(b => b.Spec.Dispatch!.RetryPolicy!).SetValidator(new HttpClientRetryPolicyValidator()).When(b => b.Spec.Dispatch?.RetryPolicy != null).OverridePropertyName("spec.dispatch.retryPolicy").WithName("spec.dispatch.retryPolicy");
+            this.RuleFor(b => b.Spec.Dispatch!.Sequencing!.AttributeName).NotEmpty().When(b => b.Spec.Dispatch?.Sequencing?.Strategy == CloudEventSequencingStrategy.Attribute)
+                .OverridePropertyName("spec.dispatch.sequencing.attributeName").WithName("spec.dispatch.sequencing.attributeName");
+            this.RuleFor(b => b.Spec.Dispatch!.Ack!.CallbackUri).Must(ResourceValidationRules.IsHttpUri).When(b => b.Spec.Dispatch?.Ack?.CallbackUri != null)
+                .OverridePropertyName("spec.dispatch.ack.callbackUri").WithName("spec.dispatch.ack.callbackUri").WithMessage("'spec.dispatch.ack.callbackUri' must be an absolute HTTP or HTTPS URI");
+            this.RuleFor(b => b.Spec.Service!).SetValidator(new ServiceConfigurationValidator()).When(b => b.Spec.Service != null).OverridePropertyName("spec.service").WithName("spec.service");
+        });
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="Gateway"/>s
+/// </summary>
+public class GatewayValidator
+    : AbstractValidator<Gateway>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="GatewayValidator"/>
+    /// </summary>
+    public GatewayValidator()
+    {
+        this.RuleFor(g => g.Spec).NotNull();
+        this.When(g => g.Spec != null, () =>
+        {
+            this.RuleForEach(g => g.Spec.Authorization!.Rules).SetValidator(new CloudEventAuthorizationRuleValidator()).When(g => g.Spec.Authorization?.Rules != null).OverridePropertyName("spec.authorization.rules").WithName("spec.authorization.rules");
+            this.RuleForEach(g => g.Spec.Sources).ChildRules(source =>
+            {
+                source.RuleFor(s => s.Uri).NotNull().OverridePropertyName("uri").WithName("uri");
+                source.RuleForEach(s => s.Authorization!.Rules).SetValidator(new CloudEventAuthorizationRuleValidator()).When(s => s.Authorization?.Rules != null);
+            }).When(g => g.Spec.Sources != null).OverridePropertyName("spec.sources").WithName("spec.sources");
+            this.RuleForEach(g => g.Spec.Events).ChildRules(events =>
+            {
+                events.RuleFor(e => e.Source).Must(p => p?.Trim() == "*" || ResourceValidationRules.IsValidRegex(p)).OverridePropertyName("source").WithName("source").WithMessage("'source' must be '*' or a valid regular expression");
+                events.RuleFor(e => e.Type).Must(p => p?.Trim() == "*" || ResourceValidationRules.IsValidRegex(p)).OverridePropertyName("type").WithName("type").WithMessage("'type' must be '*' or a valid regular expression");
+            }).When(g => g.Spec.Events != null).OverridePropertyName("spec.events").WithName("spec.events");
+            this.When(g => g.Spec.SplitHorizon != null, () =>
+            {
+                this.RuleFor(g => g.Spec.SplitHorizon!.MaxChainLength).GreaterThan(0u).When(g => g.Spec.SplitHorizon!.MaxChainLength.HasValue).OverridePropertyName("spec.splitHorizon.maxChainLength").WithName("spec.splitHorizon.maxChainLength");
+                this.RuleFor(g => g.Spec.SplitHorizon!.OriginAttribute).Matches("^[a-z0-9]+$").OverridePropertyName("spec.splitHorizon.originAttribute").WithName("spec.splitHorizon.originAttribute")
+                    .WithMessage("'spec.splitHorizon.originAttribute' must only contain lower-case letters and digits, as required of extension attribute names");
+            });
+            this.RuleFor(g => g.Spec.Service!).SetValidator(new ServiceConfigurationValidator()).When(g => g.Spec.Service != null).OverridePropertyName("spec.service").WithName("spec.service");
+        });
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="CloudEventAuthorizationRule"/>s
+/// </summary>
+public class CloudEventAuthorizationRuleValidator
+    : AbstractValidator<CloudEventAuthorizationRule>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="CloudEventAuthorizationRuleValidator"/>
+    /// </summary>
+    public CloudEventAuthorizationRuleValidator()
+    {
+        this.RuleFor(r => r.AttributeName).NotEmpty().When(r => r.Type == CloudEventAuthorizationRuleType.Attribute).OverridePropertyName("attributeName").WithName("attributeName").WithMessage("'attributeName' is required by attribute rules");
+        this.RuleFor(r => r.AttributeValue).Must(ResourceValidationRules.IsValidRegex).When(r => r.Type == CloudEventAuthorizationRuleType.Attribute).OverridePropertyName("attributeValue").WithName("attributeValue").WithMessage("'attributeValue' must be a valid regular expression");
+        this.RuleFor(r => r.MaxSize).Must(m => m is > 0).When(r => r.Type == CloudEventAuthorizationRuleType.Payload).OverridePropertyName("maxSize").WithName("maxSize").WithMessage("'maxSize' is required, and must be positive, by payload rules");
+        this.RuleFor(r => r).Must(r => r.From == null || r.To == null || r.From <= r.To).When(r => r.Type == CloudEventAuthorizationRuleType.Temporary).OverridePropertyName("to").WithName("to").WithMessage("'to' must not precede 'from'");
+        this.RuleFor(r => r).Must(r => r.From != null || r.To != null).When(r => r.Type is CloudEventAuthorizationRuleType.Temporary or CloudEventAuthorizationRuleType.TimeOfDay).OverridePropertyName("from").WithName("from").WithMessage("'from', 'to' or both are required by time-based rules");
+    }
+
+}

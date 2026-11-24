@@ -33,7 +33,7 @@ public class ProblemDetailsExceptionHandlingMiddleware<TRequest, TResult>
         }
         catch (ProblemDetailsException ex)
         {
-            if (!TryCreateErrorResponse(ex.Problem, out var response)) throw;
+            if (!TryCreateErrorResponse(ex.Problem.Normalize(), out var response)) throw;
             return response;
         }
     }
