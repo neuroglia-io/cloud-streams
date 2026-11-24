@@ -193,7 +193,7 @@ Both return `204` on success, `404` if the subscription does not exist, and `409
 
 An event that isn't resolved within `spec.subscriber.ack.timeout` (broker default `spec.dispatch.ack.timeout`, otherwise `PT5M`) is redelivered. The exception is a subscriber that has never called back: it most likely uses `202` to mean "done", so the subscription is faulted with a message saying to return `200 OK` instead. A pending acknowledgement is stored in `status.subscriber.pendingAck`, so it survives a broker restart. Only one event is ever in flight, so ordering is preserved.
 
-The gateway's own ingestion endpoint (`POST /api/events/pub`) now responds `204 No Content`, since events are persisted by the time it responds. This keeps a subscription that bridges two Cloud Streams instances from suspending on every event.
+The gateway's own ingestion endpoint (`POST /api/events/pub`) now responds `200 OK`, since events are persisted by the time it responds. This keeps a subscription that bridges two Cloud Streams instances from suspending on every event.
 
 ### Authentication
 
