@@ -284,14 +284,14 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
                 .Do(e => Logger.LogTrace("ResourceWatch received event '{type}' for '{name}'", e.Type.ToString(), e.Resource.GetName()))
                 .SubscribeAsync(
                     onNextAsync: OnResourceWatchEventAsync,
-                    onErrorAsync: ex => Task.Run(() => Logger.LogError("ResourceWatch exception: {exception}", ex.ToString())),
+                    onErrorAsync: ex => Task.Run(() => Logger.LogError(ex, "The resource watch failed")),
                     onCompletedAsync: () => Task.CompletedTask,
                     cancellationToken: CancellationTokenSource.Token
                 );
         }
         catch (Exception ex)
         {
-            Logger.LogError("Unable to watch resources, real-time updates are disabled: {exception}", ex.ToString());
+            Logger.LogError(ex, "Unable to watch resources, real-time updates are disabled");
         }
         // whatever changed while the connection was down is fetched again once it is re-established
         ResourceEventHub.Reconnected.SubscribeAsync(
@@ -302,7 +302,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         );
         Filter.Throttle(TimeSpan.FromMilliseconds(10)).SubscribeAsync(
             onNextAsync: ListResourcesAsync,
-            onErrorAsync: ex => Task.Run(() => Logger.LogError("Resource filter exception: {exception}", ex.ToString())),
+            onErrorAsync: ex => Task.Run(() => Logger.LogError(ex, "The resource filter failed")),
             onCompletedAsync: () => Task.CompletedTask,
             cancellationToken: CancellationTokenSource.Token
         );
@@ -392,7 +392,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         }
         catch (Exception ex)
         {
-            Logger.LogError("Unable to list resources: {exception}", ex.ToString());
+            Logger.LogError(ex, "Unable to list resources");
             Reduce(state => state with
             {
                 Loading = false
@@ -511,7 +511,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     async Task ReleaseWatchAsync(Core.Api.Client.Services.ResourceWatch<TResource> watch)
     {
         try { await watch.DisposeAsync().ConfigureAwait(false); }
-        catch (Exception ex) { Logger.LogWarning("Failed to stop watching resources: {exception}", ex.ToString()); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to stop watching resources"); }
     }
 
 }

@@ -131,7 +131,7 @@ public class Store
         }
         catch(Exception ex)
         {
-            this.Logger.LogError("An error occurred while dispatching an action of type '{actionType}': {ex}", action.GetType().Name, ex.ToString());
+            this.Logger.LogError(ex, "An error occurred while dispatching an action of type '{actionType}'", action.GetType().Name);
             throw;
         }
     }
