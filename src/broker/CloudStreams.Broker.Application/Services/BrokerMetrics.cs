@@ -34,6 +34,8 @@ public class BrokerMetrics
     {
         this.TotalPublishedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}published_count", "Cloud Event", "The total amount of cloud events published (dispatched) to subscribers");
         this.TotalDeliveryFailures = this.Meter.CreateCounter<int>($"{MetricsPrefix}delivery_failures_count", "Failure", "The total amount of delivery failures");
+        this.PendingAcknowledgements = this.Meter.CreateUpDownCounter<int>($"{MetricsPrefix}pending_acks", "Cloud Event", "The amount of cloud events whose acknowledgement has been deferred by the subscriber and is pending");
+        this.TotalAcknowledgementTimeouts = this.Meter.CreateCounter<int>($"{MetricsPrefix}ack_timeouts_count", "Timeout", "The total amount of deferred acknowledgements that expired before the subscriber called back");
     }
 
     /// <summary>
@@ -51,6 +53,16 @@ public class BrokerMetrics
     /// </summary>
     protected Counter<int> TotalDeliveryFailures { get; }
 
+    /// <summary>
+    /// Gets the gauge used to track the amount of cloud events whose acknowledgement is pending
+    /// </summary>
+    protected UpDownCounter<int> PendingAcknowledgements { get; }
+
+    /// <summary>
+    /// Gets the counter used to track the total amount of deferred acknowledgements that have expired
+    /// </summary>
+    protected Counter<int> TotalAcknowledgementTimeouts { get; }
+
     /// <inheritdoc/>
     public virtual void IncrementTotalPublishedEvents(string? stream, string? subscriber)
     {
@@ -61,6 +73,18 @@ public class BrokerMetrics
     public virtual void IncrementTotalDeliveryFailures(string? stream, string? subscriber)
     {
         this.TotalDeliveryFailures.Add(1, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
+    }
+
+    /// <inheritdoc/>
+    public virtual void AddPendingAcknowledgements(string? stream, string? subscriber, int delta)
+    {
+        this.PendingAcknowledgements.Add(delta, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
+    }
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalAcknowledgementTimeouts(string? stream, string? subscriber)
+    {
+        this.TotalAcknowledgementTimeouts.Add(1, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
     }
 
     /// <summary>

@@ -13,6 +13,7 @@
 
 using CloudStreams.Core.Application.Commands.Subscriptions;
 using CloudStreams.Core.Application.Queries.Subscriptions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CloudStreams.Core.Api.Controllers;
 
@@ -40,6 +41,48 @@ public class SubscriptionsController(IMediator mediator)
     {
         if (!this.TryParseLabelSelectors(labelSelector, out var labelSelectors)) return this.InvalidLabelSelector(labelSelector!);
         return this.Process(await this.Mediator.ExecuteAsync(new GetSubscriptionsHealthQuery(@namespace, labelSelectors), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Acknowledges a cloud event whose acknowledgement the subscriber has deferred by responding '202 Accepted'. Delivery then resumes after it
+    /// </summary>
+    /// <param name="name">The name of the subscription the cloud event has been delivered for</param>
+    /// <param name="request">An object that describes the acknowledgement</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    /// <remarks>The acknowledgement token is the authorization: the endpoint is therefore anonymous, regardless of how the dashboard is secured</remarks>
+    [HttpPost("{name}/ack")]
+    [AllowAnonymous]
+    [ProducesResponseType((int)HttpStatusCode.NoContent)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
+    public virtual async Task<IActionResult> AcknowledgeEvent(string name, [FromBody] AcknowledgementRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, true), cancellationToken).ConfigureAwait(false);
+        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
+    }
+
+    /// <summary>
+    /// Negatively acknowledges a cloud event whose acknowledgement the subscriber has deferred by responding '202 Accepted'. The cloud event is then redelivered
+    /// </summary>
+    /// <param name="name">The name of the subscription the cloud event has been delivered for</param>
+    /// <param name="request">An object that describes the negative acknowledgement</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    /// <remarks>The acknowledgement token is the authorization: the endpoint is therefore anonymous, regardless of how the dashboard is secured</remarks>
+    [HttpPost("{name}/nack")]
+    [AllowAnonymous]
+    [ProducesResponseType((int)HttpStatusCode.NoContent)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
+    public virtual async Task<IActionResult> NegativelyAcknowledgeEvent(string name, [FromBody] NegativeAcknowledgementRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, false, request.Reason), cancellationToken).ConfigureAwait(false);
+        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
     }
 
     /// <summary>

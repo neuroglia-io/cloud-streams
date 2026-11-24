@@ -96,6 +96,8 @@ The custom Cloud Streams counters declare non-UCUM units (`Cloud Event`, `Failur
 | `cloud_streams_gateway_events_invalid_count` | Counter | `Cloud Event` | - | Gateway | Cloud events refused by the gateway validation. |
 | `cloud_streams_broker_events_published_count` | Counter | `Cloud Event` | `stream`, `subscriber` | Broker | Cloud events successfully dispatched to a subscriber. |
 | `cloud_streams_broker_delivery_failures_count` | Counter | `Failure` | `stream`, `subscriber` | Broker | Failed delivery attempts (non-success status code, transport error or timeout), each retry included; each one moves the subscription's subscriber to the `unreachable` state and triggers the retry policy. |
+| `cloud_streams_broker_pending_acks` | UpDownCounter | `Cloud Event` | `stream`, `subscriber` | Broker | Events whose acknowledgement the subscriber has deferred (`202 Accepted`) and not yet resolved. At most one per subscription. |
+| `cloud_streams_broker_ack_timeouts_count` | Counter | `Timeout` | `stream`, `subscriber` | Broker | Deferred acknowledgements that expired before the subscriber called back. |
 
 `stream` is the name of the source stream of the subscription's partition, or `All` when the subscription is not partitioned; `subscriber` is the subscriber URI.
 

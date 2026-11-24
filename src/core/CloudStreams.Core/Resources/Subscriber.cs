@@ -46,4 +46,10 @@ public record Subscriber
     [DataMember(Order = 4, Name = "timeout"), JsonPropertyName("timeout"), YamlMember(Alias = "timeout")]
     public virtual Duration? Timeout { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure the deferred acknowledgement of the cloud events delivered to the subscriber. If not set, will fallback to the broker's default configuration
+    /// </summary>
+    [DataMember(Order = 5, Name = "ack"), JsonPropertyName("ack"), YamlMember(Alias = "ack")]
+    public virtual SubscriberAcknowledgementConfiguration? Ack { get; set; }
+
 }

@@ -168,6 +168,13 @@ spec:
                     timeout:
                       type: string
                       description: The maximum amount of time, as an ISO 8601 duration, to wait for the subscriber to respond to a single delivery attempt. Defaults to the broker dispatch timeout
+                    ack:
+                      type: object
+                      description: Configures the deferred acknowledgement of the cloud events delivered to the subscriber, which defers an acknowledgement by responding 202 Accepted
+                      properties:
+                        timeout:
+                          type: string
+                          description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to the broker setting, or PT5M
                   required:
                     - uri
               required:
