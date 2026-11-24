@@ -91,7 +91,12 @@ public sealed class InMemoryCloudEventStore
     public Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default) => Task.FromResult(this.Publish());
 
     /// <inheritdoc/>
-    public IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default) => AsyncEnumerable.Empty<string>();
+    public IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default) => this.PartitionIds.ToAsyncEnumerable();
+
+    /// <summary>
+    /// Gets/sets the partition ids returned by <see cref="ListPartitionIdsAsync"/>, in the order the projection would hold them
+    /// </summary>
+    public List<string> PartitionIds { get; set; } = [];
 
     /// <inheritdoc/>
     public Task TruncateAsync(ulong beforeVersion, CancellationToken cancellationToken = default)

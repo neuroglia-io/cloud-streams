@@ -14,7 +14,7 @@
         <label for="@(id + "partitionType")">Partition Type</label>
     </div>
     <div class="form-floating">
-        <input id="@(id + "partitionId")" type="text" class="form-control" value="@partitionId" list="@(id + "partitions")" autocomplete="on" @onchange="e => Store.SetPartitionId((string?)e.Value)" />
+        <input id="@(id + "partitionId")" type="text" class="form-control" value="@partitionId" list="@(id + "partitions")" autocomplete="off" @oninput="e => Store.SearchPartitions((string?)e.Value)" @onchange="e => Store.SetPartitionId((string?)e.Value)" />
         <datalist id="@(id + "partitions")">
             @if (partitions != null)
             {
