@@ -29,8 +29,9 @@ public sealed class BrokerTestContext
 {
 
     BrokerTestContext(TestSubscriptionHandler handler, StubHttpMessageHandler http, HttpClient httpClient, StatusPatchRecorder patches, RecordingBrokerMetrics metrics,
-        InMemoryCloudEventStore eventStore, Subject<IResourceWatchEvent<Subscription>> subscriptionEvents, Subscription subscription, Core.Resources.Broker broker)
+        InMemoryCloudEventStore eventStore, Subject<IResourceWatchEvent<Subscription>> subscriptionEvents, Subscription subscription, Core.Resources.Broker broker, IResourceRepository repository)
     {
+        this.Repository = repository;
         this.Handler = handler;
         this.Http = http;
         this.HttpClient = httpClient;
@@ -61,6 +62,11 @@ public sealed class BrokerTestContext
     /// Gets the status patches the handler has applied
     /// </summary>
     public StatusPatchRecorder Patches { get; }
+
+    /// <summary>
+    /// Gets the substitute of the <see cref="IResourceRepository"/> handed to the handler, which a test may configure further, for example to simulate concurrent writers
+    /// </summary>
+    public IResourceRepository Repository { get; }
 
     /// <summary>
     /// Gets the recorded broker metrics
@@ -147,7 +153,7 @@ public sealed class BrokerTestContext
 
         var handler = new TestSubscriptionHandler(NullLoggerFactory.Instance, Substitute.For<IHostApplicationLifetime>(), serializer ?? Substitute.For<IJsonSerializer>(), eventStore, repository,
             subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, Options.Create(options), subscription);
-        var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker);
+        var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker, repository);
         try
         {
             await handler.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
@@ -186,7 +192,7 @@ public sealed class BrokerTestContext
             .Returns(call =>
             {
                 var patch = call.Arg<Patch>()!;
-                patches.Record(patch);
+                patches.Record(patch, call.ArgAt<string?>(7));
                 var failure = failPatch?.Invoke(patch);
                 return failure == null ? Task.FromResult<IResource>(subscription) : Task.FromException<IResource>(failure);
             });
@@ -297,5 +303,15 @@ public class TestSubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicat
     public Task CatchUpMissedEventsAsync() => this.CatchUpAsync();
 
     public Task ReportErrorAsync(Exception ex) => this.OnSubscriptionErrorAsync(ex);
+
+    /// <summary>
+    /// Reports the specified subscriber state in the subscription's status
+    /// </summary>
+    public Task ReportSubscriberStateAsync(SubscriberState state, string? reason = null) => this.SetSubscriberStateAsync(state, reason);
+
+    /// <summary>
+    /// Commits the specified offset in the subscription's status
+    /// </summary>
+    public Task CommitAsync(ulong? offset) => this.CommitOffsetAsync(offset);
 
 }

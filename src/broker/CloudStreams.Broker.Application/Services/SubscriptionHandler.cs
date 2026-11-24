@@ -54,6 +54,11 @@ public class SubscriptionHandler
     const int MaxFaultReportingAttempts = 5;
 
     /// <summary>
+    /// Gets the maximum number of attempts at patching the subscription's status when other writers keep changing it concurrently
+    /// </summary>
+    const int MaxStatusPatchAttempts = 5;
+
+    /// <summary>
     /// Gets the media types a mutation webhook may respond with
     /// </summary>
     static readonly string[] MutationWebhookMediaTypes = [MediaTypeNames.Application.Json, CloudEventContentType.Json];
@@ -72,6 +77,7 @@ public class SubscriptionHandler
     ulong? _nextOffset;
     volatile bool _disposed;
     long _streamInitializationSessionId;
+    volatile Subscription _latestSubscription;
 
     /// <summary>
     /// Initializes a new <see cref="SubscriptionHandler"/>
@@ -107,6 +113,7 @@ public class SubscriptionHandler
         this.Metrics = metrics;
         this.Options = options.Value;
         this.Subscription = subscription;
+        this._latestSubscription = subscription;
         this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
         this._applicationStoppingRegistration = hostApplicationLifetime.ApplicationStopping.Register(this.OnApplicationStopping);
     }
@@ -280,6 +287,7 @@ public class SubscriptionHandler
             .Select(subscription =>
             {
                 this.Subscription = subscription;
+                this._latestSubscription = subscription;
                 return subscription;
             })
             .Publish(shared => Observable.Merge(
@@ -436,7 +444,7 @@ public class SubscriptionHandler
             // a handler that starts behind the end of the stream catches up: it is marked out of sync before subscribing, otherwise the records replayed by the
             // subscription before the flag is set would be delivered both live and by the catch-up
             if (offset != StreamPosition.EndOfStream && (ulong)offset < (this.StreamOffset ?? 0)) lock (this._syncLock) this.SubscriptionOutOfSync = true;
-            // every record is observed, so that the length of the stream is accurate: records are filtered once, when dispatched (see #161)
+            // every record is observed, so that the length of the stream is accurate: records are filtered once, when dispatched (see #162)
             var subscriptionHandle = observedStream.ToAsyncEnumerable().ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
             var shouldCatchUp = false;
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -991,7 +999,7 @@ public class SubscriptionHandler
                 lock (this._syncLock) nextOffset = this._nextOffset;
                 currentOffset = (long)(nextOffset ?? this.StreamOffset ?? 0);
             }
-            // records are read a page at a time, and the next page is read while the current one is being delivered (see #161)
+            // records are read a page at a time, and the next page is read while the current one is being delivered (see #162)
             var pageSize = this.Options.CatchUp.GetPageSize();
             using var prefetchCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(streamInitializationToken);
             Task<List<CloudEventRecord>>? prefetch = null;
@@ -1121,12 +1129,12 @@ public class SubscriptionHandler
             this.BeginAwaitingAcknowledgement(token, offset, observed: false);
             this.SubscriptionOutOfSync = true;
         }
-        var resource = this.Subscription.Clone()!;
-        resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-        resource.Status.Subscriber ??= new();
-        resource.Status.Subscriber.PendingAck = new() { Offset = offset, Token = token, ExpiresAt = expiresAt };
-        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        await this.PatchStatusAsync(resource =>
+        {
+            resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+            resource.Status.Subscriber ??= new();
+            resource.Status.Subscriber.PendingAck = new() { Offset = offset, Token = token, ExpiresAt = expiresAt };
+        }).ConfigureAwait(false);
         this.ScheduleAcknowledgementTimeout(token, expiresAt);
     }
 
@@ -1309,7 +1317,9 @@ public class SubscriptionHandler
             PatchOperation.Remove(JsonPointer.Parse("/status/subscriber/pendingAck"))
         };
         if (reason != null) operations.Add(PatchOperation.Add(JsonPointer.Parse("/status/subscriber/reason"), JsonValue.Create(reason)));
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), this.Subscription.GetName(), this.Subscription.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        // the 'test' operation is checked atomically with the write, and is the only guard needed: no resource version is expected
+        var patched = await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), this.Subscription.GetName(), this.Subscription.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        if (patched != null) this._latestSubscription = patched;
         if (this.Subscription.Status?.Subscriber != null) this.Subscription.Status.Subscriber.PendingAck = null;
     }
 
@@ -1323,20 +1333,16 @@ public class SubscriptionHandler
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.CommitOffset");
         activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
         activity?.SetTag("offset", offset);
-        var resource = this.Subscription.Clone()!;
-        if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-        if (resource.Status.Stream == null) resource.Status.Stream = new();
-        resource.Status.Stream.AckedOffset = offset;
-        resource.Status.ObservedGeneration = this.Subscription.Metadata.Generation;
+        var generation = this.Subscription.Metadata.Generation;
         this.CommittedOffset = offset;
-        this.CommittedOffsetGeneration = this.Subscription.Metadata.Generation;
-        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        if (!patch.Operations.Any()) return;
-        try
+        this.CommittedOffsetGeneration = generation;
+        await this.PatchStatusAsync(resource =>
         {
-            await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
-        }
-        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotModified) { }
+            resource.Status ??= new() { ObservedGeneration = generation };
+            resource.Status.Stream ??= new();
+            resource.Status.Stream.AckedOffset = offset;
+            resource.Status.ObservedGeneration = generation;
+        }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1346,7 +1352,7 @@ public class SubscriptionHandler
     /// <returns>A new awaitable <see cref="Task"/></returns>
     /// <remarks>
     /// A batched offset is only written once enough deliveries have been made, or once the configured interval has elapsed. The handler resumes from it in the
-    /// meantime, so batching only affects what another broker, or this one after a restart, resumes from (see #161)
+    /// meantime, so batching only affects what another broker, or this one after a restart, resumes from (see #162)
     /// </remarks>
     protected virtual async Task CommitDeliveredOffsetAsync(ulong offset)
     {
@@ -1480,6 +1486,48 @@ public class SubscriptionHandler
     }
 
     /// <summary>
+    /// Patches the subscription's status with the specified change
+    /// </summary>
+    /// <param name="update">An action that applies the change to a copy of the subscription</param>
+    /// <returns>A boolean indicating whether or not the status has been patched, which it is not if the change made no difference</returns>
+    /// <remarks>
+    /// The patch is computed against the latest known version of the subscription, which is the result of the last patch or the last update reported by the
+    /// resource watch, and only applies if the subscription is still at that version. Other writers, such as the gateway's acknowledgement endpoint, the dashboard
+    /// or another broker replica, patch the same status: when one of them has changed it in the meantime, the subscription is read again and the change is applied
+    /// to its current state, so that no update overwrites another (see #161)
+    /// </remarks>
+    /// <exception cref="ProblemDetailsException">The status could not be patched, for example because it kept changing concurrently</exception>
+    protected virtual async Task<bool> PatchStatusAsync(Action<Subscription> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        var original = this._latestSubscription;
+        for (var attempt = 1; ; attempt++)
+        {
+            var resource = original.Clone()!;
+            update(resource);
+            var patch = JsonPatchUtility.CreateJsonPatchFromDiff(original, resource);
+            if (!patch.Operations.Any()) return false;
+            try
+            {
+                var patched = await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), original.GetName(), original.GetNamespace(), original.Metadata.ResourceVersion, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                if (patched != null) this._latestSubscription = patched;
+                return true;
+            }
+            catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotModified)
+            {
+                return false;
+            }
+            catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict && attempt < MaxStatusPatchAttempts)
+            {
+                this.Logger.LogDebug("The status of subscription '{subscription}' has changed concurrently (attempt {attempt}/{maxAttempts}): retrying against its current state", this.Subscription.GetQualifiedName(), attempt, MaxStatusPatchAttempts);
+                original = await this.ResourceRepository.GetAsync<Subscription>(original.GetName(), original.GetNamespace(), this.CancellationTokenSource.Token).ConfigureAwait(false)
+                    ?? throw new ProblemDetailsException(ResourceProblemDetails.ResourceNotFound(new ResourceReference<Subscription>(original.GetName(), original.GetNamespace())));
+                this._latestSubscription = original;
+            }
+        }
+    }
+
+    /// <summary>
     /// Sets the <see cref="Core.Resources.Subscription"/>'s status phase
     /// </summary>
     /// <param name="phase">The <see cref="Core.Resources.Subscription"/>'s status phase</param>
@@ -1489,13 +1537,11 @@ public class SubscriptionHandler
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.SetStatusPhase");
         activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
         activity?.SetTag("phase", EnumHelper.GetDisplayName(phase));
-        var resource = this.Subscription.Clone()!;
-        if (resource.Status == null) resource.Status = new();
-        else if (resource.Status.Phase == phase) return;
-        resource.Status.Phase = phase;
-        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        await this.PatchStatusAsync(resource =>
+        {
+            resource.Status ??= new();
+            resource.Status.Phase = phase;
+        }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1514,14 +1560,13 @@ public class SubscriptionHandler
         // the resource watch lags behind the patches applied by the handler, so the last reported state is tracked locally to avoid patching it after every delivery
         if (this.ReportedSubscriberState == (state, reason)) return;
         this.ReportedSubscriberState = (state, reason);
-        var resource = this.Subscription.Clone()!;
-        resource.Status ??= new();
-        resource.Status.Subscriber ??= new();
-        resource.Status.Subscriber.State = state;
-        resource.Status.Subscriber.Reason = reason;
-        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-        if (!patch.Operations.Any()) return;
-        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        await this.PatchStatusAsync(resource =>
+        {
+            resource.Status ??= new();
+            resource.Status.Subscriber ??= new();
+            resource.Status.Subscriber.State = state;
+            resource.Status.Subscriber.Reason = reason;
+        }).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1545,12 +1590,12 @@ public class SubscriptionHandler
             if (this.Subscription.Status?.Stream?.Fault != null)
             {
                 this.LastRequestedOffset = offset;
-                var resource = this.Subscription.Clone()!;
-                if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-                if (resource.Status.Stream == null) resource.Status.Stream = new();
-                resource.Status.Stream.Fault = null;
-                var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                await this.PatchStatusAsync(resource =>
+                {
+                    resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+                    resource.Status.Stream ??= new();
+                    resource.Status.Stream.Fault = null;
+                }).ConfigureAwait(false);
                 return;
             }
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -1635,13 +1680,13 @@ public class SubscriptionHandler
         {
             try
             {
-                var resource = this.Subscription.Clone()!;
-                resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-                resource.Status.Stream ??= new();
-                resource.Status.Stream.Fault = ex.ToProblemDetails();
-                var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-                if (!patch.Operations.Any()) return;
-                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                var fault = ex.ToProblemDetails();
+                await this.PatchStatusAsync(resource =>
+                {
+                    resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+                    resource.Status.Stream ??= new();
+                    resource.Status.Stream.Fault = fault;
+                }).ConfigureAwait(false);
                 return;
             }
             catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException or ObjectDisposedException || (inner is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled))

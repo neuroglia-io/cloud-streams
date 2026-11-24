@@ -16,7 +16,7 @@ using Neuroglia.Data.Expressions.Services;
 namespace CloudStreams.UnitTests.Cases.Broker;
 
 /// <summary>
-/// Covers paged catch-up, batched offset commits and the evaluation of filters (see #161)
+/// Covers paged catch-up, batched offset commits and the evaluation of filters (see #162)
 /// </summary>
 public class SubscriptionHandlerPerformanceTests
 {
