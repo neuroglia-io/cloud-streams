@@ -51,6 +51,8 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<Subscr
 
 using var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseResponseCompression();
 
 await app.RunAsync();

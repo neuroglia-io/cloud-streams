@@ -121,6 +121,21 @@ public class AuthenticationTests
     }
 
     [Fact]
+    public async Task Signing_Out_Should_Not_Be_Possible_With_A_Get_Request()
+    {
+        // arrange
+        var (app, client) = await CreateAsync(Settings(dashboard: true, ingestion: false));
+        await using var _ = app;
+
+        // act - a link or an image on another site can only issue GET requests (see #150)
+        var response = await client.GetAsync("auth/logout");
+
+        // assert - the request is handled like any other page, which sends anonymous users to sign in, rather than signing anyone out
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith("http://localhost/auth/login?returnUrl=", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
     public async Task Dashboard_Api_Should_Accept_Bearer_Tokens_Issued_For_The_Configured_Audience()
     {
         // arrange

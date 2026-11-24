@@ -14,6 +14,7 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Api.Hubs;
+using CloudStreams.Core.Application.Configuration;
 using CloudStreams.Core.Application.Services;
 using CloudStreams.Core.Application.Validation;
 using CloudStreams.Gateway.Api.Hubs;
@@ -61,10 +62,13 @@ builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredSe
 builder.Services.AddSingleton<ICloudEventAuthorizationManager, CloudEventAuthorizationManager>();
 builder.Services.AddHostedService<CloudEventHubDispatcher>();
 builder.Services.AddSingleton<IJsonSchemaGenerator, JsonSchemaGenerator>();
+builder.Services.Configure<JsonSchemaRegistryOptions>(builder.Configuration.GetSection(JsonSchemaRegistryOptions.ConfigurationSectionName));
 builder.Services.AddSingleton<IJsonSchemaRegistry, MemoryJsonSchemaRegistry>();
 builder.Services.AddSingleton<IGatewayMetrics, GatewayMetrics>();
 
 using var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
 app.UseExceptionHandler();

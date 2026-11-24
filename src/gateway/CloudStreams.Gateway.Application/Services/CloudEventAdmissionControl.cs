@@ -108,19 +108,46 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     protected IResourceMonitor<Core.Resources.Gateway>? Configuration { get; set; }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The gateway's resource is only created when it does not exist, a conflict with a replica that created it concurrently is tolerated, and transient failures are
+    /// retried with backoff rather than stopping the host (see #142)
+    /// </remarks>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Execute");
-        Core.Resources.Gateway? gateway = null;
-        try
+        for (var attempt = 1; !stoppingToken.IsCancellationRequested; attempt++)
         {
-            gateway = await this.Resources.GetAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, stoppingToken).ConfigureAwait(false);
-        }
-        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
-        finally
-        {
-            if (gateway == null) await this.Resources.AddAsync(new Core.Resources.Gateway(new ResourceMetadata(this.GatewayOptions.Name, this.GatewayOptions.Namespace), new GatewaySpec()), false, stoppingToken).ConfigureAwait(false);
-            this.Configuration = await this.Resources.MonitorAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, false, stoppingToken).ConfigureAwait(false);
+            try
+            {
+                Core.Resources.Gateway? gateway = null;
+                try
+                {
+                    gateway = await this.Resources.GetAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, stoppingToken).ConfigureAwait(false);
+                }
+                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
+                if (gateway == null)
+                {
+                    try
+                    {
+                        await this.Resources.AddAsync(new Core.Resources.Gateway(new ResourceMetadata(this.GatewayOptions.Name, this.GatewayOptions.Namespace), new GatewaySpec()), false, stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { /* created by another replica in the meantime */ }
+                }
+                this.Configuration = await this.Resources.MonitorAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, false, stoppingToken).ConfigureAwait(false);
+                this.Logger.LogInformation("The configuration of gateway '{gateway}' has been loaded: admitting cloud events", this.GatewayOptions.Name);
+                return;
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, attempt - 1), 30));
+                this.Logger.LogError(ex, "Failed to load the configuration of gateway '{gateway}' (attempt {attempt}). Cloud events are refused until it is loaded. Retrying in {delay}...", this.GatewayOptions.Name, attempt, delay);
+                try { await Task.Delay(delay, stoppingToken).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return; }
+            }
         }
     }
 
@@ -128,6 +155,11 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     public virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Evaluate");
+        // until the gateway's configuration has been loaded, its policies are unknown: admitting events would bypass authorization and validation (see #142)
+        if (this.Configuration == null)
+        {
+            return new((int)HttpStatusCode.ServiceUnavailable, errors: [new Error(new Uri("https://cloud-streams.io/problems/gateway-unavailable"), "Service Unavailable", (int)HttpStatusCode.ServiceUnavailable, "The gateway is starting: its configuration has not been loaded yet. Please retry later")]);
+        }
         activity?.SetTag("event.id", e.Id);
         activity?.SetTag("event.source", e.Source.ToString());
         activity?.SetTag("event.type", e.Type);
@@ -254,11 +286,15 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         }
         else
         {
-            schema = await this.SchemaRegistry.GetAsync(e.DataSchema, cancellationToken).ConfigureAwait(false);
-            if (schema == null)
+            try
             {
-                this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: failed to find the specified data schema '{dataSchemaUri}'", e.Id, e.DataSchema);
-                return new((int)HttpStatusCode.BadRequest);
+                schema = await this.SchemaRegistry.GetAsync(e.DataSchema, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidDataException)
+            {
+                // the schema is chosen by the publisher: failing to get it is a problem with the event, not with the gateway (see #141)
+                this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {reason}", e.Id, ex.Message);
+                return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid data schema", (int)HttpStatusCode.BadRequest, ex.Message)]);
             }
         }
         if (schema != null)
@@ -284,7 +320,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     protected virtual async Task<CloudEventMetadata> ExtractMetadataAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
-        if (!e.Time.HasValue) e.Time = DateTimeOffset.Now;
+        if (!e.Time.HasValue) e.Time = DateTimeOffset.UtcNow;
         var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
         if (splitHorizon != null)
@@ -310,7 +346,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
                             this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': failed to find a context attribute with name '{attributeName}'", property.Name, e.Id, property.Attribute.Name);
                             continue;
                         }
-                        if (!string.IsNullOrWhiteSpace(property.Attribute.Value) && !Regex.IsMatch(attributeValue?.ToString()!, property.Attribute.Value))
+                        if (!string.IsNullOrWhiteSpace(property.Attribute.Value) && !CloudStreamsRegex.IsMatch(attributeValue?.ToString() ?? string.Empty, property.Attribute.Value))
                         {
                             this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': the value of the context attribute with name '{attributeName}' does not match the configured pattern '{attributeValue}'", property.Name, e.Id, property.Attribute.Name, property.Attribute.Value);
                             continue;

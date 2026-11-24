@@ -26,6 +26,8 @@ builder.UseCloudStreams(builder =>
 
 using var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
 app.UseExceptionHandler();
 

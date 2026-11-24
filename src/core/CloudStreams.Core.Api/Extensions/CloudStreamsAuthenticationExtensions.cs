@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -77,6 +78,7 @@ public static class CloudStreamsAuthenticationExtensions
         var errors = options.Validate().ToList();
         if (errors.Count > 0) throw new InvalidOperationException($"Invalid authentication configuration:{Environment.NewLine}{string.Join(Environment.NewLine, errors.Select(e => $"- {e}"))}");
         services.AddSingleton(options);
+        services.ConfigureForwardedHeaders(configuration);
         services.Configure<MvcOptions>(mvc => mvc.Conventions.Add(new DashboardAuthorizationConvention()));
 
         var bearerEnabled = !string.IsNullOrWhiteSpace(options.Oidc.Authority);
@@ -214,6 +216,39 @@ public static class CloudStreamsAuthenticationExtensions
     }
 
     /// <summary>
+    /// Configures how the headers set by reverse proxies, such as ingresses that terminate TLS, are honoured
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to configure</param>
+    /// <param name="configuration">The current <see cref="IConfiguration"/></param>
+    /// <returns>The configured <see cref="IServiceCollection"/></returns>
+    /// <remarks>
+    /// <para>
+    /// Without them, an application behind a TLS-terminating proxy believes requests are plain HTTP: cookies are issued without the 'Secure' flag, and OIDC redirect
+    /// URIs are built with 'http' (see #150). The 'X-Forwarded-For' and 'X-Forwarded-Proto' headers are honoured when sent by a trusted proxy: loopback by default,
+    /// otherwise the ones listed in 'ForwardedHeaders:KnownProxies' (addresses) and 'ForwardedHeaders:KnownNetworks' (CIDR ranges, e.g. '10.0.0.0/8').
+    /// </para>
+    /// <para>
+    /// 'ForwardedHeaders:TrustAllProxies' trusts every proxy. Only enable it when the application cannot be reached without going through a proxy.
+    /// </para>
+    /// </remarks>
+    public static IServiceCollection ConfigureForwardedHeaders(this IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("ForwardedHeaders");
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            foreach (var proxy in section.GetSection("KnownProxies").Get<string[]>() ?? []) options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+            foreach (var network in section.GetSection("KnownNetworks").Get<string[]>() ?? []) options.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(network));
+            if (section.GetValue<bool>("TrustAllProxies"))
+            {
+                options.KnownNetworks.Clear();
+                options.KnownProxies.Clear();
+            }
+        });
+        return services;
+    }
+
+    /// <summary>
     /// Maps the endpoints used to sign the dashboard's users in and out, and to describe the current user
     /// </summary>
     /// <param name="endpoints">The <see cref="IEndpointRouteBuilder"/> to configure</param>
@@ -230,7 +265,8 @@ public static class CloudStreamsAuthenticationExtensions
         if (!options.Dashboard.Enabled) return endpoints;
         endpoints.MapGet("auth/login", (string? returnUrl) => Results.Challenge(new AuthenticationProperties { RedirectUri = ToLocalUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme]))
             .AllowAnonymous().ExcludeFromDescription();
-        endpoints.MapGet("auth/logout", () => Results.SignOut(new AuthenticationProperties { RedirectUri = "/" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]))
+        // a POST rather than a GET: the session cookie is 'SameSite=Lax', so other sites cannot sign users out by sending them a link or an image (see #150)
+        endpoints.MapPost("auth/logout", () => Results.SignOut(new AuthenticationProperties { RedirectUri = "/" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]))
             .AllowAnonymous().ExcludeFromDescription();
         return endpoints;
     }

@@ -48,6 +48,7 @@ public class EventsController(IMediator mediator)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false);
+        if (result.Status == (int)HttpStatusCode.ServiceUnavailable) this.Response.Headers.RetryAfter = "5";
         if (result.Status is < 200 or >= 300) return this.Process(result);
         // the gateway always answers '204 No Content' on success, so that a subscription bridging two instances never mistakes it for a deferred acknowledgement.
         // Whether the event has been stored or ignored by the split-horizon policy is conveyed by a header (see #179)
