@@ -90,7 +90,9 @@ public abstract class StatefulComponent<TComponent, TStore, TState>
         {
             if (disposing)
             {
-                this._store.Dispose();
+                // disposing of a token source does not signal its token: it is canceled first, so that everything bound to it stops
+                this.CancellationTokenSource.Cancel();
+                this._store?.Dispose();
                 this.CancellationTokenSource.Dispose();
             }
             this._Disposed = true;

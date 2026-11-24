@@ -77,49 +77,56 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        InternalResources.SubscribeAsync(async subscriptions =>
-        {
-            if (subscriptions == null || subscriptions.Count < 0) return;
-            var partitions = new Dictionary<string, (CloudEventPartitionType, string)>();
-            foreach(var subscription in subscriptions.Where(s => s.Spec?.Partition?.Type != null && !string.IsNullOrEmpty(s.Spec?.Partition?.Id)))
+        // status updates (e.g. acknowledged offsets) arrive frequently: they are throttled, and a newer refresh cancels an older one, so that stale results are never
+        // applied (see #196)
+        InternalResources
+            .Sample(TimeSpan.FromSeconds(1))
+            .Select(subscriptions =>
             {
-                var key = GetPartitionKey(subscription.Spec.Partition!.Type, subscription.Spec.Partition.Id);
-                if (!partitions.ContainsKey(key))
+                var partitions = new Dictionary<string, (CloudEventPartitionType, string)>();
+                foreach (var subscription in (subscriptions ?? []).Where(s => s.Spec?.Partition?.Type != null && !string.IsNullOrEmpty(s.Spec?.Partition?.Id)))
                 {
-                    partitions[key] = (subscription.Spec.Partition.Type, subscription.Spec.Partition.Id);
+                    var key = GetPartitionKey(subscription.Spec.Partition!.Type, subscription.Spec.Partition.Id);
+                    partitions.TryAdd(key, (subscription.Spec.Partition.Type, subscription.Spec.Partition.Id));
                 }
-            }
-            await GetStreamsMetadata(partitions);
-        }, CancellationTokenSource.Token);
+                return partitions;
+            })
+            .Select(partitions => Observable.FromAsync(cancellationToken => GetStreamsMetadata(partitions, cancellationToken)))
+            .Switch()
+            .Subscribe(_ => { }, ex => Logger.LogError(ex, "Failed to refresh the length of streams"), CancellationTokenSource.Token);
     }
-    private async Task GetStreamsMetadata(Dictionary<string, (CloudEventPartitionType, string)> partitions)
+
+    private async Task GetStreamsMetadata(Dictionary<string, (CloudEventPartitionType, string)> partitions, CancellationToken cancellationToken)
     {
+        using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, this.CancellationTokenSource.Token);
+        cancellationToken = linkedCancellationTokenSource.Token;
         ulong globalStreamLength = 0;
         try
         {
-            StreamMetadata metadata = await ResourceManagementApi.CloudEvents.Stream.GetStreamMetadataAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+            StreamMetadata metadata = await ResourceManagementApi.CloudEvents.Stream.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
             globalStreamLength = metadata?.Length ?? 0;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to get global stream metadata");
         }
-        var partitionLengths = new EquatableDictionary<string, ulong>(Get().PartitionLengths);
-        foreach (var kvp in partitions)
+        // partitions are queried concurrently rather than one after the other
+        var lengths = await Task.WhenAll(partitions.Select(async kvp =>
         {
-            var key = kvp.Key;
             var (partitionType, partitionId) = kvp.Value;
             try
             {
-                PartitionMetadata? metadata = await ResourceManagementApi.CloudEvents.Partitions.GetPartitionMetadataAsync(partitionType, partitionId!, CancellationTokenSource.Token).ConfigureAwait(false);
-                partitionLengths[key] = metadata?.Length ?? 0;
+                var metadata = await ResourceManagementApi.CloudEvents.Partitions.GetPartitionMetadataAsync(partitionType, partitionId!, cancellationToken).ConfigureAwait(false);
+                return (kvp.Key, Length: metadata?.Length ?? 0);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Logger.LogError(ex, "Failed to get metadata for partition {PartitionType}:{Partition}", partitionType, partitionId);
-                partitionLengths[key] = 0;
+                return (kvp.Key, Length: 0ul);
             }
-        }
+        })).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var partitionLengths = new EquatableDictionary<string, ulong>(lengths.ToDictionary(l => l.Key, l => l.Length));
         Reduce(state => state with
         {
             GlobalStreamLength = globalStreamLength,

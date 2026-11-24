@@ -11,9 +11,9 @@
                 @for(int i = 0, c = streamsReadOptions.Count(); i<c; i++)
                 {
                     int optionIndex = i;
-                    <div class="d-flex">
+                    <div class="d-flex" @key="LaneKey(optionIndex)">
                         <ReadOptionsForm StreamReadOptions="streamsReadOptions.ElementAt(i)" Compact="false" Refresher="autoRefreshForm" OnChange="(readOptions) => Store.SetStreamsReadOption(optionIndex, readOptions)"></ReadOptionsForm>
-                        <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => Store.RemoveStreamsReadOption(optionIndex)" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
+                        <Button class="ms-3 mb-3" Color="ButtonColor.Danger" Outline="true" @onclick="_ => RemoveLane(optionIndex)" aria-label="Remove this lane" Disabled="loading"><Icon Name="IconName.Dash"></Icon></Button>
                     </div>
                 }
                 <div class="d-flex justify-content-end">
@@ -253,6 +253,8 @@
     [JSInvokable]
     public void SelectCloudEventOnClick(CloudEvent cloudEvent)
     {
+        // an event is pinned once, however many times it is clicked
+        if (this.selectedCloudEvents.Any(e => e.Id == cloudEvent.Id && e.Source == cloudEvent.Source)) return;
         this.selectedCloudEvents.Add(cloudEvent);
         this.OnStateChanged();
     }
@@ -264,6 +266,34 @@
     private void DeselectCloudEvent(CloudEvent cloudEvent)
     {
         this.selectedCloudEvents.Remove(cloudEvent);
+        // the component only renders when told to (see StatefulComponent.ShouldRender), so the change must be signaled (see #195)
+        this.OnStateChanged();
+    }
+
+    /// <summary>
+    /// Gets the stable keys of the lanes, so that removing a lane does not hand its form over to the next one (see #195)
+    /// </summary>
+    readonly List<Guid> laneKeys = [];
+
+    /// <summary>
+    /// Gets the stable key of the lane at the specified index
+    /// </summary>
+    /// <param name="index">The index of the lane to get the key of</param>
+    /// <returns>The stable key of the lane at the specified index</returns>
+    Guid LaneKey(int index)
+    {
+        while (this.laneKeys.Count <= index) this.laneKeys.Add(Guid.NewGuid());
+        return this.laneKeys[index];
+    }
+
+    /// <summary>
+    /// Removes the lane at the specified index
+    /// </summary>
+    /// <param name="index">The index of the lane to remove</param>
+    void RemoveLane(int index)
+    {
+        if (index < this.laneKeys.Count) this.laneKeys.RemoveAt(index);
+        this.Store.RemoveStreamsReadOption(index);
     }
 
     /// <inheritdoc/>
@@ -282,6 +312,8 @@
                 this.dotnetReference = null;
             }
             this.disposed = true;
+            // Blazor only calls DisposeAsync on components that implement it, so the store is disposed of here (see #195)
+            this.Dispose();
         }
     }
 
