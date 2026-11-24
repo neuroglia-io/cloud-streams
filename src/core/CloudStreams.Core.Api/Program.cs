@@ -27,7 +27,7 @@ builder.UseCloudStreams(builder =>
 using var app = builder.Build();
 
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
-else app.UseExceptionHandler("/error");
+app.UseExceptionHandler();
 
 app.UseResponseCompression();
 app.UseBlazorFrameworkFiles();

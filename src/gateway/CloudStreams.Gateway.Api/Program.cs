@@ -65,6 +65,7 @@ builder.Services.AddSingleton<IGatewayMetrics, GatewayMetrics>();
 using var app = builder.Build();
 
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
+app.UseExceptionHandler();
 app.UseResponseCompression();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

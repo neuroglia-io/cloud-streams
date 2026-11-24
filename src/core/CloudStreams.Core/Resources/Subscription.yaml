@@ -162,8 +162,12 @@ spec:
                                 - exponent 
                         maxAttempts:
                           type: integer
+                          description: The maximum amount of retry attempts to perform. Defaults to 5. Set to a negative value to retry forever
                       required:
                         - backoffDuration
+                    timeout:
+                      type: string
+                      description: The maximum amount of time, as an ISO 8601 duration, to wait for the subscriber to respond to a single delivery attempt. Defaults to the broker dispatch timeout
                   required:
                     - uri
               required:
