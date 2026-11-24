@@ -40,6 +40,11 @@ jobs:
       #   run: dotnet test "${{ env.SOLUTION }}" --no-restore --verbosity normal"
 
       # Test "per domain" for ease of readability
+      # NOTE: a --filter that matches nothing exits 0, so a domain with no tests - or a typo in the
+      # filter - reports green. Every domain that has tests needs its own step here or it never runs.
       - name: Test Core
         run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Core"
+
+      - name: Test Broker
+        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Broker"
       # ...
