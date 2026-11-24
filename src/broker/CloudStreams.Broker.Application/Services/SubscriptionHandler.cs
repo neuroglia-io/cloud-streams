@@ -512,7 +512,7 @@ public class SubscriptionHandler
             {
                 if (!await this.ExpressionEvaluator.EvaluateConditionAsync(attributeFilter.Value, attributeValue, cancellationToken: this.CancellationTokenSource.Token).ConfigureAwait(false)) return false;
             }
-            else if (!Regex.IsMatch(attributeValue, attributeFilter.Value)) return false;
+            else if (!CloudStreamsRegex.IsMatch(attributeValue, attributeFilter.Value)) return false;
         }
         return true;
     }

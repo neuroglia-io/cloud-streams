@@ -222,9 +222,44 @@ Authentication:
     ApiKeyHeader: X-Api-Key
 ```
 
-As with any ASP.NET Core setting, these can be supplied as environment variables, e.g. `Authentication__Dashboard__Enabled=true`. When the dashboard is secured, its session cookie is encrypted with keys stored in Redis, so that every gateway replica can read it. The OIDC client must allow `{gateway}/signin-oidc` as a redirect URI and `{gateway}/signout-callback-oidc` as a post-logout redirect URI.
+As with any ASP.NET Core setting, these can be supplied as environment variables, e.g. `Authentication__Dashboard__Enabled=true`. When the dashboard is secured, its session cookie is encrypted with keys stored in Redis, so that every gateway replica can read it. The OIDC client must allow `{gateway}/signin-oidc` as a redirect URI and `{gateway}/signout-callback-oidc` as a post-logout redirect URI. Signing out requires a `POST` to `auth/logout`.
+
+Behind a reverse proxy that terminates TLS, the `X-Forwarded-For` and `X-Forwarded-Proto` headers must be honoured, so that cookies are marked `Secure` and redirect URIs use `https`. They are only trusted when sent by a known proxy: loopback by default, otherwise the addresses and CIDR ranges configured below:
+
+```yaml
+ForwardedHeaders:
+  KnownProxies: [ 10.0.0.12 ]
+  KnownNetworks: [ 10.244.0.0/16 ]
+  TrustAllProxies: false         # only when the application cannot be reached without going through a proxy
+```
+
+### Admission
+
+Until a gateway has loaded its configuration, it answers `503 Service Unavailable` (with `Retry-After`), rather than admitting events its policies were not applied to.
+
+- **Time-based authorization rules** (`temporary`, `timeOfDay`) are evaluated against the time at which the gateway receives the event, not against its publisher-supplied `time` attribute. A `timeOfDay` range whose end precedes its start spans midnight, e.g. from 22:00 to 06:00.
+- **Regular expressions** used by authorization rules, ingestion configurations and subscription attribute filters are not anchored: `order.created` also matches `xorder_createdx`. Use `^order\.created$` to match the whole value. Every match times out after 250 ms, and a match that times out is treated as a mismatch.
+- **Data schemas** referenced by events' `dataschema` attribute are fetched over HTTP(S) only, never from private, loopback or link-local addresses, and kept in a bounded cache. A schema that cannot be fetched or parsed causes the event to be rejected with `400 Bad Request`:
+
+```yaml
+SchemaRegistry:
+  AllowedHosts: [ schemas.example.com, '*.example.org' ]   # any public host if empty
+  AllowPrivateNetworks: false
+  Timeout: '00:00:10'
+  MaxSize: 1048576                                         # bytes
+  CacheSize: 1000
+```
 
 ### Monitoring
+
+Gateways, brokers and the API expose two health endpoints, suited to liveness and readiness probes:
+
+| Endpoint | Checks | Status |
+|---|---|---|
+| `/healthz/live` | none: the process is alive | always `200` |
+| `/healthz` | Redis, EventStoreDB, the projections Cloud Streams relies on and, on gateways, whether the admission configuration has been loaded | `503` if any check is unhealthy |
+
+When the dashboard requires users to sign in, anonymous callers of `/healthz` only get the overall status, without the details of each check.
 
 `GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
 

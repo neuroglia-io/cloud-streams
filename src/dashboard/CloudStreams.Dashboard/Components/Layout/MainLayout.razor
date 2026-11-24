@@ -65,7 +65,9 @@
             @if (user?.Enabled == true && user.Authenticated)
             {
                 <span class="navbar-text me-3">@user.Name</span>
-                <a class="btn btn-sm btn-outline-light me-2" href="auth/logout" target="_top" title="Sign out">Sign out</a>
+                <form method="post" action="auth/logout" target="_top" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-light me-2" title="Sign out">Sign out</button>
+                </form>
             }
         </div>
     </nav>

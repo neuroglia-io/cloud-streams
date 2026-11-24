@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
 using CloudStreams.Core.Application.Services;
@@ -229,7 +230,7 @@ public class CloudStreamsApplicationBuilder
         mvc.AddJsonOptions(options => JsonSerializer.DefaultOptionsConfiguration(options.JsonSerializerOptions));
         foreach(var applicationPart in this.ApplicationParts) mvc.AddApplicationPart(applicationPart);
 
-        var healthChecks = this.Services.AddHealthChecks();
+        var healthChecks = this.Services.AddHealthChecks().AddCloudStreamsHealthChecks();
         foreach(var configureHealthChecks in this.HealthCheckConfigurations) configureHealthChecks(healthChecks);
 
         var resourceBuilder = ResourceBuilder.CreateDefault().AddService(serviceName: this.ServiceName, serviceVersion: this.ServiceVersion);

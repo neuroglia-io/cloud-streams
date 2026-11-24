@@ -21,7 +21,7 @@ namespace CloudStreams.Gateway.Application.Services;
 /// Represents the default implementation of the <see cref="ICloudEventAuthorizationManager"/> interface
 /// </summary>
 /// <param name="serializer">The service used to serialize/deserialize objects to/from JSON</param>
-public class CloudEventAuthorizationManager(IJsonSerializer serializer)
+public class CloudEventAuthorizationManager(IJsonSerializer serializer, TimeProvider? timeProvider = null)
     : ICloudEventAuthorizationManager
 {
 
@@ -29,6 +29,11 @@ public class CloudEventAuthorizationManager(IJsonSerializer serializer)
     /// Gets the service used to serialize/deserialize objects to/from JSON
     /// </summary>
     protected IJsonSerializer Serializer { get; } = serializer;
+
+    /// <summary>
+    /// Gets the service used to get the current time
+    /// </summary>
+    protected TimeProvider TimeProvider { get; } = timeProvider ?? TimeProvider.System;
 
     /// <inheritdoc/>
     public virtual Task<OperationResult> EvaluateAsync(CloudEvent e, CloudEventAuthorizationPolicy policy, CancellationToken cancellationToken = default)
@@ -81,24 +86,43 @@ public class CloudEventAuthorizationManager(IJsonSerializer serializer)
         {
             case CloudEventAuthorizationRuleType.Attribute:
                 if(!e.TryGetAttribute(rule.AttributeName!, out var value) || value == null) return mismatch;
-                if (!string.IsNullOrWhiteSpace(rule.AttributeValue) && !Regex.IsMatch(value.ToString()!, rule.AttributeValue)) return mismatch;
+                if (!string.IsNullOrWhiteSpace(rule.AttributeValue) && !CloudStreamsRegex.IsMatch(value.ToString() ?? string.Empty, rule.AttributeValue)) return mismatch;
                 break;
             case CloudEventAuthorizationRuleType.Payload:
                 var payloadSize = this.Serializer.SerializeToByteArray(e.Data)!.Length;
                 if (payloadSize > rule.MaxSize) return mismatch;
                 break;
+            // time-based rules are evaluated against the time at which the gateway evaluates the event, which publishers cannot forge, rather than against the
+            // event's optional, publisher-supplied 'time' attribute (see #143)
             case CloudEventAuthorizationRuleType.Temporary:
-                if (e.Time < rule.From) return mismatch;
-                if (e.Time > rule.To) return mismatch;
+                var now = this.TimeProvider.GetUtcNow();
+                if (rule.From.HasValue && now < rule.From.Value) return mismatch;
+                if (rule.To.HasValue && now > rule.To.Value) return mismatch;
                 break;
             case CloudEventAuthorizationRuleType.TimeOfDay:
-                if (e.Time!.Value.TimeOfDay < rule.From!.Value.TimeOfDay) return mismatch;
-                if (e.Time!.Value.TimeOfDay > rule.To!.Value.TimeOfDay) return mismatch;
+                if (!IsWithinTimeOfDay(this.TimeProvider.GetUtcNow(), rule.From, rule.To)) return mismatch;
                 break;
             default:
                 throw new NotSupportedException($"The specified {nameof(CloudEventAuthorizationRuleType)} '{rule.Type}' is not supported");
         }
         return match;
+    }
+
+    /// <summary>
+    /// Determines whether the specified date and time falls within the specified time of day range
+    /// </summary>
+    /// <param name="now">The date and time to check</param>
+    /// <param name="from">The start of the range, whose offset is the time zone the range is expressed in, if any</param>
+    /// <param name="to">The end of the range, if any</param>
+    /// <returns>A boolean indicating whether or not the specified date and time falls within the range</returns>
+    /// <remarks>A range whose end precedes its start spans midnight, e.g. from 22:00 to 06:00</remarks>
+    protected static bool IsWithinTimeOfDay(DateTimeOffset now, DateTimeOffset? from, DateTimeOffset? to)
+    {
+        if (!from.HasValue && !to.HasValue) return true;
+        var timeOfDay = now.ToOffset(from?.Offset ?? to!.Value.Offset).TimeOfDay;
+        var start = from?.TimeOfDay ?? TimeSpan.Zero;
+        var end = to?.TimeOfDay ?? TimeSpan.FromDays(1);
+        return start <= end ? timeOfDay >= start && timeOfDay <= end : timeOfDay >= start || timeOfDay <= end;
     }
 
 }

@@ -15,6 +15,7 @@ using CloudStreams.Broker.Application.Configuration;
 using CloudStreams.Broker.Application.Services;
 using CloudStreams.Core;
 using CloudStreams.Core.Api;
+using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application.Validation;
 using CloudStreams.Core.Resources;
 using Neuroglia.Data.Infrastructure.ResourceOriented.Services;
@@ -51,6 +52,9 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<Subscr
 
 using var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseResponseCompression();
+app.UseCloudStreamsHealthChecks();
 
 await app.RunAsync();

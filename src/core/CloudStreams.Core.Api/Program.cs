@@ -1,4 +1,4 @@
-// Copyright © 2024-Present The Cloud Streams Authors
+// Copyright ï¿½ 2024-Present The Cloud Streams Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"),
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api;
+using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Api.Hubs;
 using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -26,6 +27,8 @@ builder.UseCloudStreams(builder =>
 
 using var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
 app.UseExceptionHandler();
 
@@ -35,10 +38,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseHealthChecks("/healthz", new HealthCheckOptions()
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+app.UseCloudStreamsHealthChecks();
 app.UseSwagger(builder =>
 {
     builder.RouteTemplate = "api/{documentName}/doc/oas.{json|yaml}";

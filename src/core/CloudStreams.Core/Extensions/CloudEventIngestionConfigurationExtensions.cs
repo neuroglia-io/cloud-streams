@@ -33,8 +33,8 @@ public static class CloudEventIngestionConfigurationExtensions
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(e);
 
-        return (configuration.Source.Trim() == "*" || Regex.IsMatch(e.Source.OriginalString, configuration.Source))
-            && (configuration.Type.Trim() == "*" || Regex.IsMatch(e.Type, configuration.Type));
+        return (configuration.Source.Trim() == "*" || CloudStreamsRegex.IsMatch(e.Source.OriginalString, configuration.Source))
+            && (configuration.Type.Trim() == "*" || CloudStreamsRegex.IsMatch(e.Type, configuration.Type));
     }
 
 }

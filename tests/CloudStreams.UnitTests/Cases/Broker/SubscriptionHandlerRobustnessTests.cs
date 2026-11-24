@@ -187,7 +187,10 @@ public class SubscriptionHandlerRobustnessTests
 
         // assert
         Assert.Equal(3, context.Http.AttemptCount);
-        Assert.All(context.Http.IntervalsBetweenAttempts.Skip(1), interval => Assert.True(interval >= TimeSpan.FromMilliseconds(90), $"Deliveries should be at least 100ms apart, got {interval}"));
+        // the throttle spaces the starts of delivery attempts, while requests are recorded when sent: the first one pays one-off costs after its throttle, which can
+        // shorten the first measured interval, so the span of the whole sequence is asserted rather than each interval
+        var span = context.Http.Attempts[^1].Elapsed - context.Http.Attempts[0].Elapsed;
+        Assert.True(span >= TimeSpan.FromMilliseconds(170), $"3 deliveries at 10 per second should span at least 200ms, got {span}");
     }
 
     [Fact]

@@ -48,7 +48,15 @@ public class EventsController(IMediator mediator)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false);
-        if (result.Status is < 200 or >= 300) return this.Process(result);
+        if (result.Status == (int)HttpStatusCode.ServiceUnavailable) this.Response.Headers.RetryAfter = "5";
+        if (result.Status is < 200 or >= 300)
+        {
+            // the first error describes why the event has been refused: it is returned as is, so that publishers get its detail rather than a generic validation problem
+            var error = result.Errors?.FirstOrDefault();
+            if (error == null) return this.Process(result);
+            var problem = new Neuroglia.ProblemDetails(error.Type, error.Title, error.Status, error.Detail, error.Instance, error.Errors?.ToDictionary(e => e.Key, e => e.Value));
+            return new ObjectResult(problem) { StatusCode = result.Status, ContentTypes = { "application/problem+json" } };
+        }
         // the gateway always answers '204 No Content' on success, so that a subscription bridging two instances never mistakes it for a deferred acknowledgement.
         // Whether the event has been stored or ignored by the split-horizon policy is conveyed by a header (see #179)
         this.Response.Headers[CloudStreamsHeaders.Outcome] = result.Status == (int)HttpStatusCode.Accepted ? CloudStreamsHeaders.Outcomes.Ignored : CloudStreamsHeaders.Outcomes.Stored;
