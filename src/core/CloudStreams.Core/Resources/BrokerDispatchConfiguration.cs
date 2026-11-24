@@ -48,4 +48,10 @@ public record BrokerDispatchConfiguration
     [DataMember(Order = 2, Name = "sequencing"), JsonPropertyOrder(2), JsonPropertyName("sequencing"), YamlMember(Order = 2, Alias = "sequencing")]
     public virtual CloudEventSequencingConfiguration? Sequencing { get; set; }
 
+    /// <summary>
+    /// Gets/sets the maximum amount of time to wait for a subscriber to respond to a single delivery attempt, unless overridden by the subscription. Defaults to 100 seconds
+    /// </summary>
+    [DataMember(Order = 3, Name = "timeout"), JsonPropertyOrder(3), JsonPropertyName("timeout"), YamlMember(Order = 3, Alias = "timeout")]
+    public virtual Duration? Timeout { get; set; }
+
 }

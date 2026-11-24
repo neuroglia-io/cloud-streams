@@ -24,8 +24,7 @@ public class SubscriptionHandlerCatchUpTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This asserts <em>delivery only</em>. It deliberately does not claim catch-up finished, because it does not:
-    /// see <see cref="Catch_Up_Currently_Never_Completes_And_Leaves_The_Subscription_Out_Of_Sync"/>.
+    /// This asserts <em>delivery only</em>. Completing catch-up is covered by <see cref="Catch_Up_Should_Complete_And_Resume_Live_Dispatch"/>.
     /// </para>
     /// <para>
     /// Initialization starts catch-up itself when the resolved offset is behind the stream length, so this asserts on the automatic
@@ -52,47 +51,54 @@ public class SubscriptionHandlerCatchUpTests
     }
 
     /// <summary>
-    /// Pins the other half of issue #81, which is still broken: replaying the missed events is not the same as finishing catch-up.
+    /// Regression guard for the other half of issue #81: replaying the missed events must also finish catch-up, so live events flow again.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// This is a characterisation test. It asserts broken behaviour on purpose so the gap is visible in the suite, and so it fails
-    /// loudly when the fix lands. <b>PR 3 (#132) must invert it and rename it.</b>
-    /// </para>
-    /// <para>
-    /// The mechanism: <c>CatchUpAsync</c> exits on <c>(ulong)currentOffset &lt;= this.StreamOffset</c>. With three records,
-    /// <c>StreamOffset</c> is the length (3) and <c>currentOffset</c> reaches 3 after the last dispatch, so <c>3 &lt;= 3</c> still
-    /// holds. The loop then reads a fourth record that does not exist, gets null, waits 50 ms and repeats forever, never reaching
-    /// <c>SubscriptionOutOfSync = false</c>. The guard in <c>OnCloudEventAsync</c> consequently drops every live event, which is
-    /// exactly the "appears stuck, subscriber never receives events" symptom of #81 and #105.
-    /// </para>
-    /// <para>
-    /// Fixing the boundary is not a one-line change, which is why it is deferred rather than patched here: <c>StreamOffset</c> carries
-    /// two different meanings. Initialization sets it from <c>GetStreamMetadataAsync().Length</c> (a count), while
-    /// <c>OnCloudEventAsync</c> sets it from <c>e.Sequence</c> (an index). The two differ by one, so no single comparison is correct
-    /// for both until those semantics are unified.
-    /// </para>
+    /// <c>CatchUpAsync</c> used to exit on <c>currentOffset &lt;= StreamOffset</c> while <c>StreamOffset</c> meant a length at initialization and
+    /// an index on the live path, so it waited forever for a record past the end and never left the out-of-sync state, dropping every live event
+    /// ("appears stuck", #81 and #105). <c>StreamOffset</c> now always means the length of the stream.
     /// </remarks>
     [Fact]
-    public async Task Catch_Up_Currently_Never_Completes_And_Leaves_The_Subscription_Out_Of_Sync()
+    public async Task Catch_Up_Should_Complete_And_Resume_Live_Dispatch()
     {
         // arrange
         await using var context = await BrokerTestContext.CreateAsync(streamLength: 3,
             configureSubscription: s => s.Spec.Stream = new() { Offset = StreamPosition.StartOfStream },
             waitForStreamInitialization: false);
         await WaitUntilAsync(() => context.Http.AttemptCount >= 3, "the three missed events to be replayed", context);
-        await Task.Delay(250);
+        await WaitUntilAsync(() => !context.Handler.IsOutOfSync, "catch-up to complete", context);
 
-        // assert - BROKEN BEHAVIOUR. The fix must make this false
-        Assert.True(context.Handler.IsOutOfSync, "catch-up completed, so this characterisation test is obsolete: invert it and rename it");
-
-        // act - and because it stays out of sync, every subsequent live event is silently dropped
+        // act
         context.ResetRecorders();
         await context.Handler.HandleCloudEventAsync(BrokerTestContext.CreateRecord(3));
 
-        // assert - BROKEN BEHAVIOUR. The fix must make this a dispatch
-        Assert.Equal(0, context.Http.AttemptCount);
-        Assert.Equal(0, context.Patches.Count);
+        // assert
+        Assert.Equal(1, context.Http.AttemptCount);
+        Assert.Contains(4ul, context.Patches.OffsetsWrittenTo());
+    }
+
+    /// <summary>
+    /// Regression guard for issue #132: a catch-up that is aborted must not leave the subscription out of sync, which would silently drop every live event.
+    /// </summary>
+    [Fact]
+    public async Task Aborted_Catch_Up_Should_Not_Leave_The_Subscription_Out_Of_Sync()
+    {
+        // arrange - the subscriber never recovers, so catch-up gives up on the first missed event
+        await using var context = await BrokerTestContext.CreateAsync(StubHttpMessageHandler.AlwaysResponds(HttpStatusCode.InternalServerError), streamLength: 3,
+            configureSubscription: s =>
+            {
+                s.Spec.Stream = new() { Offset = StreamPosition.StartOfStream };
+                s.Spec.Subscriber.RetryPolicy = new() { MaxAttempts = 1, BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(0)) };
+            },
+            waitForStreamInitialization: false);
+
+        // act
+        await WaitUntilAsync(() => context.Patches.Touched("/status/stream/fault"), "the subscription to be faulted", context);
+        await WaitUntilAsync(() => !context.Handler.IsOutOfSync, "the out-of-sync state to be reset", context);
+
+        // assert - the event that could not be delivered is never skipped
+        Assert.Equal(2, context.Http.AttemptCount);
+        Assert.False(context.Patches.Touched("/status/stream/ackedOffset"));
     }
 
     /// <summary>
