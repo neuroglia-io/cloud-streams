@@ -33,6 +33,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddSingleton<ResourceWatchEventHubController>();
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ResourceWatchEventHubController>());
         builder.Services.AddHostedService<GatewayResourceController>();
+        builder.Services.AddHostedService<PartitionIndexInitializer>();
         builder.Services.AddHostedService<BrokerResourceController>();
         builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
         builder.Services.AddHostedService<SecurityConfigurationAuditor>();
