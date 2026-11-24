@@ -113,6 +113,52 @@ public class CloudEventAdmissionControlTests
         metrics.DidNotReceive().IncrementTotalRejectedEvents(Arg.Any<string>());
     }
 
+    [Fact]
+    public async Task An_Event_Whose_Source_The_Publisher_Is_Not_Bound_To_Should_Be_Rejected()
+    {
+        // arrange
+        var metrics = Substitute.For<IGatewayMetrics>();
+        var admission = Create(new(), metrics);
+
+        // act
+        var result = await admission.EvaluateAsync(CreateEvent("gateway-b"), ["https://orders.example.com/*"]);
+
+        // assert
+        Assert.Equal((int)HttpStatusCode.Forbidden, result.Status);
+        Assert.Null(result.Data);
+        var error = Assert.Single(result.Errors!);
+        Assert.Equal(CloudEventAdmissionControl.SourceNotAllowedProblemType, error.Type);
+        Assert.Contains("https://cloud-streams.io/tests", error.Detail);
+        metrics.Received(1).IncrementTotalRejectedEvents(RejectionReason.Authorization);
+    }
+
+    [Fact]
+    public async Task An_Event_Whose_Source_The_Publisher_Is_Bound_To_Should_Be_Admitted()
+    {
+        // arrange
+        var admission = Create(new());
+
+        // act
+        var result = await admission.EvaluateAsync(CreateEvent("gateway-b"), ["https://orders.example.com/*", "https://cloud-streams.io/*"]);
+
+        // assert
+        Assert.Equal((int)HttpStatusCode.OK, result.Status);
+        Assert.NotNull(result.Data);
+    }
+
+    [Fact]
+    public async Task A_Publisher_Bound_To_No_Source_Should_Publish_Nothing()
+    {
+        // arrange - a bearer token that lacks the configured source claim
+        var admission = Create(new());
+
+        // act
+        var result = await admission.EvaluateAsync(CreateEvent("gateway-b"), []);
+
+        // assert
+        Assert.Equal((int)HttpStatusCode.Forbidden, result.Status);
+    }
+
     sealed class TestAdmissionControl
         : CloudEventAdmissionControl
     {

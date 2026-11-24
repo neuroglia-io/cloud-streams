@@ -33,9 +33,14 @@ public class ApiKeyAuthenticationOptions
     public virtual string HeaderName { get; set; } = Configuration.IngestionAuthenticationOptions.DefaultApiKeyHeader;
 
     /// <summary>
-    /// Gets/sets the accepted API keys
+    /// Gets/sets the accepted API keys, which may publish cloud events of any source
     /// </summary>
     public virtual List<string> ApiKeys { get; set; } = [];
+
+    /// <summary>
+    /// Gets/sets the publishers whose API keys are accepted, and which may only publish cloud events of the sources they are bound to
+    /// </summary>
+    public virtual List<Configuration.IngestionPublisherOptions> Publishers { get; set; } = [];
 
 }
 
@@ -58,10 +63,21 @@ public class ApiKeyAuthenticationHandler(IOptionsMonitor<ApiKeyAuthenticationOpt
         if (!this.Request.Headers.TryGetValue(this.Options.HeaderName, out var values) || string.IsNullOrWhiteSpace(values.ToString())) return Task.FromResult(AuthenticateResult.NoResult());
         var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(values.ToString()));
         var matched = false;
+        Configuration.IngestionPublisherOptions? publisher = null;
+        var keys = (this.Options.ApiKeys ?? []).Where(k => !string.IsNullOrWhiteSpace(k)).Select(k => (Key: k, Publisher: (Configuration.IngestionPublisherOptions?)null))
+            .Concat((this.Options.Publishers ?? []).Where(p => !string.IsNullOrWhiteSpace(p.ApiKey)).Select(p => (Key: p.ApiKey!, Publisher: (Configuration.IngestionPublisherOptions?)p)));
         // every key is compared, in fixed time, so that the response time reveals neither which key nor how much of it matched
-        foreach (var key in this.Options.ApiKeys.Where(k => !string.IsNullOrWhiteSpace(k))) matched |= CryptographicOperations.FixedTimeEquals(providedHash, SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+        foreach (var (key, keyPublisher) in keys)
+        {
+            var equal = CryptographicOperations.FixedTimeEquals(providedHash, SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+            if (equal && !matched) publisher = keyPublisher;
+            matched |= equal;
+        }
         if (!matched) return Task.FromResult(AuthenticateResult.Fail("Invalid API key"));
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "api-key")], AuthenticationScheme);
+        var claims = new List<Claim>() { new(ClaimTypes.Name, publisher?.Name ?? "api-key") };
+        // a key bound to sources conveys them as claims, which the ingestion endpoint hands over to the admission control (see #147)
+        if (publisher != null) claims.AddRange((publisher.Sources ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => new Claim(CloudStreamsAuthenticationDefaults.AllowedSourceClaimType, s)));
+        var identity = new ClaimsIdentity(claims, AuthenticationScheme);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), AuthenticationScheme)));
     }
 

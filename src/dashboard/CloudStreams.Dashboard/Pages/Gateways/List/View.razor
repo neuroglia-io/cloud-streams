@@ -18,10 +18,13 @@
         <span>@(Resources?.Count ?? 0) items</span>
         <div class="d-flex">
             <input type="search" class="form-control rounded my-2 me-2" placeholder="Search" value="@SearchTerm" @oninput="OnSearchInput" />
-            <div class="dropdown d-flex align-content-center p-1">
+            <div class="dropdown d-flex align-content-center p-1 @(CanAdminister ? "" : "invisible")">
                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
                 <ul class="dropdown-menu">
-                    <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
+                    @if (CanAdminister)
+                    {
+                        <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
+                    }
                 </ul>
             </div>
         </div>
@@ -59,15 +62,21 @@
                         <td class="text-center">@(resource.Spec?.Validation?.DataSchema?.AutoGenerate.ToString() ?? "-")</td>
                         <td class="text-center"><span class="bi-circle-fill @GetCssClassFor(resource.Status?.HealthStatus)"></span></td>
                         <td class="text-end">
-                            <div class="dropdown">
+                            <div class="dropdown @(CanAdminister ? "" : "invisible")">
                                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
                                 <ul class="dropdown-menu">
-                                    <li>
-                                        <button class="dropdown-item" title="Edit the @(typeof(Gateway).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
-                                    </li>
-                                    <li>
-                                        <button class="dropdown-item text-danger" title="Delete the @(typeof(Gateway).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
-                                    </li>
+                                    @if (CanAdminister)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item" title="Edit the @(typeof(Gateway).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
+                                        </li>
+                                    }
+                                    @if (CanAdminister)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item text-danger" title="Delete the @(typeof(Gateway).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
+                                        </li>
+                                    }
                                 </ul>
                             </div>
                         </td>
@@ -81,7 +90,10 @@
     </table>
 </div>
 
-<Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+@if (CanAdminister)
+{
+    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+}
 
 <Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 

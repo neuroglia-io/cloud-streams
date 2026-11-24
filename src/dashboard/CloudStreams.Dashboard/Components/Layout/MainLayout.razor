@@ -79,8 +79,6 @@
 @implements IDisposable
 @code {
 
-    [Inject] HttpClient HttpClient { get; set; } = null!;
-
     [Inject] ResourceWatchEventHubClient ResourceEventHub { get; set; } = null!;
 
     Microsoft.AspNetCore.SignalR.Client.HubConnectionState connectionState;
@@ -103,10 +101,7 @@
     /// <inheritdoc/>
     public void Dispose() => connectionStateSubscription?.Dispose();
 
-    /// <summary>
-    /// Describes the signed-in user, if the dashboard requires users to sign in
-    /// </summary>
-    record UserInfo(bool Enabled, bool Authenticated, string? Name);
+    [Inject] UserAccess UserAccess { get; set; } = null!;
 
     UserInfo? user;
 
@@ -114,8 +109,7 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        try { user = await HttpClient.GetFromJsonAsync<UserInfo>("api/auth/user", new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)); }
-        catch { user = null; } // an older or misconfigured server must not break the layout
+        user = await UserAccess.GetUserAsync();
     }
 
 }

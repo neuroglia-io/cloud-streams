@@ -254,14 +254,45 @@ Authentication:
     RoleClaimType: roles
   Dashboard:
     Enabled: true                # users sign in with OIDC; the management API, hubs and MCP endpoint also accept bearer tokens
-    RequiredRoles: [ ]           # optionally, roles users must have (any of them)
+    Roles:                       # optional: without any role, every signed-in user is an administrator
+      Readers: [ cloud-streams-reader ]
+      Operators: [ cloud-streams-operator ]
+      Admins: [ cloud-streams-admin ]
   Ingestion:
-    Enabled: false               # when true, publishers must present a bearer token or one of the API keys below
-    ApiKeys: [ ]
+    Enabled: false               # when true, publishers must present a bearer token or an API key
+    ApiKeys: [ ]                 # keys that may publish events of any source
+    Publishers:                  # keys bound to the sources they may publish events of
+      - Name: orders
+        ApiKey: ...
+        Sources: [ 'https://orders.example.com/*' ]
+    SourceClaimType: ~           # optionally, the claim that lists the sources a bearer token may publish events of
     ApiKeyHeader: X-Api-Key
 ```
 
 As with any ASP.NET Core setting, these can be supplied as environment variables, e.g. `Authentication__Dashboard__Enabled=true`. When the dashboard is secured, its session cookie is encrypted with keys stored in Redis, so that every gateway replica can read it. The OIDC client must allow `{gateway}/signin-oidc` as a redirect URI and `{gateway}/signout-callback-oidc` as a post-logout redirect URI. Signing out requires a `POST` to `auth/logout`.
+
+#### Roles
+
+Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includes the ones above it:
+
+| Role | May |
+|---|---|
+| Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the MCP tools, which are all read-only |
+| Operator | also resume and replay subscriptions, with `POST /api/resources/v1/subscriptions/{name}/resume` and `.../replay` |
+| Admin | also create, replace, patch and delete resources, and patch their status |
+
+A user who has none of the configured roles is denied access (`403`). When no role is configured, every signed-in user is an administrator, as before. The dashboard hides the actions the user may not perform. Acknowledgement endpoints remain anonymous, as the token is their authorization.
+
+**Breaking changes:** `Dashboard:RequiredRoles` is deprecated, and its roles are now treated as admin roles. The `DashboardPolicy` authorization policy is replaced by `ReadPolicy`, `OperatePolicy` and `AdministerPolicy`. The dashboard resumes and replays subscriptions with the new endpoints, so it requires a gateway of the same version.
+
+#### Publishers
+
+By default, any authenticated publisher may publish events of any source. A publisher can instead be bound to the sources it may publish events of:
+
+- **API keys:** a key listed under `Publishers` may only publish events whose source matches one of its `Sources`. Keys listed under `ApiKeys` stay unrestricted, for example for a subscription that bridges another Cloud Streams instance.
+- **Bearer tokens:** when `SourceClaimType` is set, a token may only publish events whose source matches one of the patterns the claim lists, as an array or a space-separated string. A token without the claim may publish none.
+
+A pattern must match the whole source, case-sensitively. `*` matches any sequence of characters: `https://orders.example.com/*` matches `https://orders.example.com/eu`, but not `https://orders.example.com.evil.net`. An event whose source is not allowed is rejected with `403 Forbidden`, problem type `https://cloud-streams.io/problems/source-not-allowed`, and counted as rejected for authorization.
 
 Behind a reverse proxy that terminates TLS, the `X-Forwarded-For` and `X-Forwarded-Proto` headers must be honoured, so that cookies are marked `Secure` and redirect URIs use `https`. They are only trusted when sent by a known proxy: loopback by default, otherwise the addresses and CIDR ranges configured below:
 

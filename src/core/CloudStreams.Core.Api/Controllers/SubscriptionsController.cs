@@ -84,6 +84,38 @@ public class SubscriptionsController(IMediator mediator)
     }
 
     /// <summary>
+    /// Resumes the specified faulted subscription, by clearing its fault so that the cloud event that caused it is retried. To skip that event instead, change the subscription's offset
+    /// </summary>
+    /// <param name="name">The name of the subscription to resume</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is the resumed subscription</returns>
+    /// <remarks>Requires the operator role, which, unlike the admin role, does not allow patching the subscription's status (see #147)</remarks>
+    [HttpPost("{name}/resume")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> ResumeSubscription(string name, CancellationToken cancellationToken = default)
+    {
+        return this.Process(await this.Mediator.ExecuteAsync(new ResumeSubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Replays the specified subscription, by delivering every cloud event matching it again, from the beginning of the stream
+    /// </summary>
+    /// <param name="name">The name of the subscription to replay</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is the replayed subscription</returns>
+    /// <remarks>Requires the operator role, which, unlike the admin role, does not allow patching the subscription (see #147)</remarks>
+    [HttpPost("{name}/replay")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> ReplaySubscription(string name, CancellationToken cancellationToken = default)
+    {
+        return this.Process(await this.Mediator.ExecuteAsync(new ReplaySubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Exports the specified subscription
     /// </summary>
     /// <param name="name">The name of the resource to get</param>

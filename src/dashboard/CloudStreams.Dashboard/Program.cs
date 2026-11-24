@@ -42,6 +42,7 @@ builder.Services.AddFlux(flux =>
     flux.ScanMarkupTypeAssembly<App>();
 });
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
+builder.Services.AddScoped<UserAccess>();
 builder.Services.AddSingleton<CommonJsInterop>();
 builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
 builder.Services.AddSingleton<MonacoInterop>();

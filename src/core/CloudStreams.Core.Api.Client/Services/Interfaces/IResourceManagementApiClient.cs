@@ -32,6 +32,6 @@ public interface IResourceManagementApiClient
     /// <summary>
     /// Gets the API used to manage <see cref="Subscription"/>s
     /// </summary>
-    public IResourceManagementApi<Subscription> Subscriptions { get; }
+    public ISubscriptionManagementApi Subscriptions { get; }
 
 }

@@ -25,8 +25,9 @@ namespace CloudStreams.Gateway.Controllers;
 /// Represents the API controller used to manage events
 /// </summary>
 /// <param name="mediator">The service used to mediate calls</param>
+/// <param name="authenticationOptions">The options used to configure authentication, which determine the sources publishers may publish cloud events of</param>
 [Route("api/events")]
-public class EventsController(IMediator mediator)
+public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configuration.CloudStreamsAuthenticationOptions authenticationOptions)
     : Controller
 {
 
@@ -47,7 +48,7 @@ public class EventsController(IMediator mediator)
     public virtual async Task<IActionResult> PublishCloudEvent([FromBody] CloudEvent e, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false);
+        var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e, this.User.GetAllowedSources(authenticationOptions.Ingestion)), cancellationToken).ConfigureAwait(false);
         if (result.Status == (int)HttpStatusCode.ServiceUnavailable) this.Response.Headers.RetryAfter = "5";
         // the first error describes why the event has been refused: publishers get its detail rather than a generic validation problem
         if (result.Status is < 200 or >= 300) return this.Problem(result);
