@@ -408,6 +408,9 @@ public class SubscriptionHandler
                 initializationOutcome = StreamInitializationOutcomes.Superseded;
                 return;
             }
+            // a handler that starts behind the end of the stream catches up: it is marked out of sync before subscribing, otherwise the records replayed by the
+            // subscription before the flag is set would be delivered both live and by the catch-up
+            if (offset != StreamPosition.EndOfStream && (ulong)offset < (this.StreamOffset ?? 0)) lock (this._syncLock) this.SubscriptionOutOfSync = true;
             var subscriptionHandle = observedStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
             var shouldCatchUp = false;
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);

@@ -30,11 +30,25 @@ namespace CloudStreams.Broker.Application.Services;
 /// <param name="controllerOptions">The service used to access the current <see cref="IOptions{TOptions}"/></param>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
 /// <param name="brokerOptions">The service used to access the current <see cref="Configuration.BrokerOptions"/></param>
-public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IResourceRepository repository, IOptions<BrokerOptions> brokerOptions)
+/// <param name="leases">The service used to manage the leases the broker holds on the subscriptions it handles</param>
+/// <remarks>
+/// A broker only handles a subscription while it holds the lease on it, so that broker replicas never handle the same subscription, and a subscription handled by a
+/// replica that dies is taken over by another one once its lease expires. Leases are renewed periodically: a replica that loses a lease, or fails to renew it in time,
+/// stops handling the subscription before the lease can expire, and be acquired by another replica (see #154)
+/// </remarks>
+public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactory loggerFactory, IOptions<ResourceControllerOptions<Subscription>> controllerOptions, IResourceRepository repository, IOptions<BrokerOptions> brokerOptions,
+    ISubscriptionLeaseManager leases)
     : ResourceController<Subscription>(loggerFactory, controllerOptions, repository)
 {
 
     readonly ConcurrentDictionary<string, byte> _lockedKeys = new();
+    readonly ConcurrentDictionary<string, DateTimeOffset> _leaseRenewedAt = new();
+    Task? _leaseRenewalTask;
+
+    /// <summary>
+    /// Gets the service used to manage the leases the broker holds on the subscriptions it handles
+    /// </summary>
+    protected ISubscriptionLeaseManager Leases { get; } = leases;
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
@@ -82,7 +96,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
                         Sequencing = CloudEventSequencingConfiguration.Default
                     }
                 });
-                broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false);
+                // another replica may have created the broker in the meantime
+                try { broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false); }
+                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { }
             }
             this.Broker = await this.Repository.MonitorAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, false, cancellationToken).ConfigureAwait(false);
         }
@@ -97,6 +113,79 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         this.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionDeletedAsync, cancellationToken);
         this.Broker!.Select(b => b.Resource.Spec.Selector).SubscribeAsync(this.OnBrokerSelectorChangedAsync, cancellationToken: cancellationToken);
         await this.OnBrokerSelectorChangedAsync(this.Broker!.Resource.Spec.Selector).ConfigureAwait(false);
+        if (this.BrokerOptions.Leases.Enabled) this.Logger.LogInformation("Broker replica '{owner}' handles the subscriptions it holds a lease on", this.Leases.OwnerId);
+        else this.Logger.LogWarning("Subscription leases are disabled: running several replicas of broker '{broker}' would deliver every event more than once", this.BrokerOptions.Name);
+        this._leaseRenewalTask = Task.Run(() => this.RenewLeasesAsync(this.CancellationToken), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Periodically renews the leases on the handled subscriptions, stops handling the ones whose lease has been lost, and acquires the selected subscriptions that no
+    /// replica handles
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task RenewLeasesAsync(CancellationToken cancellationToken)
+    {
+        var options = this.BrokerOptions.Leases;
+        if (!options.Enabled) return;
+        var interval = options.GetRenewalInterval();
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
+                foreach (var key in this.Subscriptions.Keys.ToList())
+                {
+                    bool? renewed;
+                    try { renewed = await this.Leases.TryAcquireAsync(key, cancellationToken).ConfigureAwait(false); }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        this.Logger.LogWarning(ex, "Failed to renew the lease on subscription '{subscription}'", key);
+                        renewed = null;
+                    }
+                    if (renewed == true)
+                    {
+                        this._leaseRenewedAt[key] = DateTimeOffset.UtcNow;
+                        continue;
+                    }
+                    // the lease must be given up before it can expire, and be acquired by another replica: past that point, both replicas could deliver
+                    var renewedAt = this._leaseRenewedAt.TryGetValue(key, out var value) ? value : DateTimeOffset.MinValue;
+                    if (renewed == false || DateTimeOffset.UtcNow - renewedAt >= options.Duration - interval)
+                    {
+                        this.Logger.LogWarning("The lease on subscription '{subscription}' has been lost: the subscription is no longer handled by this broker replica", key);
+                        if (this.Subscriptions.TryRemove(key, out var handler)) await handler.DisposeAsync().ConfigureAwait(false);
+                        this._leaseRenewedAt.TryRemove(key, out _);
+                    }
+                }
+                // subscriptions whose lease has expired, e.g. because the replica that handled them died, are taken over
+                foreach (var subscription in this.Resources.Values.ToList())
+                {
+                    var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+                    if (this.Subscriptions.ContainsKey(key) || this._lockedKeys.ContainsKey(key)) continue;
+                    await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                this.Logger.LogError(ex, "An error occurred while renewing the leases on subscriptions");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Releases the lease on the specified subscription
+    /// </summary>
+    /// <param name="key">The key of the subscription to release the lease on</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task ReleaseLeaseAsync(string key)
+    {
+        this._leaseRenewedAt.TryRemove(key, out _);
+        try { await this.Leases.ReleaseAsync(key, CancellationToken.None).ConfigureAwait(false); }
+        catch (Exception ex) { this.Logger.LogWarning(ex, "Failed to release the lease on subscription '{subscription}': it will expire on its own", key); }
     }
 
     /// <inheritdoc/>
@@ -159,6 +248,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
         if (!this.Subscriptions.TryRemove(key, out var handler) || handler == null) return;
         await handler.DisposeAsync().ConfigureAwait(false);
+        await this.ReleaseLeaseAsync(key).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -179,8 +269,16 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         }
         SubscriptionHandler? handler = null;
         var initialized = false;
+        var leased = false;
         try
         {
+            leased = await this.Leases.TryAcquireAsync(key, this.CancellationToken).ConfigureAwait(false);
+            if (!leased)
+            {
+                this.Logger.LogDebug("Subscription '{subscription}' is handled by another broker replica", subscription.GetQualifiedName());
+                return;
+            }
+            this._leaseRenewedAt[key] = DateTimeOffset.UtcNow;
             handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
             await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
             this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
@@ -195,8 +293,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         {
             this._lockedKeys.TryRemove(key, out _);
             if (!initialized && handler != null) await handler.DisposeAsync().ConfigureAwait(false);
+            if (!initialized && leased) await this.ReleaseLeaseAsync(key).ConfigureAwait(false);
         }
-        if (!initialized && !this.CancellationToken.IsCancellationRequested) _ = this.RetrySubscriptionCreationAsync(subscription);
+        if (!initialized && leased && !this.CancellationToken.IsCancellationRequested) _ = this.RetrySubscriptionCreationAsync(subscription);
     }
 
     /// <summary>
@@ -234,7 +333,9 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         activity?.SetTag("subscription.name", subscription.GetName());
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (this.Subscriptions.Remove(key, out var handler) && handler != null) await handler.DisposeAsync().ConfigureAwait(false);
+        if (!this.Subscriptions.Remove(key, out var handler) || handler == null) return;
+        await handler.DisposeAsync().ConfigureAwait(false);
+        await this.ReleaseLeaseAsync(key).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -244,8 +345,13 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     protected override async ValueTask DisposeAsync(bool disposing)
     {
         if (!disposing) return;
-        // handlers are disposed of first, while the manager's token source, to which they are linked, is still usable
-        foreach (var handler in this.Subscriptions.Values.ToList()) await handler.DisposeAsync().ConfigureAwait(false);
+        // handlers are disposed of first, while the manager's token source, to which they are linked, is still usable, and their leases are released so that other
+        // replicas take over without waiting for them to expire
+        foreach (var (key, handler) in this.Subscriptions.ToList())
+        {
+            await handler.DisposeAsync().ConfigureAwait(false);
+            await this.ReleaseLeaseAsync(key).ConfigureAwait(false);
+        }
         this.Subscriptions.Clear();
         if (this.Broker != null) await this.Broker.DisposeAsync().ConfigureAwait(false);
         await base.DisposeAsync(disposing);

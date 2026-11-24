@@ -46,6 +46,9 @@ builder.UseCloudStreams(builder =>
 
 builder.Services.Configure<BrokerOptions>(builder.Configuration);
 builder.Services.AddSingleton<IBrokerMetrics, BrokerMetrics>();
+// replicas hold a lease on the subscriptions they handle, unless leases are disabled (see #154)
+if (brokerOptions.Leases.Enabled) builder.Services.AddSingleton<ISubscriptionLeaseManager, RedisSubscriptionLeaseManager>();
+else builder.Services.AddSingleton<ISubscriptionLeaseManager, UnrestrictedSubscriptionLeaseManager>();
 builder.Services.AddSingleton<SubscriptionManager>();
 builder.Services.AddSingleton<IResourceController<Subscription>>(provider => provider.GetRequiredService<SubscriptionManager>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<SubscriptionManager>());
