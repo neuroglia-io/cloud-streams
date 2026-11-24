@@ -72,9 +72,9 @@ CloudStreams [subscriptions](https://github.com/neuroglia-io/cloud-streams/wiki/
 
 ### Getting started
 
-The easiest way to start the solution is using ``docker-compose``. 
+The easiest way to start the solution is using Docker Compose.
 
-To to this, clone the repository:
+To do this, clone the repository:
 
 ```shell
 git clone https://github.com/neuroglia-io/cloud-streams.git
@@ -83,7 +83,19 @@ git clone https://github.com/neuroglia-io/cloud-streams.git
 Navigate to the resulting `/cloud-streams/` directory, then run the following command:
 
 ```shell
-docker-compose -f "deployments/docker-compose/docker-compose.yml" up
+docker compose -f "deployments/docker-compose/docker-compose.yml" up --build
+```
+
+This development stack authenticates nothing, and runs EventStoreDB without TLS. To run it secured, add the secure overlay:
+- EventStoreDB runs over TLS, with certificates generated on first start, and requires credentials.
+- Users sign in to the dashboard through Keycloak, at `http://localhost:8180`, as the `demo` user.
+- Publishers must send an `X-Api-Key` header.
+
+The overlay reads its secrets from the environment, and never stores them in the repository:
+
+```shell
+export EVENTSTORE_ADMIN_PASSWORD=... KEYCLOAK_ADMIN_PASSWORD=... CLOUDSTREAMS_DEMO_PASSWORD=... CLOUDSTREAMS_INGESTION_API_KEY=...
+docker compose -f "deployments/docker-compose/docker-compose.yml" -f "deployments/docker-compose/docker-compose.secure.yml" up --build
 ```
 
 Now that everything is up and running, you can start publishing cloud events using POST requests on the gateway's ingestion endpoint, at `http://localhost:8080/api/events/pub`:
@@ -218,6 +230,7 @@ By default, Cloud Streams does not authenticate requests and relies on the infra
 Authentication:
   Oidc:
     Authority: https://keycloak.example.com/realms/cloud-streams
+    MetadataAddress: ...         # optional: where to fetch the discovery document, when the application reaches the authority at another address than users
     ClientId: cloud-streams-dashboard
     ClientSecret: ...            # optional, for confidential clients; PKCE is always used
     Audience: cloud-streams      # strongly recommended: the audience bearer tokens must have been issued for

@@ -4,10 +4,8 @@ on:
   pull_request:
     branches: [ main ]
     paths-ignore:
-      - '.github/**'
       - '**/*.md'
       - 'assets/**'
-      - 'deployments/**'
   workflow_call:
 
 permissions:
@@ -20,34 +18,40 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dotnet-version: ['9.0.x' ]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ matrix.dotnet-version }}
-        uses: actions/setup-dotnet@v2
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: '9.0.x'
 
       - name: Restore dependencies
         run: dotnet restore "${{ env.SOLUTION }}"
 
-      # - name: Test
-      #   run: dotnet test "${{ env.SOLUTION }}" --no-restore --verbosity normal"
+      - name: Build
+        run: dotnet build "${{ env.SOLUTION }}" --configuration Release --no-restore
 
-      # Test "per domain" for ease of readability
-      # NOTE: a --filter that matches nothing exits 0, so a domain with no tests - or a typo in the
-      # filter - reports green. Every domain that has tests needs its own step here or it never runs.
-      - name: Test Core
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Core"
+      # Every test of every test project runs: no filter, so that no test can be left out by a filter that matches nothing
+      - name: Test
+        run: >
+          dotnet test "${{ env.SOLUTION }}" --configuration Release --no-build
+          --logger "trx" --logger "console;verbosity=normal"
+          --collect "XPlat Code Coverage" --results-directory ./test-results
 
-      - name: Test Broker
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Broker"
+      - name: Report coverage
+        if: ${{ !cancelled() }}
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator -reports:"./test-results/**/coverage.cobertura.xml" -targetdir:./test-results/coverage -reporttypes:"MarkdownSummaryGithub;Cobertura;HtmlSummary"
+          cat ./test-results/coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Test Gateway
-        run: dotnet test "${{ env.SOLUTION }}" --no-restore --filter "FullyQualifiedName~Cases.Gateway"
-      # ...
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./test-results
+          retention-days: 14

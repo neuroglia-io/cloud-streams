@@ -1,0 +1,99 @@
+# Secures the stack of docker-compose.yml:
+#   - EventStoreDB runs over TLS, with certificates generated on first start, and requires credentials;
+#   - users sign in to the dashboard with Keycloak (http://localhost:8180), which imports the realm of config/keycloak;
+#   - publishers must present an API key (or a bearer token) to publish events.
+#
+# Secrets are never committed: set them in the environment, or in a .env.secure file passed with --env-file, before starting the stack:
+#
+#   EVENTSTORE_ADMIN_PASSWORD=...        # the password of EventStoreDB's 'admin' user
+#   KEYCLOAK_ADMIN_PASSWORD=...          # the password of Keycloak's 'admin' user, for its console
+#   CLOUDSTREAMS_DEMO_PASSWORD=...       # the password of the 'demo' user, who may sign in to the dashboard
+#   CLOUDSTREAMS_INGESTION_API_KEY=...   # the key publishers send in the X-Api-Key header
+#
+#   docker compose -f docker-compose.yml -f docker-compose.secure.yml up --build
+
+services:
+
+  certificates:
+    image: eventstore/es-gencert-cli:1.0.2
+    # Runs as root to write to the volume, then hands the files to EventStoreDB's user (1000): only the CA certificate is readable by other containers
+    user: root
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        set -e
+        if [ -f /certs/node/node.crt ]; then echo "Certificates already generated"; exit 0; fi
+        /app/es-gencert-cli create-ca -out /certs/ca
+        /app/es-gencert-cli create-node -ca-certificate /certs/ca/ca.crt -ca-key /certs/ca/ca.key -out /certs/node -dns-names eventstore,localhost -ip-addresses 127.0.0.1
+        chown -R 1000:1000 /certs
+        chmod 755 /certs /certs/ca /certs/node
+        chmod 644 /certs/ca/ca.crt /certs/node/node.crt
+        chmod 600 /certs/ca/ca.key /certs/node/node.key
+    volumes:
+      - certificates:/certs
+
+  eventstore:
+    environment:
+      EVENTSTORE_INSECURE: "false"
+      EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP: "false"
+      EVENTSTORE_CERTIFICATE_FILE: /certs/node/node.crt
+      EVENTSTORE_CERTIFICATE_PRIVATE_KEY_FILE: /certs/node/node.key
+      EVENTSTORE_TRUSTED_ROOT_CERTIFICATES_PATH: /certs/ca
+      EVENTSTORE_DEFAULT_ADMIN_PASSWORD: ${EVENTSTORE_ADMIN_PASSWORD:?Set EVENTSTORE_ADMIN_PASSWORD}
+    volumes:
+      - certificates:/certs:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "curl --fail --silent --cacert /certs/ca/ca.crt https://localhost:2113/health/live || exit 1" ]
+    depends_on:
+      certificates:
+        condition: service_completed_successfully
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: [ "start-dev", "--import-realm" ]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+      # Browsers reach Keycloak at localhost:8180, containers at keycloak:8080: tokens are issued by the former, and back-channel requests use the latter
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      CLOUDSTREAMS_DEMO_PASSWORD: ${CLOUDSTREAMS_DEMO_PASSWORD:?Set CLOUDSTREAMS_DEMO_PASSWORD}
+    volumes:
+      - ./config/keycloak:/opt/keycloak/data/import:ro
+    ports:
+      - 8180:8080
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3" ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  gateway:
+    environment:
+      CONNECTIONSTRINGS__EVENTSTORE: esdb://admin:${EVENTSTORE_ADMIN_PASSWORD}@eventstore:2113?tls=true&tlsCaFile=/certs/ca/ca.crt
+      AUTHENTICATION__OIDC__AUTHORITY: http://localhost:8180/realms/cloud-streams
+      AUTHENTICATION__OIDC__METADATAADDRESS: http://keycloak:8080/realms/cloud-streams/.well-known/openid-configuration
+      AUTHENTICATION__OIDC__REQUIREHTTPSMETADATA: "false"
+      AUTHENTICATION__OIDC__CLIENTID: cloud-streams-dashboard
+      AUTHENTICATION__OIDC__AUDIENCE: cloud-streams
+      AUTHENTICATION__OIDC__REQUIREAUDIENCE: "true"
+      AUTHENTICATION__DASHBOARD__ENABLED: "true"
+      AUTHENTICATION__DASHBOARD__REQUIREDROLES__0: cloud-streams-user
+      AUTHENTICATION__INGESTION__ENABLED: "true"
+      AUTHENTICATION__INGESTION__APIKEYS__0: ${CLOUDSTREAMS_INGESTION_API_KEY:?Set CLOUDSTREAMS_INGESTION_API_KEY}
+    volumes:
+      - certificates:/certs:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  broker:
+    environment:
+      CONNECTIONSTRINGS__EVENTSTORE: esdb://admin:${EVENTSTORE_ADMIN_PASSWORD}@eventstore:2113?tls=true&tlsCaFile=/certs/ca/ca.crt
+    volumes:
+      - certificates:/certs:ro
+
+volumes:
+  certificates:
