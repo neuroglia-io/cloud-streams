@@ -13,6 +13,7 @@
 
 using CloudStreams.Core;
 using CloudStreams.Core.Api;
+using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Api.Hubs;
 using CloudStreams.Core.Application.Configuration;
 using CloudStreams.Core.Application.Services;
@@ -42,6 +43,7 @@ builder.UseCloudStreams(builder =>
     builder.RegisterApplicationPart<EventsController>();
     builder.RegisterMediationAssembly<ConsumeEventCommand>();
     builder.RegisterValidationAssembly<CloudEventValidator>();
+    builder.RegisterHealthCheck(healthChecks => healthChecks.AddCheck<AdmissionControlHealthCheck>("admission"));
     
     // Use pod-specific name for OpenTelemetry (e.g., gateway-mozart, gateway-content)
     if (!string.IsNullOrWhiteSpace(gatewayOptions.Name))
@@ -78,10 +80,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseHealthChecks("/healthz", new HealthCheckOptions()
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
+app.UseCloudStreamsHealthChecks();
 app.UseSwagger(builder =>
 {
     builder.RouteTemplate = "api/{documentName}/doc/oas.{json|yaml}";

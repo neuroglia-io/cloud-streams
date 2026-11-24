@@ -11,7 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Grpc.Core;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Neuroglia.Data.Infrastructure.EventSourcing;
 using Neuroglia.Data.Infrastructure.EventSourcing.Services;
 using Neuroglia.Data.Infrastructure.ResourceOriented.Properties;
@@ -28,9 +30,24 @@ namespace CloudStreams.Core.Application.Services;
 /// <param name="eventStore">The underlying service used to source events</param>
 /// <param name="projectionManager">The service used to manage event-driven projections</param>
 /// <param name="serializer">The service used to serialize/deserialize data to/from JSON</param>
-public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer)
-    : IHostedService, ICloudEventStore
+/// <param name="logger">The service used to perform logging</param>
+public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null)
+    : IHostedService, ICloudEventStore, IDisposable
 {
+
+    readonly CancellationTokenSource _cancellationTokenSource = new();
+    Task? _projectionSetupTask;
+    volatile IReadOnlyCollection<string>? _missingProjections;
+
+    /// <summary>
+    /// Gets the service used to perform logging
+    /// </summary>
+    protected ILogger Logger { get; } = (ILogger?)logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+
+    /// <summary>
+    /// Gets the names of the projections that are missing, as of the last attempt at setting them up, or null if no attempt has completed yet
+    /// </summary>
+    public IReadOnlyCollection<string>? MissingProjections => this._missingProjections;
 
     /// <summary>
     /// Gets the underlying service used to source events
@@ -48,10 +65,27 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     protected IJsonSerializer Serializer { get; } = serializer;
 
     /// <inheritdoc/>
-    public virtual Task StartAsync(CancellationToken cancellationToken) => this.SetupProjectionsAsync(cancellationToken);
+    /// <remarks>Projections are set up in the background, and retried until they all exist, so that an unavailable event store does not prevent the host from starting (see #186)</remarks>
+    public virtual Task StartAsync(CancellationToken cancellationToken)
+    {
+        this._projectionSetupTask = Task.Run(() => this.EnsureProjectionsAsync(this._cancellationTokenSource.Token), CancellationToken.None);
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc/>
-    public virtual Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public virtual async Task StopAsync(CancellationToken cancellationToken)
+    {
+        this._cancellationTokenSource.Cancel();
+        if (this._projectionSetupTask != null) await Task.WhenAny(this._projectionSetupTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        this._cancellationTokenSource.Cancel();
+        this._cancellationTokenSource.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     /// <inheritdoc/>
     public virtual async Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default)
@@ -113,12 +147,19 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     public virtual async IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
+        var projectionName = Projections.CloudEventPartitionsMetadataPrefix + typeName;
         List<string>? partitionsIds = null;
+        // a missing projection lists no partition, while any other failure is reported rather than being mistaken for an empty list (see #187)
         try
         {
-            partitionsIds = await this.ProjectionManager.GetStateAsync<List<string>>(Projections.CloudEventPartitionsMetadataPrefix + typeName, cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (!await this.ProjectionExistsAsync(projectionName, cancellationToken).ConfigureAwait(false)) this.Logger.LogWarning("The projection '{projection}', which lists the partitions of type '{partitionType}', does not exist", projectionName, partitionType);
+            else partitionsIds = await this.ProjectionManager.GetStateAsync<List<string>>(projectionName, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
-        catch { }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            this.Logger.LogError(ex, "Failed to read the projection '{projection}'", projectionName);
+            throw new ProblemDetailsException(new ProblemDetails(new Uri("https://cloud-streams.io/problems/event-store-unavailable"), "Service Unavailable", (int)HttpStatusCode.ServiceUnavailable, $"Failed to list the partitions of type '{EnumHelper.Stringify(partitionType)}': the event store is unavailable"));
+        }
         if (partitionsIds == null) yield break;
         await foreach (var id in partitionsIds.ToAsyncEnumerable()) yield return id;
     }
@@ -229,64 +270,115 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     public virtual Task TruncateAsync(ulong beforeVersion, CancellationToken cancellationToken = default) => this.EventStore.TruncateAsync(Streams.All, beforeVersion, cancellationToken);
 
     /// <summary>
-    /// Creates and configures the projections required by Cloud Streams
+    /// Gets the definitions of the projections required by Cloud Streams, as the names of the projections and functions that create them
     /// </summary>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task SetupProjectionsAsync(CancellationToken cancellationToken = default)
+    /// <returns>The definitions of the projections required by Cloud Streams</returns>
+    protected virtual IEnumerable<(string Name, Func<CancellationToken, Task> Create)> GetProjectionDefinitions()
     {
-        try { if (await this.ProjectionManager.GetStatusAsync(Projections.PartitionBySource, cancellationToken: cancellationToken) != null) return; }
-        catch { }
-
-        try
-        {
-            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySource,
-                projection => projection
-                    .FromStream(Streams.All)
-                    .When((state, e) => e.Metadata!.Get("source") != null)
-                    .Then((state, e) => Projection.LinkEventTo("$by-source-" + e.Metadata!.Get("source"), e)),
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch { }
-
-        try
-        {
-            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySubject,
+        yield return (Projections.PartitionBySource, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySource,
+            projection => projection
+                .FromStream(Streams.All)
+                .When((state, e) => e.Metadata!.Get("source") != null)
+                .Then((state, e) => Projection.LinkEventTo("$by-source-" + e.Metadata!.Get("source"), e)),
+            cancellationToken: cancellationToken));
+        yield return (Projections.PartitionBySubject, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySubject,
             projection => projection
                 .FromStream(Streams.All)
                 .When((state, e) => e.Metadata!.Get("subject") != null)
                 .Then((state, e) => Projection.LinkEventTo("$by-subject-" + e.Metadata!.Get("subject"), e)),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch { }
-
-        try
-        {
-            await this.ProjectionManager.CreateAsync<object>(Projections.PartitionByCausationId,
-           projection => projection
+            cancellationToken: cancellationToken));
+        yield return (Projections.PartitionByCausationId, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionByCausationId,
+            projection => projection
                 .FromStream(Streams.All)
                 .When((state, e) => e.Metadata!.Get("$causationId") != null)
                 .Then((state, e) => Projection.LinkEventTo("$by-causation-" + e.Metadata!.Get("$causationId"), e)),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch { }
-
+            cancellationToken: cancellationToken));
         foreach (var partitionType in Enum.GetValues<CloudEventPartitionType>())
         {
             var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
             var metadataPath = typeName.Replace("by", string.Empty).ToCamelCase();
             if (partitionType == CloudEventPartitionType.ByCorrelationId || partitionType == CloudEventPartitionType.ByCausationId) metadataPath = "$" + metadataPath.Replace("-id", "Id");
+            var name = Projections.CloudEventPartitionsMetadataPrefix + typeName;
+            yield return (name, cancellationToken => this.ProjectionManager.CreateAsync<List<object>>(name,
+                projection => projection
+                    .FromStream(Streams.All)
+                    .Given(() => new List<object>())
+                    .When((state, e) => e.Metadata!.Get(metadataPath) != null && !state.Contains(e.Metadata!.Get(metadataPath)))
+                    .Then((state, e) => state.Add(e.Metadata!.Get(metadataPath))),
+                cancellationToken: cancellationToken));
+        }
+    }
+
+    /// <summary>
+    /// Creates the projections required by Cloud Streams that do not exist yet
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The names of the projections that are still missing</returns>
+    /// <remarks>
+    /// Each projection is checked and created on its own, so that a projection introduced by a newer version is created on existing deployments, and a failure is
+    /// logged instead of being swallowed (see #186)
+    /// </remarks>
+    public virtual async Task<IReadOnlyCollection<string>> SetupProjectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var missing = new List<string>();
+        foreach (var (name, create) in this.GetProjectionDefinitions())
+        {
             try
             {
-                await this.ProjectionManager.CreateAsync<List<object>>(Projections.CloudEventPartitionsMetadataPrefix + typeName,
-                     projection => projection
-                        .FromStream(Streams.All)
-                        .Given(() => new List<object>())
-                        .When((state, e) => e.Metadata!.Get(metadataPath) != null && !state.Contains(e.Metadata!.Get(metadataPath)))
-                        .Then((state, e) => state.Add(e.Metadata!.Get(metadataPath))),
-                     cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (await this.ProjectionExistsAsync(name, cancellationToken).ConfigureAwait(false)) continue;
+                await create(cancellationToken).ConfigureAwait(false);
+                this.Logger.LogInformation("Created the projection '{projection}'", name);
             }
-            catch { }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                this.Logger.LogError(ex, "Failed to set up the projection '{projection}'", name);
+                missing.Add(name);
+            }
+        }
+        this._missingProjections = missing;
+        return missing;
+    }
+
+    /// <summary>
+    /// Determines whether the specified projection exists
+    /// </summary>
+    /// <param name="name">The name of the projection to check</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A boolean indicating whether or not the specified projection exists</returns>
+    /// <remarks>EventStoreDB reports a missing projection with a 'NotFound' <see cref="RpcException"/>, while any other failure means that existence is unknown, and is thrown</remarks>
+    protected virtual async Task<bool> ProjectionExistsAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await this.ProjectionManager.GetStatusAsync(name, cancellationToken).ConfigureAwait(false) != null;
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sets up the projections required by Cloud Streams, retrying with backoff until they all exist
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task EnsureProjectionsAsync(CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; !cancellationToken.IsCancellationRequested; attempt++)
+        {
+            try
+            {
+                var missing = await this.SetupProjectionsAsync(cancellationToken).ConfigureAwait(false);
+                if (missing.Count == 0) return;
+                var delay = TimeSpan.FromSeconds(Math.Min(5 * Math.Pow(2, attempt - 1), 300));
+                this.Logger.LogWarning("{count} projection(s) could not be set up: {projections}. Retrying in {delay}...", missing.Count, string.Join(", ", missing), delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
         }
     }
 

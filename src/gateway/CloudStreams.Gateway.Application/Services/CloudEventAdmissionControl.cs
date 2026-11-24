@@ -107,6 +107,19 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// </summary>
     protected IResourceMonitor<Core.Resources.Gateway>? Configuration { get; set; }
 
+    /// <summary>
+    /// Gets a boolean indicating whether or not the gateway's configuration has been loaded, and cloud events can therefore be admitted
+    /// </summary>
+    public bool IsReady => this.Configuration != null;
+
+    /// <summary>
+    /// Converts the specified failed <see cref="OperationResult"/> into a failed <see cref="OperationResult{T}"/>, keeping its errors
+    /// </summary>
+    /// <param name="result">The failed <see cref="OperationResult"/> to convert</param>
+    /// <returns>A new failed <see cref="OperationResult{T}"/></returns>
+    /// <remarks><see cref="OperationResult.OfType{T}"/> drops the errors, and with them the reason why the event has been refused</remarks>
+    protected static OperationResult<CloudEventDescriptor> Failure(OperationResult result) => new(result.Status, errors: result.Errors?.ToArray());
+
     /// <inheritdoc/>
     /// <remarks>
     /// The gateway's resource is only created when it does not exist, a conflict with a replica that created it concurrently is tolerated, and transient failures are
@@ -186,14 +199,14 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
                 return new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted);
             }
             this._metrics.IncrementTotalRejectedEvents();
-            return result.OfType<CloudEventDescriptor>();
+            return Failure(result);
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
             this._metrics.IncrementTotalInvalidEvents();
-            return result.OfType<CloudEventDescriptor>();
+            return Failure(result);
         }
         this.Logger.LogDebug("Admission evaluation for cloud event with id '{eventId}' completed successfully", e.Id);
         this.Logger.LogDebug("Extracting metadata from the cloud event with id '{eventId}'", e.Id);
@@ -294,7 +307,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             {
                 // the schema is chosen by the publisher: failing to get it is a problem with the event, not with the gateway (see #141)
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: {reason}", e.Id, ex.Message);
-                return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid data schema", (int)HttpStatusCode.BadRequest, ex.Message)]);
+                return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid data schema", (int)HttpStatusCode.BadRequest, ex.Message, errors: [new KeyValuePair<string, string[]>(CloudEventAttributes.DataSchema, [ex.Message])])]);
             }
         }
         if (schema != null)

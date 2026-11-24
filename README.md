@@ -252,6 +252,15 @@ SchemaRegistry:
 
 ### Monitoring
 
+Gateways, brokers and the API expose two health endpoints, suited to liveness and readiness probes:
+
+| Endpoint | Checks | Status |
+|---|---|---|
+| `/healthz/live` | none: the process is alive | always `200` |
+| `/healthz` | Redis, EventStoreDB, the projections Cloud Streams relies on and, on gateways, whether the admission configuration has been loaded | `503` if any check is unhealthy |
+
+When the dashboard requires users to sign in, anonymous callers of `/healthz` only get the overall status, without the details of each check.
+
 `GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
 
 Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `Warning` by default. Set `Logging__LogLevel__System.Net.Http.HttpClient.OtlpTraceExporter` (or `OtlpMetricExporter`/`OtlpLogExporter`) to restore them.
