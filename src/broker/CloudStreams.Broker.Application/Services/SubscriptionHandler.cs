@@ -271,10 +271,12 @@ public class SubscriptionHandler
                     .Select(subscription => subscription.Spec.Stream!.Offset)
                     .DistinctUntilChanged()
                     .Select(offset => OnSubscriptionOffsetChangedAsync(offset).ToObservable()),
-                shared.Where(s => s.Status != null && s.Status.Stream != null)
-                    .Select(s => s.Status!.Stream!.Fault)
-                    .DistinctUntilChanged()
-                    .Where(fault => fault != null)
+                // the handler reacts to the subscription becoming faulted, which stops streaming, and to its fault being cleared, which resumes it: a fault is
+                // cleared when the offset of a faulted subscription is changed, and was otherwise never followed by streaming again (see #204)
+                shared.Select(s => s.Status?.Stream?.Fault)
+                    .StartWith(this.Subscription.Status?.Stream?.Fault)
+                    .DistinctUntilChanged(fault => fault != null)
+                    .Skip(1)
                     .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable()),
                 shared.Select(s => s.Status?.Subscriber?.PendingAck)
                     .DistinctUntilChanged(pendingAck => pendingAck?.Token)
