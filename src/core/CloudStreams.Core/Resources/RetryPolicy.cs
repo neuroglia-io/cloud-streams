@@ -20,7 +20,15 @@ namespace CloudStreams.Core.Resources;
 public record RetryPolicy
 {
 
-    static readonly RetryBackoffDuration DefaultRetryBackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(3));
+    /// <summary>
+    /// Gets the maximum amount of retry attempts to perform when <see cref="MaxAttempts"/> has not been set
+    /// </summary>
+    public const int DefaultMaxAttempts = 5;
+
+    /// <summary>
+    /// Gets the default backoff duration between retry attempts, used when <see cref="BackoffDuration"/> has not been set
+    /// </summary>
+    public static readonly RetryBackoffDuration DefaultRetryBackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(3));
 
     /// <summary>
     /// Initializes a new <see cref="RetryPolicy"/>
@@ -46,7 +54,8 @@ public record RetryPolicy
     public virtual RetryBackoffDuration BackoffDuration { get; set; } = null!;
 
     /// <summary>
-    /// Gets/sets the maximum retry attempts to perform. If not set, it will retry forever
+    /// Gets/sets the maximum retry attempts to perform.<para></para>
+    /// If not set, defaults to <see cref="DefaultMaxAttempts"/>. Set to a negative value (e.g. <c>-1</c>) to retry forever
     /// </summary>
     [DataMember(Order = 2, Name = "maxAttempts"), JsonPropertyName("maxAttempts"), YamlMember(Alias = "maxAttempts")]
     public virtual int? MaxAttempts { get; set; }

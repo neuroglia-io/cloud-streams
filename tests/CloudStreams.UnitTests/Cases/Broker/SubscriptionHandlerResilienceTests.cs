@@ -24,9 +24,7 @@ public class SubscriptionHandlerResilienceTests
     /// reached the hosted service and stopped the host, taking every other subscription with it.
     /// </summary>
     /// <remarks>
-    /// The subscriber recovers on the second attempt on purpose. A permanently-failing 4xx cannot be asserted here yet: the retry policy is
-    /// currently bypassed (issue #131), so <c>maxAttempts</c> has no effect and an always-failing subscriber recurses without bound.
-    /// Add that case once #131 lands.
+    /// The subscriber recovers on the second attempt. A permanently-failing subscriber is covered by <see cref="SubscriptionHandlerRetryPolicyTests"/>.
     /// </remarks>
     [Theory]
     [InlineData(HttpStatusCode.BadRequest)]

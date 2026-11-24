@@ -39,4 +39,11 @@ public record Subscriber
     [DataMember(Order = 3, Name = "retryPolicy"), JsonPropertyName("retryPolicy"), YamlMember(Alias = "retryPolicy")]
     public virtual HttpClientRetryPolicy? RetryPolicy { get; set; }
 
+    /// <summary>
+    /// Gets/sets the maximum amount of time to wait for the subscriber to respond to a single delivery attempt. If not set, will fallback to the broker's default dispatch timeout.<para></para>
+    /// A delivery attempt that times out is considered failed and is retried according to the retry policy
+    /// </summary>
+    [DataMember(Order = 4, Name = "timeout"), JsonPropertyName("timeout"), YamlMember(Alias = "timeout")]
+    public virtual Duration? Timeout { get; set; }
+
 }

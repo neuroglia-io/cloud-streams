@@ -37,6 +37,23 @@ public class SubscriptionHandlerTests
         Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
     }
 
+    /// <summary>
+    /// Regression guard for issue #104: the subscriber state used to stay 'unknown' forever, since it was only ever set when the subscriber was unreachable.
+    /// </summary>
+    [Fact]
+    public async Task Successful_Delivery_Should_Report_The_Subscriber_As_Reachable_Once()
+    {
+        // arrange
+        await using var context = await BrokerTestContext.CreateAsync(StubHttpMessageHandler.AlwaysResponds(HttpStatusCode.OK));
+
+        // act
+        await context.Handler.DispatchRecordAsync(BrokerTestContext.CreateRecord(41));
+        await context.Handler.DispatchRecordAsync(BrokerTestContext.CreateRecord(42));
+
+        // assert
+        Assert.Equal(["reachable"], context.Patches.ValuesWrittenTo("/status/subscriber/state").Select(v => v.ToString()));
+    }
+
     [Fact]
     public async Task Dispatch_Should_Eventually_Deliver_When_The_Subscriber_Recovers()
     {

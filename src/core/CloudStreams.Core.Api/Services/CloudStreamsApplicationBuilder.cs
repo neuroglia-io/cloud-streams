@@ -43,6 +43,16 @@ public class CloudStreamsApplicationBuilder
 {
 
     /// <summary>
+    /// Gets the log categories of the HTTP clients used by the OpenTelemetry OTLP exporters
+    /// </summary>
+    public static readonly IReadOnlyList<string> OtlpExporterLogCategories =
+    [
+        "System.Net.Http.HttpClient.OtlpTraceExporter",
+        "System.Net.Http.HttpClient.OtlpMetricExporter",
+        "System.Net.Http.HttpClient.OtlpLogExporter"
+    ];
+
+    /// <summary>
     /// Initializes a new <see cref="CloudStreamsApplicationBuilder"/>
     /// </summary>
     /// <param name="configuration">The current <see cref="ConfigurationManager"/></param>
@@ -65,6 +75,8 @@ public class CloudStreamsApplicationBuilder
             options.Providers.Add<GzipCompressionProvider>();
         });
         this.Services.AddProblemDetails();
+        this.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
+        this.Services.AddCloudStreamsAuthentication(configuration);
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
         this.Services.AddCoreApiQueries();
@@ -235,6 +247,12 @@ public class CloudStreamsApplicationBuilder
         {
             options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId;
         });
+        // the OTLP exporters send through IHttpClientFactory, which logs 4 informational lines per export and per signal, drowning the application's own logs (see #125).
+        // they are lowered to warnings unless explicitly configured, e.g. with 'Logging__LogLevel__System.Net.Http.HttpClient.OtlpTraceExporter=Information'
+        foreach (var category in OtlpExporterLogCategories)
+        {
+            if (string.IsNullOrWhiteSpace(this.Configuration[$"Logging:LogLevel:{category}"])) this.Logging.AddFilter(category, LogLevel.Warning);
+        }
 
         var telemetry = this.Services.AddOpenTelemetry();
         telemetry = telemetry.WithTracing(builder =>

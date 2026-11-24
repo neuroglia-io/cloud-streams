@@ -16,6 +16,8 @@ using JsonCons.Utilities;
 using Neuroglia.Data;
 using Neuroglia.Serialization;
 using Neuroglia.Serialization.Yaml;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CloudStreams.Dashboard.Components.ResourceEditorStateManagement;
 
@@ -58,6 +60,11 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.Saving"/> changes
     /// </summary>
     public IObservable<bool> Saving => this.Select(state => state.Saving).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.SuccessMessage"/> changes
+    /// </summary>
+    public IObservable<string?> SuccessMessage => this.Select(state => state.SuccessMessage).DistinctUntilChanged();
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="ResourceEditorState{TResource}.ProblemType"/> changes
@@ -202,6 +209,7 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
             ProblemStatus = problem?.Status ?? 0,
             ProblemDetail = problem?.Detail ?? string.Empty,
             ProblemErrors = problem?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? [],
+            SuccessMessage = null,
 
         });
     }
@@ -260,8 +268,62 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
             try
             {
                 resource = jsonSerializer.Deserialize<TResource>(textEditorValue);
+                if (!this.ValidateMappedProperties(textEditorValue, resource)) return;
                 resource = await resourceManagementApi.Manage<TResource>().CreateAsync(resource!, this.CancellationTokenSource.Token);
                 this.SetResource(resource);
+                this.SetSuccessMessage($"The {typeof(TResource).Name.ToLower()} '{resource.GetName()}' has been created");
+            }
+            catch (ProblemDetailsException ex)
+            {
+                this.SetProblemDetails(ex.Problem);
+            }
+        }
+        catch (Exception ex)
+        {
+            this.SetProblemDetails(new ProblemDetails(
+                ProblemTypes.SchemaValidationFailed,
+                "Creation failed",
+                400,
+                ex.Message
+            ));
+        }
+        finally
+        {
+            this.SetSaving(false);
+        }
+    }
+
+    /// <summary>
+    /// Updates the current resource using the text editor value
+    /// </summary>
+    /// <returns></returns>
+    /// <remarks>
+    /// Only the resource's spec can be patched: its metadata is managed by the server and its status by the controllers. The patch is therefore computed from
+    /// the spec alone, otherwise any status change made since the editor was opened (such as an acknowledged offset) would end up in it and be rejected (see #109)
+    /// </remarks>
+    public async Task UpdateResourceAsync()
+    {
+        this.SetProblemDetails(null);
+        var resource = this.Get(state => state.Resource);
+        if (resource == null) return;
+        this.SetSaving(true);
+        try
+        {
+            var textEditorValue = this.Get(state => state.TextEditorValue);
+            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
+            var updatedResource = jsonSerializer.Deserialize<TResource>(textEditorValue);
+            if (!this.ValidateMappedProperties(textEditorValue, updatedResource)) return;
+            var jsonPatch = JsonPatch.FromDiff(this.GetSpecDocument(resource), this.GetSpecDocument(updatedResource));
+            if (jsonPatch.RootElement.GetArrayLength() < 1)
+            {
+                this.SetSuccessMessage("The specification has not changed: there is nothing to update");
+                return;
+            }
+            try
+            {
+                resource = await resourceManagementApi.Manage<TResource>().PatchAsync(new Patch(PatchType.JsonPatch, jsonPatch), resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
+                this.SetResource(resource);
+                this.SetSuccessMessage($"The {typeof(TResource).Name.ToLower()} '{resource.GetName()}' has been updated");
             }
             catch (ProblemDetailsException ex)
             {
@@ -277,52 +339,106 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
                 ex.Message
             ));
         }
-        this.SetSaving(false);
+        finally
+        {
+            this.SetSaving(false);
+        }
     }
 
     /// <summary>
-    /// Updates the current resource using the text editor value
+    /// Gets a <see cref="JsonElement"/> that only contains the specified resource's spec, if any
     /// </summary>
-    /// <returns></returns>
-    public async Task UpdateResourceAsync()
+    /// <param name="resource">The resource to get the spec document of</param>
+    /// <returns>A new <see cref="JsonElement"/> of the form <c>{ "spec": ... }</c></returns>
+    JsonElement GetSpecDocument(TResource? resource)
     {
-        this.SetProblemDetails(null);
-        this.SetSaving(true);
-        var resource = this.Get(state => state.Resource);
-        if (resource == null)
+        var node = resource == null ? null : JsonNode.Parse(jsonSerializer.SerializeToElement(resource)!.Value.GetRawText()) as JsonObject;
+        var document = new JsonObject();
+        if (node != null && node.TryGetPropertyValue("spec", out var spec) && spec != null) document["spec"] = spec.DeepClone();
+        return JsonDocument.Parse(document.ToJsonString()).RootElement;
+    }
+
+    /// <summary>
+    /// Ensures that every property of the specified editor value is mapped by the resource it has been deserialized into, and reports the ones that are not
+    /// </summary>
+    /// <param name="json">The JSON the resource has been deserialized from</param>
+    /// <param name="resource">The deserialized resource</param>
+    /// <returns>A boolean indicating whether or not all properties have been mapped</returns>
+    /// <remarks>
+    /// The editor value is deserialized into a strongly typed resource before being sent, which silently discards any property the resource does not define,
+    /// such as one declared at the wrong level. Reporting them avoids creating or updating a resource that differs from what the user wrote (see #127)
+    /// </remarks>
+    bool ValidateMappedProperties(string json, TResource? resource)
+    {
+        var unmapped = FindUnmappedProperties(JsonNode.Parse(json), resource == null ? null : JsonNode.Parse(jsonSerializer.SerializeToElement(resource)!.Value.GetRawText()), string.Empty).ToList();
+        if (unmapped.Count < 1) return true;
+        this.SetProblemDetails(new ProblemDetails(
+            ProblemTypes.SchemaValidationFailed,
+            "Unsupported properties",
+            400,
+            $"The following properties are not supported by the {typeof(TResource).Name.ToLower()} definition, and would be ignored. Please check that they are declared at the right level",
+            null,
+            new Dictionary<string, string[]>() { { "Unsupported properties", [.. unmapped] } }));
+        return false;
+    }
+
+    /// <summary>
+    /// Finds the properties of the specified source node that are missing from the specified mapped node
+    /// </summary>
+    /// <param name="source">The node, as written by the user</param>
+    /// <param name="mapped">The node, as mapped by the resource</param>
+    /// <param name="path">The path of the nodes</param>
+    /// <returns>A new <see cref="IEnumerable{T}"/> containing the paths of all unmapped properties</returns>
+    static IEnumerable<string> FindUnmappedProperties(JsonNode? source, JsonNode? mapped, string path)
+    {
+        if (source is JsonObject sourceObject)
         {
-            return;
-        }
-        try
-        {
-            var textEditorValue = this.Get(state => state.TextEditorValue);
-            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
-            var jsonPatch = JsonPatch.FromDiff(jsonSerializer.SerializeToElement(resource)!.Value, jsonSerializer.SerializeToElement(jsonSerializer.Deserialize<TResource>(textEditorValue))!.Value);
-            var patch = jsonSerializer.Deserialize<Json.Patch.JsonPatch>(jsonPatch.RootElement);
-            if (patch != null)
+            var mappedObject = mapped as JsonObject;
+            foreach (var property in sourceObject)
             {
-                var resourcePatch = new Patch(PatchType.JsonPatch, jsonPatch);
-                try
-                {
-                    resource = await resourceManagementApi.Manage<TResource>().PatchAsync(resourcePatch, resource.GetName(), resource.GetNamespace(), this.CancellationTokenSource.Token);
-                    this.SetResource(resource);
-                }
-                catch (ProblemDetailsException ex)
-                {
-                    this.SetProblemDetails(ex.Problem);
-                }
+                if (IsEmptyOrDefault(property.Value)) continue;
+                var propertyPath = string.IsNullOrEmpty(path) ? property.Key : $"{path}.{property.Key}";
+                if (mappedObject == null || !mappedObject.TryGetPropertyValue(property.Key, out var mappedValue) || mappedValue == null) yield return propertyPath;
+                else foreach (var unmapped in FindUnmappedProperties(property.Value, mappedValue, propertyPath)) yield return unmapped;
             }
         }
-        catch (Exception ex)
+        else if (source is JsonArray sourceArray && mapped is JsonArray mappedArray)
         {
-            this.SetProblemDetails(new ProblemDetails(
-                ProblemTypes.SchemaValidationFailed,
-                "Update failed",
-                400,
-                ex.Message
-            ));
+            for (var i = 0; i < Math.Min(sourceArray.Count, mappedArray.Count); i++)
+            {
+                foreach (var unmapped in FindUnmappedProperties(sourceArray[i], mappedArray[i], $"{path}[{i}]")) yield return unmapped;
+            }
         }
-        this.SetSaving(false);
+    }
+
+    /// <summary>
+    /// Determines whether or not the specified node is empty or holds a default value, which serializers may legitimately omit
+    /// </summary>
+    static bool IsEmptyOrDefault(JsonNode? node) => node switch
+    {
+        null => true,
+        JsonObject o => o.Count == 0,
+        JsonArray a => a.Count == 0,
+        JsonValue v => v.GetValueKind() switch
+        {
+            JsonValueKind.False or JsonValueKind.Null => true,
+            JsonValueKind.Number => v.ToJsonString() is "0" or "0.0",
+            JsonValueKind.String => string.IsNullOrEmpty(v.GetValue<string>()),
+            _ => false
+        },
+        _ => false
+    };
+
+    /// <summary>
+    /// Sets the message to display once the resource has been successfully saved
+    /// </summary>
+    /// <param name="message">The message to display</param>
+    public void SetSuccessMessage(string? message)
+    {
+        this.Reduce(state => state with
+        {
+            SuccessMessage = message
+        });
     }
 
 }

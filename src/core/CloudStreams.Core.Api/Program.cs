@@ -27,12 +27,13 @@ builder.UseCloudStreams(builder =>
 using var app = builder.Build();
 
 if (app.Environment.IsDevelopment()) app.UseWebAssemblyDebugging();
-else app.UseExceptionHandler("/error");
+app.UseExceptionHandler();
 
 app.UseResponseCompression();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseHealthChecks("/healthz", new HealthCheckOptions()
 {
@@ -51,8 +52,9 @@ app.UseSwaggerUI(builder =>
 });
 
 app.MapControllers();
-app.MapHub<ResourceEventWatchHub>("api/resources/v1/ws/watch");
-app.MapMcp("mcp");
-app.MapFallbackToFile("index.html");
+app.MapHub<ResourceEventWatchHub>("api/resources/v1/ws/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapCloudStreamsAuthenticationEndpoints();
+app.MapFallbackToFile("index.html").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPagePolicy);
 
 await app.RunAsync().ConfigureAwait(false);

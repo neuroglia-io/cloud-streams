@@ -68,4 +68,9 @@ public record ResourceEditorState<TResource>
     /// Gets/sets the list of <see cref="ProblemDetails"/> errors that occurred when trying to save the resource, if any
     /// </summary>
     public IDictionary<string, string[]> ProblemErrors { get; set; } = new Dictionary<string, string[]>();
+
+    /// <summary>
+    /// Gets/sets the message to display once the resource has been successfully saved, if any
+    /// </summary>
+    public string? SuccessMessage { get; set; }
 }

@@ -14,68 +14,84 @@
 namespace CloudStreams.UnitTests.Cases.Broker;
 
 /// <summary>
-/// Pins what a subscriber timeout does today, which is issue #132 and is <em>not</em> the desired behaviour
+/// Regression guards for issue #132: a subscriber timeout must be treated as a delivery failure, never swallowed as if it were a shutdown
 /// </summary>
 /// <remarks>
-/// <para>
-/// These are characterisation tests. They assert the broken behaviour on purpose, so it is visible in the suite
-/// rather than buried in a document, and so they fail loudly the moment the fix lands.
-/// </para>
-/// <para>
-/// <b>PR 3 (#132) must invert every assertion in this file</b> and rename the tests accordingly. A timeout should
-/// be routed through the retry path like any other delivery failure, the event should be redelivered rather than
-/// skipped, and the failure should be visible in the status and the metrics.
-/// </para>
-/// <para>
-/// The root cause: <see cref="HttpClient"/> raises a timeout as <see cref="TaskCanceledException"/>, not
-/// <see cref="HttpRequestException"/>, so it slips past the retry path entirely and is then absorbed by the
-/// cancellation filters that exist to swallow genuine shutdown.
-/// </para>
+/// <see cref="HttpClient"/> raises a timeout as <see cref="TaskCanceledException"/>, not <see cref="HttpRequestException"/>. It used to slip past the retry
+/// path and be absorbed by the cancellation filters that exist to swallow genuine shutdown, skipping the event without a trace.
 /// </remarks>
 public class SubscriptionHandlerTimeoutTests
 {
 
+    static readonly HttpClientRetryPolicy ImmediateRetries = new() { MaxAttempts = 2, BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(0)) };
+
     /// <summary>
-    /// Live path. The timeout is swallowed by the cancellation filter in <c>OnCloudEventAsync</c>: no offset is committed,
-    /// no retry is scheduled, and nothing is recorded. The next event then commits its own higher offset, stepping
-    /// <c>ackedOffset</c> past the timed-out event so it is never redelivered.
+    /// Live path. A timeout must be retried and, once the policy is exhausted, fault the subscription rather than let the next event step <c>ackedOffset</c> past it.
     /// </summary>
     [Fact]
-    public async Task Live_Dispatch_Timeout_Is_Currently_Swallowed_And_The_Event_Is_Skipped()
+    public async Task Live_Dispatch_Timeout_Should_Be_Retried_And_Never_Skip_The_Event()
     {
         // arrange
-        await using var context = await BrokerTestContext.CreateAsync(StubHttpMessageHandler.AlwaysTimesOut());
+        await using var context = await BrokerTestContext.CreateAsync(StubHttpMessageHandler.AlwaysTimesOut(), configureSubscription: s => s.Spec.Subscriber.RetryPolicy = ImmediateRetries);
 
         // act
         var exception = await Record.ExceptionAsync(() => context.Handler.HandleCloudEventAsync(BrokerTestContext.CreateRecord(41)));
 
-        // assert - BROKEN BEHAVIOUR, see the remarks on this class
+        // assert
         Assert.Null(exception);
-        Assert.Equal(1, context.Http.AttemptCount);                     // #132 fix: should be retried, so more than one
-        Assert.Equal(0, context.Metrics.TotalDeliveryFailures);         // #132 fix: should count as a delivery failure
-        Assert.Equal(0, context.Patches.Count);                         // #132 fix: should surface a reason on the status
+        Assert.Equal(3, context.Http.AttemptCount);
+        Assert.Equal(3, context.Metrics.TotalDeliveryFailures);
+        Assert.Contains("timeout", string.Join(' ', context.Patches.ValuesWrittenTo("/status/subscriber/reason").Select(v => v.ToString())));
+        Assert.True(context.Patches.Touched("/status/stream/fault"), context.Patches.Describe());
         Assert.False(context.Patches.Touched("/status/stream/ackedOffset"));
     }
 
     /// <summary>
-    /// A timeout is not an <see cref="HttpRequestException"/>, so <c>DispatchAsync</c> does not recognise it as a delivery
-    /// failure and lets it escape instead of routing it into <c>RetryDispatchAsync</c>. This is the mechanism behind both
-    /// the skipped event above and the wedged catch-up.
+    /// A timeout is routed through the retry path like any other delivery failure, so a subscriber that recovers gets the event.
     /// </summary>
     [Fact]
-    public async Task Dispatch_Timeout_Currently_Escapes_Instead_Of_Entering_The_Retry_Path()
+    public async Task Dispatch_Timeout_Should_Enter_The_Retry_Path()
     {
         // arrange
-        await using var context = await BrokerTestContext.CreateAsync(StubHttpMessageHandler.AlwaysTimesOut());
+        var http = new StubHttpMessageHandler((_, attempt, _) => attempt == 0
+            ? throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.", new TimeoutException())
+            : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        await using var context = await BrokerTestContext.CreateAsync(http, configureSubscription: s => s.Spec.Subscriber.RetryPolicy = ImmediateRetries);
 
         // act
         var exception = await Record.ExceptionAsync(() => context.Handler.DispatchRecordAsync(BrokerTestContext.CreateRecord(41)));
 
-        // assert - BROKEN BEHAVIOUR, see the remarks on this class
-        Assert.IsAssignableFrom<OperationCanceledException>(exception);  // #132 fix: should not escape at all
-        Assert.Equal(1, context.Http.AttemptCount);
-        // the handler's own token is NOT cancelled, which is exactly how the fix can tell a timeout from a real shutdown
-        Assert.IsType<TimeoutException>(exception!.InnerException);
+        // assert
+        Assert.Null(exception);
+        Assert.Equal(2, context.Http.AttemptCount);
+        Assert.Equal(1, context.Metrics.TotalDeliveryFailures);
+        Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
+    }
+
+    /// <summary>
+    /// The dispatch timeout is configurable per subscription, and a subscriber slower than it is retried.
+    /// </summary>
+    [Fact]
+    public async Task Configured_Subscriber_Timeout_Should_Be_Enforced()
+    {
+        // arrange
+        var http = new StubHttpMessageHandler(async (_, attempt, cancellationToken) =>
+        {
+            if (attempt == 0) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        await using var context = await BrokerTestContext.CreateAsync(http, configureSubscription: s =>
+        {
+            s.Spec.Subscriber.Timeout = Duration.FromMilliseconds(100);
+            s.Spec.Subscriber.RetryPolicy = ImmediateRetries;
+        });
+
+        // act
+        await context.Handler.DispatchRecordAsync(BrokerTestContext.CreateRecord(41)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        // assert
+        Assert.Equal(2, context.Http.AttemptCount);
+        Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
     }
 
 }

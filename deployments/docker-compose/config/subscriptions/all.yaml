@@ -5,10 +5,14 @@ metadata:
 spec:
   subscriber:
     uri: https://events.k.ccie.cisco.com/events/pub
+    retryPolicy:
+      statusCodes: [ 503 ]
+      backoffDuration:
+        type: constant
+        period: PT3S
+      maxAttempts: 5
+      circuitBreaker:
+        breakAfter: 3
+        breakDuration: PT5S
   stream:
     offset: -1
-  retryPolicy:
-    statusCodes: [ 503 ]
-    circuitBreaker:
-      breakAfter: 3
-  breakDuration: PT5S
