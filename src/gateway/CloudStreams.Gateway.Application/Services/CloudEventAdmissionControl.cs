@@ -181,6 +181,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         foreach (var validator in this.Validators) validationResults.Add(await validator.ValidateAsync(e, cancellationToken).ConfigureAwait(false));
         if (!validationResults.All(r => r.IsValid))
         {
+            this._metrics.IncrementTotalInvalidEvents(InvalidityReason.Attributes);
             return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid", (int)HttpStatusCode.BadRequest, errors: validationResults
                 .Where(r => !r.IsValid)
                 .SelectMany(r => r.Errors)
@@ -195,17 +196,18 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             // an ignored loop is a success without data: the publisher is told it has been ignored, and it is counted as such rather than as rejected (see #179)
             if (result.Status == (int)HttpStatusCode.Conflict && this.Configuration?.Resource.Spec.SplitHorizon?.LoopAction == LoopAction.Ignore)
             {
-                this._metrics.IncrementTotalIgnoredEvents();
+                this._metrics.IncrementTotalIgnoredEvents(e.Source);
                 return new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted);
             }
-            this._metrics.IncrementTotalRejectedEvents();
+            // the split-horizon policy is the only one to answer '409 Conflict', the authorization policy answering '401 Unauthorized' or '403 Forbidden'
+            this._metrics.IncrementTotalRejectedEvents(result.Status == (int)HttpStatusCode.Conflict ? RejectionReason.SplitHorizon : RejectionReason.Authorization);
             return Failure(result);
         }
         result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
-            this._metrics.IncrementTotalInvalidEvents();
+            this._metrics.IncrementTotalInvalidEvents(InvalidityReason.Schema);
             return Failure(result);
         }
         this.Logger.LogDebug("Admission evaluation for cloud event with id '{eventId}' completed successfully", e.Id);
@@ -377,7 +379,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             }
             catch (Exception ex)
             {
-                this.Logger.LogError("An error occurred while extracting the metadata property '{property}' from the cloud event with id '{eventId}': {error}", property.Name, e.Id, ex);
+                this.Logger.LogError(ex, "An error occurred while extracting the metadata property '{property}' from the cloud event with id '{eventId}'", property.Name, e.Id);
                 continue;
             }
         }

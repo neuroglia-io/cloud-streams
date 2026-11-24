@@ -16,6 +16,7 @@ using CloudStreams.Core.Application.Services;
 using CloudStreams.Gateway.Application.Services;
 using Neuroglia.Mediation;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
 namespace CloudStreams.Gateway.Application.Commands.CloudEvents;
 
@@ -65,12 +66,47 @@ public class ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAd
         activity?.SetTag("event.type", command.CloudEvent.Type);
         if(!string.IsNullOrWhiteSpace(command.CloudEvent.Subject)) activity?.SetTag("event.subject", command.CloudEvent.Subject);
         var e = command.CloudEvent;
-        var admissionResult = await eventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
-        if (admissionResult.Data == null || !admissionResult.IsSuccess()) return admissionResult;
-        await eventStore.AppendAsync(admissionResult.Data, cancellationToken).ConfigureAwait(false);
-        metrics.IncrementTotalIngestedEvents();
-        // '202 Accepted' is reserved for events that have been accepted but ignored (see CloudEventAdmissionControl)
-        return new OperationResult((int)HttpStatusCode.Created);
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = IngestionOutcome.Failed;
+        try
+        {
+            var admissionResult = await eventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
+            if (admissionResult.Data == null || !admissionResult.IsSuccess())
+            {
+                outcome = GetOutcome(admissionResult.Status);
+                return admissionResult;
+            }
+            try
+            {
+                await eventStore.AppendAsync(admissionResult.Data, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                metrics.IncrementTotalAppendFailures(e.Source);
+                throw;
+            }
+            metrics.IncrementTotalIngestedEvents(e.Source);
+            outcome = IngestionOutcome.Stored;
+            // '202 Accepted' is reserved for events that have been accepted but ignored (see CloudEventAdmissionControl)
+            return new OperationResult((int)HttpStatusCode.Created);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested) metrics.RecordIngestionDuration(outcome, Stopwatch.GetElapsedTime(startedAt));
+        }
     }
+
+    /// <summary>
+    /// Gets the outcome of an ingestion the admission control did not admit
+    /// </summary>
+    /// <param name="status">The status code of the admission</param>
+    /// <returns>The outcome of the ingestion. See <see cref="IngestionOutcome"/></returns>
+    static string GetOutcome(int status) => status switch
+    {
+        (int)HttpStatusCode.Accepted => IngestionOutcome.Ignored,
+        (int)HttpStatusCode.BadRequest => IngestionOutcome.Invalid,
+        (int)HttpStatusCode.Unauthorized or (int)HttpStatusCode.Forbidden or (int)HttpStatusCode.Conflict => IngestionOutcome.Rejected,
+        _ => IngestionOutcome.Failed
+    };
 
 }
