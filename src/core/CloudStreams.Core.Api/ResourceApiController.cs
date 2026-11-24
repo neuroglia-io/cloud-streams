@@ -114,7 +114,7 @@ public abstract class ResourceApiController<TResource>(IMediator mediator)
     [HttpPut]
     [ProducesResponseType(typeof(IAsyncEnumerable<Resource>), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ReplaceResource(TResource resource, bool dryRun = false, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ReplaceResource([FromBody] TResource resource, bool dryRun = false, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         return this.Process(await this.Mediator.ExecuteAsync(new ReplaceResourceCommand<TResource>(resource, dryRun), cancellationToken).ConfigureAwait(false));
