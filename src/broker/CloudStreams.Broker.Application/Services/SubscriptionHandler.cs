@@ -693,7 +693,7 @@ public class SubscriptionHandler
         timeoutCancellationTokenSource.CancelAfter(timeout);
         // deferring the acknowledgement only makes sense for a subscription that tracks an offset, since there is otherwise nothing to advance or rewind
         var tracksOffset = this.Subscription.Spec.Stream != null;
-        var ackToken = tracksOffset ? Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)) : null;
+        var ackToken = tracksOffset ? AcknowledgementTokens.Generate() : null;
         var deferred = false;
         try
         {
@@ -990,7 +990,7 @@ public class SubscriptionHandler
     /// Suspends delivery until the subscriber acknowledges the specified cloud event, negatively acknowledges it, or the acknowledgement expires
     /// </summary>
     /// <param name="offset">The offset of the cloud event whose acknowledgement has been deferred</param>
-    /// <param name="token">The token the subscriber must present to acknowledge the cloud event</param>
+    /// <param name="token">The token the subscriber must present to acknowledge the cloud event. Only its hash is recorded</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     /// <remarks>
     /// The pending acknowledgement is recorded in the subscription's status, where the gateway validates the subscriber's callback. Suspension relies on the out-of-sync
@@ -998,6 +998,8 @@ public class SubscriptionHandler
     /// </remarks>
     protected virtual async Task SuspendForAcknowledgementAsync(ulong offset, string token)
     {
+        // only the hash of the token is kept, and recorded in the status: the subscriber is the only one to know the token itself (see #149)
+        token = AcknowledgementTokens.Hash(token);
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.SuspendForAcknowledgement");
         activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
         activity?.SetTag("offset", offset);

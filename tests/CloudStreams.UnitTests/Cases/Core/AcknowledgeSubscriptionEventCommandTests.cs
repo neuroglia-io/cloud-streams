@@ -47,7 +47,7 @@ public class AcknowledgeSubscriptionEventCommandTests
         {
             ObservedGeneration = 1,
             Stream = new() { AckedOffset = 41 },
-            Subscriber = new() { State = SubscriberState.Reachable, PendingAck = new() { Offset = 41, Token = Token, ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(5) } }
+            Subscriber = new() { State = SubscriberState.Reachable, PendingAck = new() { Offset = 41, Token = AcknowledgementTokens.Hash(Token), ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(5) } }
         }
     };
 
@@ -94,10 +94,10 @@ public class AcknowledgeSubscriptionEventCommandTests
         var (handler, patches) = Create(CreateSubscription());
 
         // act
-        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", token, true)));
+        var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", token, true));
 
         // assert
-        Assert.Equal(409, exception.Problem.Status);
+        Assert.Equal(409, result.Status);
         Assert.Equal(0, patches.Count);
     }
 
@@ -108,25 +108,39 @@ public class AcknowledgeSubscriptionEventCommandTests
         var (handler, patches) = Create(CreateSubscription(DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         // act
-        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", Token, true)));
+        var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", Token, true));
 
         // assert
-        Assert.Equal(409, exception.Problem.Status);
-        Assert.Contains("expired", exception.Problem.Detail);
+        Assert.Equal(409, result.Status);
+        Assert.Contains("expired", result.Errors!.First().Detail);
         Assert.Equal(0, patches.Count);
     }
 
     [Fact]
-    public async Task Unknown_Subscription_Should_Not_Be_Found()
+    public async Task Unknown_Subscription_Should_Conflict_Like_An_Invalid_Token()
     {
         // arrange
         var (handler, _) = Create(null);
 
-        // act
+        // act - the endpoint is anonymous, so it must not reveal which subscriptions exist (see #149)
         var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("missing", Token, true));
 
         // assert
-        Assert.Equal(404, result.Status);
+        Assert.Equal(409, result.Status);
+    }
+
+    [Fact]
+    public async Task The_Hash_Stored_In_The_Status_Should_Not_Be_Usable_As_A_Token()
+    {
+        // arrange
+        var (handler, patches) = Create(CreateSubscription());
+
+        // act - anyone allowed to read the subscription sees the hash, not the token
+        var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", AcknowledgementTokens.Hash(Token), true));
+
+        // assert
+        Assert.Equal(409, result.Status);
+        Assert.Equal(0, patches.Count);
     }
 
 }

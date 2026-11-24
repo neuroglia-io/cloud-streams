@@ -56,6 +56,10 @@ public class CloudStreamsAuthenticationOptions
             if (!oidcConfigured) yield return $"'{ConfigurationSection}:Oidc:Authority' is required when '{ConfigurationSection}:Dashboard:Enabled' is true";
             if (string.IsNullOrWhiteSpace(this.Oidc.ClientId)) yield return $"'{ConfigurationSection}:Oidc:ClientId' is required when '{ConfigurationSection}:Dashboard:Enabled' is true";
         }
+        if (oidcConfigured && this.Oidc.RequireAudience && string.IsNullOrWhiteSpace(this.Oidc.Audience))
+        {
+            yield return $"'{ConfigurationSection}:Oidc:Audience' is required when '{ConfigurationSection}:Oidc:RequireAudience' is true";
+        }
         if (this.Ingestion.Enabled && !oidcConfigured && (this.Ingestion.ApiKeys == null || this.Ingestion.ApiKeys.Count(k => !string.IsNullOrWhiteSpace(k)) < 1))
         {
             yield return $"Either '{ConfigurationSection}:Oidc:Authority' or at least one '{ConfigurationSection}:Ingestion:ApiKeys' is required when '{ConfigurationSection}:Ingestion:Enabled' is true";
@@ -94,6 +98,12 @@ public class OidcAuthenticationOptions
     /// Gets/sets the audience bearer tokens must have been issued for. Strongly recommended: if not set, any token issued by the authority is accepted
     /// </summary>
     public virtual string? Audience { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not an <see cref="Audience"/> is required, in which case the application refuses to start without one. Defaults to
+    /// false, in which case a warning is logged at startup when no audience is configured (see #145)
+    /// </summary>
+    public virtual bool RequireAudience { get; set; }
 
     /// <summary>
     /// Gets/sets a boolean indicating whether or not the authority's metadata must be retrieved over HTTPS. Defaults to true
