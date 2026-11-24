@@ -23,6 +23,8 @@ using Grpc.Core;
 using System.Numerics;
 using System.Reactive.Threading.Tasks;
 using System.Text.RegularExpressions;
+using CloudStreams.Broker.Application.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace CloudStreams.Broker.Application.Services;
 
@@ -60,6 +62,10 @@ public class SubscriptionHandler
     bool _pendingAcknowledgementObserved;
     long? _pendingAcknowledgementSince;
     IDisposable? _lagRegistration;
+    readonly SemaphoreSlim _commitLock = new(1, 1);
+    ulong? _uncommittedOffset;
+    ulong? _uncommittedOffsetGeneration;
+    int _uncommittedDeliveries;
     CancellationTokenSource? _acknowledgementTimeoutCancellationTokenSource;
     CancellationTokenRegistration _applicationStoppingRegistration;
     long _nextDeliveryTimestamp;
@@ -81,9 +87,10 @@ public class SubscriptionHandler
     /// <param name="cloudEventValidators">An <see cref="IEnumerable{T}"/> containing registered <see cref="CloudEvent"/> <see cref="IValidator"/>s</param>
     /// <param name="httpClient">The service used to perform HTTP requests</param>
     /// <param name="metrics">The service used to track broker metrics</param>
+    /// <param name="options">The service used to access the current <see cref="BrokerOptions"/></param>
     /// <param name="subscription">The <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
     public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController,
-        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, Subscription subscription)
+        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IOptions<BrokerOptions> options, Subscription subscription)
     {
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.HostApplicationLifetime = hostApplicationLifetime;
@@ -98,6 +105,7 @@ public class SubscriptionHandler
         // timeouts are enforced per delivery attempt (see GetDispatchTimeout), so that they can exceed the HttpClient's default of 100 seconds
         this.HttpClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
         this.Metrics = metrics;
+        this.Options = options.Value;
         this.Subscription = subscription;
         this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
         this._applicationStoppingRegistration = hostApplicationLifetime.ApplicationStopping.Register(this.OnApplicationStopping);
@@ -169,6 +177,11 @@ public class SubscriptionHandler
     protected IBrokerMetrics Metrics { get; }
 
     /// <summary>
+    /// Gets the current <see cref="BrokerOptions"/>
+    /// </summary>
+    protected BrokerOptions Options { get; }
+
+    /// <summary>
     /// Gets the <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to
     /// </summary>
     protected Subscription Subscription { get; private set; }
@@ -179,7 +192,7 @@ public class SubscriptionHandler
     protected HttpClientRetryPolicy DefaultRetryPolicy { get; private set; }
 
     /// <summary>
-    /// Gets the offset of the last filtered <see cref="CloudEvent"/> in the stream
+    /// Gets the length of the stream, which is to say the offset of the next record to be appended, as last observed by the handler
     /// </summary>
     protected ulong? StreamOffset { get; private set; }
 
@@ -315,7 +328,14 @@ public class SubscriptionHandler
             if (this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration
                 && this.Subscription.Spec.Stream?.Offset != (long?)this.Subscription.Status?.Stream?.AckedOffset)
             {
-                await this.CommitOffsetAsync(null).ConfigureAwait(false);
+                // the offset has been changed by the user: offsets delivered before are obsolete, and must not overwrite the reset
+                await this._commitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+                try
+                {
+                    lock (this._syncLock) this.DiscardUncommittedOffset();
+                    await this.CommitOffsetAsync(null).ConfigureAwait(false);
+                }
+                finally { this._commitLock.Release(); }
                 // the offset has been changed by the user, which overrides whatever acknowledgement was pending
                 var pendingAck = this.Subscription.Status?.Subscriber?.PendingAck;
                 if (pendingAck != null)
@@ -416,7 +436,8 @@ public class SubscriptionHandler
             // a handler that starts behind the end of the stream catches up: it is marked out of sync before subscribing, otherwise the records replayed by the
             // subscription before the flag is set would be delivered both live and by the catch-up
             if (offset != StreamPosition.EndOfStream && (ulong)offset < (this.StreamOffset ?? 0)) lock (this._syncLock) this.SubscriptionOutOfSync = true;
-            var subscriptionHandle = observedStream.ToAsyncEnumerable().WhereAwait(this.FiltersAsync).ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
+            // every record is observed, so that the length of the stream is accurate: records are filtered once, when dispatched (see #161)
+            var subscriptionHandle = observedStream.ToAsyncEnumerable().ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
             var shouldCatchUp = false;
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
             try
@@ -739,8 +760,13 @@ public class SubscriptionHandler
         }
         this.Metrics.IncrementTotalPublishedEvents(this.Subscription.GetQualifiedName(), this.GetStreamName());
         await this.SetSubscriberStateAsync(SubscriberState.Reachable).ConfigureAwait(false);
-        if (deferred) await this.SuspendForAcknowledgementAsync(offset, ackToken!).ConfigureAwait(false);
-        else if (tracksOffset) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
+        if (deferred)
+        {
+            // the subscriber's acknowledgement advances the offset itself: whatever was delivered before must be committed first, so as not to overwrite it
+            await this.FlushOffsetAsync().ConfigureAwait(false);
+            await this.SuspendForAcknowledgementAsync(offset, ackToken!).ConfigureAwait(false);
+        }
+        else if (tracksOffset) await this.CommitDeliveredOffsetAsync(offset + 1).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -889,7 +915,7 @@ public class SubscriptionHandler
     /// <remarks>
     /// The position of the subscription is the offset of the event whose acknowledgement is pending, if any. Otherwise, it is the furthest of its acknowledged offset
     /// and of the offset that follows the last record it handled, since records that are filtered out are handled without advancing the acknowledged offset.
-    /// The length of the stream is updated by every record that passes the subscription's filters, so records filtered out at the end of the stream are not counted
+    /// The length of the stream is updated by every record the handler observes, and records that are filtered out are handled as soon as they are observed
     /// </remarks>
     protected virtual (string Stream, ulong Lag)? GetLag()
     {
@@ -965,27 +991,56 @@ public class SubscriptionHandler
                 lock (this._syncLock) nextOffset = this._nextOffset;
                 currentOffset = (long)(nextOffset ?? this.StreamOffset ?? 0);
             }
-            while (true)
+            // records are read a page at a time, and the next page is read while the current one is being delivered (see #161)
+            var pageSize = this.Options.CatchUp.GetPageSize();
+            using var prefetchCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(streamInitializationToken);
+            Task<List<CloudEventRecord>>? prefetch = null;
+            var prefetchOffset = 0L;
+            try
             {
-                while (!streamInitializationToken.IsCancellationRequested && this.IsStreamInitializationSessionCurrent(streamInitializationSessionId) && (ulong)currentOffset < (this.StreamOffset ?? 0))
+                while (true)
                 {
-                    var record = this.Subscription.Spec.Partition == null ?
-                        await this.EventStore.ReadOneAsync(StreamReadDirection.Forwards, currentOffset!, streamInitializationToken).ConfigureAwait(false)
-                        : await this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Forwards, currentOffset, 1, streamInitializationToken).SingleOrDefaultAsync(streamInitializationToken).ConfigureAwait(false);
-                    if (record == null)
+                    while (!streamInitializationToken.IsCancellationRequested && this.IsStreamInitializationSessionCurrent(streamInitializationSessionId) && (ulong)currentOffset < (this.StreamOffset ?? 0))
                     {
-                        await Task.Delay(50, streamInitializationToken).ConfigureAwait(false);
-                        continue;
+                        var page = prefetch != null && prefetchOffset == currentOffset
+                            ? await prefetch.ConfigureAwait(false)
+                            : await this.ReadPageAsync(currentOffset, pageSize, streamInitializationToken).ConfigureAwait(false);
+                        prefetch = null;
+                        if (page.Count == 0)
+                        {
+                            // the record has been appended, but is not readable yet: a partition's records are linked by a projection shortly after being stored
+                            await Task.Delay(50, streamInitializationToken).ConfigureAwait(false);
+                            continue;
+                        }
+                        if (page.Count == pageSize)
+                        {
+                            prefetchOffset = currentOffset + page.Count;
+                            prefetch = this.ReadPageAsync(prefetchOffset, pageSize, prefetchCancellationTokenSource.Token);
+                        }
+                        foreach (var record in page)
+                        {
+                            if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
+                            if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false) || this.AwaitingAcknowledgement) return;
+                            currentOffset++;
+                        }
                     }
-                    if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false) || this.AwaitingAcknowledgement) return;
-                    currentOffset++;
+                    if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
+                    lock (this._syncLock)
+                    {
+                        if ((ulong)currentOffset < (this.StreamOffset ?? 0)) continue;
+                        this.SubscriptionOutOfSync = false;
+                        return;
+                    }
                 }
-                if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
-                lock (this._syncLock)
+            }
+            finally
+            {
+                // a page read ahead is abandoned when catch-up stops early, but must still be awaited, so that its failure, if any, is observed
+                prefetchCancellationTokenSource.Cancel();
+                if (prefetch != null)
                 {
-                    if ((ulong)currentOffset < (this.StreamOffset ?? 0)) continue;
-                    this.SubscriptionOutOfSync = false;
-                    return;
+                    try { await prefetch.ConfigureAwait(false); }
+                    catch { }
                 }
             }
         }
@@ -1005,6 +1060,21 @@ public class SubscriptionHandler
             finally { this.InitLock.Release(); }
             streamSynchronizationCompletionSource?.TrySetResult();
         }
+    }
+
+    /// <summary>
+    /// Reads a page of the records the subscription reads from
+    /// </summary>
+    /// <param name="offset">The offset of the first record to read</param>
+    /// <param name="length">The maximum amount of records to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The records read, which may be fewer than requested, or none, if the end of the stream has been reached</returns>
+    protected virtual Task<List<CloudEventRecord>> ReadPageAsync(long offset, int length, CancellationToken cancellationToken)
+    {
+        var records = this.Subscription.Spec.Partition == null
+            ? this.EventStore.ReadAsync(StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken)
+            : this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken);
+        return records.ToListAsync(cancellationToken).AsTask();
     }
 
     /// <summary>
@@ -1270,6 +1340,112 @@ public class SubscriptionHandler
     }
 
     /// <summary>
+    /// Commits the offset that follows a delivered event, at once or as part of a batch, as configured by the broker's <see cref="OffsetCommitOptions"/>
+    /// </summary>
+    /// <param name="offset">The offset to commit</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// A batched offset is only written once enough deliveries have been made, or once the configured interval has elapsed. The handler resumes from it in the
+    /// meantime, so batching only affects what another broker, or this one after a restart, resumes from (see #161)
+    /// </remarks>
+    protected virtual async Task CommitDeliveredOffsetAsync(ulong offset)
+    {
+        var options = this.Options.OffsetCommits;
+        if (!options.IsBatched)
+        {
+            await this.CommitOffsetAsync(offset).ConfigureAwait(false);
+            return;
+        }
+        bool flush, schedule;
+        lock (this._syncLock)
+        {
+            this._uncommittedOffset = offset;
+            this._uncommittedOffsetGeneration = this.Subscription.Metadata.Generation;
+            this._uncommittedDeliveries++;
+            this.CommittedOffset = offset;
+            this.CommittedOffsetGeneration = this.Subscription.Metadata.Generation;
+            flush = this._uncommittedDeliveries >= options.BatchSize;
+            schedule = !flush && this._uncommittedDeliveries == 1;
+        }
+        if (flush) await this.FlushOffsetAsync().ConfigureAwait(false);
+        else if (schedule) this.ScheduleOffsetFlush(options.Interval);
+    }
+
+    /// <summary>
+    /// Writes the offset of the last delivered event, if it has not been committed yet
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task FlushOffsetAsync()
+    {
+        if (!this.Options.OffsetCommits.IsBatched) return;
+        await this._commitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            ulong? offset, generation;
+            lock (this._syncLock)
+            {
+                offset = this._uncommittedOffset;
+                generation = this._uncommittedOffsetGeneration;
+                this.DiscardUncommittedOffset();
+            }
+            // an offset delivered before the user changed the subscription's offset is obsolete
+            if (!offset.HasValue || generation != this.Subscription.Metadata.Generation) return;
+            try
+            {
+                await this.CommitOffsetAsync(offset).ConfigureAwait(false);
+            }
+            catch
+            {
+                // the offset is kept for the next attempt, unless a more recent one has been delivered in the meantime
+                lock (this._syncLock)
+                {
+                    if (!this._uncommittedOffset.HasValue)
+                    {
+                        this._uncommittedOffset = offset;
+                        this._uncommittedOffsetGeneration = generation;
+                        this._uncommittedDeliveries = 1;
+                    }
+                }
+                throw;
+            }
+        }
+        finally { this._commitLock.Release(); }
+    }
+
+    /// <summary>
+    /// Discards the offset that has been delivered but not committed yet, if any. Must be called while holding the sync lock
+    /// </summary>
+    void DiscardUncommittedOffset()
+    {
+        this._uncommittedOffset = null;
+        this._uncommittedOffsetGeneration = null;
+        this._uncommittedDeliveries = 0;
+    }
+
+    /// <summary>
+    /// Schedules the writing of the offset of the last delivered event
+    /// </summary>
+    /// <param name="delay">The delay after which to write the offset</param>
+    protected virtual void ScheduleOffsetFlush(TimeSpan delay)
+    {
+        var cancellationToken = this.CancellationTokenSource.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                await this.FlushOffsetAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }
+            catch (Exception ex)
+            {
+                this.Logger.LogWarning(ex, "Failed to commit the offset of subscription '{subscription}': it will be committed with the next delivery", this.Subscription.GetQualifiedName());
+                lock (this._syncLock) if (this._uncommittedOffset.HasValue && this._uncommittedDeliveries == 1) this.ScheduleOffsetFlush(delay);
+            }
+        }, CancellationToken.None);
+    }
+
+    /// <summary>
     /// Cancels the subscription's ongoing synchronization loop, if any
     /// </summary>
     public async Task CancelSynchronizationLoopAsync()
@@ -1452,6 +1628,9 @@ public class SubscriptionHandler
         catch (ObjectDisposedException) { }
         this.Logger.LogError(ex, "An error occurred while streaming cloud events for subscription '{subscription}'", this.Subscription.GetQualifiedName());
         if (this.Subscription.Spec.Stream == null) return;
+        // the offset to resume from must reflect every event delivered before the fault
+        try { await this.FlushOffsetAsync().ConfigureAwait(false); }
+        catch (Exception flushException) { this.Logger.LogWarning(flushException, "Failed to commit the offset of subscription '{subscription}' before faulting it", this.Subscription.GetQualifiedName()); }
         for (var attempt = 1; attempt <= MaxFaultReportingAttempts && !this._disposed; attempt++)
         {
             try
@@ -1504,6 +1683,12 @@ public class SubscriptionHandler
         this._disposed = true;
         if (!disposing) return;
         this._applicationStoppingRegistration.Dispose();
+        // whatever has been delivered is committed before stopping, so that the next handler does not redeliver it
+        if (this.CancellationTokenSource != null && !this.CancellationTokenSource.IsCancellationRequested)
+        {
+            try { await this.FlushOffsetAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (Exception ex) { this.Logger.LogWarning(ex, "Failed to commit the offset of subscription '{subscription}' before stopping: the events delivered since the last commit will be redelivered", this.Subscription.GetQualifiedName()); }
+        }
         // the handler's token is canceled first: in-flight deliveries, retries and backoffs are bound to it, and would otherwise delay the disposal
         try { this.CancellationTokenSource?.Cancel(); }
         catch (ObjectDisposedException) { }
