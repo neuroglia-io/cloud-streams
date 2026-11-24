@@ -11,7 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Broker.Application.Configuration;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Neuroglia.Data.Expressions.Services;
@@ -98,6 +100,7 @@ public sealed class BrokerTestContext
     /// <param name="configureBroker">An action used to configure the broker the subscription belongs to</param>
     /// <param name="streamLength">The amount of records to seed the in-memory event store with</param>
     /// <param name="configureEventStore">An action used to configure the in-memory event store before initialization</param>
+    /// <param name="configureOptions">An action used to configure the broker's options</param>
     /// <param name="waitForStreamInitialization">A boolean indicating whether to wait for the stream to be initialized. Set to false to test an initialization that is expected to fail</param>
     /// <remarks>
     /// The handler's <see cref="CancellationTokenSource"/> is only assigned by <c>InitializeAsync</c>, and every dispatch dereferences it, so initialization is not optional.
@@ -107,7 +110,7 @@ public sealed class BrokerTestContext
     /// </remarks>
     public static async Task<BrokerTestContext> CreateAsync(StubHttpMessageHandler? http = null, Action<Subscription>? configureSubscription = null, Action<Core.Resources.Broker>? configureBroker = null, int streamLength = 0,
         Action<InMemoryCloudEventStore>? configureEventStore = null, bool waitForStreamInitialization = true,
-        IExpressionEvaluator? expressionEvaluator = null, IEnumerable<IValidator<CloudEvent>>? cloudEventValidators = null, IJsonSerializer? serializer = null, Func<Patch, Exception?>? failPatch = null)
+        IExpressionEvaluator? expressionEvaluator = null, IEnumerable<IValidator<CloudEvent>>? cloudEventValidators = null, IJsonSerializer? serializer = null, Func<Patch, Exception?>? failPatch = null, Action<BrokerOptions>? configureOptions = null)
     {
         http ??= StubHttpMessageHandler.AlwaysResponds(HttpStatusCode.OK);
         var httpClient = http.CreateClient();
@@ -139,9 +142,11 @@ public sealed class BrokerTestContext
         var subscriptionController = CreateSubscriptionController(subscriptionEvents);
         var brokerMonitor = CreateBrokerMonitor(broker);
         var metrics = new RecordingBrokerMetrics();
+        var options = new BrokerOptions() { Name = "test-broker" };
+        configureOptions?.Invoke(options);
 
         var handler = new TestSubscriptionHandler(NullLoggerFactory.Instance, Substitute.For<IHostApplicationLifetime>(), serializer ?? Substitute.For<IJsonSerializer>(), eventStore, repository,
-            subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, subscription);
+            subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, Options.Create(options), subscription);
         var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker);
         try
         {
@@ -242,8 +247,8 @@ public sealed class BrokerTestContext
 /// <inheritdoc/>
 public class TestSubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore,
     IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController, IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator,
-    IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, Subscription subscription)
-    : SubscriptionHandler(loggerFactory, hostApplicationLifetime, serializer, cloudEventStore, resourceRepository, subscriptionController, broker, expressionEvaluator, cloudEventValidators, httpClient, metrics, subscription)
+    IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IOptions<BrokerOptions> options, Subscription subscription)
+    : SubscriptionHandler(loggerFactory, hostApplicationLifetime, serializer, cloudEventStore, resourceRepository, subscriptionController, broker, expressionEvaluator, cloudEventValidators, httpClient, metrics, options, subscription)
 {
 
     /// <summary>

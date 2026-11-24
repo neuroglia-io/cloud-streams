@@ -28,6 +28,12 @@ public sealed class InMemoryCloudEventStore
     readonly List<CloudEventRecord> _records = [];
     readonly Subject<CloudEventRecord> _live = new();
     readonly Lock _lock = new();
+    readonly List<(long Offset, ulong? Length)> _reads = [];
+
+    /// <summary>
+    /// Gets the offset and length of every forward read made so far
+    /// </summary>
+    public IReadOnlyList<(long Offset, ulong? Length)> Reads { get { lock (this._lock) return [.. this._reads]; } }
 
     /// <summary>
     /// Gets/sets a boolean indicating whether observing should hand back a null stream, reproducing the contract violation behind issue #113
@@ -110,6 +116,7 @@ public sealed class InMemoryCloudEventStore
         List<CloudEventRecord> matches;
         lock (this._lock)
         {
+            if (readDirection == StreamReadDirection.Forwards) this._reads.Add((offset, length));
             matches = readDirection == StreamReadDirection.Backwards
                 ? [.. this._records.Where(r => offset == StreamPosition.EndOfStream || r.Sequence <= (ulong)offset).Reverse()]
                 : [.. this._records.Where(r => offset == StreamPosition.EndOfStream || r.Sequence >= (ulong)offset)];

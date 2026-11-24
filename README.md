@@ -190,6 +190,20 @@ Leases:                          # e.g. CLOUDSTREAMS_BROKER_LEASES__DURATION=00:
   RenewalInterval: '00:00:05'    # defaults to a third of the duration
 ```
 
+#### Catch-up and offset commits
+
+A subscription behind the end of its stream, because it starts from an earlier offset, resumes after a fault or after its subscriber was unreachable, catches up by reading the records it missed a page at a time. The next page is read while the current one is delivered. Once caught up, it switches back to live delivery.
+
+After each delivery, the broker commits the offset that follows it to the subscription's status, which is what a broker resumes from after a restart. By default, every delivery is committed at once. Under heavy load, commits can be batched instead, which saves one status write per event. A broker that dies then redelivers the events delivered since its last commit: delivery remains at-least-once. Uncommitted offsets are always written before a delivery is suspended for a deferred acknowledgement, before a subscription is faulted, and when the broker stops handling a subscription. With batching, the `ackedOffset` of the subscription's status, and the lag reported by the health endpoint, can trail actual delivery by up to the configured interval. The `cloud_streams_broker_subscription_lag` metric does not.
+
+```yaml
+CatchUp:                         # e.g. CLOUDSTREAMS_BROKER_CATCHUP__PAGESIZE=500
+  PageSize: 100                  # records read at once during catch-up
+OffsetCommits:                   # e.g. CLOUDSTREAMS_BROKER_OFFSETCOMMITS__BATCHSIZE=100
+  BatchSize: 1                   # deliveries committed at once: 1 commits every delivery
+  Interval: '00:00:01'           # how long a delivered offset may remain uncommitted, when batching
+```
+
 #### Deferred acknowledgement
 
 A subscriber whose processing takes a while doesn't have to hold the connection open, or acknowledge an event it hasn't processed yet. It can defer the acknowledgement by responding `202 Accepted`, and call back once it is done. Every delivery to a subscription that tracks a stream offset carries the headers needed to do so:

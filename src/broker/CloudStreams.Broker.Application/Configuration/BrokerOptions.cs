@@ -39,4 +39,14 @@ public class BrokerOptions
     /// </summary>
     public virtual SubscriptionLeaseOptions Leases { get; set; } = new();
 
+    /// <summary>
+    /// Gets/sets the options used to configure how the broker catches up the records subscriptions have missed
+    /// </summary>
+    public virtual CatchUpOptions CatchUp { get; set; } = new();
+
+    /// <summary>
+    /// Gets/sets the options used to configure how the broker commits the offsets of the events it has delivered
+    /// </summary>
+    public virtual OffsetCommitOptions OffsetCommits { get; set; } = new();
+
 }
