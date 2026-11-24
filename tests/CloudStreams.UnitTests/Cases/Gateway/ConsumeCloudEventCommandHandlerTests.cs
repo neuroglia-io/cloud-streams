@@ -27,7 +27,7 @@ public class ConsumeCloudEventCommandHandlerTests
     static ICloudEventAdmissionControl Admits()
     {
         var admission = Substitute.For<ICloudEventAdmissionControl>();
-        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.OK, new CloudEventDescriptor(new(), null)));
+        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.OK, new CloudEventDescriptor(new(), null)));
         return admission;
     }
 
@@ -76,7 +76,7 @@ public class ConsumeCloudEventCommandHandlerTests
         // arrange
         var metrics = Substitute.For<IGatewayMetrics>();
         var admission = Substitute.For<ICloudEventAdmissionControl>();
-        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)status));
+        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)status));
         var store = Substitute.For<ICloudEventStore>();
         var handler = new ConsumeCloudEventCommandHandler(admission, metrics, store);
 

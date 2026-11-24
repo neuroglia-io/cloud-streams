@@ -25,8 +25,9 @@ public interface ICloudEventAdmissionControl
     /// Evaluates the admission of the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to evaluate for admission</param>
+    /// <param name="allowedSources">The patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="OperationResult{TContent}"/> that describes the result of the evaluation</returns>
-    Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default);
+    Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default);
 
 }

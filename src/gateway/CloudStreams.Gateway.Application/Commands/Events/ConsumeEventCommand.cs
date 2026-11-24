@@ -36,16 +36,23 @@ public class ConsumeEventCommand
     /// Initializes a new <see cref="ConsumeEventCommand"/>
     /// </summary>
     /// <param name="cloudEvent">The <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/> to consume</param>
-    public ConsumeEventCommand(CloudEvent cloudEvent)
+    /// <param name="allowedSources">The patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source</param>
+    public ConsumeEventCommand(CloudEvent cloudEvent, IReadOnlyCollection<string>? allowedSources = null)
     {
         this.CloudEvent = cloudEvent;
+        this.AllowedSources = allowedSources;
     }
-    
+
     /// <summary>
     /// Gets the <see cref="CloudEvent"/> to consume
     /// </summary>
     [Required]
     public CloudEvent CloudEvent { get; }
+
+    /// <summary>
+    /// Gets the patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source
+    /// </summary>
+    public IReadOnlyCollection<string>? AllowedSources { get; }
 
 }
 
@@ -70,7 +77,7 @@ public class ConsumeCloudEventCommandHandler(ICloudEventAdmissionControl eventAd
         var outcome = IngestionOutcome.Failed;
         try
         {
-            var admissionResult = await eventAdmissionControl.EvaluateAsync(e, cancellationToken).ConfigureAwait(false);
+            var admissionResult = await eventAdmissionControl.EvaluateAsync(e, command.AllowedSources, cancellationToken).ConfigureAwait(false);
             if (admissionResult.Data == null || !admissionResult.IsSuccess())
             {
                 outcome = GetOutcome(admissionResult.Status);

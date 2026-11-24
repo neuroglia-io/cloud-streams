@@ -49,6 +49,11 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         : BackgroundService, ICloudEventAdmissionControl, IDisposable
 {
 
+    /// <summary>
+    /// Gets the type of the problem that describes a cloud event refused because its publisher is not allowed to publish cloud events of its source
+    /// </summary>
+    public static readonly Uri SourceNotAllowedProblemType = new("https://cloud-streams.io/problems/source-not-allowed");
+
     readonly IGatewayMetrics _metrics = metrics;
     bool _disposed;
 
@@ -165,7 +170,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     }
 
     /// <inheritdoc/>
-    public virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    public virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default)
     {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Evaluate");
         // until the gateway's configuration has been loaded, its policies are unknown: admitting events would bypass authorization and validation (see #142)
@@ -189,6 +194,13 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
                 .Select(g => new KeyValuePair<string, string[]>(g.Key, g.Select(e => e.ErrorMessage).ToArray())))]);
         }
         this.Logger.LogDebug("Started admission evaluation for cloud event with id '{eventId}'...", e.Id);
+        // a publisher bound to sources may only publish cloud events of these sources, whatever the gateway's own policies allow (see #147)
+        if (allowedSources != null && !CloudEventSourcePattern.IsMatchAny(e.Source, allowedSources))
+        {
+            this.Logger.LogDebug("The cloud event with id '{eventId}' has been rejected: its publisher is not allowed to publish cloud events of source '{source}'", e.Id, e.Source);
+            this._metrics.IncrementTotalRejectedEvents(RejectionReason.Authorization);
+            return new((int)HttpStatusCode.Forbidden, errors: [new Error(SourceNotAllowedProblemType, "Forbidden", (int)HttpStatusCode.Forbidden, $"The publisher is not allowed to publish cloud events of source '{e.Source.OriginalString}'")]);
+        }
         var result = await this.AuthorizeAsync(e, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
         {

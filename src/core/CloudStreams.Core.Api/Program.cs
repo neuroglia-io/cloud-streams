@@ -54,8 +54,8 @@ app.UseSwaggerUI(builder =>
 });
 
 app.MapControllers();
-app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
-app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy);
+app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy);
 app.MapCloudStreamsAuthenticationEndpoints();
 app.MapFallbackToFile("index.html").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPagePolicy);
 

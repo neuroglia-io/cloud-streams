@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using System.Security.Claims;
 
 namespace CloudStreams.Core.Api;
 
@@ -36,14 +37,30 @@ public static class CloudStreamsAuthenticationDefaults
 {
 
     /// <summary>
-    /// Gets the name of the policy that protects the management API, the hubs and the MCP endpoint used by the dashboard
+    /// Gets the name of the policy that allows getting, listing and watching resources, cloud events and partitions, which protects the read-only endpoints of
+    /// the management API, the hubs and the MCP endpoint
     /// </summary>
-    public const string DashboardPolicy = "cloud-streams:dashboard";
+    public const string ReadPolicy = "cloud-streams:read";
 
     /// <summary>
-    /// Gets the name of the policy that protects the dashboard's pages, which, unlike <see cref="DashboardPolicy"/>, redirects anonymous users to the sign-in page
+    /// Gets the name of the policy that allows resuming and replaying subscriptions
+    /// </summary>
+    public const string OperatePolicy = "cloud-streams:operate";
+
+    /// <summary>
+    /// Gets the name of the policy that allows creating, replacing, patching and deleting resources, and patching their status
+    /// </summary>
+    public const string AdministerPolicy = "cloud-streams:administer";
+
+    /// <summary>
+    /// Gets the name of the policy that protects the dashboard's pages, which, unlike <see cref="ReadPolicy"/>, redirects anonymous users to the sign-in page
     /// </summary>
     public const string DashboardPagePolicy = "cloud-streams:dashboard-page";
+
+    /// <summary>
+    /// Gets the type of the claims that list the patterns of the sources an API key may publish cloud events of
+    /// </summary>
+    public const string AllowedSourceClaimType = "cloud-streams:allowed-source";
 
     /// <summary>
     /// Gets the name of the policy that protects the cloud event ingestion endpoint
@@ -82,8 +99,7 @@ public static class CloudStreamsAuthenticationExtensions
         services.Configure<MvcOptions>(mvc => mvc.Conventions.Add(new DashboardAuthorizationConvention()));
 
         var bearerEnabled = !string.IsNullOrWhiteSpace(options.Oidc.Authority);
-        var apiKeys = options.Ingestion.ApiKeys?.Where(k => !string.IsNullOrWhiteSpace(k)).ToList() ?? [];
-        var apiKeyEnabled = options.Ingestion.Enabled && apiKeys.Count > 0;
+        var apiKeyEnabled = options.Ingestion.Enabled && options.Ingestion.GetApiKeys().Count > 0;
         var authentication = services.AddAuthentication(authenticationOptions =>
         {
             if (options.Dashboard.Enabled) authenticationOptions.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -173,35 +189,32 @@ public static class CloudStreamsAuthenticationExtensions
             authentication.AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.AuthenticationScheme, apiKey =>
             {
                 apiKey.HeaderName = string.IsNullOrWhiteSpace(options.Ingestion.ApiKeyHeader) ? IngestionAuthenticationOptions.DefaultApiKeyHeader : options.Ingestion.ApiKeyHeader;
-                apiKey.ApiKeys = apiKeys;
+                apiKey.ApiKeys = [.. options.Ingestion.ApiKeys ?? []];
+                apiKey.Publishers = [.. options.Ingestion.Publishers ?? []];
             });
         }
 
         services.AddAuthorization(authorization =>
         {
-            authorization.AddPolicy(CloudStreamsAuthenticationDefaults.DashboardPolicy, policy =>
+            void AddAccessPolicy(string name, CloudStreamsAccessLevel level, bool acceptBearerTokens)
             {
-                if (!options.Dashboard.Enabled)
+                authorization.AddPolicy(name, policy =>
                 {
-                    policy.RequireAssertion(_ => true);
-                    return;
-                }
-                policy.AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme);
-                if (bearerEnabled) policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
-                if (options.Dashboard.RequiredRoles.Count > 0) policy.RequireRole(options.Dashboard.RequiredRoles);
-            });
-            authorization.AddPolicy(CloudStreamsAuthenticationDefaults.DashboardPagePolicy, policy =>
-            {
-                if (!options.Dashboard.Enabled)
-                {
-                    policy.RequireAssertion(_ => true);
-                    return;
-                }
-                policy.AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
-                if (options.Dashboard.RequiredRoles.Count > 0) policy.RequireRole(options.Dashboard.RequiredRoles);
-            });
+                    if (!options.Dashboard.Enabled)
+                    {
+                        policy.RequireAssertion(_ => true);
+                        return;
+                    }
+                    policy.AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme);
+                    if (acceptBearerTokens && bearerEnabled) policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.RequireAssertion(context => options.Dashboard.GetAccessLevel(context.User) >= level);
+                });
+            }
+            AddAccessPolicy(CloudStreamsAuthenticationDefaults.ReadPolicy, CloudStreamsAccessLevel.Read, true);
+            AddAccessPolicy(CloudStreamsAuthenticationDefaults.OperatePolicy, CloudStreamsAccessLevel.Operate, true);
+            AddAccessPolicy(CloudStreamsAuthenticationDefaults.AdministerPolicy, CloudStreamsAccessLevel.Administer, true);
+            AddAccessPolicy(CloudStreamsAuthenticationDefaults.DashboardPagePolicy, CloudStreamsAccessLevel.Read, false);
             authorization.AddPolicy(CloudStreamsAuthenticationDefaults.IngestionPolicy, policy =>
             {
                 if (!options.Ingestion.Enabled)
@@ -262,7 +275,9 @@ public static class CloudStreamsAuthenticationExtensions
         {
             enabled = options.Dashboard.Enabled,
             authenticated = context.User.Identity?.IsAuthenticated == true,
-            name = context.User.Identity?.Name
+            name = context.User.Identity?.Name,
+            // lets the dashboard hide what the user may not do; the API enforces it regardless (see #147)
+            access = options.Dashboard.GetAccessLevel(context.User).ToString().ToLowerInvariant()
         })).AllowAnonymous().ExcludeFromDescription();
         if (!options.Dashboard.Enabled) return endpoints;
         endpoints.MapGet("auth/login", (string? returnUrl) => Results.Challenge(new AuthenticationProperties { RedirectUri = ToLocalUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme]))
@@ -273,17 +288,61 @@ public static class CloudStreamsAuthenticationExtensions
         return endpoints;
     }
 
+    /// <summary>
+    /// Gets the patterns of the sources the specified publisher may publish cloud events of
+    /// </summary>
+    /// <param name="publisher">The authenticated publisher</param>
+    /// <param name="options">The options used to configure the authentication of the cloud event ingestion endpoint</param>
+    /// <returns>A new <see cref="IReadOnlyCollection{T}"/> containing the patterns of the sources the publisher may publish cloud events of, which is empty if it may publish
+    /// none, or null if it may publish cloud events of any source</returns>
+    /// <remarks>
+    /// API keys of configured publishers are bound to their sources. Bearer tokens are bound to the sources listed by the claim configured by
+    /// <see cref="IngestionAuthenticationOptions.SourceClaimType"/>, if any, or to none if they lack it (see #147)
+    /// </remarks>
+    public static IReadOnlyCollection<string>? GetAllowedSources(this ClaimsPrincipal publisher, IngestionAuthenticationOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(options);
+        if (!options.Enabled) return null;
+        var identities = publisher.Identities.Where(i => i.IsAuthenticated).ToList();
+        if (identities.Count == 0) return null;
+        // a request may carry several credentials, such as an API key and a bearer token: the publisher may do whatever any of them allows
+        var allowedSources = new List<string>();
+        foreach (var identity in identities)
+        {
+            var sources = GetAllowedSources(identity, options);
+            if (sources == null) return null;
+            allowedSources.AddRange(sources);
+        }
+        return allowedSources.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    static IReadOnlyCollection<string>? GetAllowedSources(ClaimsIdentity identity, IngestionAuthenticationOptions options)
+    {
+        if (identity.AuthenticationType == ApiKeyAuthenticationHandler.AuthenticationScheme)
+        {
+            var sources = identity.FindAll(CloudStreamsAuthenticationDefaults.AllowedSourceClaimType).Select(c => c.Value).ToList();
+            return sources.Count > 0 ? sources : null;
+        }
+        if (string.IsNullOrWhiteSpace(options.SourceClaimType)) return null;
+        // a claim holding an array is mapped to one claim per value; a scope-like string lists them separated by spaces
+        return [.. identity.FindAll(options.SourceClaimType).SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))];
+    }
+
     static string ToLocalUrl(string? url) => !string.IsNullOrWhiteSpace(url) && url.StartsWith('/') && !url.StartsWith("//") && !url.StartsWith("/\\") ? url : "/";
 
     static bool IsApiRequest(HttpRequest request) => request.Path.StartsWithSegments("/api") || request.Path.StartsWithSegments("/mcp");
 
     /// <summary>
-    /// Represents the <see cref="IApplicationModelConvention"/> that protects every controller action with the <see cref="CloudStreamsAuthenticationDefaults.DashboardPolicy"/>,
-    /// unless it explicitly declares its own authorization requirements, like the cloud event ingestion endpoint does
+    /// Represents the <see cref="IApplicationModelConvention"/> that protects every controller action that does not declare its own authorization requirements, like the
+    /// cloud event ingestion endpoint does: actions that only answer GET or HEAD requests require the <see cref="CloudStreamsAuthenticationDefaults.ReadPolicy"/>, and
+    /// all others the <see cref="CloudStreamsAuthenticationDefaults.AdministerPolicy"/>, so that an action is never less protected than it should be (see #147)
     /// </summary>
     sealed class DashboardAuthorizationConvention
         : IApplicationModelConvention
     {
+
+        static readonly HashSet<string> SafeMethods = new(StringComparer.OrdinalIgnoreCase) { HttpMethods.Get, HttpMethods.Head };
 
         public void Apply(ApplicationModel application)
         {
@@ -292,7 +351,9 @@ public static class CloudStreamsAuthenticationExtensions
                 foreach (var action in controller.Actions)
                 {
                     if (controller.Attributes.Concat(action.Attributes).Any(a => a is IAuthorizeData || a is IAllowAnonymous)) continue;
-                    foreach (var selector in action.Selectors) selector.EndpointMetadata.Add(new AuthorizeAttribute(CloudStreamsAuthenticationDefaults.DashboardPolicy));
+                    var methods = action.Attributes.OfType<Microsoft.AspNetCore.Mvc.Routing.IActionHttpMethodProvider>().SelectMany(a => a.HttpMethods).ToList();
+                    var policy = methods.Count > 0 && methods.All(SafeMethods.Contains) ? CloudStreamsAuthenticationDefaults.ReadPolicy : CloudStreamsAuthenticationDefaults.AdministerPolicy;
+                    foreach (var selector in action.Selectors) selector.EndpointMetadata.Add(new AuthorizeAttribute(policy));
                 }
             }
         }

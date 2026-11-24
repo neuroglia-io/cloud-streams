@@ -58,6 +58,22 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     protected ToastService ToastService { get; set; } = null!;
 
     /// <summary>
+    /// Gets the service used to determine what the current user may do
+    /// </summary>
+    [Inject]
+    protected UserAccess UserAccess { get; set; } = null!;
+
+    /// <summary>
+    /// Gets a boolean indicating whether the current user may resume and replay subscriptions
+    /// </summary>
+    protected bool CanOperate { get; private set; }
+
+    /// <summary>
+    /// Gets a boolean indicating whether the current user may create, edit and delete resources
+    /// </summary>
+    protected bool CanAdminister { get; private set; }
+
+    /// <summary>
     /// Notifies the user that an action succeeded
     /// </summary>
     /// <param name="message">The message to display</param>
@@ -128,6 +144,8 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
+        CanOperate = await UserAccess.CanOperateAsync();
+        CanAdminister = await UserAccess.CanAdministerAsync();
         Observable.CombineLatest(
             Store.Resources,
             Store.SelectedResourceNames,

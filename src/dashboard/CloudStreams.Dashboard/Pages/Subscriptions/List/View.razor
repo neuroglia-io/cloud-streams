@@ -27,7 +27,10 @@
                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnExportSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Download" /> Export selected</a></li>
-                    <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
+                    @if (CanAdminister)
+                    {
+                        <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
+                    }
                 </ul>
             </div>
         </div>
@@ -76,7 +79,14 @@
                             }
                             @if(resource.Status?.Stream?.Fault != null)
                             {
-                                <button type="button" class="badge text-dark bg-danger border-0 ms-1" title="@($"{resource.Status.Stream.Fault} (click to resume)")" aria-label="@($"Subscription '{resource.Metadata.Name}' is faulted: resume it")" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</button>
+                                @if (CanOperate)
+                                {
+                                    <button type="button" class="badge text-dark bg-danger border-0 ms-1" title="@($"{resource.Status.Stream.Fault} (click to resume)")" aria-label="@($"Subscription '{resource.Metadata.Name}' is faulted: resume it")" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</button>
+                                }
+                                else
+                                {
+                                    <span class="badge text-dark bg-danger ms-1" title="@resource.Status.Stream.Fault">faulted</span>
+                                }
                             }
                         </td>
                         <td class="text-center">
@@ -126,18 +136,27 @@
                             <div class="dropdown">
                                 <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
                                 <ul class="dropdown-menu">
-                                    <li>
-                                        <button class="dropdown-item" title="Replay all events matching @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', which implicitly enables streaming." @onclick="async _ => await OnRestartSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.ArrowClockwise" /> Replay</button>
-                                    </li>
+                                    @if (CanOperate)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item" title="Replay all events matching @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', which implicitly enables streaming." @onclick="async _ => await OnRestartSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.ArrowClockwise" /> Replay</button>
+                                        </li>
+                                    }
                                     <li>
                                         <a href="@($"/api/resources/v1/subscriptions/{resource.Metadata.Name}/export")" target="_blank" class="dropdown-item" title="Export the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name' definition" @onclick:stopPropagation><Icon Name="IconName.Download" /> Export</a>
                                     </li>
-                                    <li>
-                                        <button class="dropdown-item" title="Edit the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
-                                    </li>
-                                    <li>
-                                        <button class="dropdown-item text-danger" title="Delete the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
-                                    </li>
+                                    @if (CanAdminister)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item" title="Edit the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
+                                        </li>
+                                    }
+                                    @if (CanAdminister)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item text-danger" title="Delete the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
+                                        </li>
+                                    }
                                 </ul>
                             </div>
                         </td>
@@ -151,7 +170,10 @@
     </table>
 </div>
 
-<Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+@if (CanAdminister)
+{
+    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+}
 
 <Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
@@ -187,8 +209,8 @@
         if (!confirmed) return;
         try
         {
-            var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
-            await this.ApiClient.Resources.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
+            // a dedicated endpoint rather than a status patch, which only administrators may send (see #147)
+            await this.ApiClient.Resources.Subscriptions.ResumeAsync(subscription.GetName());
             NotifySuccess($"The subscription '{subscription.Metadata.Name}' has been resumed");
         }
         catch (Exception ex)
@@ -198,8 +220,7 @@
     }
 
     /// <remarks>
-    /// The broker only reacts to changes of the offset. A subscription that already starts at the beginning of the stream is therefore moved to its end first, then
-    /// back to its beginning: should the second patch fail, the original offset is restored (see #196)
+    /// Replayed by a dedicated endpoint, which operators may call without being allowed to patch the subscription (see #147)
     /// </remarks>
     async Task OnRestartSubscriptionAsync(Subscription subscription)
     {
@@ -209,42 +230,14 @@
             message1: "Every event matching the subscription will be delivered again, from the beginning of the stream.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Replay", YesButtonColor = ButtonColor.Warning, NoButtonText = "Cancel", IsVerticallyCentered = true });
         if (!confirmed) return;
-        var originalStream = subscription.Spec.Stream;
         try
         {
-            await this.ReplaySubscriptionAsync(subscription);
+            await this.ApiClient.Resources.Subscriptions.ReplayAsync(subscription.GetName());
             NotifySuccess($"The subscription '{subscription.Metadata.Name}' is being replayed");
         }
         catch (Exception ex)
         {
             NotifyFailure($"Failed to replay the subscription '{subscription.Metadata.Name}'", ex);
-            if (originalStream == null) return;
-            try
-            {
-                var restore = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), this.Serializer.SerializeToNode(originalStream))));
-                await this.ApiClient.Resources.Subscriptions.PatchAsync(restore, subscription.GetName(), subscription.GetNamespace());
-            }
-            catch (Exception restoreException)
-            {
-                NotifyFailure($"Failed to restore the offset of the subscription '{subscription.Metadata.Name}'", restoreException);
-            }
-        }
-    }
-
-    async Task ReplaySubscriptionAsync(Subscription subscription)
-    {
-        var offset = subscription.Spec.Stream?.Offset;
-        if (offset == StreamPosition.StartOfStream) offset = StreamPosition.EndOfStream;
-        else offset = StreamPosition.StartOfStream;
-        var streamNode = this.Serializer.SerializeToNode(new CloudEventStream() { Offset = offset });
-        var patch = new Patch(PatchType.JsonPatch, new JsonPatch(subscription.Spec.Stream == null
-            ? PatchOperation.Add(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), streamNode)
-            : PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), streamNode)));
-        subscription = await this.ApiClient.Resources.Subscriptions.PatchAsync(patch, subscription.GetName(), subscription.GetNamespace());
-        if (subscription.Spec.Stream?.Offset == StreamPosition.EndOfStream)
-        {
-            patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), this.Serializer.SerializeToNode(new CloudEventStream() { Offset = StreamPosition.StartOfStream }))));
-            await this.ApiClient.Resources.Subscriptions.PatchAsync(patch, subscription.GetName(), subscription.GetNamespace());
         }
     }
 
