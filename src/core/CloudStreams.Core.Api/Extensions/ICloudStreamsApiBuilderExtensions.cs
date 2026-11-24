@@ -35,6 +35,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddHostedService<GatewayResourceController>();
         builder.Services.AddHostedService<BrokerResourceController>();
         builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
+        builder.Services.AddHostedService<SecurityConfigurationAuditor>();
         return builder;
     }
 

@@ -71,7 +71,8 @@ public class SubscriptionHandlerAcknowledgementTests
         // assert - the token recorded is the one the subscriber received, the offset is not committed, and live events are dropped
         var pendingAck = context.Patches.ValuesWrittenTo("/status/subscriber/pendingAck").Single();
         Assert.Equal(41ul, pendingAck["offset"]!.GetValue<ulong>());
-        Assert.Equal(context.Http.Attempts[0].Headers[CloudStreamsHeaders.AckToken], pendingAck["token"]!.GetValue<string>());
+        // the subscriber gets the token, while the status only records its hash (see #149)
+        Assert.Equal(AcknowledgementTokens.Hash(context.Http.Attempts[0].Headers[CloudStreamsHeaders.AckToken]), pendingAck["token"]!.GetValue<string>());
         Assert.False(context.Patches.Touched("/status/stream/ackedOffset"));
         Assert.True(context.Handler.IsOutOfSync);
         Assert.Equal(1, context.Http.AttemptCount);
