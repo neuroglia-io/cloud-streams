@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Neuroglia.Mediation.AspNetCore;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace CloudStreams.Core.Api;
 
@@ -35,8 +35,9 @@ public static class ControllerBaseExtensions
     {
         ArgumentNullException.ThrowIfNull(result);
         var error = result.Errors?.FirstOrDefault();
-        if (error == null) return controller.Process(result);
-        var problem = new Neuroglia.ProblemDetails(error.Type, error.Title, error.Status, error.Detail, error.Instance, error.Errors?.ToDictionary(e => e.Key, e => e.Value));
+        var problem = error == null
+            ? new Neuroglia.ProblemDetails(new Uri($"https://httpstatuses.io/{result.Status}"), ReasonPhrases.GetReasonPhrase(result.Status), result.Status)
+            : new Neuroglia.ProblemDetails(error.Type, error.Title, error.Status, error.Detail, error.Instance, error.Errors?.ToDictionary(e => e.Key, e => e.Value));
         return new ObjectResult(problem) { StatusCode = result.Status, ContentTypes = { "application/problem+json" } };
     }
 
