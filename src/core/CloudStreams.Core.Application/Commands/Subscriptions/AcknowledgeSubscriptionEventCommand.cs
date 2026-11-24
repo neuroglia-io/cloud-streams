@@ -73,13 +73,35 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(AcknowledgeSubscriptionEventCommand command, CancellationToken cancellationToken = default)
     {
+        // the mediator turns exceptions into internal server errors: the problems that describe why an acknowledgement is refused are returned instead
+        try
+        {
+            return await this.AcknowledgeAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ProblemDetailsException ex) when (ex.Problem.Status is >= 400 and < 500)
+        {
+            return new OperationResult<Subscription>(ex.Problem.Status, errors: [new Error(ex.Problem.Type, ex.Problem.Title, ex.Problem.Status, ex.Problem.Detail)]);
+        }
+    }
+
+    /// <summary>
+    /// Acknowledges or negatively acknowledges the cloud event described by the specified command
+    /// </summary>
+    /// <param name="command">The command to handle</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IOperationResult{TResult}"/></returns>
+    /// <exception cref="ProblemDetailsException">The acknowledgement is invalid, or does not match a pending one</exception>
+    protected virtual async Task<IOperationResult<Subscription>> AcknowledgeAsync(AcknowledgeSubscriptionEventCommand command, CancellationToken cancellationToken)
+    {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity(command.Acknowledge ? "AcknowledgeSubscriptionEvent" : "NegativelyAcknowledgeSubscriptionEvent");
         activity?.SetTag("subscription", command.Name);
         if (string.IsNullOrWhiteSpace(command.Token)) throw new ProblemDetailsException(new(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, "The acknowledgement token is required"));
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
-        if (subscription == null) return this.NotFound();
-        var pendingAck = subscription.Status?.Subscriber?.PendingAck;
-        if (pendingAck == null || !TokensEqual(pendingAck.Token, command.Token)) throw Conflict("The specified acknowledgement token does not match any pending acknowledgement: it is unknown, has already been used, or has expired");
+        Subscription? subscription = null;
+        try { subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false); }
+        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
+        // an unknown subscription is reported like an invalid token, so that the endpoint, which is anonymous, does not reveal which subscriptions exist (see #149)
+        var pendingAck = subscription?.Status?.Subscriber?.PendingAck;
+        if (subscription == null || pendingAck == null || !AcknowledgementTokens.Matches(command.Token, pendingAck.Token)) throw Conflict("The specified acknowledgement token does not match any pending acknowledgement: it is unknown, has already been used, or has expired");
         if (pendingAck.ExpiresAt <= DateTimeOffset.UtcNow) throw Conflict($"The acknowledgement of the cloud event at offset '{pendingAck.Offset}' expired at {pendingAck.ExpiresAt:O}: the cloud event is being redelivered");
         var operations = new List<PatchOperation>()
         {
@@ -113,6 +135,5 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
 
     static ProblemDetailsException Conflict(string detail) => new(new(AcknowledgementConflictProblemType, "Acknowledgement Conflict", (int)HttpStatusCode.Conflict, detail));
 
-    static bool TokensEqual(string expected, string actual) => CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.UTF8.GetBytes(expected)), SHA256.HashData(Encoding.UTF8.GetBytes(actual)));
 
 }

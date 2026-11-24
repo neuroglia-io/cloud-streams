@@ -55,13 +55,12 @@ public class SubscriptionsController(IMediator mediator)
     [AllowAnonymous]
     [ProducesResponseType((int)HttpStatusCode.NoContent)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.NotFound)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
     public virtual async Task<IActionResult> AcknowledgeEvent(string name, [FromBody] AcknowledgementRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, true), cancellationToken).ConfigureAwait(false);
-        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
+        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Problem(result);
     }
 
     /// <summary>
@@ -76,13 +75,12 @@ public class SubscriptionsController(IMediator mediator)
     [AllowAnonymous]
     [ProducesResponseType((int)HttpStatusCode.NoContent)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.NotFound)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
     public virtual async Task<IActionResult> NegativelyAcknowledgeEvent(string name, [FromBody] NegativeAcknowledgementRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, false, request.Reason), cancellationToken).ConfigureAwait(false);
-        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
+        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Problem(result);
     }
 
     /// <summary>

@@ -191,7 +191,7 @@ POST /api/resources/v1/subscriptions/{name}/ack    { "token": "..." }           
 POST /api/resources/v1/subscriptions/{name}/nack   { "token": "...", "reason": "..." } # the event is redelivered
 ```
 
-Both return `204` on success, `404` if the subscription does not exist, and `409` if the token doesn't match the pending acknowledgement (unknown, already used, or expired). The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
+Both return `204` on success, and `409` if the token doesn't match a pending acknowledgement (unknown subscription or token, already used, or expired), so as not to reveal which subscriptions exist. Only a hash of the token is stored in the subscription's status. The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
 
 An event that isn't resolved within `spec.subscriber.ack.timeout` (broker default `spec.dispatch.ack.timeout`, otherwise `PT5M`) is redelivered. The exception is a subscriber that has never called back: it most likely uses `202` to mean "done", so the subscription is faulted with a message saying to return `200 OK` instead. A pending acknowledgement is stored in `status.subscriber.pendingAck`, so it survives a broker restart. Only one event is ever in flight, so ordering is preserved.
 
@@ -210,6 +210,7 @@ Authentication:
     ClientId: cloud-streams-dashboard
     ClientSecret: ...            # optional, for confidential clients; PKCE is always used
     Audience: cloud-streams      # strongly recommended: the audience bearer tokens must have been issued for
+    RequireAudience: true        # refuse to start without an audience; otherwise, a warning is logged
     Scopes: [ openid, profile ]
     NameClaimType: preferred_username
     RoleClaimType: roles
@@ -231,6 +232,28 @@ ForwardedHeaders:
   KnownProxies: [ 10.0.0.12 ]
   KnownNetworks: [ 10.244.0.0/16 ]
   TrustAllProxies: false         # only when the application cannot be reached without going through a proxy
+```
+
+#### Exposure
+
+Gateways serve both the public endpoints (event ingestion, acknowledgements and health checks) and the management API (resources, hubs, MCP and the dashboard). The management API can be kept off the public network, either by serving it on a dedicated port that is not exposed, or by disabling it on ingestion-only replicas:
+
+```yaml
+ManagementApi:
+  Enabled: true                  # false on ingestion-only replicas
+  Port: 8081                     # serve the management API on this port only; listen on it too, e.g. ASPNETCORE_HTTP_PORTS=8080;8081
+```
+
+At startup, a `SECURITY` warning is logged whenever the management API is served without authentication, bearer tokens are accepted without audience validation, or forwarded headers are trusted from any client.
+
+The requests Cloud Streams sends on behalf of resources (deliveries to subscribers, mutation webhooks and health checks) are subject to an outbound policy. By default, it only denies link-local addresses, which include cloud providers' metadata services:
+
+```yaml
+OutboundRequests:
+  AllowedHosts: [ '*.svc.cluster.local', subscriber.example.com ]  # any host if empty
+  DeniedNetworks: [ 10.10.0.0/16 ]
+  DenyLinkLocal: true
+  DenyPrivateNetworks: false
 ```
 
 ### Admission

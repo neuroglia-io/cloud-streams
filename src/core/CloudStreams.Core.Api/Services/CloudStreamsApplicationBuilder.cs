@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Configuration;
+using CloudStreams.Core.Api.Configuration;
 using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
@@ -68,7 +70,10 @@ public class CloudStreamsApplicationBuilder
         this.Environment = environment;
         this.Services = services;
         this.Logging = logging;
-        this.Services.AddHttpClient();
+        this.Services.Configure<OutboundRequestOptions>(configuration.GetSection(OutboundRequestOptions.ConfigurationSection));
+        this.Services.AddSingleton<OutboundRequestPolicy>();
+        // the default client sends the requests resources configure (deliveries, mutation webhooks, health checks): their destinations are subject to the outbound policy (see #148)
+        this.Services.AddHttpClient(Microsoft.Extensions.Options.Options.DefaultName).ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler() { ConnectCallback = provider.GetRequiredService<OutboundRequestPolicy>().ConnectAsync, PooledConnectionLifetime = TimeSpan.FromMinutes(5) });
         this.Services.AddResponseCompression(options =>
         {
             options.EnableForHttps = true;
@@ -78,6 +83,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddProblemDetails();
         this.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
         this.Services.AddCloudStreamsAuthentication(configuration);
+        this.Services.Configure<ManagementApiOptions>(configuration.GetSection(ManagementApiOptions.ConfigurationSection));
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
         this.Services.AddCoreApiQueries();
