@@ -323,6 +323,16 @@ Subscriptions, brokers and gateways are validated when they are created, replace
 
 Status updates are never validated, so a broker can still record the state of a subscription that was stored before these checks existed.
 
+### Concurrent updates
+
+Every update of a resource is atomic: it only applies to the state it was computed against, so concurrent writers, such as the broker, the acknowledgement endpoints and the dashboard, never overwrite each other.
+
+- A patch that names an expected `resourceVersion` fails with `409 Conflict` if the resource has changed since then. Replacements always expect the version of the resource they carry.
+- A patch that doesn't name one is applied again to the new state if the resource changes while it is being applied.
+- A JSON patch that cannot be applied, for example because a `test` operation fails, fails with `409 Conflict` and changes nothing. It used to be reported as `304 Not Modified`.
+
+The broker patches a subscription's status against the latest version it knows of. On a conflict, it reads the subscription again and applies its change to the current state.
+
 ### Partitions
 
 `GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`.

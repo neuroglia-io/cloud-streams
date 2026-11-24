@@ -26,6 +26,7 @@ public class StatusPatchRecorder
 {
 
     readonly List<Patch> _patches = [];
+    readonly List<string?> _resourceVersions = [];
     readonly Lock _lock = new();
 
     /// <summary>
@@ -39,14 +40,35 @@ public class StatusPatchRecorder
     public int Count { get { lock (this._lock) return this._patches.Count; } }
 
     /// <summary>
+    /// Gets the resource versions the recorded patches expected, in order. A null version means that the patch expected none
+    /// </summary>
+    public IReadOnlyList<string?> ResourceVersions { get { lock (this._lock) return [.. this._resourceVersions]; } }
+
+    /// <summary>
     /// Records the specified patch
     /// </summary>
-    public void Record(Patch patch) { lock (this._lock) this._patches.Add(patch); }
+    /// <param name="patch">The patch to record</param>
+    /// <param name="resourceVersion">The resource version the patch expects, if any</param>
+    public void Record(Patch patch, string? resourceVersion = null)
+    {
+        lock (this._lock)
+        {
+            this._patches.Add(patch);
+            this._resourceVersions.Add(resourceVersion);
+        }
+    }
 
     /// <summary>
     /// Clears everything recorded so far
     /// </summary>
-    public void Clear() { lock (this._lock) this._patches.Clear(); }
+    public void Clear()
+    {
+        lock (this._lock)
+        {
+            this._patches.Clear();
+            this._resourceVersions.Clear();
+        }
+    }
 
     /// <summary>
     /// Gets every operation of every recorded patch, in order
