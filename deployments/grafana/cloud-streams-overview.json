@@ -308,7 +308,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -377,7 +377,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -391,7 +391,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Failed dispatch attempts / (successful dispatches + failed dispatch attempts) over the selected brokers, subscribers and streams.",
+      "description": "Failed dispatch attempts / (successful dispatches + failed dispatch attempts) over the selected brokers, subscriptions and streams.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -450,7 +450,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * (sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)) / clamp_min((sum(rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)) + (sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)), 1e-9)",
+          "expr": "100 * (sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)) / clamp_min((sum(rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)) + (sum(rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or vector(0)), 1e-9)",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -792,24 +792,11 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 14
-      },
-      "id": 12,
-      "panels": [],
-      "title": "Broker delivery",
-      "type": "row"
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Rate of cloud events successfully dispatched, per subscriber URI.",
+      "description": "Duration of the ingestion of cloud events, from their admission to their storage in the event store (cloud_streams_gateway_ingestion_duration), for the events that were stored.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -857,7 +844,7 @@
               }
             ]
           },
-          "unit": "eps"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -865,9 +852,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 15
+        "y": 14
       },
-      "id": 13,
+      "id": 29,
       "options": {
         "legend": {
           "calcs": [
@@ -891,13 +878,35 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval]))",
-          "legendFormat": "{{subscriber}}",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(cloud_streams_gateway_ingestion_duration_seconds_bucket{${job_label}=~\"$gateway\", outcome=\"stored\"}[$__rate_interval])))",
+          "legendFormat": "p50",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(cloud_streams_gateway_ingestion_duration_seconds_bucket{${job_label}=~\"$gateway\", outcome=\"stored\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(cloud_streams_gateway_ingestion_duration_seconds_bucket{${job_label}=~\"$gateway\", outcome=\"stored\"}[$__rate_interval])))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "Delivered events by subscriber",
+      "title": "Ingestion latency",
       "type": "timeseries"
     },
     {
@@ -905,7 +914,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Rate of failed dispatch attempts (non-success status code or transport error), per subscriber URI. Each failure puts the subscriber in the Unreachable state and triggers the retry policy.",
+      "description": "Rate of cloud events refused by the gateway, per reason: rejected by the split-horizon or authorization policies, or invalid because of their attributes or of their data schema.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -961,7 +970,330 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 15
+        "y": 14
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (reason) (rate({__name__=~\"cloud_streams_gateway_events_rejected_count.*\", ${job_label}=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "rejected: {{reason}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (reason) (rate({__name__=~\"cloud_streams_gateway_events_invalid_count.*\", ${job_label}=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "invalid: {{reason}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Refused events by reason",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rate of cloud events stored, and of admitted cloud events that could not be appended to the event store, per source. Past the first 100 distinct sources, sources are labelled 'other'.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "eps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (source) (rate({__name__=~\"cloud_streams_gateway_events_ingested_count.*\", ${job_label}=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "{{source}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (source) (rate({__name__=~\"cloud_streams_gateway_append_failures_count.*\", ${job_label}=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "append failures: {{source}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Ingested and failed events by source",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 12,
+      "panels": [],
+      "title": "Broker delivery",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rate of cloud events successfully dispatched, per subscription.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "eps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (subscription) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval]))",
+          "legendFormat": "{{subscription}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Delivered events by subscription",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rate of failed dispatch attempts (non-success status code or transport error), per subscription. Each failure puts the subscriber in the Unreachable state and triggers the retry policy.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "eps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
       },
       "id": 14,
       "options": {
@@ -987,13 +1319,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval]))",
-          "legendFormat": "{{subscriber}}",
+          "expr": "sum by (subscription) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval]))",
+          "legendFormat": "{{subscription}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Delivery failures by subscriber",
+      "title": "Delivery failures by subscription",
       "type": "timeseries"
     },
     {
@@ -1001,7 +1333,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "failures / (delivered + failures), per subscriber URI. Only subscribers with at least one failure in the window are shown.",
+      "description": "failures / (delivered + failures), per subscription. Only subscriptions with at least one failure in the window are shown.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1066,7 +1398,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 15
+        "y": 23
       },
       "id": 15,
       "options": {
@@ -1092,13 +1424,13 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "100 * sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) / clamp_min(sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) + (sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) or sum by (subscriber) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])) * 0), 1e-9)",
-          "legendFormat": "{{subscriber}}",
+          "expr": "100 * sum by (subscription) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) / clamp_min(sum by (subscription) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) + (sum by (subscription) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) or sum by (subscription) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])) * 0), 1e-9)",
+          "legendFormat": "{{subscription}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Delivery failure ratio by subscriber",
+      "title": "Delivery failure ratio by subscription",
       "type": "timeseries"
     },
     {
@@ -1162,7 +1494,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 31
       },
       "id": 16,
       "options": {
@@ -1188,7 +1520,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (stream) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval]))",
+          "expr": "sum by (stream) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval]))",
           "legendFormat": "delivered - {{stream}}",
           "range": true,
           "refId": "A"
@@ -1199,7 +1531,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (stream) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval]))",
+          "expr": "sum by (stream) (rate({__name__=~\"cloud_streams_broker_delivery_failures_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval]))",
           "legendFormat": "failed - {{stream}}",
           "range": true,
           "refId": "B"
@@ -1269,7 +1601,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 31
       },
       "id": 17,
       "options": {
@@ -1295,7 +1627,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "label_replace(sum by (${job_label}) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscriber=~\"$subscriber\", stream=~\"$stream\"}[$__rate_interval])), \"service\", \"$1\", \"${job_label}\", \"(.*)\")",
+          "expr": "label_replace(sum by (${job_label}) (rate({__name__=~\"cloud_streams_broker_events_published_count.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])), \"service\", \"$1\", \"${job_label}\", \"(.*)\")",
           "legendFormat": "{{service}}",
           "range": true,
           "refId": "A"
@@ -1305,12 +1637,322 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Amount of records of its stream each subscription has yet to handle (cloud_streams_broker_subscription_lag), as reported by the broker replica that holds its lease.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 39
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max by (subscription) ({__name__=~\"cloud_streams_broker_subscription_lag.*\", ${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"})",
+          "legendFormat": "{{subscription}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Lag by subscription",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Duration of delivery attempts, from the request to the subscriber's response, mutation included (cloud_streams_broker_delivery_duration), per outcome: delivered, deferred ('202 Accepted') or failed.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 39
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.5, sum by (le, outcome) (rate(cloud_streams_broker_delivery_duration_seconds_bucket{${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{outcome}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(cloud_streams_broker_delivery_duration_seconds_bucket{${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{outcome}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Delivery latency by outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "How long deferred acknowledgements have been pending before being acknowledged, negatively acknowledged or expiring (cloud_streams_broker_ack_duration).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 39
+      },
+      "id": 34,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.5, sum by (le, outcome) (rate(cloud_streams_broker_ack_duration_seconds_bucket{${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])))",
+          "legendFormat": "p50 {{outcome}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(cloud_streams_broker_ack_duration_seconds_bucket{${job_label}=~\"$broker\", subscription=~\"$subscription\", stream=~\"$stream\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{outcome}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Deferred acknowledgement duration by outcome",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 47
       },
       "id": 18,
       "panels": [],
@@ -1378,7 +2020,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 32
+        "y": 48
       },
       "id": 19,
       "options": {
@@ -1474,7 +2116,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 32
+        "y": 48
       },
       "id": 20,
       "options": {
@@ -1601,7 +2243,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 32
+        "y": 48
       },
       "id": 21,
       "options": {
@@ -1708,7 +2350,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 40
+        "y": 56
       },
       "id": 22,
       "options": {
@@ -1804,7 +2446,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 40
+        "y": 56
       },
       "id": 23,
       "options": {
@@ -1931,7 +2573,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 40
+        "y": 56
       },
       "id": 24,
       "options": {
@@ -1983,7 +2625,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 64
       },
       "id": 25,
       "panels": [],
@@ -2051,7 +2693,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 49
+        "y": 65
       },
       "id": 26,
       "options": {
@@ -2147,7 +2789,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 49
+        "y": 65
       },
       "id": 27,
       "options": {
@@ -2274,7 +2916,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 49
+        "y": 65
       },
       "id": 28,
       "options": {
@@ -2446,16 +3088,16 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values({__name__=~\"cloud_streams_broker_(events_published|delivery_failures)_count.*\", ${job_label}=~\"$broker\"}, subscriber)",
+        "definition": "label_values({__name__=~\"cloud_streams_broker_(events_published|delivery_failures)_count.*\", ${job_label}=~\"$broker\"}, subscription)",
         "hide": 0,
         "includeAll": true,
-        "label": "Subscriber",
+        "label": "Subscription",
         "multi": true,
-        "name": "subscriber",
+        "name": "subscription",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values({__name__=~\"cloud_streams_broker_(events_published|delivery_failures)_count.*\", ${job_label}=~\"$broker\"}, subscriber)",
+          "query": "label_values({__name__=~\"cloud_streams_broker_(events_published|delivery_failures)_count.*\", ${job_label}=~\"$broker\"}, subscription)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,

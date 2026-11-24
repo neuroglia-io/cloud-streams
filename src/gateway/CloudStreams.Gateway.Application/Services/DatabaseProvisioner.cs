@@ -106,7 +106,7 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
             }
             catch (Exception ex)
             {
-                this.Logger.LogError("An error occurred while reading a gateway from file '{file}': {ex}", file.FullName, ex);
+                this.Logger.LogError(ex, "An error occurred while reading a gateway from file '{file}'", file.FullName);
                 continue;
             }
         }
@@ -157,7 +157,7 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
             }
             catch (Exception ex)
             {
-                this.Logger.LogError("An error occurred while reading a broker from file '{file}': {ex}", file.FullName, ex);
+                this.Logger.LogError(ex, "An error occurred while reading a broker from file '{file}'", file.FullName);
                 continue;
             }
         }
@@ -208,7 +208,7 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
             }
             catch (Exception ex)
             {
-                this.Logger.LogError("An error occurred while reading a subscription from file '{file}': {ex}", file.FullName, ex);
+                this.Logger.LogError(ex, "An error occurred while reading a subscription from file '{file}'", file.FullName);
                 continue;
             }
         }

@@ -109,8 +109,8 @@ public class CloudEventAdmissionControlTests
         // assert
         Assert.Equal((int)HttpStatusCode.Accepted, result.Status);
         Assert.Null(result.Data);
-        metrics.Received(1).IncrementTotalIgnoredEvents();
-        metrics.DidNotReceive().IncrementTotalRejectedEvents();
+        metrics.Received(1).IncrementTotalIgnoredEvents(Arg.Any<Uri>());
+        metrics.DidNotReceive().IncrementTotalRejectedEvents(Arg.Any<string>());
     }
 
     sealed class TestAdmissionControl

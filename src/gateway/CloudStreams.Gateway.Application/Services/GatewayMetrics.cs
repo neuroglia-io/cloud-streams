@@ -12,6 +12,8 @@
 // limitations under the License.
 
 using CloudStreams.Core;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace CloudStreams.Gateway.Application.Services;
@@ -26,6 +28,22 @@ public class GatewayMetrics
     const string MetricsPrefix = "cloud_streams_gateway_";
     const string CloudEventMetricsPrefix = MetricsPrefix + "events_";
 
+    /// <summary>
+    /// Gets the maximum amount of distinct sources used as labels. Admitted events whose source is not one of them are labelled <see cref="OtherSource"/>
+    /// </summary>
+    public const int MaxSourceLabels = 100;
+
+    /// <summary>
+    /// Gets the label of the sources past the <see cref="MaxSourceLabels"/> first ones
+    /// </summary>
+    public const string OtherSource = "other";
+
+    /// <summary>
+    /// Gets the bucket boundaries, in seconds, of the ingestion duration histogram, which are those of the HTTP server duration metric
+    /// </summary>
+    static readonly IReadOnlyList<double> IngestionDurationBuckets = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10];
+
+    readonly ConcurrentDictionary<string, byte> _sourceLabels = new();
     bool _disposed;
 
     /// <summary>
@@ -33,21 +51,13 @@ public class GatewayMetrics
     /// </summary>
     public GatewayMetrics()
     {
-        this.TotalIngestedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ingested_count", "Cloud Event", "The total amount of ingested cloud events");
-        this.TotalInvalidEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}invalid_count", "Cloud Event", "The total amount of invalid cloud events");
-        this.TotalRejectedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}rejected_count", "Cloud Event", "The total amount of rejected cloud events");
-        this.TotalIgnoredEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ignored_count", "Cloud Event", "The total amount of cloud events ignored by the split-horizon policy");
-    }
-
-    /// <summary>
-    /// Gets the <see cref="Counter{T}"/> used to count the cloud events ignored by the split-horizon policy
-    /// </summary>
-    protected Counter<int> TotalIgnoredEvents { get; }
-
-    /// <inheritdoc/>
-    public virtual void IncrementTotalIgnoredEvents()
-    {
-        this.TotalIgnoredEvents.Add(1);
+        this.TotalIngestedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ingested_count", "{event}", "The total amount of ingested cloud events");
+        this.TotalInvalidEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}invalid_count", "{event}", "The total amount of invalid cloud events");
+        this.TotalRejectedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}rejected_count", "{event}", "The total amount of rejected cloud events");
+        this.TotalIgnoredEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ignored_count", "{event}", "The total amount of cloud events ignored by the split-horizon policy");
+        this.TotalAppendFailures = this.Meter.CreateCounter<int>($"{MetricsPrefix}append_failures_count", "{failure}", "The total amount of admitted cloud events that could not be appended to the event store");
+        this.IngestionDuration = this.Meter.CreateHistogram<double>($"{MetricsPrefix}ingestion_duration", "s", "The duration of the ingestion of cloud events, from their admission to their storage",
+            advice: new() { HistogramBucketBoundaries = IngestionDurationBuckets });
     }
 
     /// <summary>
@@ -70,22 +80,54 @@ public class GatewayMetrics
     /// </summary>
     protected Counter<int> TotalRejectedEvents { get; }
 
-    /// <inheritdoc/>
-    public virtual void IncrementTotalIngestedEvents()
-    {
-        this.TotalIngestedEvents.Add(1);
-    }
+    /// <summary>
+    /// Gets the <see cref="Counter{T}"/> used to count the cloud events ignored by the split-horizon policy
+    /// </summary>
+    protected Counter<int> TotalIgnoredEvents { get; }
+
+    /// <summary>
+    /// Gets the <see cref="Counter{T}"/> used to count the admitted cloud events that could not be appended to the event store
+    /// </summary>
+    protected Counter<int> TotalAppendFailures { get; }
+
+    /// <summary>
+    /// Gets the <see cref="Histogram{T}"/> used to record the duration of the ingestion of cloud events, in seconds
+    /// </summary>
+    protected Histogram<double> IngestionDuration { get; }
 
     /// <inheritdoc/>
-    public virtual void IncrementTotalInvalidEvents()
-    {
-        this.TotalInvalidEvents.Add(1);
-    }
+    public virtual void IncrementTotalIngestedEvents(Uri source) => this.TotalIngestedEvents.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));
 
     /// <inheritdoc/>
-    public virtual void IncrementTotalRejectedEvents()
+    public virtual void IncrementTotalInvalidEvents(string reason) => this.TotalInvalidEvents.Add(1, new KeyValuePair<string, object?>("reason", reason));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalRejectedEvents(string reason) => this.TotalRejectedEvents.Add(1, new KeyValuePair<string, object?>("reason", reason));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalIgnoredEvents(Uri source) => this.TotalIgnoredEvents.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalAppendFailures(Uri source) => this.TotalAppendFailures.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));
+
+    /// <inheritdoc/>
+    public virtual void RecordIngestionDuration(string outcome, TimeSpan duration) => this.IngestionDuration.Record(duration.TotalSeconds, new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <summary>
+    /// Gets the label of the specified source
+    /// </summary>
+    /// <param name="source">The source to get the label of</param>
+    /// <returns>The source itself, if it is one of the <see cref="MaxSourceLabels"/> first distinct sources, or <see cref="OtherSource"/> otherwise</returns>
+    /// <remarks>The query string of the source, if any, is left out: it is not used to tell sources apart, and could carry credentials</remarks>
+    protected virtual string GetSourceLabel(Uri source)
     {
-        this.TotalRejectedEvents.Add(1);
+        ArgumentNullException.ThrowIfNull(source);
+        var label = source.IsAbsoluteUri ? source.GetLeftPart(UriPartial.Path) : source.OriginalString.Split('?', 2)[0];
+        if (this._sourceLabels.ContainsKey(label)) return label;
+        // the limit may be exceeded by a few concurrent additions, which is harmless: what matters is that it bounds the amount of labels
+        if (this._sourceLabels.Count >= MaxSourceLabels) return OtherSource;
+        this._sourceLabels.TryAdd(label, 0);
+        return label;
     }
 
     /// <summary>
