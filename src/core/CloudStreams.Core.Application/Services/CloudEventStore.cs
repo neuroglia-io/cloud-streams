@@ -198,7 +198,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         // a missing projection lists no partition, while any other failure is reported rather than being mistaken for an empty list (see #187)
         try
         {
-            if (!await this.ProjectionExistsAsync(projectionName, cancellationToken).ConfigureAwait(false)) this.Logger.LogWarning("The projection '{projection}', which lists the partitions of type '{partitionType}', does not exist", projectionName, partitionType);
+            if (!await this.ProjectionExistsAsync(projectionName, cancellationToken).ConfigureAwait(false)) this.Logger.LogDebug("The projection '{projection}', which listed the partitions of type '{partitionType}' in earlier versions, does not exist", projectionName, partitionType);
             else partitionsIds = await this.ProjectionManager.GetStateAsync<List<string>>(projectionName, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -364,6 +364,12 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
+                // another application, such as a broker started alongside a gateway, may have created the projection in the meantime, which EventStoreDB reports as a conflict
+                if (await this.ProjectionExistsQuietlyAsync(name, cancellationToken).ConfigureAwait(false))
+                {
+                    this.Logger.LogDebug("The projection '{projection}' has been created concurrently", name);
+                    continue;
+                }
                 this.Logger.LogError(ex, "Failed to set up the projection '{projection}'", name);
                 missing.Add(name);
             }
@@ -386,6 +392,24 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
             return await this.ProjectionManager.GetStatusAsync(name, cancellationToken).ConfigureAwait(false) != null;
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the specified projection exists, considering that it does not if that cannot be determined
+    /// </summary>
+    /// <param name="name">The name of the projection to check</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A boolean indicating whether or not the specified projection is known to exist</returns>
+    protected virtual async Task<bool> ProjectionExistsQuietlyAsync(string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await this.ProjectionExistsAsync(name, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return false;
         }
