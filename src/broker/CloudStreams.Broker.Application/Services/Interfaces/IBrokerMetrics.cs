@@ -34,4 +34,19 @@ public interface IBrokerMetrics
     /// <param name="subscriber">The URI of the subscriber the delivery failed for</param>
     void IncrementTotalDeliveryFailures(string? stream, string? subscriber);
 
+    /// <summary>
+    /// Adds the specified delta to the amount of cloud events whose acknowledgement is pending
+    /// </summary>
+    /// <param name="stream">The name of the stream or partition the event was published from, or "All" for unpartitioned subscriptions</param>
+    /// <param name="subscriber">The URI of the subscriber that deferred the acknowledgement</param>
+    /// <param name="delta">The delta to add: 1 when a subscriber defers an acknowledgement, -1 when it is acknowledged, negatively acknowledged or expires</param>
+    void AddPendingAcknowledgements(string? stream, string? subscriber, int delta);
+
+    /// <summary>
+    /// Increments the total count of deferred acknowledgements that have expired
+    /// </summary>
+    /// <param name="stream">The name of the stream or partition the event was published from, or "All" for unpartitioned subscriptions</param>
+    /// <param name="subscriber">The URI of the subscriber that failed to acknowledge in time</param>
+    void IncrementTotalAcknowledgementTimeouts(string? stream, string? subscriber);
+
 }

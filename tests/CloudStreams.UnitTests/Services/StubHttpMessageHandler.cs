@@ -67,7 +67,7 @@ public class StubHttpMessageHandler(Func<HttpRequestMessage, int, CancellationTo
             // started on the first attempt rather than at construction, so setup time is never mistaken for backoff
             this._stopwatch ??= Stopwatch.StartNew();
             index = this._attempts.Count;
-            this._attempts.Add(new(index, request.RequestUri, this._stopwatch.Elapsed));
+            this._attempts.Add(new(index, request.RequestUri, this._stopwatch.Elapsed, request.Headers.ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase)));
         }
         return await this._responder(request, index, cancellationToken).ConfigureAwait(false);
     }
@@ -111,7 +111,8 @@ public class StubHttpMessageHandler(Func<HttpRequestMessage, int, CancellationTo
     /// </summary>
     /// <param name="Index">The zero-based index of the attempt</param>
     /// <param name="RequestUri">The uri the attempt was sent to</param>
+    /// <param name="Headers">The headers the attempt was sent with</param>
     /// <param name="Elapsed">The time elapsed since the <em>first</em> attempt, so setup time is never counted. Zero for the first attempt. Prefer <see cref="IntervalsBetweenAttempts"/> when asserting backoff</param>
-    public record RecordedAttempt(int Index, Uri? RequestUri, TimeSpan Elapsed);
+    public record RecordedAttempt(int Index, Uri? RequestUri, TimeSpan Elapsed, IReadOnlyDictionary<string, string> Headers);
 
 }

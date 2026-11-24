@@ -165,6 +165,36 @@ spec:
 
 While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
 
+#### Deferred acknowledgement
+
+A subscriber whose processing takes a while doesn't have to hold the connection open, or acknowledge an event it hasn't processed yet. It can defer the acknowledgement by responding `202 Accepted`, and call back once it is done. Every delivery to a subscription that tracks a stream offset carries the headers needed to do so:
+
+| Header | Description |
+|---|---|
+| `cloudstreams-subscription` | The name of the subscription |
+| `cloudstreams-offset` | The offset of the event in the subscription's stream |
+| `cloudstreams-ack-token` | An opaque, single-use token identifying this delivery |
+| `cloudstreams-ack-uri` | The uri to acknowledge the event at. Only sent when the broker's `spec.dispatch.ack.callbackUri` is set to the gateway's public base uri |
+
+| Subscriber response | Broker behaviour |
+|---|---|
+| `2xx` other than `202` | The event is acknowledged: the offset is committed and the next event is delivered |
+| `202 Accepted` | Delivery is suspended until the subscriber calls back, or the acknowledgement expires |
+| non-`2xx` | The delivery failed, and is retried according to the retry policy |
+
+To resolve a deferred acknowledgement, the subscriber calls the gateway:
+
+```
+POST /api/resources/v1/subscriptions/{name}/ack    { "token": "..." }                  # the event is processed: delivery resumes after it
+POST /api/resources/v1/subscriptions/{name}/nack   { "token": "...", "reason": "..." } # the event is redelivered
+```
+
+Both return `204` on success, `404` if the subscription does not exist, and `409` if the token doesn't match the pending acknowledgement (unknown, already used, or expired). The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
+
+An event that isn't resolved within `spec.subscriber.ack.timeout` (broker default `spec.dispatch.ack.timeout`, otherwise `PT5M`) is redelivered. The exception is a subscriber that has never called back: it most likely uses `202` to mean "done", so the subscription is faulted with a message saying to return `200 OK` instead. A pending acknowledgement is stored in `status.subscriber.pendingAck`, so it survives a broker restart. Only one event is ever in flight, so ordering is preserved.
+
+The gateway's own ingestion endpoint (`POST /api/events/pub`) now responds `204 No Content`, since events are persisted by the time it responds. This keeps a subscription that bridges two Cloud Streams instances from suspending on every event.
+
 ### Authentication
 
 By default, Cloud Streams does not authenticate requests and relies on the infrastructure (e.g. an ingress) to do so. The dashboard and the event ingestion endpoint (`POST /api/events/pub`) can each be secured independently at the application level. For example, publishers can stay anonymous while users must sign in to the dashboard:

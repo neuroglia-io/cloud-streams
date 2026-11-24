@@ -38,7 +38,7 @@ public class EventsController(IMediator mediator)
     [HttpPost("pub")]
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.IngestionPolicy)]
     [Consumes(CloudEventContentType.Json)]
-    [ProducesResponseType((int)HttpStatusCode.Accepted)]
+    [ProducesResponseType((int)HttpStatusCode.NoContent)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.ServiceUnavailable)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Forbidden)]
@@ -46,7 +46,8 @@ public class EventsController(IMediator mediator)
     public virtual async Task<IActionResult> PublishCloudEvent([FromBody] CloudEvent e, CancellationToken cancellationToken)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false), (int)HttpStatusCode.Accepted);
+        var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e), cancellationToken).ConfigureAwait(false);
+        return result.Status is >= 200 and < 300 ? this.NoContent() : this.Process(result);
     }
 
 }

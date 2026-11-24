@@ -12,6 +12,12 @@
 // limitations under the License.
 
 using FluentValidation;
+using Json.Patch;
+using Json.Pointer;
+using System.Buffers.Text;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using Grpc.Core;
 using System.Numerics;
 using System.Reactive.Threading.Tasks;
@@ -40,6 +46,8 @@ public class SubscriptionHandler
     public static readonly TimeSpan DefaultDispatchTimeout = TimeSpan.FromSeconds(100);
 
     readonly object _syncLock = new();
+    bool _pendingAcknowledgementObserved;
+    CancellationTokenSource? _acknowledgementTimeoutCancellationTokenSource;
     bool _disposed;
     long _streamInitializationSessionId;
 
@@ -205,6 +213,21 @@ public class SubscriptionHandler
     protected (SubscriberState State, string? Reason)? ReportedSubscriberState { get; private set; }
 
     /// <summary>
+    /// Gets a boolean indicating whether or not delivery is suspended until the subscriber acknowledges a cloud event whose acknowledgement it has deferred
+    /// </summary>
+    protected bool AwaitingAcknowledgement { get; private set; }
+
+    /// <summary>
+    /// Gets the token of the pending acknowledgement, if any
+    /// </summary>
+    protected string? PendingAcknowledgementToken { get; private set; }
+
+    /// <summary>
+    /// Gets the offset of the cloud event whose acknowledgement is pending, if any
+    /// </summary>
+    protected ulong PendingAcknowledgementOffset { get; private set; }
+
+    /// <summary>
     /// Initializes the <see cref="SubscriptionHandler"/>
     /// </summary>
     /// <returns>A new awaitable <see cref="Task"/></returns>
@@ -228,7 +251,10 @@ public class SubscriptionHandler
                     .Select(s => s.Status!.Stream!.Fault)
                     .DistinctUntilChanged()
                     .Where(fault => fault != null)
-                    .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable())
+                    .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable()),
+                shared.Select(s => s.Status?.Subscriber?.PendingAck)
+                    .DistinctUntilChanged(pendingAck => pendingAck?.Token)
+                    .Select(pendingAck => OnPendingAcknowledgementChangedAsync(pendingAck).ToObservable())
             ))
             .Subscribe(this.CancellationTokenSource.Token);
         this.Broker
@@ -261,6 +287,14 @@ public class SubscriptionHandler
                 && this.Subscription.Spec.Stream?.Offset != (long?)this.Subscription.Status?.Stream?.AckedOffset)
             {
                 await this.CommitOffsetAsync(null).ConfigureAwait(false);
+                // the offset has been changed by the user, which overrides whatever acknowledgement was pending
+                var pendingAck = this.Subscription.Status?.Subscriber?.PendingAck;
+                if (pendingAck != null)
+                {
+                    this.EndAwaitingAcknowledgement(null);
+                    try { await this.ClearPendingAcknowledgementAsync(pendingAck.Token, null).ConfigureAwait(false); }
+                    catch (ProblemDetailsException) { }
+                }
             }
 
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -366,8 +400,16 @@ public class SubscriptionHandler
                     this.CloudEventStream = observedStream;
                     this.SubscriptionHandle = subscriptionHandle;
                     shouldCatchUp = this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset);
+                    var pendingAck = this.Subscription.Spec.Stream == null ? null : this.Subscription.Status?.Subscriber?.PendingAck;
+                    if (pendingAck != null)
+                    {
+                        // the acknowledgement was deferred before the broker (re)started: delivery stays suspended until it is resolved or expires
+                        lock (this._syncLock) this.BeginAwaitingAcknowledgement(pendingAck.Token, pendingAck.Offset, observed: true);
+                        this.SubscriptionOutOfSync = true;
+                        shouldCatchUp = false;
+                    }
                     // a new stream starts in sync unless it has to catch up: a previous session aborted while out of sync must not wedge this one
-                    this.SubscriptionOutOfSync = shouldCatchUp;
+                    else this.SubscriptionOutOfSync = shouldCatchUp;
                     initializationOutcome = StreamInitializationOutcomes.Initialized;
                     subscriptionHandle = null;
                 }
@@ -375,6 +417,8 @@ public class SubscriptionHandler
             finally { this.InitLock.Release(); }
             subscriptionHandle?.Dispose();
             if (initializationOutcome == StreamInitializationOutcomes.Initialized && shouldCatchUp) _ = this.CatchUpAsync().ConfigureAwait(false);
+            var restoredAck = this.Subscription.Status?.Subscriber?.PendingAck;
+            if (initializationOutcome == StreamInitializationOutcomes.Initialized && restoredAck != null && this.AwaitingAcknowledgement && this.PendingAcknowledgementToken == restoredAck.Token) this.ScheduleAcknowledgementTimeout(restoredAck.Token, restoredAck.ExpiresAt);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled))
         {
@@ -591,10 +635,22 @@ public class SubscriptionHandler
         var timeout = this.GetDispatchTimeout();
         using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
         timeoutCancellationTokenSource.CancelAfter(timeout);
+        // deferring the acknowledgement only makes sense for a subscription that tracks an offset, since there is otherwise nothing to advance or rewind
+        var tracksOffset = this.Subscription.Spec.Stream != null;
+        var ackToken = tracksOffset ? Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)) : null;
+        var deferred = false;
         try
         {
             using var requestContent = e.ToHttpContent();
             using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
+            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Subscription, this.Subscription.GetName());
+            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Offset, offset.ToString(CultureInfo.InvariantCulture));
+            if (ackToken != null)
+            {
+                request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.AckToken, ackToken);
+                var ackUri = this.GetAcknowledgementUri();
+                if (ackUri != null) request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.AckUri, ackUri.OriginalString);
+            }
             using var response = await this.HttpClient.SendAsync(request, timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
@@ -603,14 +659,17 @@ public class SubscriptionHandler
                 if (!string.IsNullOrWhiteSpace(responseContent)) reason = $"{reason}: {responseContent}";
                 throw new HttpRequestException(reason, null, response.StatusCode);
             }
+            // per RFC 9110, '202 Accepted' means that the request has been accepted for processing, but that the processing has not been completed (see #133)
+            deferred = tracksOffset && response.StatusCode == HttpStatusCode.Accepted;
         }
         catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)
         {
             throw new HttpRequestException($"The subscriber did not respond within the configured timeout of {timeout}", ex);
         }
         this.Metrics.IncrementTotalPublishedEvents(this.GetStreamName(), this.Subscription.Spec.Subscriber.Uri.ToString());
-        if (this.Subscription.Spec.Stream != null) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
         await this.SetSubscriberStateAsync(SubscriberState.Reachable).ConfigureAwait(false);
+        if (deferred) await this.SuspendForAcknowledgementAsync(offset, ackToken!).ConfigureAwait(false);
+        else if (tracksOffset) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
         if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value), this.CancellationTokenSource.Token).ConfigureAwait(false);
     }
 
@@ -744,7 +803,14 @@ public class SubscriptionHandler
     /// catching up is either replayed here or dispatched live, but never dropped. The out-of-sync state is reset on every exit path, unless another
     /// catch-up has started in the meantime, so an aborted catch-up can never leave the subscription unable to receive anything (see #81 and #132).
     /// </remarks>
-    protected virtual async Task CatchUpAsync()
+    protected virtual Task CatchUpAsync() => this.CatchUpAsync(null);
+
+    /// <summary>
+    /// Catches up missed <see cref="CloudEvent"/>s, starting at the specified offset
+    /// </summary>
+    /// <param name="fromOffset">The offset to start catching up at. If not set, resumes from the subscription's acknowledged offset</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task CatchUpAsync(long? fromOffset)
     {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.CatchUp");
         activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
@@ -754,7 +820,8 @@ public class SubscriptionHandler
         await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
         try
         {
-            if (this.StreamInitializationCancellationTokenSource == null) return;
+            // a subscription awaiting an acknowledgement must not dispatch anything else: it resumes once the acknowledgement is received or expires
+            if (this.StreamInitializationCancellationTokenSource == null || this.AwaitingAcknowledgement) return;
             streamInitializationToken = this.StreamInitializationCancellationTokenSource.Token;
             streamInitializationSessionId = Interlocked.Read(ref this._streamInitializationSessionId);
             this.StreamSynchronizationTaskCompletionSource ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -764,8 +831,8 @@ public class SubscriptionHandler
         try
         {
             this.SubscriptionOutOfSync = true;
-            var currentOffset = this.Subscription.GetOffset();
-            if (this.CommittedOffset.HasValue && this.CommittedOffsetGeneration == this.Subscription.Metadata.Generation && (long)this.CommittedOffset.Value > currentOffset) currentOffset = (long)this.CommittedOffset.Value;
+            var currentOffset = fromOffset ?? this.Subscription.GetOffset();
+            if (!fromOffset.HasValue && this.CommittedOffset.HasValue && this.CommittedOffsetGeneration == this.Subscription.Metadata.Generation && (long)this.CommittedOffset.Value > currentOffset) currentOffset = (long)this.CommittedOffset.Value;
             if (currentOffset == StreamPosition.EndOfStream) currentOffset = this.Subscription.Spec.Partition == null ?
                 (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, streamInitializationToken).ConfigureAwait(false))!.Sequence
                 : (long)(await this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, streamInitializationToken).SingleAsync(streamInitializationToken).ConfigureAwait(false))!.Sequence;
@@ -781,7 +848,7 @@ public class SubscriptionHandler
                         await Task.Delay(50, streamInitializationToken).ConfigureAwait(false);
                         continue;
                     }
-                    if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false)) return;
+                    if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false) || this.AwaitingAcknowledgement) return;
                     currentOffset++;
                 }
                 if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
@@ -801,13 +868,232 @@ public class SubscriptionHandler
             {
                 if (this.StreamSynchronizationTaskCompletionSource == null || this.StreamSynchronizationTaskCompletionSource == streamSynchronizationCompletionSource)
                 {
-                    this.SubscriptionOutOfSync = false;
+                    // a subscription awaiting an acknowledgement stays out of sync, so that live events are dropped until it resumes
+                    this.SubscriptionOutOfSync = this.AwaitingAcknowledgement;
                     if (this.StreamSynchronizationTaskCompletionSource == streamSynchronizationCompletionSource) this.StreamSynchronizationTaskCompletionSource = null;
                 }
             }
             finally { this.InitLock.Release(); }
             streamSynchronizationCompletionSource?.TrySetResult();
         }
+    }
+
+    /// <summary>
+    /// Gets the maximum amount of time a cloud event whose acknowledgement has been deferred may remain unacknowledged
+    /// </summary>
+    /// <returns>The maximum amount of time a cloud event whose acknowledgement has been deferred may remain unacknowledged</returns>
+    protected virtual TimeSpan GetAcknowledgementTimeout()
+    {
+        var timeout = this.Subscription.Spec.Subscriber.Ack?.Timeout?.ToTimeSpan() ?? this.Broker.Resource.Spec.Dispatch?.Ack?.Timeout?.ToTimeSpan() ?? SubscriberAcknowledgementConfiguration.DefaultTimeout;
+        return timeout > TimeSpan.Zero ? timeout : SubscriberAcknowledgementConfiguration.DefaultTimeout;
+    }
+
+    /// <summary>
+    /// Gets the uri subscribers must call to acknowledge the cloud events delivered for the subscription, if the broker knows it
+    /// </summary>
+    /// <returns>The uri subscribers must call to acknowledge the cloud events delivered for the subscription, if any</returns>
+    protected virtual Uri? GetAcknowledgementUri()
+    {
+        var callbackUri = this.Broker.Resource.Spec.Dispatch?.Ack?.CallbackUri;
+        if (callbackUri == null) return null;
+        return new Uri($"{callbackUri.OriginalString.TrimEnd('/')}/api/resources/v1/subscriptions/{Uri.EscapeDataString(this.Subscription.GetName())}/ack");
+    }
+
+    /// <summary>
+    /// Suspends delivery until the subscriber acknowledges the specified cloud event, negatively acknowledges it, or the acknowledgement expires
+    /// </summary>
+    /// <param name="offset">The offset of the cloud event whose acknowledgement has been deferred</param>
+    /// <param name="token">The token the subscriber must present to acknowledge the cloud event</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// The pending acknowledgement is recorded in the subscription's status, where the gateway validates the subscriber's callback. Suspension relies on the out-of-sync
+    /// state rather than on blocking, so that live events are dropped, and later replayed by catch-up, instead of piling up in memory
+    /// </remarks>
+    protected virtual async Task SuspendForAcknowledgementAsync(ulong offset, string token)
+    {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.SuspendForAcknowledgement");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        activity?.SetTag("offset", offset);
+        var expiresAt = DateTimeOffset.UtcNow + this.GetAcknowledgementTimeout();
+        lock (this._syncLock)
+        {
+            this.BeginAwaitingAcknowledgement(token, offset, observed: false);
+            this.SubscriptionOutOfSync = true;
+        }
+        var resource = this.Subscription.Clone()!;
+        resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+        resource.Status.Subscriber ??= new();
+        resource.Status.Subscriber.PendingAck = new() { Offset = offset, Token = token, ExpiresAt = expiresAt };
+        var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        this.ScheduleAcknowledgementTimeout(token, expiresAt);
+    }
+
+    /// <summary>
+    /// Marks the subscription as awaiting the acknowledgement of a cloud event. Must be called while holding the sync lock
+    /// </summary>
+    void BeginAwaitingAcknowledgement(string token, ulong offset, bool observed)
+    {
+        if (!this.AwaitingAcknowledgement) this.Metrics.AddPendingAcknowledgements(this.GetStreamName(), this.Subscription.Spec.Subscriber.Uri.ToString(), 1);
+        this.AwaitingAcknowledgement = true;
+        this.PendingAcknowledgementToken = token;
+        this.PendingAcknowledgementOffset = offset;
+        this._pendingAcknowledgementObserved = observed;
+    }
+
+    /// <summary>
+    /// Stops awaiting the acknowledgement of a cloud event
+    /// </summary>
+    /// <param name="token">The token of the pending acknowledgement to stop awaiting. If not set, stops awaiting whatever acknowledgement is pending</param>
+    /// <returns>A boolean indicating whether or not the handler was awaiting the specified acknowledgement</returns>
+    protected virtual bool EndAwaitingAcknowledgement(string? token)
+    {
+        CancellationTokenSource? timeoutCancellationTokenSource;
+        lock (this._syncLock)
+        {
+            if (!this.AwaitingAcknowledgement || (token != null && token != this.PendingAcknowledgementToken)) return false;
+            this.AwaitingAcknowledgement = false;
+            this.PendingAcknowledgementToken = null;
+            this._pendingAcknowledgementObserved = false;
+            timeoutCancellationTokenSource = this._acknowledgementTimeoutCancellationTokenSource;
+            this._acknowledgementTimeoutCancellationTokenSource = null;
+        }
+        timeoutCancellationTokenSource?.Cancel();
+        timeoutCancellationTokenSource?.Dispose();
+        this.Metrics.AddPendingAcknowledgements(this.GetStreamName(), this.Subscription.Spec.Subscriber.Uri.ToString(), -1);
+        return true;
+    }
+
+    /// <summary>
+    /// Schedules the expiry of the specified pending acknowledgement
+    /// </summary>
+    /// <param name="token">The token of the pending acknowledgement</param>
+    /// <param name="expiresAt">The date and time at which the pending acknowledgement expires</param>
+    protected virtual void ScheduleAcknowledgementTimeout(string token, DateTimeOffset expiresAt)
+    {
+        var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
+        CancellationTokenSource? previous;
+        lock (this._syncLock)
+        {
+            if (!this.AwaitingAcknowledgement || this.PendingAcknowledgementToken != token)
+            {
+                cancellationTokenSource.Dispose();
+                return;
+            }
+            previous = this._acknowledgementTimeoutCancellationTokenSource;
+            this._acknowledgementTimeoutCancellationTokenSource = cancellationTokenSource;
+        }
+        previous?.Cancel();
+        previous?.Dispose();
+        var cancellationToken = cancellationTokenSource.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var delay = expiresAt - DateTimeOffset.UtcNow;
+                if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                if (!cancellationToken.IsCancellationRequested) await this.OnAcknowledgementTimeoutAsync(token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException) { }
+        }, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Handles changes to the subscription's pending acknowledgement, as reported by the resource watch
+    /// </summary>
+    /// <param name="pendingAck">The subscription's pending acknowledgement, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// The watch lags behind the handler's own patches, so it may still report no pending acknowledgement right after the handler has suspended delivery.
+    /// Delivery therefore only resumes once the watch has reported the pending acknowledgement, and then reports it gone, which means that the subscriber has
+    /// called back: after an acknowledgement, the acknowledged offset has been advanced; after a negative acknowledgement, it has not, and the event is redelivered
+    /// </remarks>
+    protected virtual async Task OnPendingAcknowledgementChangedAsync(PendingAcknowledgement? pendingAck)
+    {
+        try
+        {
+            ulong offset;
+            lock (this._syncLock)
+            {
+                if (pendingAck != null)
+                {
+                    if (this.AwaitingAcknowledgement && pendingAck.Token == this.PendingAcknowledgementToken) this._pendingAcknowledgementObserved = true;
+                    return;
+                }
+                if (!this.AwaitingAcknowledgement || !this._pendingAcknowledgementObserved) return;
+                offset = this.PendingAcknowledgementOffset;
+            }
+            if (!this.EndAwaitingAcknowledgement(null)) return;
+            var ackedOffset = this.Subscription.Status?.Stream?.AckedOffset;
+            await this.CatchUpAsync(ackedOffset.HasValue && ackedOffset.Value > offset ? (long)ackedOffset.Value : (long)offset).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+    }
+
+    /// <summary>
+    /// Handles the expiry of the specified pending acknowledgement
+    /// </summary>
+    /// <param name="token">The token of the pending acknowledgement that has expired</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// An expired acknowledgement is treated as a negative one, and the event is redelivered, so that a subscriber that defers and then dies can never hold its
+    /// subscription suspended forever. A subscriber that has never called back, however, most likely misuses <c>202 Accepted</c> to mean "done": rather than
+    /// letting it degrade into a silent redelivery loop, the subscription is faulted with a self-explaining reason
+    /// </remarks>
+    protected virtual async Task OnAcknowledgementTimeoutAsync(string token)
+    {
+        try
+        {
+            ulong offset;
+            lock (this._syncLock)
+            {
+                if (!this.AwaitingAcknowledgement || this.PendingAcknowledgementToken != token) return;
+                offset = this.PendingAcknowledgementOffset;
+            }
+            var neverAcknowledged = this.Subscription.Status?.Subscriber?.LastAcknowledgedAt == null;
+            var timeout = this.GetAcknowledgementTimeout();
+            if (!this.EndAwaitingAcknowledgement(token)) return;
+            this.Metrics.IncrementTotalAcknowledgementTimeouts(this.GetStreamName(), this.Subscription.Spec.Subscriber.Uri.ToString());
+            var reason = neverAcknowledged
+                ? $"The subscriber returned '202 Accepted' at offset '{offset}' but never acknowledged it within {timeout}. If it did not intend to defer the acknowledgement, it should return '200 OK' instead"
+                : $"The subscriber did not acknowledge the cloud event at offset '{offset}' within {timeout}: it is being redelivered";
+            this.Logger.LogWarning("Subscription '{subscription}': {reason}", this.Subscription.GetQualifiedName(), reason);
+            try
+            {
+                await this.ClearPendingAcknowledgementAsync(token, reason).ConfigureAwait(false);
+            }
+            catch (ProblemDetailsException)
+            {
+                // the subscriber called back concurrently: whatever it decided is now recorded, so resume from the subscription's acknowledged offset
+                await this.CatchUpAsync(null).ConfigureAwait(false);
+                return;
+            }
+            if (neverAcknowledged) await this.OnSubscriptionErrorAsync(new TimeoutException(reason)).ConfigureAwait(false);
+            else await this.CatchUpAsync((long)offset).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+    }
+
+    /// <summary>
+    /// Removes the specified pending acknowledgement from the subscription's status, unless it has been resolved in the meantime
+    /// </summary>
+    /// <param name="token">The token of the pending acknowledgement to remove</param>
+    /// <param name="reason">The reason to report on the subscriber's status, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <exception cref="ProblemDetailsException">The pending acknowledgement has been resolved in the meantime</exception>
+    protected virtual async Task ClearPendingAcknowledgementAsync(string token, string? reason)
+    {
+        var operations = new List<PatchOperation>()
+        {
+            // guards against a subscriber that calls back concurrently: the patch only applies if the acknowledgement is still pending
+            PatchOperation.Test(JsonPointer.Parse("/status/subscriber/pendingAck/token"), JsonValue.Create(token)),
+            PatchOperation.Remove(JsonPointer.Parse("/status/subscriber/pendingAck"))
+        };
+        if (reason != null) operations.Add(PatchOperation.Add(JsonPointer.Parse("/status/subscriber/reason"), JsonValue.Create(reason)));
+        await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), this.Subscription.GetName(), this.Subscription.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        if (this.Subscription.Status?.Subscriber != null) this.Subscription.Status.Subscriber.PendingAck = null;
     }
 
     /// <summary>
@@ -1036,6 +1322,8 @@ public class SubscriptionHandler
             if (disposing)
             {
                 this.SubscriptionHandle?.Dispose();
+                this._acknowledgementTimeoutCancellationTokenSource?.Cancel();
+                this._acknowledgementTimeoutCancellationTokenSource?.Dispose();
                 this.CancellationTokenSource.Dispose();
             }
             this._disposed = true;

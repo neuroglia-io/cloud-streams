@@ -33,4 +33,17 @@ public record SubscriberStatus
     [DataMember(Order = 2, Name = "reason"), JsonPropertyName("reason"), JsonPropertyOrder(2), YamlMember(Alias = "reason", Order = 2)]
     public virtual string? Reason { get; set; }
 
+    /// <summary>
+    /// Gets/sets the cloud event whose acknowledgement the subscriber has deferred, if any. Delivery is suspended until it is acknowledged, negatively acknowledged, or expires
+    /// </summary>
+    [DataMember(Order = 3, Name = "pendingAck"), JsonPropertyName("pendingAck"), JsonPropertyOrder(3), YamlMember(Alias = "pendingAck", Order = 3)]
+    public virtual PendingAcknowledgement? PendingAck { get; set; }
+
+    /// <summary>
+    /// Gets/sets the date and time at which the subscriber last called the acknowledgement endpoints back, if ever.<para></para>
+    /// A subscriber that defers an acknowledgement without ever having called back most likely misuses <c>202 Accepted</c>, which is why it faults the subscription rather than being silently redelivered to
+    /// </summary>
+    [DataMember(Order = 4, Name = "lastAcknowledgedAt"), JsonPropertyName("lastAcknowledgedAt"), JsonPropertyOrder(4), YamlMember(Alias = "lastAcknowledgedAt", Order = 4)]
+    public virtual DateTimeOffset? LastAcknowledgedAt { get; set; }
+
 }

@@ -86,6 +86,17 @@ spec:
                     timeout:
                       type: string
                       description: The maximum amount of time, as an ISO 8601 duration, to wait for a subscriber to respond to a single delivery attempt. Defaults to PT100S
+                    ack:
+                      type: object
+                      description: Configures the deferred acknowledgement of the cloud events dispatched by the broker, unless overridden by the subscription
+                      properties:
+                        timeout:
+                          type: string
+                          description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to PT5M
+                        callbackUri:
+                          type: string
+                          format: uri
+                          description: The base uri, as reachable by subscribers, of the gateway that exposes the acknowledgement endpoints. When set, it is advertised to subscribers in the cloudstreams-ack-uri header
                     sequencing:
                       type: object
                       properties:

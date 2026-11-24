@@ -40,6 +40,7 @@ public class RecordingBrokerMetrics
     {
         Interlocked.Exchange(ref this._totalPublishedEvents, 0);
         Interlocked.Exchange(ref this._totalDeliveryFailures, 0);
+        Interlocked.Exchange(ref this._totalAcknowledgementTimeouts, 0); // the pending acknowledgements gauge is a level rather than a count, so it is deliberately kept
     }
 
     /// <inheritdoc/>
@@ -47,6 +48,25 @@ public class RecordingBrokerMetrics
 
     /// <inheritdoc/>
     public void IncrementTotalDeliveryFailures(string? stream, string? subscriber) => Interlocked.Increment(ref this._totalDeliveryFailures);
+
+    int _pendingAcknowledgements;
+    int _totalAcknowledgementTimeouts;
+
+    /// <summary>
+    /// Gets the current value of the pending acknowledgements gauge
+    /// </summary>
+    public int PendingAcknowledgements => Volatile.Read(ref this._pendingAcknowledgements);
+
+    /// <summary>
+    /// Gets the amount of times <see cref="IncrementTotalAcknowledgementTimeouts"/> has been called
+    /// </summary>
+    public int TotalAcknowledgementTimeouts => Volatile.Read(ref this._totalAcknowledgementTimeouts);
+
+    /// <inheritdoc/>
+    public void AddPendingAcknowledgements(string? stream, string? subscriber, int delta) => Interlocked.Add(ref this._pendingAcknowledgements, delta);
+
+    /// <inheritdoc/>
+    public void IncrementTotalAcknowledgementTimeouts(string? stream, string? subscriber) => Interlocked.Increment(ref this._totalAcknowledgementTimeouts);
 
     /// <inheritdoc/>
     public void Dispose() => GC.SuppressFinalize(this);

@@ -54,4 +54,10 @@ public record BrokerDispatchConfiguration
     [DataMember(Order = 3, Name = "timeout"), JsonPropertyOrder(3), JsonPropertyName("timeout"), YamlMember(Order = 3, Alias = "timeout")]
     public virtual Duration? Timeout { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure the deferred acknowledgement of the cloud events dispatched by the broker, unless overridden by the subscription
+    /// </summary>
+    [DataMember(Order = 4, Name = "ack"), JsonPropertyOrder(4), JsonPropertyName("ack"), YamlMember(Order = 4, Alias = "ack")]
+    public virtual BrokerAcknowledgementConfiguration? Ack { get; set; }
+
 }
