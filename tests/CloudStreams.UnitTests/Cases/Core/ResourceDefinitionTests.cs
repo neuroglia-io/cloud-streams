@@ -13,6 +13,7 @@
 
 using Json.Schema;
 using BrokerResource = CloudStreams.Core.Resources.Broker;
+using GatewayResource = CloudStreams.Core.Resources.Gateway;
 using Duration = CloudStreams.Core.Resources.Duration;
 using Neuroglia.Serialization.Yaml;
 using System.Text.Json.Nodes;
@@ -80,7 +81,7 @@ public class ResourceDefinitionTests
         Status = new() { HealthStatus = "healthy", LastHealthCheckAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"), ObservedGeneration = 1 }
     };
 
-    static Gateway SampleGateway() => new(new ResourceMetadata("sample"), new GatewaySpec()
+    static GatewayResource SampleGateway() => new(new ResourceMetadata("sample"), new GatewaySpec()
     {
         Authorization = new() { DecisionStrategy = RuleBasedDecisionStrategy.Unanimous, Rules = [new() { Type = CloudEventAuthorizationRuleType.Attribute, Effect = AuthorizationPolicyEffect.Authorize, AttributeName = "type", AttributeValue = ".*" }] },
         Validation = new() { SkipValidation = true, ValidationStrategy = CloudEventValidationStrategy.Fail, DataSchema = new() { Required = false, AutoGenerate = true } },
@@ -95,7 +96,7 @@ public class ResourceDefinitionTests
     {
         Subscription => new SubscriptionResourceDefinition().Spec.Versions.First().Schema.OpenAPIV3Schema!,
         BrokerResource => new BrokerResourceDefinition().Spec.Versions.First().Schema.OpenAPIV3Schema!,
-        Gateway => new GatewayResourceDefinition().Spec.Versions.First().Schema.OpenAPIV3Schema!,
+        GatewayResource => new GatewayResourceDefinition().Spec.Versions.First().Schema.OpenAPIV3Schema!,
         _ => throw new NotSupportedException()
     };
 
