@@ -53,7 +53,8 @@ public class StoreHealthTests
         await manager.DidNotReceive().CreateAsync(Projections.PartitionBySource, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
         await manager.Received(1).CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
         await manager.Received(1).CreateAsync(Projections.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
-        await manager.Received(Enum.GetValues<CloudEventPartitionType>().Length).CreateAsync(Arg.Is<string>(n => n.StartsWith(Projections.CloudEventPartitionsMetadataPrefix)), Arg.Any<Action<IProjectionSourceBuilder<List<object>>>>(), Arg.Any<CancellationToken>());
+        // partition ids are listed by the partition index rather than by projections, whose state grows with every partition (see #185)
+        await manager.DidNotReceive().CreateAsync(Arg.Is<string>(n => n.StartsWith(Projections.CloudEventPartitionsMetadataPrefix)), Arg.Any<Action<IProjectionSourceBuilder<List<object>>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

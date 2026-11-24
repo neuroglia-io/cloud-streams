@@ -31,7 +31,8 @@ namespace CloudStreams.Core.Application.Services;
 /// <param name="projectionManager">The service used to manage event-driven projections</param>
 /// <param name="serializer">The service used to serialize/deserialize data to/from JSON</param>
 /// <param name="logger">The service used to perform logging</param>
-public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null)
+/// <param name="partitionIndex">The index of the partitions cloud events have been published to, if any</param>
+public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null, IPartitionIndex? partitionIndex = null)
     : IHostedService, ICloudEventStore, IDisposable
 {
 
@@ -94,7 +95,52 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         var streamName = Streams.All;
         var descriptor = await this.ParseEventDescriptorAsync(e, cancellationToken).ConfigureAwait(false);
         var offset = await this.EventStore.AppendAsync(streamName, [descriptor], cancellationToken: cancellationToken).ConfigureAwait(false);
+        await this.IndexPartitionsAsync(e.Metadata, cancellationToken).ConfigureAwait(false);
         return new(streamName, offset, e.Metadata, e.Data);
+    }
+
+    /// <summary>
+    /// Gets the partitions the specified cloud event belongs to
+    /// </summary>
+    /// <param name="metadata">The metadata of the cloud event to get the partitions of</param>
+    /// <returns>The partitions the specified cloud event belongs to</returns>
+    public static IEnumerable<PartitionReference> GetPartitions(CloudEventMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        var attributes = new (CloudEventPartitionType Type, string Attribute)[]
+        {
+            (CloudEventPartitionType.BySource, CloudEventAttributes.Source),
+            (CloudEventPartitionType.ByType, CloudEventAttributes.Type),
+            (CloudEventPartitionType.BySubject, CloudEventAttributes.Subject),
+            (CloudEventPartitionType.ByCorrelationId, "$correlationId"),
+            (CloudEventPartitionType.ByCausationId, "$causationId")
+        };
+        foreach (var (type, attribute) in attributes)
+        {
+            if (!metadata.ContextAttributes.TryGetValue(attribute, out var value) || value == null) continue;
+            var id = value is Uri uri ? uri.OriginalString : value.ToString();
+            if (!string.IsNullOrEmpty(id)) yield return new(type, id);
+        }
+    }
+
+    /// <summary>
+    /// Adds the partitions the cloud event described by the specified metadata belongs to to the partition index, if any
+    /// </summary>
+    /// <param name="metadata">The metadata of the cloud event to index the partitions of</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>The event is stored by then: failing to index its partitions only affects listing them, so it is logged rather than failing the ingestion</remarks>
+    protected virtual async Task IndexPartitionsAsync(CloudEventMetadata metadata, CancellationToken cancellationToken)
+    {
+        if (partitionIndex == null) return;
+        try
+        {
+            await partitionIndex.AddAsync(GetPartitions(metadata), cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            this.Logger.LogError(ex, "Failed to index the partitions of a cloud event: they may be missing from partition listings");
+        }
     }
 
     /// <inheritdoc/>
@@ -293,20 +339,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
                 .When((state, e) => e.Metadata!.Get("$causationId") != null)
                 .Then((state, e) => Projection.LinkEventTo("$by-causation-" + e.Metadata!.Get("$causationId"), e)),
             cancellationToken: cancellationToken));
-        foreach (var partitionType in Enum.GetValues<CloudEventPartitionType>())
-        {
-            var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
-            var metadataPath = typeName.Replace("by", string.Empty).ToCamelCase();
-            if (partitionType == CloudEventPartitionType.ByCorrelationId || partitionType == CloudEventPartitionType.ByCausationId) metadataPath = "$" + metadataPath.Replace("-id", "Id");
-            var name = Projections.CloudEventPartitionsMetadataPrefix + typeName;
-            yield return (name, cancellationToken => this.ProjectionManager.CreateAsync<List<object>>(name,
-                projection => projection
-                    .FromStream(Streams.All)
-                    .Given(() => new List<object>())
-                    .When((state, e) => e.Metadata!.Get(metadataPath) != null && !state.Contains(e.Metadata!.Get(metadataPath)))
-                    .Then((state, e) => state.Add(e.Metadata!.Get(metadataPath))),
-                cancellationToken: cancellationToken));
-        }
+        // the ids of the partitions are no longer listed by projections, whose state grows with every partition, but by the partition index (see #185)
     }
 
     /// <summary>

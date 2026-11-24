@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	<VersionPrefix>0.58.0</VersionPrefix>
+	<VersionPrefix>0.59.0</VersionPrefix>
 	<AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
 	<FileVersion>$(VersionPrefix)</FileVersion>
 	<NeutralLanguage>en</NeutralLanguage>
@@ -23,6 +23,7 @@
     <PackageReference Include="Grpc.Core.Api" Version="2.71.0" />
 	<PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.23.1" />
     <PackageReference Include="Polly" Version="8.6.1" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.41" />
   </ItemGroup>
 
   <ItemGroup>

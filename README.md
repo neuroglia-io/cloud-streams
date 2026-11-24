@@ -167,6 +167,17 @@ spec:
 
 While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
 
+#### Broker replicas
+
+Several replicas of a broker can run side by side, for availability. A replica only handles a subscription while it holds a lease on it in Redis, so that every subscription is handled by a single replica, and every event is delivered once. Leases are renewed periodically. When the replica that handles a subscription dies, its lease expires and another replica takes the subscription over. A replica that fails to renew a lease in time stops handling the subscription before the lease can be acquired by another one. When a replica stops gracefully, it releases its leases so that others take over immediately.
+
+```yaml
+Leases:                          # e.g. CLOUDSTREAMS_BROKER_LEASES__DURATION=00:00:15
+  Enabled: true                  # disabling leases is only safe with a single replica per subscription
+  Duration: '00:00:15'           # how long a subscription stays unhandled when the replica that handles it dies
+  RenewalInterval: '00:00:05'    # defaults to a third of the duration
+```
+
 #### Deferred acknowledgement
 
 A subscriber whose processing takes a while doesn't have to hold the connection open, or acknowledge an event it hasn't processed yet. It can defer the acknowledgement by responding `202 Accepted`, and call back once it is done. Every delivery to a subscription that tracks a stream offset carries the headers needed to do so:
@@ -191,7 +202,7 @@ POST /api/resources/v1/subscriptions/{name}/ack    { "token": "..." }           
 POST /api/resources/v1/subscriptions/{name}/nack   { "token": "...", "reason": "..." } # the event is redelivered
 ```
 
-Both return `204` on success, `404` if the subscription does not exist, and `409` if the token doesn't match the pending acknowledgement (unknown, already used, or expired). The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
+Both return `204` on success, and `409` if the token doesn't match a pending acknowledgement (unknown subscription or token, already used, or expired), so as not to reveal which subscriptions exist. Only a hash of the token is stored in the subscription's status. The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
 
 An event that isn't resolved within `spec.subscriber.ack.timeout` (broker default `spec.dispatch.ack.timeout`, otherwise `PT5M`) is redelivered. The exception is a subscriber that has never called back: it most likely uses `202` to mean "done", so the subscription is faulted with a message saying to return `200 OK` instead. A pending acknowledgement is stored in `status.subscriber.pendingAck`, so it survives a broker restart. Only one event is ever in flight, so ordering is preserved.
 
@@ -210,6 +221,7 @@ Authentication:
     ClientId: cloud-streams-dashboard
     ClientSecret: ...            # optional, for confidential clients; PKCE is always used
     Audience: cloud-streams      # strongly recommended: the audience bearer tokens must have been issued for
+    RequireAudience: true        # refuse to start without an audience; otherwise, a warning is logged
     Scopes: [ openid, profile ]
     NameClaimType: preferred_username
     RoleClaimType: roles
@@ -231,6 +243,28 @@ ForwardedHeaders:
   KnownProxies: [ 10.0.0.12 ]
   KnownNetworks: [ 10.244.0.0/16 ]
   TrustAllProxies: false         # only when the application cannot be reached without going through a proxy
+```
+
+#### Exposure
+
+Gateways serve both the public endpoints (event ingestion, acknowledgements and health checks) and the management API (resources, hubs, MCP and the dashboard). The management API can be kept off the public network, either by serving it on a dedicated port that is not exposed, or by disabling it on ingestion-only replicas:
+
+```yaml
+ManagementApi:
+  Enabled: true                  # false on ingestion-only replicas
+  Port: 8081                     # serve the management API on this port only; listen on it too, e.g. ASPNETCORE_HTTP_PORTS=8080;8081
+```
+
+At startup, a `SECURITY` warning is logged whenever the management API is served without authentication, bearer tokens are accepted without audience validation, or forwarded headers are trusted from any client.
+
+The requests Cloud Streams sends on behalf of resources (deliveries to subscribers, mutation webhooks and health checks) are subject to an outbound policy. By default, it only denies link-local addresses, which include cloud providers' metadata services:
+
+```yaml
+OutboundRequests:
+  AllowedHosts: [ '*.svc.cluster.local', subscriber.example.com ]  # any host if empty
+  DeniedNetworks: [ 10.10.0.0/16 ]
+  DenyLinkLocal: true
+  DenyPrivateNetworks: false
 ```
 
 ### Admission
@@ -261,6 +295,12 @@ Subscriptions, brokers and gateways are validated when they are created, replace
 - **Numbers:** positive rate limits and split-horizon chain lengths, and stream offsets of at least `-1`.
 
 Status updates are never validated, so a broker can still record the state of a subscription that was stored before these checks existed.
+
+### Partitions
+
+`GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`.
+
+Partition ids are kept in an index in Redis, updated as events are ingested, so that listing and searching them never loads them all. Earlier versions listed them with EventStoreDB projections, whose state grows with every partition until it reaches EventStoreDB's maximum projection state size. On upgrade, the index is backfilled once from those projections, which are no longer used afterwards: the `cloud_events_partition_*` projections can then be stopped and deleted from EventStoreDB.
 
 ### Monitoring
 

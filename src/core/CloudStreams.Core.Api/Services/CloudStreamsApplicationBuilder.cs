@@ -12,6 +12,9 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Validation;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CloudStreams.Core.Application.Configuration;
+using CloudStreams.Core.Api.Configuration;
 using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
@@ -69,7 +72,10 @@ public class CloudStreamsApplicationBuilder
         this.Environment = environment;
         this.Services = services;
         this.Logging = logging;
-        this.Services.AddHttpClient();
+        this.Services.Configure<OutboundRequestOptions>(configuration.GetSection(OutboundRequestOptions.ConfigurationSection));
+        this.Services.AddSingleton<OutboundRequestPolicy>();
+        // the default client sends the requests resources configure (deliveries, mutation webhooks, health checks): their destinations are subject to the outbound policy (see #148)
+        this.Services.AddHttpClient(Microsoft.Extensions.Options.Options.DefaultName).ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler() { ConnectCallback = provider.GetRequiredService<OutboundRequestPolicy>().ConnectAsync, PooledConnectionLifetime = TimeSpan.FromMinutes(5) });
         this.Services.AddResponseCompression(options =>
         {
             options.EnableForHttps = true;
@@ -79,6 +85,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddProblemDetails();
         this.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
         this.Services.AddCloudStreamsAuthentication(configuration);
+        this.Services.Configure<ManagementApiOptions>(configuration.GetSection(ManagementApiOptions.ConfigurationSection));
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
         this.Services.AddSingleton<IResourceValidator, CloudStreamsResourceValidator>();
@@ -99,6 +106,13 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddEsdbEventStore();
         this.Services.AddEsdbProjectionManager();
         this.Services.AddRedisDatabase(redisConnectionString);
+        this.Services.TryAddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+        {
+            var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+            options.AbortOnConnectFail = false;
+            return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+        });
+        this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());
