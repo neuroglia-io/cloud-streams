@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+global using CloudStreams.Core.Serialization;
 global using Neuroglia;
 global using Neuroglia.Data.Infrastructure.ResourceOriented;
 global using Neuroglia.Eventing.CloudEvents;

@@ -55,6 +55,11 @@ spec:
                               type: string
                             exponent:
                               type: number
+                              exclusiveMinimum: 0
+                              description: The exponent of an exponential backoff. Required by exponential backoffs
+                            maxDelay:
+                              type: string
+                              description: The maximum amount of time, as an ISO 8601 duration, to wait between two retry attempts. Defaults to PT1H
                           oneOf:
                             - properties:
                                 type:
@@ -105,13 +110,13 @@ spec:
                           enum: [ 'none', 'attribute' ]
                         attributeName:
                           type: string
-                          format: '^[a-z0-9]{3,20}$'
+                          pattern: '^[a-z0-9]{3,20}$'
                         attributeConflictResolution:
                           type: string
                           enum: [ 'overwrite', 'fallback' ]
                         fallbackAttributeName:
                           type: string
-                          format: '^[a-z0-9]{3,20}$'
+                          pattern: '^[a-z0-9]{3,20}$'
                       oneOf:
                         - properties:
                             strategy:
@@ -159,11 +164,32 @@ spec:
                               type: string
                             path:
                               type: string
+                            headers:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            body:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
                           required: [ method, path ]
+                        interval:
+                          type: string
+                          pattern: '^P([0-9]+(?:[,\.][0-9]+)?Y)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?D)?(?:T([0-9]+(?:[,\.][0-9]+)?H)?([0-9]+(?:[,\.][0-9]+)?M)?([0-9]+(?:[,\.][0-9]+)?S)?)?$'
+                      required: [ request ]
                   required:
                     - uri
             status:
               type: object
+              properties:
+                healthStatus:
+                  type: string
+                lastHealthCheckAt:
+                  type: string
+                  format: date-time
+                observedGeneration:
+                  type: number
+                stream:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
           required:
             - spec
       subresources:

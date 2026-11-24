@@ -41,6 +41,22 @@ public record RetryBackoffDuration
     public virtual double? Exponent { get; set; }
 
     /// <summary>
+    /// Gets/sets the maximum amount of time to wait between two retry attempts. Defaults to <see cref="DefaultMaxDelay"/>
+    /// </summary>
+    [DataMember(Order = 4, Name = "maxDelay"), JsonPropertyName("maxDelay"), YamlMember(Alias = "maxDelay")]
+    public virtual Duration? MaxDelay { get; set; }
+
+    /// <summary>
+    /// Gets the default maximum amount of time to wait between two retry attempts
+    /// </summary>
+    public static readonly TimeSpan DefaultMaxDelay = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Gets the exponent used by exponential backoffs that do not define one
+    /// </summary>
+    public const double DefaultExponent = 2;
+
+    /// <summary>
     /// Creates a new constant <see cref="RetryBackoffDuration"/>
     /// </summary>
     /// <param name="period">The constant period of time to wait between retry attempts</param>

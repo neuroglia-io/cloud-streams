@@ -157,6 +157,7 @@ spec:
         type: exponential         # constant | incremental | exponential
         period: PT1S
         exponent: 2
+        maxDelay: PT5M            # caps the delay between two attempts; defaults to PT1H
       maxAttempts: 10             # defaults to 5; set to -1 to retry forever
       circuitBreaker:
         breakAfter: 3             # consecutive failures after which delivery pauses...

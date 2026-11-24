@@ -27,17 +27,26 @@ public static class RetryBackoffDurationExtensions
     /// <param name="duration">The extended <see cref="RetryBackoffDuration"/></param>
     /// <param name="attemptNumber">The number of the retry attempt to get the backoff duration for</param>
     /// <returns>A new <see cref="TimeSpan"/> that represents the backoff duration for the specified retry attempt</returns>
+    /// <remarks>
+    /// The backoff never exceeds the configured maximum delay, which defaults to <see cref="RetryBackoffDuration.DefaultMaxDelay"/>, so that retrying forever can never
+    /// overflow. An exponential backoff without exponent uses <see cref="RetryBackoffDuration.DefaultExponent"/> (see #169)
+    /// </remarks>
     public static TimeSpan ForAttempt(this RetryBackoffDuration duration, int attemptNumber)
     {
         ArgumentNullException.ThrowIfNull(duration);
-        var timeSpan = duration.Period.ToTimeSpan();
-        return duration.Type switch
+        if (attemptNumber < 0) attemptNumber = 0;
+        var period = duration.Period?.ToTimeSpan() ?? TimeSpan.Zero;
+        var maxDelay = duration.MaxDelay?.ToTimeSpan() ?? RetryBackoffDuration.DefaultMaxDelay;
+        var factor = duration.Type switch
         {
-            RetryBackoffDurationType.Constant => timeSpan,
-            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent!.Value) * timeSpan,
-            RetryBackoffDurationType.Incremental => attemptNumber * timeSpan,
+            RetryBackoffDurationType.Constant => 1d,
+            RetryBackoffDurationType.Exponential => Math.Pow(attemptNumber, duration.Exponent ?? RetryBackoffDuration.DefaultExponent),
+            RetryBackoffDurationType.Incremental => attemptNumber,
             _ => throw new NotSupportedException($"The specified {nameof(RetryBackoffDurationType)} '{duration.Type}' is not supported")
         };
+        var ticks = factor * period.Ticks;
+        if (double.IsNaN(ticks) || ticks < 0) return TimeSpan.Zero;
+        return ticks >= maxDelay.Ticks ? maxDelay : TimeSpan.FromTicks((long)ticks);
     }
 
 }
