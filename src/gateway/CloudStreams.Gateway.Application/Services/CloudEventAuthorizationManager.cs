@@ -41,16 +41,14 @@ public class CloudEventAuthorizationManager(IJsonSerializer serializer)
             switch (policy.DecisionStrategy)
             {
                 case RuleBasedDecisionStrategy.Consensus:
-                    var results = policy.Rules.Select(r => this.Evaluate(e, r));
+                    // materialized once: counting over a lazy projection would evaluate every rule once per count
+                    var results = policy.Rules.Select(r => this.Evaluate(e, r)).ToList();
                     var succeeded = results.Count(r => r);
-                    var failed = results.Count(r => !r);
+                    var failed = results.Count - succeeded;
                     if (succeeded <= failed) return new((int)HttpStatusCode.Forbidden);
                     return new OperationResult((int)HttpStatusCode.OK);
                 case RuleBasedDecisionStrategy.Minority:
-                    results = policy.Rules.Select(r => this.Evaluate(e, r));
-                    succeeded = results.Count(r => r);
-                    failed = results.Count(r => !r);
-                    if (succeeded <= 0) return new((int)HttpStatusCode.Forbidden);
+                    if (!policy.Rules.Any(r => this.Evaluate(e, r))) return new((int)HttpStatusCode.Forbidden);
                     return new OperationResult((int)HttpStatusCode.OK);
                 case RuleBasedDecisionStrategy.Unanimous:
                     if (!policy.Rules.All(r => this.Evaluate(e, r))) return new((int)HttpStatusCode.Forbidden);

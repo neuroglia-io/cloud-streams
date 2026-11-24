@@ -15,6 +15,7 @@ using FluentValidation;
 using Json.Patch;
 using Json.Pointer;
 using System.Buffers.Text;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
@@ -45,10 +46,23 @@ public class SubscriptionHandler
     /// </summary>
     public static readonly TimeSpan DefaultDispatchTimeout = TimeSpan.FromSeconds(100);
 
+    /// <summary>
+    /// Gets the maximum number of attempts at recording a streaming fault in the subscription's status
+    /// </summary>
+    const int MaxFaultReportingAttempts = 5;
+
+    /// <summary>
+    /// Gets the media types a mutation webhook may respond with
+    /// </summary>
+    static readonly string[] MutationWebhookMediaTypes = [MediaTypeNames.Application.Json, CloudEventContentType.Json];
+
     readonly object _syncLock = new();
     bool _pendingAcknowledgementObserved;
     CancellationTokenSource? _acknowledgementTimeoutCancellationTokenSource;
-    bool _disposed;
+    CancellationTokenRegistration _applicationStoppingRegistration;
+    long _nextDeliveryTimestamp;
+    ulong? _nextOffset;
+    volatile bool _disposed;
     long _streamInitializationSessionId;
 
     /// <summary>
@@ -84,7 +98,17 @@ public class SubscriptionHandler
         this.Metrics = metrics;
         this.Subscription = subscription;
         this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
-        hostApplicationLifetime.ApplicationStopping.Register(async () => await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Inactive).ConfigureAwait(false));
+        this._applicationStoppingRegistration = hostApplicationLifetime.ApplicationStopping.Register(this.OnApplicationStopping);
+    }
+
+    /// <summary>
+    /// Handles the application's shutdown, by reporting the subscription as inactive
+    /// </summary>
+    protected virtual async void OnApplicationStopping()
+    {
+        if (this._disposed) return;
+        try { await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Inactive).ConfigureAwait(false); }
+        catch (Exception ex) { this.Logger.LogWarning(ex, "Failed to report subscription '{subscription}' as inactive", this.Subscription.GetQualifiedName()); }
     }
 
     /// <summary>
@@ -308,6 +332,8 @@ public class SubscriptionHandler
                 streamInitializationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
                 this.StreamInitializationCancellationTokenSource = streamInitializationCancellationTokenSource;
                 streamInitializationSessionId = Interlocked.Increment(ref this._streamInitializationSessionId);
+                // the position reached by a previous session is meaningless once the stream is observed again, possibly at another offset
+                lock (this._syncLock) this._nextOffset = null;
             }
             finally { this.InitLock.Release(); }
 
@@ -481,7 +507,11 @@ public class SubscriptionHandler
         {
             if (!attributes.TryGetValue(attributeFilter.Key, out var attributeValue) || string.IsNullOrWhiteSpace(attributeValue)) return false;
             if (string.IsNullOrWhiteSpace(attributeFilter.Value)) continue;
-            if (attributeValue.IsRuntimeExpression() && !await this.ExpressionEvaluator.EvaluateConditionAsync(attributeFilter.Value, attributeValue, cancellationToken: this.CancellationTokenSource.Token).ConfigureAwait(false)) return false;
+            // the filter value, not the event's attribute value, determines whether the filter is a runtime expression or a regular expression
+            if (attributeFilter.Value.IsRuntimeExpression())
+            {
+                if (!await this.ExpressionEvaluator.EvaluateConditionAsync(attributeFilter.Value, attributeValue, cancellationToken: this.CancellationTokenSource.Token).ConfigureAwait(false)) return false;
+            }
             else if (!Regex.IsMatch(attributeValue, attributeFilter.Value)) return false;
         }
         return true;
@@ -504,15 +534,16 @@ public class SubscriptionHandler
     /// Mutates the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to mutate</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which bounds the duration of a webhook based mutation</param>
     /// <returns>The mutated <see cref="CloudEvent"/></returns>
-    protected virtual async Task<CloudEvent> MutateAsync(CloudEvent e)
+    protected virtual async Task<CloudEvent> MutateAsync(CloudEvent e, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
         if (this.Subscription.Spec.Mutation == null) return e.Clone()!;
         var mutated = this.Subscription.Spec.Mutation.Type switch
         {
             CloudEventMutationType.Expression => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Expression!).ConfigureAwait(false),
-            CloudEventMutationType.Webhook => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Webhook!).ConfigureAwait(false),
+            CloudEventMutationType.Webhook => await this.MutateAsync(e, this.Subscription.Spec.Mutation.Webhook!, cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException($"The specified {nameof(CloudEventMutationType)} '{EnumHelper.Stringify(this.Subscription.Spec.Mutation.Type)}' is not supported"),
         } ?? throw new NullReferenceException("Failed to mutate the specified cloud event");
         await this.ValidateAsync(mutated).ConfigureAwait(false);
@@ -538,18 +569,22 @@ public class SubscriptionHandler
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to mutate</param>
     /// <param name="webhook">An object used to configure the webhook to invoke</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which bounds the duration of the call to the webhook</param>
     /// <returns>The mutated <see cref="CloudEvent"/></returns>
-    protected virtual async Task<CloudEvent?> MutateAsync(CloudEvent e, Webhook webhook)
+    /// <exception cref="HttpRequestException">The webhook could not be reached, or responded with a non-success status code</exception>
+    protected virtual async Task<CloudEvent?> MutateAsync(CloudEvent e, Webhook webhook, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(e);
         ArgumentNullException.ThrowIfNull(webhook);
+        if (!cancellationToken.CanBeCanceled) cancellationToken = this.CancellationTokenSource.Token;
         using var requestContent = e.ToHttpContent();
         using var request = new HttpRequestMessage(HttpMethod.Post, webhook.ServiceUri) { Content = requestContent };
-        request.Headers.Accept.Add(new(MediaTypeNames.Application.Json));
-        using var response = await this.HttpClient.SendAsync(request, this.CancellationTokenSource.Token).ConfigureAwait(false);
-        var responseContent = await response.Content.ReadAsStringAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Json) throw new Exception($"Unexpected HTTP response's content type: {response.Content.Headers.ContentType?.MediaType}");
+        foreach (var mediaType in MutationWebhookMediaTypes) request.Headers.Accept.Add(new(mediaType));
+        using var response = await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) throw new HttpRequestException($"The mutation webhook '{webhook.ServiceUri}' responded with a non-success status code '{response.StatusCode}'", null, response.StatusCode);
+        var mediaTypeName = response.Content.Headers.ContentType?.MediaType;
+        if (!MutationWebhookMediaTypes.Contains(mediaTypeName, StringComparer.OrdinalIgnoreCase)) throw new FormatException($"The mutation webhook '{webhook.ServiceUri}' responded with an unexpected content type '{mediaTypeName}'. Expected one of: {string.Join(", ", MutationWebhookMediaTypes)}");
         return this.Serializer.Deserialize<CloudEvent>(responseContent);
     }
 
@@ -566,9 +601,10 @@ public class SubscriptionHandler
         activity?.SetTag("event.id", e.Id);
         activity?.SetTag("event.source", e.Source);
         activity?.SetTag("event.type", e.Type);
-        var validationTasks = this.CloudEventValidators.Select(v => v.ValidateAsync(e, this.CancellationTokenSource.Token));
-        await Task.WhenAll(validationTasks).ConfigureAwait(false);
-        if (validationTasks.Any(t => !t.Result.IsValid)) throw new FormatException("Failed to validate the specified cloud event"); //todo: better feedback
+        // materialized once: enumerating a lazy projection again would run every validator a second time
+        var validationResults = await Task.WhenAll(this.CloudEventValidators.Select(v => v.ValidateAsync(e, this.CancellationTokenSource.Token))).ConfigureAwait(false);
+        var errors = validationResults.Where(r => !r.IsValid).SelectMany(r => r.Errors).Select(error => $"{error.PropertyName}: {error.ErrorMessage}").ToList();
+        if (errors.Count > 0) throw new FormatException($"The mutated cloud event is invalid: {string.Join("; ", errors)}");
     }
 
     /// <summary>
@@ -591,10 +627,26 @@ public class SubscriptionHandler
         activity?.SetTag("retry", retryOnError);
         activity?.SetTag("catchup", catchUpWhenAvailable);
         ArgumentNullException.ThrowIfNull(e);
+        if (!await this.FiltersAsync(e).ConfigureAwait(false))
+        {
+            this.OnRecordHandled(e.Sequence);
+            return true;
+        }
+        // mutations are applied by every delivery attempt, so that a webhook based mutation is bound by the dispatch timeout and goes through the retry policy
         var cloudEvent = e.ToCloudEvent(this.Broker.Resource.Spec.Dispatch?.Sequencing);
-        if (!await this.FiltersAsync(e).ConfigureAwait(false)) return true;
-        cloudEvent = await this.MutateAsync(cloudEvent).ConfigureAwait(false);
-        return await this.DispatchAsync(cloudEvent, e.Sequence, retryOnError, catchUpWhenAvailable).ConfigureAwait(false);
+        var handled = await this.DispatchAsync(cloudEvent, e.Sequence, retryOnError, catchUpWhenAvailable).ConfigureAwait(false);
+        // a subscription that does not track an offset drops an event that could not be delivered, and moves on
+        if (handled || this.Subscription.Spec.Stream == null) this.OnRecordHandled(e.Sequence);
+        return handled;
+    }
+
+    /// <summary>
+    /// Records that the specified record has been handled, which is to say delivered, filtered out or dropped
+    /// </summary>
+    /// <param name="sequence">The sequence of the handled record</param>
+    protected virtual void OnRecordHandled(ulong sequence)
+    {
+        lock (this._syncLock) if (!this._nextOffset.HasValue || sequence + 1 > this._nextOffset.Value) this._nextOffset = sequence + 1;
     }
 
     /// <summary>
@@ -632,6 +684,7 @@ public class SubscriptionHandler
     /// </remarks>
     protected virtual async Task DeliverAsync(CloudEvent e, ulong offset)
     {
+        await this.ThrottleAsync().ConfigureAwait(false);
         var timeout = this.GetDispatchTimeout();
         using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
         timeoutCancellationTokenSource.CancelAfter(timeout);
@@ -641,6 +694,7 @@ public class SubscriptionHandler
         var deferred = false;
         try
         {
+            e = await this.MutateAsync(e, timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             using var requestContent = e.ToHttpContent();
             using var request = new HttpRequestMessage(HttpMethod.Post, this.Subscription.Spec.Subscriber.Uri) { Content = requestContent };
             request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Subscription, this.Subscription.GetName());
@@ -664,13 +718,38 @@ public class SubscriptionHandler
         }
         catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)
         {
-            throw new HttpRequestException($"The subscriber did not respond within the configured timeout of {timeout}", ex);
+            var target = this.Subscription.Spec.Mutation?.Type == CloudEventMutationType.Webhook ? "The mutation webhook or the subscriber" : "The subscriber";
+            throw new HttpRequestException($"{target} did not respond within the configured timeout of {timeout}", ex);
         }
         this.Metrics.IncrementTotalPublishedEvents(this.GetStreamName(), this.Subscription.Spec.Subscriber.Uri.ToString());
         await this.SetSubscriberStateAsync(SubscriberState.Reachable).ConfigureAwait(false);
         if (deferred) await this.SuspendForAcknowledgementAsync(offset, ackToken!).ConfigureAwait(false);
         else if (tracksOffset) await this.CommitOffsetAsync(offset + 1).ConfigureAwait(false);
-        if (this.Subscription.Spec.Subscriber.RateLimit.HasValue) await Task.Delay((int)(1000 / this.Subscription.Spec.Subscriber.RateLimit.Value), this.CancellationTokenSource.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Waits, if necessary, until the subscription's rate limit allows the next delivery attempt
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// Attempts are spaced by the inverse of the rate limit, measured from the start of the previous attempt, so that the time spent delivering counts towards the
+    /// interval and the configured rate is the actual delivery rate. A rate limit that is not strictly positive is ignored
+    /// </remarks>
+    protected virtual async Task ThrottleAsync()
+    {
+        var rateLimit = this.Subscription.Spec.Subscriber.RateLimit;
+        if (rateLimit is not > 0 || double.IsInfinity(rateLimit.Value) || double.IsNaN(rateLimit.Value)) return;
+        var intervalInSeconds = Math.Min(1 / rateLimit.Value, TimeSpan.FromDays(1).TotalSeconds);
+        var intervalInTicks = (long)(intervalInSeconds * Stopwatch.Frequency);
+        TimeSpan delay;
+        lock (this._syncLock)
+        {
+            var now = Stopwatch.GetTimestamp();
+            var next = Math.Max(now, this._nextDeliveryTimestamp);
+            delay = next > now ? Stopwatch.GetElapsedTime(now, next) : TimeSpan.Zero;
+            this._nextDeliveryTimestamp = next + intervalInTicks;
+        }
+        if (delay > TimeSpan.Zero) await Task.Delay(delay, this.CancellationTokenSource.Token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -833,9 +912,14 @@ public class SubscriptionHandler
             this.SubscriptionOutOfSync = true;
             var currentOffset = fromOffset ?? this.Subscription.GetOffset();
             if (!fromOffset.HasValue && this.CommittedOffset.HasValue && this.CommittedOffsetGeneration == this.Subscription.Metadata.Generation && (long)this.CommittedOffset.Value > currentOffset) currentOffset = (long)this.CommittedOffset.Value;
-            if (currentOffset == StreamPosition.EndOfStream) currentOffset = this.Subscription.Spec.Partition == null ?
-                (long)(await this.EventStore.ReadOneAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, streamInitializationToken).ConfigureAwait(false))!.Sequence
-                : (long)(await this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, streamInitializationToken).SingleAsync(streamInitializationToken).ConfigureAwait(false))!.Sequence;
+            if (currentOffset == StreamPosition.EndOfStream)
+            {
+                // the end of the stream is the position after its last record: resume after the last record the handler has dealt with, if any, and otherwise
+                // start at the stream's current length, so that a new subscription never receives an event published before it was created (see #155)
+                ulong? nextOffset;
+                lock (this._syncLock) nextOffset = this._nextOffset;
+                currentOffset = (long)(nextOffset ?? this.StreamOffset ?? 0);
+            }
             while (true)
             {
                 while (!streamInitializationToken.IsCancellationRequested && this.IsStreamInitializationSessionCurrent(streamInitializationSessionId) && (ulong)currentOffset < (this.StreamOffset ?? 0))
@@ -1127,6 +1211,7 @@ public class SubscriptionHandler
     /// </summary>
     public async Task CancelSynchronizationLoopAsync()
     {
+        if (this._disposed || this.CancellationTokenSource == null) return;
         CancellationTokenSource? streamInitializationCancellationTokenSource = null;
         Task? streamSynchronizationTask = null;
         IDisposable? subscriptionHandle = null;
@@ -1293,42 +1378,112 @@ public class SubscriptionHandler
     /// </summary>
     /// <param name="ex">The unhandled <see cref="Exception"/> to handle</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// Recording the fault is retried with backoff, and abandoned when the subscription no longer exists. This method never throws, since most of its callers are
+    /// fire-and-forget tasks or reactive callbacks, where an exception would go unobserved (see #159)
+    /// </remarks>
     protected virtual async Task OnSubscriptionErrorAsync(Exception ex)
     {
-        try
+        if (this._disposed) return;
+        try { this.StreamInitializationCancellationTokenSource?.Cancel(); }
+        catch (ObjectDisposedException) { }
+        this.Logger.LogError(ex, "An error occurred while streaming cloud events for subscription '{subscription}'", this.Subscription.GetQualifiedName());
+        if (this.Subscription.Spec.Stream == null) return;
+        for (var attempt = 1; attempt <= MaxFaultReportingAttempts && !this._disposed; attempt++)
         {
-            this.StreamInitializationCancellationTokenSource?.Cancel();
-            this.Logger.LogError("An error occurred while streaming cloud events for subscription '{subscription}': {ex}", this.Subscription.GetQualifiedName(), ex);
-            var resource = this.Subscription.Clone()!;
-            if (resource.Spec.Stream == null) return;
-            if (resource.Status == null) resource.Status = new() { ObservedGeneration = this.Subscription.Metadata.Generation };
-            if (resource.Status.Stream == null) resource.Status.Stream = new();
-            resource.Status.Stream.Fault = ex.ToProblemDetails();
-            var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
-            await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+            try
+            {
+                var resource = this.Subscription.Clone()!;
+                resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
+                resource.Status.Stream ??= new();
+                resource.Status.Stream.Fault = ex.ToProblemDetails();
+                var patch = JsonPatchUtility.CreateJsonPatchFromDiff(this.Subscription, resource);
+                if (!patch.Operations.Any()) return;
+                await this.ResourceRepository.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, patch), resource.GetName(), resource.GetNamespace(), null, false, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException or ObjectDisposedException || (inner is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled))
+            {
+                return;
+            }
+            catch (ProblemDetailsException inner) when (inner.Problem.Status == (int)HttpStatusCode.NotFound)
+            {
+                this.Logger.LogDebug("Abandoned recording the fault of subscription '{subscription}', which no longer exists", this.Subscription.GetQualifiedName());
+                return;
+            }
+            catch (Exception inner)
+            {
+                if (attempt == MaxFaultReportingAttempts)
+                {
+                    this.Logger.LogError(inner, "Failed to record the fault of subscription '{subscription}' after {attempts} attempts", this.Subscription.GetQualifiedName(), attempt);
+                    return;
+                }
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
+                this.Logger.LogWarning(inner, "Failed to record the fault of subscription '{subscription}' (attempt {attempt}/{maxAttempts}). Retrying in {delay}...", this.Subscription.GetQualifiedName(), attempt, MaxFaultReportingAttempts, delay);
+                try { await Task.Delay(delay, this.CancellationTokenSource.Token).ConfigureAwait(false); }
+                catch (Exception delayException) when (delayException is OperationCanceledException or ObjectDisposedException) { return; }
+            }
         }
-        catch (Exception inner) when (inner is OperationCanceledException or TaskCanceledException || (inner is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
-        
     }
 
     /// <summary>
     /// Disposes of the <see cref="SubscriptionHandler"/>
     /// </summary>
     /// <param name="disposing">A boolean indicating whether or not the <see cref="SubscriptionHandler"/> is being disposed of</param>
-    protected virtual ValueTask DisposeAsync(bool disposing)
+    /// <remarks>
+    /// Disposing of a <see cref="System.Threading.CancellationTokenSource"/> does not signal its token, so every token source is canceled before being disposed of.
+    /// This ends the reactive subscriptions bound to the handler's token, the synchronization loop and the acknowledgement timer, so that a disposed handler never
+    /// reacts to updates nor dispatches anything (see #153)
+    /// </remarks>
+    protected virtual async ValueTask DisposeAsync(bool disposing)
     {
-        if (!this._disposed)
+        if (this._disposed) return;
+        this._disposed = true;
+        if (!disposing) return;
+        this._applicationStoppingRegistration.Dispose();
+        // the handler's token is canceled first: in-flight deliveries, retries and backoffs are bound to it, and would otherwise delay the disposal
+        try { this.CancellationTokenSource?.Cancel(); }
+        catch (ObjectDisposedException) { }
+        Task? streamSynchronizationTask;
+        CancellationTokenSource? streamInitializationCancellationTokenSource;
+        IDisposable? subscriptionHandle;
+        await this.InitLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
         {
-            if (disposing)
-            {
-                this.SubscriptionHandle?.Dispose();
-                this._acknowledgementTimeoutCancellationTokenSource?.Cancel();
-                this._acknowledgementTimeoutCancellationTokenSource?.Dispose();
-                this.CancellationTokenSource.Dispose();
-            }
-            this._disposed = true;
+            Interlocked.Increment(ref this._streamInitializationSessionId);
+            streamInitializationCancellationTokenSource = this.StreamInitializationCancellationTokenSource;
+            this.StreamInitializationCancellationTokenSource = null;
+            streamSynchronizationTask = this.StreamSynchronizationTaskCompletionSource?.Task;
+            this.StreamSynchronizationTaskCompletionSource = null;
+            subscriptionHandle = this.SubscriptionHandle;
+            this.SubscriptionHandle = null;
         }
-        return ValueTask.CompletedTask;
+        finally { this.InitLock.Release(); }
+        try { streamInitializationCancellationTokenSource?.Cancel(); }
+        catch (ObjectDisposedException) { }
+        if (streamSynchronizationTask != null)
+        {
+            try { await streamSynchronizationTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (Exception) { /* the loop has been canceled: whatever it ended with is irrelevant to a disposed handler */ }
+        }
+        subscriptionHandle?.Dispose();
+        CancellationTokenSource? acknowledgementTimeoutCancellationTokenSource;
+        lock (this._syncLock)
+        {
+            acknowledgementTimeoutCancellationTokenSource = this._acknowledgementTimeoutCancellationTokenSource;
+            this._acknowledgementTimeoutCancellationTokenSource = null;
+        }
+        CancelAndDispose(acknowledgementTimeoutCancellationTokenSource);
+        streamInitializationCancellationTokenSource?.Dispose();
+        this.CancellationTokenSource?.Dispose();
+    }
+
+    static void CancelAndDispose(CancellationTokenSource? cancellationTokenSource)
+    {
+        if (cancellationTokenSource == null) return;
+        try { cancellationTokenSource.Cancel(); }
+        catch (ObjectDisposedException) { }
+        cancellationTokenSource.Dispose();
     }
 
     /// <inheritdoc/>

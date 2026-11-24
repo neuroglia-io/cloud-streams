@@ -92,7 +92,8 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
             await this.OnSubscriptionCreatedAsync(subscription).ConfigureAwait(false);
         }
         this.Where(e => e.Type == ResourceWatchEventType.Created).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionCreatedAsync, cancellationToken);
-        this.Where(e => e.Type == ResourceWatchEventType.Updated).Select(s => s.Resource).DistinctUntilChanged(s => s.Metadata.Labels).SubscribeAsync(this.OnSubscriptionLabelChangedAsync, cancellationToken);
+        // every update is evaluated: label changes have to be detected per subscription, and OnSubscriptionLabelChangedAsync returns early when nothing changes
+        this.Where(e => e.Type == ResourceWatchEventType.Updated).Select(s => s.Resource).SubscribeAsync(this.OnSubscriptionLabelChangedAsync, cancellationToken);
         this.Where(e => e.Type == ResourceWatchEventType.Deleted).Select(e => e.Resource).SubscribeAsync(this.OnSubscriptionDeletedAsync, cancellationToken);
         this.Broker!.Select(b => b.Resource.Spec.Selector).SubscribeAsync(this.OnBrokerSelectorChangedAsync, cancellationToken: cancellationToken);
         await this.OnBrokerSelectorChangedAsync(this.Broker!.Resource.Spec.Selector).ConfigureAwait(false);
@@ -137,7 +138,8 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
         if (this.Broker == null) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
-        if (this._lockedKeys.ContainsKey(key)) return;
+        // a change must not be ignored because the subscription's handler is being created: wait for it, then evaluate the change
+        while (this._lockedKeys.ContainsKey(key)) await Task.Delay(50, this.CancellationToken).ConfigureAwait(false);
         if (this.Options.LabelSelectors == null || this.Options.LabelSelectors.All(s => s.Selects(subscription)) == true)
         {
             if (this.Subscriptions.TryGetValue(key, out _)) return;
@@ -175,16 +177,51 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
             if (this._lockedKeys.TryAdd(key, 0)) break;
             await Task.Delay(50, this.CancellationToken).ConfigureAwait(false);
         }
+        SubscriptionHandler? handler = null;
+        var initialized = false;
         try
         {
-            var handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
+            handler = ActivatorUtilities.CreateInstance<SubscriptionHandler>(this.ServiceProvider, subscription, this.Broker!);
             await handler.InitializeAsync(this.CancellationToken).ConfigureAwait(false);
             this.Subscriptions.AddOrUpdate(key, handler, (_, _) => handler);
+            initialized = true;
         }
+        catch (Exception ex) when (!this.CancellationToken.IsCancellationRequested)
+        {
+            this.Logger.LogError(ex, "Failed to initialize the handler of subscription '{subscription}'. Retrying in {delay}...", subscription.GetQualifiedName(), HandlerInitializationRetryDelay);
+        }
+        catch (OperationCanceledException) { }
         finally
         {
             this._lockedKeys.TryRemove(key, out _);
+            if (!initialized && handler != null) await handler.DisposeAsync().ConfigureAwait(false);
         }
+        if (!initialized && !this.CancellationToken.IsCancellationRequested) _ = this.RetrySubscriptionCreationAsync(subscription);
+    }
+
+    /// <summary>
+    /// Gets the delay after which the initialization of a subscription's handler is retried, when it has failed
+    /// </summary>
+    protected static readonly TimeSpan HandlerInitializationRetryDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Retries to create the handler of the specified subscription, unless it has been deleted, deselected or handled in the meantime
+    /// </summary>
+    /// <param name="subscription">The subscription to retry creating the handler of</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task RetrySubscriptionCreationAsync(Subscription subscription)
+    {
+        try
+        {
+            await Task.Delay(HandlerInitializationRetryDelay, this.CancellationToken).ConfigureAwait(false);
+            var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
+            // the controller's cache only holds the subscriptions the broker selects, so a deleted or deselected subscription is not retried
+            var current = this.Resources.Values.FirstOrDefault(s => s.GetName() == subscription.GetName() && s.GetNamespace() == subscription.GetNamespace());
+            if (current == null || this.Subscriptions.ContainsKey(key)) return;
+            await this.OnSubscriptionCreatedAsync(current).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { this.Logger.LogError(ex, "Failed to retry initializing the handler of subscription '{subscription}'", subscription.GetQualifiedName()); }
     }
 
     /// <summary>
@@ -207,11 +244,12 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
     protected override async ValueTask DisposeAsync(bool disposing)
     {
         if (!disposing) return;
-        await base.DisposeAsync(disposing);
-        this.CancellationTokenSource?.Dispose();
-        await this.Subscriptions.ToAsyncEnumerable().ForEachAsync(async s => await s.Value.DisposeAsync().ConfigureAwait(false)).ConfigureAwait(false);
+        // handlers are disposed of first, while the manager's token source, to which they are linked, is still usable
+        foreach (var handler in this.Subscriptions.Values.ToList()) await handler.DisposeAsync().ConfigureAwait(false);
         this.Subscriptions.Clear();
         if (this.Broker != null) await this.Broker.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsync(disposing);
+        this.CancellationTokenSource?.Dispose();
     }
 
 }

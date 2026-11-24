@@ -107,6 +107,7 @@ spec:
                       format: url
                     rateLimit:
                       type: number
+                      exclusiveMinimum: 0
                     retryPolicy:
                       type: object
                       properties:

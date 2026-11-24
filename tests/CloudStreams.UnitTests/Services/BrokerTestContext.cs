@@ -106,7 +106,8 @@ public sealed class BrokerTestContext
     /// Everything initialization records is discarded, so a test starts from a clean slate.
     /// </remarks>
     public static async Task<BrokerTestContext> CreateAsync(StubHttpMessageHandler? http = null, Action<Subscription>? configureSubscription = null, Action<Core.Resources.Broker>? configureBroker = null, int streamLength = 0,
-        Action<InMemoryCloudEventStore>? configureEventStore = null, bool waitForStreamInitialization = true)
+        Action<InMemoryCloudEventStore>? configureEventStore = null, bool waitForStreamInitialization = true,
+        IExpressionEvaluator? expressionEvaluator = null, IEnumerable<IValidator<CloudEvent>>? cloudEventValidators = null, IJsonSerializer? serializer = null, Func<Patch, Exception?>? failPatch = null)
     {
         http ??= StubHttpMessageHandler.AlwaysResponds(HttpStatusCode.OK);
         var httpClient = http.CreateClient();
@@ -131,7 +132,7 @@ public sealed class BrokerTestContext
         configureBroker?.Invoke(broker);
 
         var patches = new StatusPatchRecorder();
-        var repository = CreateRepository(patches, subscription);
+        var repository = CreateRepository(patches, subscription, failPatch);
         var eventStore = new InMemoryCloudEventStore().Seed(streamLength);
         configureEventStore?.Invoke(eventStore);
         var subscriptionEvents = new Subject<IResourceWatchEvent<Subscription>>();
@@ -139,8 +140,8 @@ public sealed class BrokerTestContext
         var brokerMonitor = CreateBrokerMonitor(broker);
         var metrics = new RecordingBrokerMetrics();
 
-        var handler = new TestSubscriptionHandler(NullLoggerFactory.Instance, Substitute.For<IHostApplicationLifetime>(), Substitute.For<IJsonSerializer>(), eventStore, repository,
-            subscriptionController, brokerMonitor, Substitute.For<IExpressionEvaluator>(), [], httpClient, metrics, subscription);
+        var handler = new TestSubscriptionHandler(NullLoggerFactory.Instance, Substitute.For<IHostApplicationLifetime>(), serializer ?? Substitute.For<IJsonSerializer>(), eventStore, repository,
+            subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, subscription);
         var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker);
         try
         {
@@ -173,14 +174,16 @@ public sealed class BrokerTestContext
         this.Http.Reset();
     }
 
-    static IResourceRepository CreateRepository(StatusPatchRecorder patches, Subscription subscription)
+    static IResourceRepository CreateRepository(StatusPatchRecorder patches, Subscription subscription, Func<Patch, Exception?>? failPatch)
     {
         var repository = Substitute.For<IResourceRepository>();
         repository.PatchSubResourceAsync(Arg.Any<Patch>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
-                patches.Record(call.Arg<Patch>()!);
-                return Task.FromResult<IResource>(subscription);
+                var patch = call.Arg<Patch>()!;
+                patches.Record(patch);
+                var failure = failPatch?.Invoke(patch);
+                return failure == null ? Task.FromResult<IResource>(subscription) : Task.FromException<IResource>(failure);
             });
         return repository;
     }
@@ -287,5 +290,7 @@ public class TestSubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicat
     /// Catches up missed <see cref="CloudEvent"/>s
     /// </summary>
     public Task CatchUpMissedEventsAsync() => this.CatchUpAsync();
+
+    public Task ReportErrorAsync(Exception ex) => this.OnSubscriptionErrorAsync(ex);
 
 }
