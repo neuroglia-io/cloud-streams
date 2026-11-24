@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Core.Application.Commands.Subscriptions;
+using CloudStreams.Core.Application.Queries.Subscriptions;
 
 namespace CloudStreams.Core.Api.Controllers;
 
@@ -23,6 +24,23 @@ namespace CloudStreams.Core.Api.Controllers;
 public class SubscriptionsController(IMediator mediator)
     : ClusterResourceApiController<Subscription>(mediator)
 {
+
+    /// <summary>
+    /// Describes the health of all subscriptions matching the specified filters, including their lag, in a flat format suited to monitoring tools such as Grafana
+    /// </summary>
+    /// <param name="namespace">The namespace the subscriptions to describe belong to, if any. Subscriptions are cluster-scoped, so it is usually omitted</param>
+    /// <param name="labelSelector">A comma-separated list of label selectors used to filter the subscriptions to describe, if any (e.g. <c>app=content,env=prod</c>)</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is a JSON array at root level, empty if no subscription matches</returns>
+    /// <remarks>The <c>health</c> segment takes precedence over the name of a subscription, so a subscription named 'health' cannot be retrieved with <c>GET {name}</c>; use the list endpoints instead</remarks>
+    [HttpGet("health")]
+    [ProducesResponseType(typeof(IEnumerable<SubscriptionHealth>), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> GetSubscriptionsHealth([FromQuery(Name = "namespace")] string? @namespace = null, string? labelSelector = null, CancellationToken cancellationToken = default)
+    {
+        if (!this.TryParseLabelSelectors(labelSelector, out var labelSelectors)) return this.InvalidLabelSelector(labelSelector!);
+        return this.Process(await this.Mediator.ExecuteAsync(new GetSubscriptionsHealthQuery(@namespace, labelSelectors), cancellationToken).ConfigureAwait(false));
+    }
 
     /// <summary>
     /// Exports the specified subscription
