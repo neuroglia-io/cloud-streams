@@ -17,18 +17,26 @@ jobs:
   publish-packages:
     name: Publish Packages
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required to issue the GitHub OIDC token exchanged for a short-lived NuGet API key (trusted publishing)
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup .NET
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
       - name: Restore dependencies
         run: dotnet restore "${{ env.SOLUTION }}"
       - name: Build
-        run: dotnet build "${{ env.SOLUTION }}" --configuration Release --no-restore 
-      - name: Push1
-        run: dotnet nuget push "./src/*/*/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet build "${{ env.SOLUTION }}" --configuration Release --no-restore
+      - name: NuGet login (OIDC → temporary API key)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }} # nuget.org profile name (not email) that owns the 'cloud-streams' trusted publishing policy
+      - name: Push packages
+        run: dotnet nuget push "./src/*/*/bin/Release/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   publish-api-image:
     name: Publish API image
