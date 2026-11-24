@@ -60,6 +60,7 @@ body:
     options:
       - Api
       - Broker
+      - Dashboard
       - Gateway
 
 - type: dropdown
