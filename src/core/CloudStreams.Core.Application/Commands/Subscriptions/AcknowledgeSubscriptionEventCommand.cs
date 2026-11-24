@@ -56,12 +56,13 @@ public class AcknowledgeSubscriptionEventCommand(string name, string token, bool
 /// Represents the service used to handle <see cref="AcknowledgeSubscriptionEventCommand"/>s
 /// </summary>
 /// <param name="resources">The service used to manage resources</param>
+/// <param name="gracePeriod">How long a token that matches no pending acknowledgement is given to become pending, before it is refused. Defaults to 5 seconds</param>
 /// <remarks>
 /// The acknowledgement token is the only authorization required, so it is compared in fixed time, and it is single-use: the status patch only applies if the
 /// acknowledgement it resolves is still pending. The broker, which watches the subscription, resumes delivery as soon as the pending acknowledgement is gone:
 /// after the acknowledged offset on acknowledgement, or at the same offset (which redelivers the event) on negative acknowledgement
 /// </remarks>
-public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository resources)
+public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository resources, TimeSpan? gracePeriod = null)
     : ICommandHandler<AcknowledgeSubscriptionEventCommand, Subscription>
 {
 
@@ -69,6 +70,16 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
     /// Gets the type of the problem returned when the specified token does not match a pending acknowledgement
     /// </summary>
     public static readonly Uri AcknowledgementConflictProblemType = new("https://cloud-streams.io/problems/acknowledgement-conflict");
+
+    /// <summary>
+    /// Gets the default duration of the grace period given to a token to become pending
+    /// </summary>
+    public static readonly TimeSpan DefaultGracePeriod = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets the interval at which a token is checked again during its grace period
+    /// </summary>
+    static readonly TimeSpan GracePollingInterval = TimeSpan.FromMilliseconds(100);
 
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(AcknowledgeSubscriptionEventCommand command, CancellationToken cancellationToken = default)
@@ -96,11 +107,21 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity(command.Acknowledge ? "AcknowledgeSubscriptionEvent" : "NegativelyAcknowledgeSubscriptionEvent");
         activity?.SetTag("subscription", command.Name);
         if (string.IsNullOrWhiteSpace(command.Token)) throw new ProblemDetailsException(new(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, "The acknowledgement token is required"));
-        Subscription? subscription = null;
-        try { subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false); }
-        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
+        var deadline = DateTimeOffset.UtcNow + (gracePeriod ?? DefaultGracePeriod);
+        Subscription? subscription;
+        PendingAcknowledgement? pendingAck;
+        while (true)
+        {
+            subscription = null;
+            try { subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false); }
+            catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
+            pendingAck = subscription?.Status?.Subscriber?.PendingAck;
+            if (subscription != null && pendingAck != null && AcknowledgementTokens.Matches(command.Token, pendingAck.Token)) break;
+            // a token issued for a delivery whose '202 Accepted' response the broker has yet to record is given time to become pending
+            if (DateTimeOffset.UtcNow >= deadline) break;
+            await Task.Delay(GracePollingInterval, cancellationToken).ConfigureAwait(false);
+        }
         // an unknown subscription is reported like an invalid token, so that the endpoint, which is anonymous, does not reveal which subscriptions exist (see #149)
-        var pendingAck = subscription?.Status?.Subscriber?.PendingAck;
         if (subscription == null || pendingAck == null || !AcknowledgementTokens.Matches(command.Token, pendingAck.Token)) throw Conflict("The specified acknowledgement token does not match any pending acknowledgement: it is unknown, has already been used, or has expired");
         if (pendingAck.ExpiresAt <= DateTimeOffset.UtcNow) throw Conflict($"The acknowledgement of the cloud event at offset '{pendingAck.Offset}' expired at {pendingAck.ExpiresAt:O}: the cloud event is being redelivered");
         var operations = new List<PatchOperation>()
