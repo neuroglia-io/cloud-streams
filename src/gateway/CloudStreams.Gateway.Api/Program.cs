@@ -70,6 +70,7 @@ app.UseResponseCompression();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseHealthChecks("/healthz", new HealthCheckOptions()
 {
@@ -87,9 +88,10 @@ app.UseSwaggerUI(builder =>
     builder.DisplayOperationId();
 });
 app.MapControllers();
-app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch");
-app.MapHub<CloudEventHub>("api/ws/events");
-app.MapMcp("mcp");
-app.MapFallbackToFile("index.html");
+app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapHub<CloudEventHub>("api/ws/events").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPolicy);
+app.MapCloudStreamsAuthenticationEndpoints();
+app.MapFallbackToFile("index.html").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPagePolicy);
 
 await app.RunAsync();

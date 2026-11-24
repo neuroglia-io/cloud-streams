@@ -76,6 +76,7 @@ public class CloudStreamsApplicationBuilder
         });
         this.Services.AddProblemDetails();
         this.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
+        this.Services.AddCloudStreamsAuthentication(configuration);
         this.Services.AddEndpointsApiExplorer();
         this.Services.AddCoreApiCommands();
         this.Services.AddCoreApiQueries();

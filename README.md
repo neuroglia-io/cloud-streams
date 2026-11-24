@@ -11,6 +11,9 @@
 - [Documentation](#documentation)
 	+ [Fundamentals](#fundamentals)
 	+ [Getting started](#getting-started)
+	+ [Delivery and retries](#delivery-and-retries)
+	+ [Authentication](#authentication)
+	+ [Monitoring](#monitoring)
 	+ [API Reference](#api-reference)
 - [Contributing](#contributing)
 	+ [How to contribute](#how-to-contribute)
@@ -136,6 +139,62 @@ Note that, by default, subscriptions will only process cloud events published **
 The `Dashboard UI` is served by the `gateway` and is reachable at [http://localhost:8080](http://localhost:8080/).
 
 The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhost:8080/api/doc](http://localhost:8080/api/doc).
+
+### Delivery and retries
+
+The broker delivers each event with a `POST` to `spec.subscriber.uri`. Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
+
+A delivery fails when the subscriber cannot be reached, responds with a non-success status code, or does not respond within the dispatch timeout. Failed deliveries are retried according to `spec.subscriber.retryPolicy`. If the subscription has none, the broker's `spec.dispatch.retryPolicy` applies:
+
+```yaml
+spec:
+  subscriber:
+    uri: https://subscriber.example.com/events
+    timeout: PT30S                # per attempt; defaults to the broker's spec.dispatch.timeout, or PT100S
+    retryPolicy:
+      statusCodes: [ 429, 503 ]   # status codes to retry; all of them if empty. Connection failures and timeouts are always retried
+      backoffDuration:
+        type: exponential         # constant | incremental | exponential
+        period: PT1S
+        exponent: 2
+      maxAttempts: 10             # defaults to 5; set to -1 to retry forever
+      circuitBreaker:
+        breakAfter: 3             # consecutive failures after which delivery pauses...
+        breakDuration: PT30S      # ...for this long
+```
+
+While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
+
+### Authentication
+
+By default, Cloud Streams does not authenticate requests and relies on the infrastructure (e.g. an ingress) to do so. The dashboard and the event ingestion endpoint (`POST /api/events/pub`) can each be secured independently at the application level. For example, publishers can stay anonymous while users must sign in to the dashboard:
+
+```yaml
+Authentication:
+  Oidc:
+    Authority: https://keycloak.example.com/realms/cloud-streams
+    ClientId: cloud-streams-dashboard
+    ClientSecret: ...            # optional, for confidential clients; PKCE is always used
+    Audience: cloud-streams      # strongly recommended: the audience bearer tokens must have been issued for
+    Scopes: [ openid, profile ]
+    NameClaimType: preferred_username
+    RoleClaimType: roles
+  Dashboard:
+    Enabled: true                # users sign in with OIDC; the management API, hubs and MCP endpoint also accept bearer tokens
+    RequiredRoles: [ ]           # optionally, roles users must have (any of them)
+  Ingestion:
+    Enabled: false               # when true, publishers must present a bearer token or one of the API keys below
+    ApiKeys: [ ]
+    ApiKeyHeader: X-Api-Key
+```
+
+As with any ASP.NET Core setting, these can be supplied as environment variables, e.g. `Authentication__Dashboard__Enabled=true`. When the dashboard is secured, its session cookie is encrypted with keys stored in Redis, so that every gateway replica can read it. The OIDC client must allow `{gateway}/signin-oidc` as a redirect URI and `{gateway}/signout-callback-oidc` as a post-logout redirect URI.
+
+### Monitoring
+
+`GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
+
+Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `Warning` by default. Set `Logging__LogLevel__System.Net.Http.HttpClient.OtlpTraceExporter` (or `OtlpMetricExporter`/`OtlpLogExporter`) to restore them.
 
 ### API Reference
 

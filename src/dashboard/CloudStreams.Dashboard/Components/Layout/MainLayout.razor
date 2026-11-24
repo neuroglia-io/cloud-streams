@@ -49,9 +49,34 @@
                     </NavLink>
                 </li>
             </ul>
+            @if (user?.Enabled == true && user.Authenticated)
+            {
+                <span class="navbar-text ms-auto me-3">@user.Name</span>
+                <a class="btn btn-sm btn-outline-light me-2" href="auth/logout" target="_top" title="Sign out">Sign out</a>
+            }
         </div>
     </nav>
     <div class="content flex-grow d-flex flex-column p-3">
         @Body
     </div>
 </div>
+@code {
+
+    [Inject] HttpClient HttpClient { get; set; } = null!;
+
+    /// <summary>
+    /// Describes the signed-in user, if the dashboard requires users to sign in
+    /// </summary>
+    record UserInfo(bool Enabled, bool Authenticated, string? Name);
+
+    UserInfo? user;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        try { user = await HttpClient.GetFromJsonAsync<UserInfo>("api/auth/user", new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)); }
+        catch { user = null; } // an older or misconfigured server must not break the layout
+    }
+
+}
