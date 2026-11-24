@@ -284,32 +284,28 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// <inheritdoc/>
     public virtual async Task<IObservable<CloudEventRecord>> ObserveAsync(long offset = -1, CancellationToken cancellationToken = default)
     {
-        var subscription = await this.EventStore.ObserveAsync(
-            Streams.All,
-            offset,
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        if (subscription == null)
-        {
-            throw new InvalidOperationException($"The underlying event store returned a null observable while observing stream '{Streams.All}' at offset '{offset}'.");
-        }
-        return subscription.Select(this.ReadRecord);
+        return (await this.ObserveStreamAsync(Streams.All, offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
     }
 
     /// <inheritdoc/>
     public virtual async Task<IObservable<CloudEventRecord>> ObservePartitionAsync(PartitionReference partition, long offset = -1, CancellationToken cancellationToken = default)
     {
-        var streamName = partition.GetStreamName();
-        var subscription = await this.EventStore.ObserveAsync(
-           streamName,
-           offset,
-           cancellationToken: cancellationToken)
-           .ConfigureAwait(false);
-        if (subscription == null)
-        {
-            throw new InvalidOperationException($"The underlying event store returned a null observable while observing partition stream '{streamName}' at offset '{offset}'.");
-        }
-        return subscription.Select(this.ReadRecord);
+        return (await this.ObserveStreamAsync(partition.GetStreamName(), offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
+    }
+
+    /// <summary>
+    /// Observes the specified stream
+    /// </summary>
+    /// <param name="streamId">The id of the stream to observe</param>
+    /// <param name="offset">The offset of the first record to observe, or <see cref="StreamPosition.EndOfStream"/> to only observe the records appended from now on</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IObservable{T}"/> used to observe the specified stream</returns>
+    /// <remarks>Observing a stream from an offset is gapless: the records appended while the observation starts are not lost (see <see cref="GaplessStreamObservation"/>)</remarks>
+    protected virtual async Task<IObservable<IEventRecord>> ObserveStreamAsync(string streamId, long offset, CancellationToken cancellationToken)
+    {
+        if (offset != StreamPosition.EndOfStream) return await GaplessStreamObservation.ObserveAsync(this.EventStore, streamId, offset, cancellationToken).ConfigureAwait(false);
+        return await this.EventStore.ObserveAsync(streamId, offset, cancellationToken: cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"The underlying event store returned a null observable while observing stream '{streamId}'");
     }
 
     /// <inheritdoc/>

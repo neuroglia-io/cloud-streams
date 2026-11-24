@@ -36,7 +36,7 @@ public class AcknowledgeSubscriptionEventCommandTests
                 patches.Record(call.Arg<Patch>()!);
                 return Task.FromResult<IResource>(subscription!);
             });
-        return (new AcknowledgeSubscriptionEventCommandHandler(repository), patches);
+        return (new AcknowledgeSubscriptionEventCommandHandler(repository, TimeSpan.Zero), patches);
     }
 
     static Subscription CreateSubscription(DateTimeOffset? expiresAt = null) => new()
@@ -68,6 +68,48 @@ public class AcknowledgeSubscriptionEventCommandTests
         Assert.Contains(operations, o => o.Op == OperationType.Remove && o.Path.ToString() == "/status/subscriber/pendingAck");
         Assert.Equal([42ul], patches.OffsetsWrittenTo());
         Assert.True(patches.Touched("/status/subscriber/lastAcknowledgedAt"));
+    }
+
+    [Fact]
+    public async Task A_Token_That_Becomes_Pending_During_Its_Grace_Period_Should_Be_Accepted()
+    {
+        // arrange: the subscriber calls back before the broker has recorded the pending acknowledgement, which it does a moment later
+        var pending = CreateSubscription();
+        var notYetPending = CreateSubscription();
+        notYetPending.Status!.Subscriber!.PendingAck = null;
+        var reads = 0;
+        var repository = Substitute.For<IResourceRepository>();
+        repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromResult<IResource?>(Interlocked.Increment(ref reads) <= 3 ? notYetPending : pending));
+        repository.PatchSubResourceAsync(Arg.Any<Patch>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IResource>(pending));
+        var handler = new AcknowledgeSubscriptionEventCommandHandler(repository, TimeSpan.FromSeconds(5));
+
+        // act
+        var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", Token, true));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        Assert.Equal(4, reads);
+    }
+
+    [Fact]
+    public async Task A_Token_That_Never_Becomes_Pending_Should_Be_Refused_Once_Its_Grace_Period_Is_Over()
+    {
+        // arrange
+        var subscription = CreateSubscription();
+        subscription.Status!.Subscriber!.PendingAck = null;
+        var repository = Substitute.For<IResourceRepository>();
+        repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IResource?>(subscription));
+        var handler = new AcknowledgeSubscriptionEventCommandHandler(repository, TimeSpan.FromMilliseconds(300));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // act
+        var result = await handler.HandleAsync(new AcknowledgeSubscriptionEventCommand("test-subscription", Token, true));
+
+        // assert
+        Assert.Equal(409, result.Status);
+        Assert.InRange(stopwatch.Elapsed, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(3));
     }
 
     [Fact]
