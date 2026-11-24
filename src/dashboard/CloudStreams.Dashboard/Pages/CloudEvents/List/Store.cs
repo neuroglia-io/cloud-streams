@@ -100,50 +100,68 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     /// </summary>
     /// <param name="request">The <see cref="ItemsProviderRequest"/> to execute</param>
     /// <returns>The resulting <see cref="ItemsProviderResult{TResult}"/></returns>
+    /// <remarks>
+    /// Pages are read in chunks of at most <see cref="StreamReadOptions.MaxLength"/> events, each starting right after the last event of the previous one, so that no
+    /// event is listed twice. Failures are logged and yield an empty page rather than breaking the page, and the loading state always ends (see #194)
+    /// </remarks>
     public async ValueTask<ItemsProviderResult<CloudEvent>> ProvideCloudEvents(ItemsProviderRequest request)
     {
         var readOptions = this.Get(state => state.ReadOptions);
         if (readOptions == null) return new ItemsProviderResult<CloudEvent>([], 0);
-        this.SetLoading(true);
-        readOptions = readOptions with { };
-        if (readOptions.Partition?.Type == null || readOptions.Partition?.Id == null)
-        {
-            readOptions = readOptions with { Partition = null };
-        }
         var totalCount = (int?)this.Get(state => state.TotalCount);
         if (totalCount == null) return new ItemsProviderResult<CloudEvent>([], 0);
-        if (readOptions.Direction == StreamReadDirection.Forwards)
+        this.SetLoading(true);
+        try
         {
-            readOptions.Offset = (readOptions.Offset ?? 0) + request.StartIndex;
-        }
-        else
-        {
-            if ((readOptions.Offset??0) == 0 && request.StartIndex == 0) readOptions.Offset = -1;
-            else readOptions.Offset = Math.Max((readOptions.Offset ?? totalCount ?? 0) - request.StartIndex, 0);
-        }
-        readOptions.Length = (ulong)request.Count;
-        var fetchedCloudEvents = new List<CloudEvent>();
-        if (readOptions.Length <= StreamReadOptions.MaxLength)
-        {
-            fetchedCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
-        }
-        else
-        {
-            bool fetchMore = true;
-            var offset = readOptions.Offset.Value;
-            do
+            readOptions = readOptions with { };
+            if (readOptions.Partition?.Type == null || readOptions.Partition?.Id == null) readOptions = readOptions with { Partition = null };
+            if (readOptions.Direction == StreamReadDirection.Forwards)
             {
-                StreamReadOptions tempReadOptions = readOptions with { };
-                tempReadOptions.Offset = offset;
-                tempReadOptions.Length = StreamReadOptions.MaxLength;
-                var tempCloudEvents = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(tempReadOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false) as List<CloudEvent>;
-                fetchedCloudEvents.AddRange(tempCloudEvents);
-                offset = (long)fetchedCloudEvents.Last()!.GetSequence()!;
-                fetchMore = tempCloudEvents.Count > 1 && (ulong)fetchedCloudEvents.Count < readOptions!.Length;
+                readOptions.Offset = (readOptions.Offset is null or < 0 ? 0 : readOptions.Offset.Value) + request.StartIndex;
             }
-            while (fetchMore);
+            else if (readOptions.Offset is null or < 0)
+            {
+                // reading backwards from the end: the n-th item is the event at offset 'length - 1 - n'
+                readOptions.Offset = request.StartIndex == 0 ? StreamPosition.EndOfStream : Math.Max(totalCount.Value - 1 - request.StartIndex, 0);
+            }
+            else
+            {
+                readOptions.Offset = Math.Max(readOptions.Offset.Value - request.StartIndex, 0);
+            }
+            readOptions.Length = (ulong)request.Count;
+            var fetchedCloudEvents = new List<CloudEvent>();
+            var offset = readOptions.Offset.Value;
+            while ((ulong)fetchedCloudEvents.Count < readOptions.Length)
+            {
+                var chunkOptions = readOptions with
+                {
+                    Offset = offset,
+                    Length = Math.Min(readOptions.Length - (ulong)fetchedCloudEvents.Count, (ulong)StreamReadOptions.MaxLength)
+                };
+                var chunk = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(chunkOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync(request.CancellationToken).ConfigureAwait(false);
+                var events = chunk.OfType<CloudEvent>().ToList();
+                fetchedCloudEvents.AddRange(events);
+                if ((ulong)events.Count < chunkOptions.Length) break;
+                var lastSequence = events[^1].GetSequence();
+                if (lastSequence == null) break;
+                if (readOptions.Direction == StreamReadDirection.Forwards) offset = (long)lastSequence.Value + 1;
+                else if (lastSequence.Value == 0) break;
+                else offset = (long)lastSequence.Value - 1;
+            }
+            return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount.Value);
         }
-        this.SetLoading(false);
-        return new ItemsProviderResult<CloudEvent>(fetchedCloudEvents, totalCount ?? 0);
+        catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to read cloud events: {ex}");
+            return new ItemsProviderResult<CloudEvent>([], totalCount.Value);
+        }
+        finally
+        {
+            this.SetLoading(false);
+        }
     }
 }

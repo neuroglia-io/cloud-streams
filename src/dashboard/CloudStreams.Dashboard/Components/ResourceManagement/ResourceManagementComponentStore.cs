@@ -50,12 +50,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// <summary>
     /// Gets the service used to monitor resources of the specified type
     /// </summary>
-    protected Core.Api.Client.Services.ResourceWatch<TResource> ResourceWatch { get; private set; } = null!;
-
-    /// <summary>
-    /// Gets an <see cref="IDisposable"/> that represents the store's <see cref="ResourceWatch"/> subscription
-    /// </summary>
-    protected IDisposable ResourceWatchSubscription { get; private set; } = null!;
+    protected Core.Api.Client.Services.ResourceWatch<TResource>? ResourceWatch { get; private set; }
 
     #region Selectors
     /// <summary>
@@ -279,16 +274,32 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     {
         await ListNamespacesAsync().ConfigureAwait(false);
         await GetResourceDefinitionAsync().ConfigureAwait(false);
-        await ResourceEventHub.StartAsync().ConfigureAwait(false);
-        ResourceWatch = await ResourceEventHub.WatchAsync<TResource>().ConfigureAwait(false);
-        ResourceWatch
-            .Do(e => Logger.LogTrace("ResourceWatch received event '{type}' for '{name}'", e.Type.ToString(), e.Resource.GetName()))
-            .SubscribeAsync(
-                onNextAsync: OnResourceWatchEventAsync,
-                onErrorAsync: ex => Task.Run(() => Logger.LogError("ResourceWatch exception: {exception}", ex.ToString())),
-                onCompletedAsync: () => Task.CompletedTask,
-                cancellationToken: CancellationTokenSource.Token
-            );
+        // real-time updates are a nicety: failing to establish them must not prevent the resources from being listed (see #192)
+        try
+        {
+            await ResourceEventHub.StartAsync().ConfigureAwait(false);
+            ResourceWatch = await ResourceEventHub.WatchAsync<TResource>().ConfigureAwait(false);
+            // the subscription ends when the store's token is canceled, on disposal
+            ResourceWatch
+                .Do(e => Logger.LogTrace("ResourceWatch received event '{type}' for '{name}'", e.Type.ToString(), e.Resource.GetName()))
+                .SubscribeAsync(
+                    onNextAsync: OnResourceWatchEventAsync,
+                    onErrorAsync: ex => Task.Run(() => Logger.LogError("ResourceWatch exception: {exception}", ex.ToString())),
+                    onCompletedAsync: () => Task.CompletedTask,
+                    cancellationToken: CancellationTokenSource.Token
+                );
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError("Unable to watch resources, real-time updates are disabled: {exception}", ex.ToString());
+        }
+        // whatever changed while the connection was down is fetched again once it is re-established
+        ResourceEventHub.Reconnected.SubscribeAsync(
+            onNextAsync: _ => ListResourcesAsync(Get(state => new ResourcesFilter() { Namespace = state.Namespace, LabelSelectors = state.LabelSelectors })),
+            onErrorAsync: _ => Task.CompletedTask,
+            onCompletedAsync: () => Task.CompletedTask,
+            cancellationToken: CancellationTokenSource.Token
+        );
         Filter.Throttle(TimeSpan.FromMilliseconds(10)).SubscribeAsync(
             onNextAsync: ListResourcesAsync,
             onErrorAsync: ex => Task.Run(() => Logger.LogError("Resource filter exception: {exception}", ex.ToString())),
@@ -306,7 +317,8 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public virtual async Task DeleteResourceAsync(TResource resource)
     {
         await ResourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
-        var resources = new EquatableList<TResource>(Get().Resources.Where(r => r.GetName() != resource.GetName() && r.GetNamespace() != resource.GetNamespace()));
+        // only the deleted resource is removed: resources are cluster-scoped, so filtering out its namespace would remove all of them (see #190)
+        var resources = new EquatableList<TResource>(Get().Resources.Where(r => !(r.GetName() == resource.GetName() && r.GetNamespace() == resource.GetNamespace())));
         Reduce(s => s with
         {
             Resources = resources
@@ -381,6 +393,10 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         catch (Exception ex)
         {
             Logger.LogError("Unable to list resources: {exception}", ex.ToString());
+            Reduce(state => state with
+            {
+                Loading = false
+            });
         }
     }
 
@@ -467,10 +483,13 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     }
 
     /// <inheritdoc/>
+    /// <remarks>Blazor disposes of components synchronously, so the watch, whose release requires a call to the server, is released in the background (see #191)</remarks>
     protected override void Dispose(bool disposing)
     {
         if (!disposing) return;
-        ResourceWatchSubscription?.Dispose();
+        var watch = ResourceWatch;
+        ResourceWatch = null;
+        if (watch != null) _ = ReleaseWatchAsync(watch);
         base.Dispose(disposing);
     }
 
@@ -478,9 +497,21 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     protected override async ValueTask DisposeAsync(bool disposing)
     {
         if (!disposing) return;
-        await ResourceWatch.DisposeAsync().ConfigureAwait(false);
-        ResourceWatchSubscription.Dispose();
-        base.Dispose(disposing);
+        var watch = ResourceWatch;
+        ResourceWatch = null;
+        if (watch != null) await ReleaseWatchAsync(watch).ConfigureAwait(false);
+        await base.DisposeAsync(disposing).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Releases the specified watch, which tells the server to stop watching once no other store watches the same resources
+    /// </summary>
+    /// <param name="watch">The watch to release</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    async Task ReleaseWatchAsync(Core.Api.Client.Services.ResourceWatch<TResource> watch)
+    {
+        try { await watch.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception ex) { Logger.LogWarning("Failed to stop watching resources: {exception}", ex.ToString()); }
     }
 
 }

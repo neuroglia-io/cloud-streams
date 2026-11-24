@@ -151,8 +151,16 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
     /// <summary>
     /// Gathers the <see cref="CloudEvent"/>s for the current <see cref="TimelineState.StreamsReadOptions"/>
     /// </summary>
+    /// <remarks>
+    /// A new gathering cancels the previous one, whose result is discarded, so that an older response can never overwrite a newer one (see #195)
+    /// </remarks>
     public async Task GatherCloudEventsAsync()
     {
+        var gatheringCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
+        var previous = Interlocked.Exchange(ref this._gatheringCancellationTokenSource, gatheringCancellationTokenSource);
+        try { previous?.Cancel(); }
+        catch (ObjectDisposedException) { /* the previous gathering has completed in the meantime */ }
+        var cancellationToken = gatheringCancellationTokenSource.Token;
         this.Reduce(state => state with
         {
             Loading = true
@@ -193,7 +201,7 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                 }
                 if (readOptions.Length <= StreamReadOptions.MaxLength)
                 {
-                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
                     data.AddRange(cloudEvents!);
                 }
                 else
@@ -205,28 +213,44 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                     {
                         readOptions.Offset = offset;
                         readOptions.Length = length;
-                        var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, this.CancellationTokenSource.Token).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false);
+                        var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
                         data.AddRange(cloudEvents!);
-                        offset = (long)cloudEvents.Last()!.GetSequence()! + (options.Direction == StreamReadDirection.Forwards ? 1 : -1);
+                        var lastSequence = cloudEvents.LastOrDefault()?.GetSequence();
                         length = Math.Min(options.Length - (ulong)data.Count, StreamReadOptions.MaxLength);
-                        fetchMore = cloudEvents.Count > 1 && length != 0;
+                        fetchMore = lastSequence.HasValue && (ulong)cloudEvents.Count == readOptions.Length && length != 0 && (options.Direction == StreamReadDirection.Forwards || lastSequence.Value > 0);
+                        if (fetchMore) offset = (long)lastSequence!.Value + (options.Direction == StreamReadDirection.Forwards ? 1 : -1);
                     }
                     while(fetchMore);
                 }
                 lanes.Add(name, data);
             }
+            if (cancellationToken.IsCancellationRequested) return;
             this.Reduce(state => state with { 
                 TimelineLanes = lanes,
                 Loading = false
             });
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // superseded by a newer gathering, which reports its own result
+        }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString()); // todo: improve logging
+            Console.Error.WriteLine($"Failed to gather cloud events: {ex}");
             this.Reduce(state => state with
             {
                 Loading = false
             });
         }
+        finally
+        {
+            Interlocked.CompareExchange(ref this._gatheringCancellationTokenSource, null, gatheringCancellationTokenSource);
+            gatheringCancellationTokenSource.Dispose();
+        }
     }
+
+    /// <summary>
+    /// Gets the <see cref="System.Threading.CancellationTokenSource"/> of the ongoing gathering, if any
+    /// </summary>
+    CancellationTokenSource? _gatheringCancellationTokenSource;
 }

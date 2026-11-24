@@ -122,7 +122,9 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
             }
             else
             {
-                this.SetEditorValue(YamlSerializer.Default.Serialize(resource));
+                // the editor shows JSON when JSON is preferred, since that is how its value is parsed on save (see #193)
+                var json = resource == null ? string.Empty : JsonNode.Parse(jsonSerializer.SerializeToText(resource))!.ToJsonString(IndentedJsonOptions);
+                this.SetEditorValue(json);
             }
         }, token: this.CancellationTokenSource.Token);
     }
@@ -298,8 +300,9 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     /// </summary>
     /// <returns></returns>
     /// <remarks>
-    /// Only the resource's spec can be patched: its metadata is managed by the server and its status by the controllers. The patch is therefore computed from
-    /// the spec alone, otherwise any status change made since the editor was opened (such as an acknowledged offset) would end up in it and be rejected (see #109)
+    /// Only the resource's spec, labels and annotations can be patched: the rest of its metadata is managed by the server and its status by the controllers. The
+    /// patch is therefore computed from those alone, otherwise any status change made since the editor was opened (such as an acknowledged offset) would end up in it
+    /// and be rejected (see #109), while label and annotation changes would be silently dropped (see #193)
     /// </remarks>
     public async Task UpdateResourceAsync()
     {
@@ -313,10 +316,10 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
             if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
             var updatedResource = jsonSerializer.Deserialize<TResource>(textEditorValue);
             if (!this.ValidateMappedProperties(textEditorValue, updatedResource)) return;
-            var jsonPatch = JsonPatch.FromDiff(this.GetSpecDocument(resource), this.GetSpecDocument(updatedResource));
+            var jsonPatch = JsonPatch.FromDiff(this.GetEditableDocument(resource), this.GetEditableDocument(updatedResource));
             if (jsonPatch.RootElement.GetArrayLength() < 1)
             {
-                this.SetSuccessMessage("The specification has not changed: there is nothing to update");
+                this.SetSuccessMessage("Neither the specification, the labels nor the annotations have changed: there is nothing to update");
                 return;
             }
             try
@@ -346,17 +349,28 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     }
 
     /// <summary>
-    /// Gets a <see cref="JsonElement"/> that only contains the specified resource's spec, if any
+    /// Gets a <see cref="JsonElement"/> that only contains the parts of the specified resource users may edit: its spec, labels and annotations
     /// </summary>
-    /// <param name="resource">The resource to get the spec document of</param>
-    /// <returns>A new <see cref="JsonElement"/> of the form <c>{ "spec": ... }</c></returns>
-    JsonElement GetSpecDocument(TResource? resource)
+    /// <param name="resource">The resource to get the editable document of</param>
+    /// <returns>A new <see cref="JsonElement"/> of the form <c>{ "metadata": { "labels": ..., "annotations": ... }, "spec": ... }</c></returns>
+    JsonElement GetEditableDocument(TResource? resource)
     {
         var node = resource == null ? null : JsonNode.Parse(jsonSerializer.SerializeToElement(resource)!.Value.GetRawText()) as JsonObject;
-        var document = new JsonObject();
+        // 'metadata' is always present, so that the diff targets '/metadata/labels' or '/metadata/annotations', and never replaces the whole metadata
+        var editableMetadata = new JsonObject();
+        var document = new JsonObject() { ["metadata"] = editableMetadata };
+        if (node != null && node.TryGetPropertyValue("metadata", out var metadataNode) && metadataNode is JsonObject metadata)
+        {
+            foreach (var property in new[] { "labels", "annotations" }) if (metadata.TryGetPropertyValue(property, out var value) && value != null) editableMetadata[property] = value.DeepClone();
+        }
         if (node != null && node.TryGetPropertyValue("spec", out var spec) && spec != null) document["spec"] = spec.DeepClone();
         return JsonDocument.Parse(document.ToJsonString()).RootElement;
     }
+
+    /// <summary>
+    /// Gets the options used to format JSON in the editor
+    /// </summary>
+    static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
 
     /// <summary>
     /// Ensures that every property of the specified editor value is mapped by the resource it has been deserialized into, and reports the ones that are not

@@ -52,6 +52,29 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     protected IJsonSerializer Serializer { get; set; } = null!;
 
     /// <summary>
+    /// Gets the service used to notify users of the outcome of their actions
+    /// </summary>
+    [Inject]
+    protected ToastService ToastService { get; set; } = null!;
+
+    /// <summary>
+    /// Notifies the user that an action succeeded
+    /// </summary>
+    /// <param name="message">The message to display</param>
+    protected void NotifySuccess(string message) => this.ToastService.Notify(new(ToastType.Success, message));
+
+    /// <summary>
+    /// Notifies the user that an action failed
+    /// </summary>
+    /// <param name="action">A description of the action that failed</param>
+    /// <param name="ex">The exception that describes the failure</param>
+    protected void NotifyFailure(string action, Exception ex)
+    {
+        var detail = ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+        this.ToastService.Notify(new(ToastType.Danger, $"{action}: {detail}"));
+    }
+
+    /// <summary>
     /// Gets/sets the list of displayed <see cref="Resource"/>s
     /// </summary>
     protected EquatableList<TResource>? Resources { get; set; }
@@ -199,7 +222,15 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
             }
         );
         if (!confirmation) return;
-        await Store.DeleteResourceAsync(resource);
+        try
+        {
+            await Store.DeleteResourceAsync(resource);
+            NotifySuccess($"The {typeof(TResource).Name.ToLower()} '{resource.Metadata.Name}' has been deleted");
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure($"Failed to delete the {typeof(TResource).Name.ToLower()} '{resource.Metadata.Name}'", ex);
+        }
     }
 
     /// <summary>
@@ -221,7 +252,15 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
             }
         );
         if (!confirmation) return;
-        await Store.DeleteSelectedResourcesAsync();
+        try
+        {
+            await Store.DeleteSelectedResourcesAsync();
+            NotifySuccess("The selected resources have been deleted");
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure("Failed to delete the selected resources", ex);
+        }
     }
 
     /// <summary>

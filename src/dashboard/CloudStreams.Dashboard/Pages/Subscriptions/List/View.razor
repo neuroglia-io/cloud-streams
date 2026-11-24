@@ -61,7 +61,7 @@
                     @{
                         var streamLength = subscriptionLengths.Keys.Contains(resource.GetName()) ? subscriptionLengths[resource.GetName()] : (ulong)0;
                     }
-                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer @( ((resource.Status?.Stream?.AckedOffset ?? 0) < streamLength) ? "warning-row" : "")">
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer @(IsBehind(resource, streamLength) ? "warning-row" : "")">
                         <td>@resource.Metadata.Name</td>
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.ToString("R")</td>
                         <td class="text-center">
@@ -76,7 +76,7 @@
                             }
                             @if(resource.Status?.Stream?.Fault != null)
                             {
-                                <span class="badge text-dark bg-danger ms-1 cursor-pointer" title="@resource.Status.Stream.Fault.ToString()" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</span>
+                                <button type="button" class="badge text-dark bg-danger border-0 ms-1" title="@($"{resource.Status.Stream.Fault} (click to resume)")" aria-label="@($"Subscription '{resource.Metadata.Name}' is faulted: resume it")" @onclick="async e => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault="true" @onclick:stopPropagation="true">faulted</button>
                             }
                         </td>
                         <td class="text-center">
@@ -170,13 +170,68 @@
         await base.OnInitializedAsync().ConfigureAwait(false);
     }
 
-    Task OnResumeSubscriptionAsync(Subscription subscription)
+    /// <summary>
+    /// Determines whether the specified subscription is behind the stream or partition it consumes
+    /// </summary>
+    /// <remarks>Only subscriptions that track an offset can be behind: their acknowledged offset is the offset of the next event to deliver (see #196)</remarks>
+    static bool IsBehind(Subscription subscription, ulong streamLength) => subscription.Spec.Stream != null && (subscription.Status?.Stream?.AckedOffset ?? 0) < streamLength;
+
+    async Task OnResumeSubscriptionAsync(Subscription subscription)
     {
-        var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
-        return this.ApiClient.Resources.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
+        if (Dialog == null) return;
+        var confirmed = await Dialog.ShowAsync(
+            title: $"Resume subscription '{subscription.Metadata.Name}'?",
+            message1: $"The subscription is faulted: {subscription.Status?.Stream?.Fault?.Detail ?? subscription.Status?.Stream?.Fault?.Title}",
+            message2: "Resuming clears the fault and retries the event that caused it. To skip that event instead, edit the subscription's 'spec.stream.offset'.",
+            confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true });
+        if (!confirmed) return;
+        try
+        {
+            var patch = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Remove(JsonPointer.Create<Subscription>(s => s.Status!.Stream!.Fault!).ToCamelCase())));
+            await this.ApiClient.Resources.Subscriptions.PatchStatusAsync(patch, subscription.GetName(), subscription.GetNamespace());
+            NotifySuccess($"The subscription '{subscription.Metadata.Name}' has been resumed");
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure($"Failed to resume the subscription '{subscription.Metadata.Name}'", ex);
+        }
     }
 
+    /// <remarks>
+    /// The broker only reacts to changes of the offset. A subscription that already starts at the beginning of the stream is therefore moved to its end first, then
+    /// back to its beginning: should the second patch fail, the original offset is restored (see #196)
+    /// </remarks>
     async Task OnRestartSubscriptionAsync(Subscription subscription)
+    {
+        if (Dialog == null) return;
+        var confirmed = await Dialog.ShowAsync(
+            title: $"Replay subscription '{subscription.Metadata.Name}'?",
+            message1: "Every event matching the subscription will be delivered again, from the beginning of the stream.",
+            confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Replay", YesButtonColor = ButtonColor.Warning, NoButtonText = "Cancel", IsVerticallyCentered = true });
+        if (!confirmed) return;
+        var originalStream = subscription.Spec.Stream;
+        try
+        {
+            await this.ReplaySubscriptionAsync(subscription);
+            NotifySuccess($"The subscription '{subscription.Metadata.Name}' is being replayed");
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure($"Failed to replay the subscription '{subscription.Metadata.Name}'", ex);
+            if (originalStream == null) return;
+            try
+            {
+                var restore = new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Replace(JsonPointer.Create<Subscription>(s => s.Spec.Stream!).ToCamelCase(), this.Serializer.SerializeToNode(originalStream))));
+                await this.ApiClient.Resources.Subscriptions.PatchAsync(restore, subscription.GetName(), subscription.GetNamespace());
+            }
+            catch (Exception restoreException)
+            {
+                NotifyFailure($"Failed to restore the offset of the subscription '{subscription.Metadata.Name}'", restoreException);
+            }
+        }
+    }
+
+    async Task ReplaySubscriptionAsync(Subscription subscription)
     {
         var offset = subscription.Spec.Stream?.Offset;
         if (offset == StreamPosition.StartOfStream) offset = StreamPosition.EndOfStream;

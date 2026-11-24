@@ -14,6 +14,8 @@
 using CloudStreams.Core.Api.Client;
 using CloudStreams.Dashboard;
 using CloudStreams.Dashboard.Components;
+using CloudStreams.Dashboard.Services;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Neuroglia.Serialization;
@@ -27,7 +29,10 @@ builder.Services.Configure(Neuroglia.Serialization.Json.JsonSerializer.DefaultOp
 builder.Services.AddSerialization();
 builder.Services.AddJsonSerializer();
 builder.Services.AddYamlDotNetSerializer();
-builder.Services.AddScoped(provider => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+builder.Services.AddScoped(provider => new HttpClient(new UnauthorizedRedirectHandler(provider.GetRequiredService<NavigationManager>()) { InnerHandler = new HttpClientHandler() })
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
+});
 builder.Services.AddCloudStreamsCoreApiClient(options =>
 {
     options.BaseAddress = builder.HostEnvironment.BaseAddress;
