@@ -144,13 +144,14 @@ The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhos
 
 The broker delivers each event with a `POST` to `spec.subscriber.uri`. Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
 
-A delivery fails when the subscriber cannot be reached, responds with a non-success status code, or does not respond within the dispatch timeout. Failed deliveries are retried according to `spec.subscriber.retryPolicy`. If the subscription has none, the broker's `spec.dispatch.retryPolicy` applies:
+A delivery fails when the subscriber cannot be reached, responds with a non-success status code, or does not respond within the dispatch timeout. A subscription's mutation is applied by every delivery attempt: a mutation webhook shares the attempt's timeout, and its failures are retried like the subscriber's. Failed deliveries are retried according to `spec.subscriber.retryPolicy`. If the subscription has none, the broker's `spec.dispatch.retryPolicy` applies:
 
 ```yaml
 spec:
   subscriber:
     uri: https://subscriber.example.com/events
     timeout: PT30S                # per attempt; defaults to the broker's spec.dispatch.timeout, or PT100S
+    rateLimit: 10                 # optional maximum number of deliveries per second; must be strictly positive
     retryPolicy:
       statusCodes: [ 429, 503 ]   # status codes to retry; all of them if empty. Connection failures and timeouts are always retried
       backoffDuration:
