@@ -167,6 +167,17 @@ spec:
 
 While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
 
+#### Broker replicas
+
+Several replicas of a broker can run side by side, for availability. A replica only handles a subscription while it holds a lease on it in Redis, so that every subscription is handled by a single replica, and every event is delivered once. Leases are renewed periodically. When the replica that handles a subscription dies, its lease expires and another replica takes the subscription over. A replica that fails to renew a lease in time stops handling the subscription before the lease can be acquired by another one. When a replica stops gracefully, it releases its leases so that others take over immediately.
+
+```yaml
+Leases:                          # e.g. CLOUDSTREAMS_BROKER_LEASES__DURATION=00:00:15
+  Enabled: true                  # disabling leases is only safe with a single replica per subscription
+  Duration: '00:00:15'           # how long a subscription stays unhandled when the replica that handles it dies
+  RenewalInterval: '00:00:05'    # defaults to a third of the duration
+```
+
 #### Deferred acknowledgement
 
 A subscriber whose processing takes a while doesn't have to hold the connection open, or acknowledge an event it hasn't processed yet. It can defer the acknowledgement by responding `202 Accepted`, and call back once it is done. Every delivery to a subscription that tracks a stream offset carries the headers needed to do so:

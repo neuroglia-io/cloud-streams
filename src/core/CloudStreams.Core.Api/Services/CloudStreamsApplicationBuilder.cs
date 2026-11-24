@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using CloudStreams.Core.Api.HealthChecks;
 using CloudStreams.Core.Application;
 using CloudStreams.Core.Application.Commands.Resources;
@@ -97,6 +98,12 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddEsdbEventStore();
         this.Services.AddEsdbProjectionManager();
         this.Services.AddRedisDatabase(redisConnectionString);
+        this.Services.TryAddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
+        {
+            var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+            options.AbortOnConnectFail = false;
+            return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+        });
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());

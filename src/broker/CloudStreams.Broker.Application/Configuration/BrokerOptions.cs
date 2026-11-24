@@ -34,4 +34,9 @@ public class BrokerOptions
     /// </summary>
     public virtual string? Namespace { get; set; } = null!;
 
+    /// <summary>
+    /// Gets/sets the options used to configure the leases the broker holds on the subscriptions it handles
+    /// </summary>
+    public virtual SubscriptionLeaseOptions Leases { get; set; } = new();
+
 }
