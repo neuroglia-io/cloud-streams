@@ -61,7 +61,7 @@ public class ListEventPartitionIdsQuery(CloudEventPartitionType partitionType, s
 /// and is the same for every client (see #20). The whole list of ids is held by the projection's state anyway, so sorting it costs little compared to reading it.
 /// Pages are keyed by the last id they contain, so a page never skips nor repeats an id because another one has been added in the meantime
 /// </remarks>
-public class ListEventPartitionIdsQueryHandler(ICloudEventStore eventStore)
+public class ListEventPartitionIdsQueryHandler(ICloudEventStore eventStore, IPartitionIndex? partitionIndex = null)
     : IQueryHandler<ListEventPartitionIdsQuery, PartitionIdCollection>
 {
 
@@ -71,11 +71,20 @@ public class ListEventPartitionIdsQueryHandler(ICloudEventStore eventStore)
         var maxResults = query.MaxResults ?? PartitionIdCollection.DefaultMaxResults;
         if (maxResults < 1 || maxResults > PartitionIdCollection.MaxResultsLimit) throw BadRequest($"The maximum amount of results must be between 1 and {PartitionIdCollection.MaxResultsLimit}");
         var after = string.IsNullOrWhiteSpace(query.ContinuationToken) ? null : DecodeContinuationToken(query.ContinuationToken);
-        IEnumerable<string> ids = (await eventStore.ListPartitionIdsAsync(query.PartitionType, cancellationToken).ToListAsync(cancellationToken).ConfigureAwait(false)).Distinct(StringComparer.Ordinal);
-        if (!string.IsNullOrEmpty(query.Prefix)) ids = ids.Where(id => id.StartsWith(query.Prefix, StringComparison.OrdinalIgnoreCase));
-        ids = ids.Order(PartitionIdCollection.Comparer);
-        if (after != null) ids = ids.Where(id => PartitionIdCollection.Comparer.Compare(id, after) > 0);
-        var items = ids.Take(maxResults + 1).ToList();
+        List<string> items;
+        if (partitionIndex != null)
+        {
+            // the index serves the requested page directly, instead of loading, sorting and filtering every partition id (see #185)
+            items = [.. await partitionIndex.ListAsync(query.PartitionType, query.Prefix, after, maxResults + 1, cancellationToken).ConfigureAwait(false)];
+        }
+        else
+        {
+            IEnumerable<string> ids = (await eventStore.ListPartitionIdsAsync(query.PartitionType, cancellationToken).ToListAsync(cancellationToken).ConfigureAwait(false)).Distinct(StringComparer.Ordinal);
+            if (!string.IsNullOrEmpty(query.Prefix)) ids = ids.Where(id => id.StartsWith(query.Prefix, StringComparison.OrdinalIgnoreCase));
+            ids = ids.Order(PartitionIdCollection.Comparer);
+            if (after != null) ids = ids.Where(id => PartitionIdCollection.Comparer.Compare(id, after) > 0);
+            items = [.. ids.Take(maxResults + 1)];
+        }
         var hasMore = items.Count > maxResults;
         if (hasMore) items.RemoveAt(maxResults);
         return this.Ok(new PartitionIdCollection()

@@ -104,6 +104,7 @@ public class CloudStreamsApplicationBuilder
             options.AbortOnConnectFail = false;
             return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
         });
+        this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());
