@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace CloudStreams.Broker.Application.Services;
@@ -25,6 +27,17 @@ public class BrokerMetrics
     const string MetricsPrefix = "cloud_streams_broker_";
     const string CloudEventMetricsPrefix = MetricsPrefix + "events_";
 
+    /// <summary>
+    /// Gets the bucket boundaries, in seconds, of the delivery duration histogram, which are those of the HTTP client duration metric
+    /// </summary>
+    static readonly IReadOnlyList<double> DeliveryDurationBuckets = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10, 30, 60];
+
+    /// <summary>
+    /// Gets the bucket boundaries, in seconds, of the acknowledgement duration histogram: subscribers that defer an acknowledgement typically take seconds to minutes
+    /// </summary>
+    static readonly IReadOnlyList<double> AcknowledgementDurationBuckets = [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 1800, 3600];
+
+    readonly ConcurrentDictionary<object, (string Subscription, Func<(string Stream, ulong Lag)?> Observe)> _lagSources = new();
     bool _disposed;
 
     /// <summary>
@@ -32,10 +45,15 @@ public class BrokerMetrics
     /// </summary>
     public BrokerMetrics()
     {
-        this.TotalPublishedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}published_count", "Cloud Event", "The total amount of cloud events published (dispatched) to subscribers");
-        this.TotalDeliveryFailures = this.Meter.CreateCounter<int>($"{MetricsPrefix}delivery_failures_count", "Failure", "The total amount of delivery failures");
-        this.PendingAcknowledgements = this.Meter.CreateUpDownCounter<int>($"{MetricsPrefix}pending_acks", "Cloud Event", "The amount of cloud events whose acknowledgement has been deferred by the subscriber and is pending");
-        this.TotalAcknowledgementTimeouts = this.Meter.CreateCounter<int>($"{MetricsPrefix}ack_timeouts_count", "Timeout", "The total amount of deferred acknowledgements that expired before the subscriber called back");
+        this.TotalPublishedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}published_count", "{event}", "The total amount of cloud events published (dispatched) to subscribers");
+        this.TotalDeliveryFailures = this.Meter.CreateCounter<int>($"{MetricsPrefix}delivery_failures_count", "{failure}", "The total amount of delivery failures");
+        this.DeliveryDuration = this.Meter.CreateHistogram<double>($"{MetricsPrefix}delivery_duration", "s", "The duration of delivery attempts, from the request to the subscriber's response, mutation included",
+            advice: new() { HistogramBucketBoundaries = DeliveryDurationBuckets });
+        this.PendingAcknowledgements = this.Meter.CreateUpDownCounter<int>($"{MetricsPrefix}pending_acks", "{event}", "The amount of cloud events whose acknowledgement has been deferred by the subscriber and is pending");
+        this.AcknowledgementDuration = this.Meter.CreateHistogram<double>($"{MetricsPrefix}ack_duration", "s", "How long deferred acknowledgements have been pending before being acknowledged, negatively acknowledged or expiring",
+            advice: new() { HistogramBucketBoundaries = AcknowledgementDurationBuckets });
+        this.TotalAcknowledgementTimeouts = this.Meter.CreateCounter<int>($"{MetricsPrefix}ack_timeouts_count", "{timeout}", "The total amount of deferred acknowledgements that expired before the subscriber called back");
+        this.Meter.CreateObservableGauge($"{MetricsPrefix}subscription_lag", this.ObserveLags, "{event}", "The amount of records of its stream a subscription has yet to handle");
     }
 
     /// <summary>
@@ -54,9 +72,19 @@ public class BrokerMetrics
     protected Counter<int> TotalDeliveryFailures { get; }
 
     /// <summary>
+    /// Gets the <see cref="Histogram{T}"/> used to record the duration of delivery attempts, in seconds
+    /// </summary>
+    protected Histogram<double> DeliveryDuration { get; }
+
+    /// <summary>
     /// Gets the gauge used to track the amount of cloud events whose acknowledgement is pending
     /// </summary>
     protected UpDownCounter<int> PendingAcknowledgements { get; }
+
+    /// <summary>
+    /// Gets the <see cref="Histogram{T}"/> used to record how long deferred acknowledgements have been pending, in seconds
+    /// </summary>
+    protected Histogram<double> AcknowledgementDuration { get; }
 
     /// <summary>
     /// Gets the counter used to track the total amount of deferred acknowledgements that have expired
@@ -64,28 +92,51 @@ public class BrokerMetrics
     protected Counter<int> TotalAcknowledgementTimeouts { get; }
 
     /// <inheritdoc/>
-    public virtual void IncrementTotalPublishedEvents(string? stream, string? subscriber)
-    {
-        this.TotalPublishedEvents.Add(1, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
-    }
+    public virtual void IncrementTotalPublishedEvents(string subscription, string stream) => this.TotalPublishedEvents.Add(1, Tags(subscription, stream));
 
     /// <inheritdoc/>
-    public virtual void IncrementTotalDeliveryFailures(string? stream, string? subscriber)
-    {
-        this.TotalDeliveryFailures.Add(1, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
-    }
+    public virtual void IncrementTotalDeliveryFailures(string subscription, string stream) => this.TotalDeliveryFailures.Add(1, Tags(subscription, stream));
 
     /// <inheritdoc/>
-    public virtual void AddPendingAcknowledgements(string? stream, string? subscriber, int delta)
-    {
-        this.PendingAcknowledgements.Add(delta, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
-    }
+    public virtual void RecordDeliveryDuration(string subscription, string stream, string outcome, TimeSpan duration) => this.DeliveryDuration.Record(duration.TotalSeconds, Tags(subscription, stream, outcome));
 
     /// <inheritdoc/>
-    public virtual void IncrementTotalAcknowledgementTimeouts(string? stream, string? subscriber)
+    public virtual void AddPendingAcknowledgements(string subscription, string stream, int delta) => this.PendingAcknowledgements.Add(delta, Tags(subscription, stream));
+
+    /// <inheritdoc/>
+    public virtual void RecordAcknowledgementDuration(string subscription, string stream, string outcome, TimeSpan duration) => this.AcknowledgementDuration.Record(duration.TotalSeconds, Tags(subscription, stream, outcome));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalAcknowledgementTimeouts(string subscription, string stream) => this.TotalAcknowledgementTimeouts.Add(1, Tags(subscription, stream));
+
+    /// <inheritdoc/>
+    public virtual IDisposable ObserveLag(string subscription, Func<(string Stream, ulong Lag)?> observe)
     {
-        this.TotalAcknowledgementTimeouts.Add(1, new KeyValuePair<string, object?>("stream", stream), new KeyValuePair<string, object?>("subscriber", subscriber));
+        ArgumentException.ThrowIfNullOrWhiteSpace(subscription);
+        ArgumentNullException.ThrowIfNull(observe);
+        var key = new object();
+        this._lagSources[key] = (subscription, observe);
+        return new LagRegistration(() => this._lagSources.TryRemove(key, out _));
     }
+
+    /// <summary>
+    /// Observes the lag of every registered subscription
+    /// </summary>
+    /// <returns>The current lag of every registered subscription whose lag is known</returns>
+    protected virtual IEnumerable<Measurement<long>> ObserveLags()
+    {
+        foreach (var (subscription, observe) in this._lagSources.Values)
+        {
+            (string Stream, ulong Lag)? lag;
+            try { lag = observe(); }
+            catch { continue; } // a subscription that fails to report its lag must not prevent the others from being reported
+            if (lag.HasValue) yield return new((long)Math.Min(lag.Value.Lag, long.MaxValue), Tags(subscription, lag.Value.Stream));
+        }
+    }
+
+    static TagList Tags(string subscription, string stream) => new() { { "subscription", subscription }, { "stream", stream } };
+
+    static TagList Tags(string subscription, string stream, string outcome) => new() { { "subscription", subscription }, { "stream", stream }, { "outcome", outcome } };
 
     /// <summary>
     /// Disposes of the <see cref="BrokerMetrics"/>
@@ -108,6 +159,16 @@ public class BrokerMetrics
     {
         this.Dispose(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    sealed class LagRegistration(Action unregister)
+        : IDisposable
+    {
+
+        Action? _unregister = unregister;
+
+        public void Dispose() => Interlocked.Exchange(ref this._unregister, null)?.Invoke();
+
     }
 
 }

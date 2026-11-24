@@ -33,6 +33,7 @@ public class SubscriptionHandlerTests
         Assert.Equal(new Uri("http://localhost:8888/events"), context.Http.Attempts[0].RequestUri);
         Assert.Equal(1, context.Metrics.TotalPublishedEvents);
         Assert.Equal(0, context.Metrics.TotalDeliveryFailures);
+        Assert.Equal([DeliveryOutcome.Delivered], context.Metrics.DeliveryDurations.Select(d => d.Outcome));
         Assert.True(context.Patches.Touched("/status/stream/ackedOffset"), context.Patches.Describe());
         Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
     }
@@ -68,6 +69,7 @@ public class SubscriptionHandlerTests
         Assert.Equal(2, context.Http.AttemptCount);
         Assert.Equal(1, context.Metrics.TotalPublishedEvents);
         Assert.Equal(1, context.Metrics.TotalDeliveryFailures);
+        Assert.Equal([DeliveryOutcome.Failed, DeliveryOutcome.Delivered], context.Metrics.DeliveryDurations.Select(d => d.Outcome));
         Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
     }
 

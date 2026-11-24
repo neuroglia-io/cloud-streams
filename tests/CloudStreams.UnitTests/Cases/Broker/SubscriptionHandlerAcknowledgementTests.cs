@@ -77,6 +77,7 @@ public class SubscriptionHandlerAcknowledgementTests
         Assert.True(context.Handler.IsOutOfSync);
         Assert.Equal(1, context.Http.AttemptCount);
         Assert.Equal(1, context.Metrics.PendingAcknowledgements);
+        Assert.Equal([DeliveryOutcome.Deferred], context.Metrics.DeliveryDurations.Select(d => d.Outcome));
     }
 
     [Fact]
@@ -94,6 +95,7 @@ public class SubscriptionHandlerAcknowledgementTests
         Assert.Equal(3, context.Http.AttemptCount);
         Assert.Equal(["1", "2"], context.Http.Attempts.Skip(1).Select(a => a.Headers[CloudStreamsHeaders.Offset]));
         Assert.Equal(0, context.Metrics.PendingAcknowledgements);
+        Assert.Equal([AcknowledgementOutcome.Acknowledged], context.Metrics.AcknowledgementDurations.Select(d => d.Outcome));
     }
 
     [Fact]
@@ -109,6 +111,7 @@ public class SubscriptionHandlerAcknowledgementTests
         // assert
         await WaitUntilAsync(() => !context.Handler.IsOutOfSync && context.Http.AttemptCount >= 3, "delivery to resume", context);
         Assert.Equal(["0", "0", "1"], context.Http.Attempts.Select(a => a.Headers[CloudStreamsHeaders.Offset]));
+        Assert.Equal([AcknowledgementOutcome.NegativelyAcknowledged], context.Metrics.AcknowledgementDurations.Select(d => d.Outcome));
     }
 
     [Fact]
@@ -128,6 +131,9 @@ public class SubscriptionHandlerAcknowledgementTests
         Assert.Contains(context.Patches.Operations, o => o.Op == Json.Patch.OperationType.Remove && o.Path.ToString() == "/status/subscriber/pendingAck");
         Assert.Equal(1, context.Metrics.TotalAcknowledgementTimeouts);
         Assert.Equal(0, context.Metrics.PendingAcknowledgements);
+        var expiry = Assert.Single(context.Metrics.AcknowledgementDurations);
+        Assert.Equal(AcknowledgementOutcome.Expired, expiry.Outcome);
+        Assert.True(expiry.Duration >= TimeSpan.FromMilliseconds(100), $"the acknowledgement expired after {expiry.Duration}");
         Assert.Equal(1, context.Http.AttemptCount);
     }
 
