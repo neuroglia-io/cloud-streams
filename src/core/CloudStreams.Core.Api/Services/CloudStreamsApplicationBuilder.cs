@@ -105,13 +105,16 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddEventStoreProjectionManagementClient(esdbConnectionString);
         this.Services.AddEsdbEventStore();
         this.Services.AddEsdbProjectionManager();
-        this.Services.AddRedisDatabase(redisConnectionString);
         this.Services.TryAddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ =>
         {
             var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
             options.AbortOnConnectFail = false;
             return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
         });
+        // registered in place of the base Redis database, whose updates are not atomic (see #161)
+        this.Services.AddSingleton<AtomicRedisDatabase>();
+        this.Services.AddSingleton<RedisDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
+        this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
         this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
