@@ -28,7 +28,8 @@ namespace CloudStreams.Dashboard.Services;
 public static class ResourceDocuments
 {
 
-    static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
+    // the documents are displayed, not embedded in HTML: characters such as + are kept as they are rather than escaped
+    static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>
     /// Gets the parts of the specified resource users may edit: its spec, labels and annotations

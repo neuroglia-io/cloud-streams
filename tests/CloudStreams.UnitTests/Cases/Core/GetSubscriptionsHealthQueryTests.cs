@@ -35,12 +35,15 @@ public class GetSubscriptionsHealthQueryTests
         return subscription;
     }
 
-    static async Task<List<SubscriptionHealth>> ExecuteAsync(int streamLength, params Subscription[] subscriptions)
+    static Task<List<SubscriptionHealth>> ExecuteAsync(int streamLength, params Subscription[] subscriptions) => ExecuteAsync(streamLength, 0, subscriptions);
+
+    static async Task<List<SubscriptionHealth>> ExecuteAsync(int streamLength, ulong expired, params Subscription[] subscriptions)
     {
         var repository = Substitute.For<IResourceRepository>();
         repository.GetAllAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<IEnumerable<LabelSelector>?>(), Arg.Any<CancellationToken>())
             .Returns(subscriptions.ToAsyncEnumerable().Cast<IResource>());
         using var eventStore = new InMemoryCloudEventStore().Seed(streamLength);
+        if (expired > 0) await eventStore.TruncateAsync(expired);
         var handler = new GetSubscriptionsHealthQueryHandler(NullLogger<GetSubscriptionsHealthQueryHandler>.Instance, repository, eventStore);
         var result = await handler.HandleAsync(new GetSubscriptionsHealthQuery(null, null), CancellationToken.None);
         return [.. result.Data!];
@@ -66,6 +69,22 @@ public class GetSubscriptionsHealthQueryTests
         Assert.Equal("https://test.com", partitioned.PartitionId);
         Assert.Equal(0ul, partitioned.Lag);
         Assert.Null(partitioned.SubscriberState);
+    }
+
+    [Fact]
+    public async Task Health_Should_Report_The_Events_That_Expired_Before_A_Subscription_Delivered_Them()
+    {
+        // arrange - the first 4 of 10 events have expired (see #206)
+        var behind = CreateSubscription("behind", s => s.Status!.Stream!.AckedOffset = 1);
+        var starting = CreateSubscription("starting");
+        var ahead = CreateSubscription("ahead", s => s.Status!.Stream!.AckedOffset = 6);
+        var live = CreateSubscription("live", s => s.Spec.Stream = null);
+
+        // act
+        var health = await ExecuteAsync(10, 4, behind, starting, ahead, live);
+
+        // assert
+        Assert.Equal([3ul, 4ul, null, null], health.Select(h => h.ExpiredEvents));
     }
 
     [Fact]

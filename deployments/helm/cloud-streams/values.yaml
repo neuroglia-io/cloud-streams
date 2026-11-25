@@ -1,0 +1,140 @@
+# Default values of the Cloud Streams chart.
+# EventStoreDB and Redis are not deployed by the chart: point it at existing ones.
+
+image:
+  registry: ghcr.io
+  # the gateway and broker images are '<repositoryPrefix>-gateway' and '<repositoryPrefix>-broker'
+  repositoryPrefix: neuroglia-io/cloud-streams
+  # defaults to the chart's appVersion
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# The EventStoreDB that stores the cloud events, e.g. 'esdb://eventstore:2113?tls=false'
+eventstore:
+  connectionString: ""
+  # use an existing secret rather than 'connectionString', which is then ignored
+  existingSecret: ""
+  existingSecretKey: eventstore
+
+# The Redis that stores resources, leases and the partition index, e.g. 'redis:6379'
+redis:
+  connectionString: ""
+  existingSecret: ""
+  existingSecretKey: redis
+
+# The retention policy of the cloud event stream, which gateways apply at startup (see the README's 'Retention' section).
+# Leave both empty to keep events forever and leave any policy set otherwise as it is; set both to 0 to remove a policy.
+retention:
+  # an ISO 8601 duration, e.g. 'P30D'
+  maxAge: ""
+  # e.g. 1000000
+  maxCount: ""
+
+telemetry:
+  # the OTLP endpoint traces, metrics and logs are exported to, if any, e.g. 'http://otel-collector:4317'
+  otlpEndpoint: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+gateway:
+  enabled: true
+  # the name of the gateway resource, shared by its replicas. Defaults to '<fullname>-gateway'
+  name: ""
+  replicaCount: 2
+  port: 8080
+  # serve the management API (resources, dashboard, hubs and MCP) on a dedicated port, kept off the public ingress (see the README's 'Exposure' section)
+  managementApi:
+    enabled: true
+    port: ""
+  service:
+    type: ClusterIP
+    annotations: {}
+  # exposes the public endpoints: ingestion, acknowledgements and health checks, and the management API unless it has a dedicated port
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: cloud-streams.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  # exposes the management API on its dedicated port, e.g. on an internal ingress class
+  managementIngress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: cloud-streams-admin.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  # extra environment variables, e.g. to configure authentication: Authentication__Dashboard__Enabled, Oidc__Authority...
+  env: []
+  envFrom: []
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+broker:
+  enabled: true
+  # the name of the broker resource, shared by its replicas, which split its subscriptions with leases. Defaults to '<fullname>-broker'
+  name: ""
+  replicaCount: 2
+  port: 8080
+  service:
+    type: ClusterIP
+    annotations: {}
+  env: []
+  envFrom: []
+  resources: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+probes:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3

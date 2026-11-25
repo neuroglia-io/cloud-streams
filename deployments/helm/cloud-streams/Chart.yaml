@@ -1,0 +1,17 @@
+apiVersion: v2
+name: cloud-streams
+description: Cloud Streams, a cloud-native event gateway and broker built on CloudEvents, EventStoreDB and Redis
+type: application
+# the release workflow packages the chart with the version of the release, which is also the tag of the images it deploys
+version: 0.0.0-dev
+appVersion: "latest"
+home: https://github.com/neuroglia-io/cloud-streams
+sources:
+  - https://github.com/neuroglia-io/cloud-streams
+keywords:
+  - cloudevents
+  - event-broker
+  - eventstoredb
+maintainers:
+  - name: The Cloud Streams Authors
+    url: https://github.com/neuroglia-io/cloud-streams

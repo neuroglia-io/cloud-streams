@@ -82,4 +82,11 @@ public record SubscriptionHealth
     [DataMember(Order = 9, Name = "subscriberReason"), JsonPropertyOrder(9), JsonPropertyName("subscriberReason"), JsonIgnore(Condition = JsonIgnoreCondition.Never), YamlMember(Order = 9, Alias = "subscriberReason")]
     public virtual string? SubscriberReason { get; set; }
 
+    /// <summary>
+    /// Gets/sets the amount of events the subscription will never deliver because they expired before it got to them, if any: its offset is before the first event its
+    /// stream or partition retains (see #206)
+    /// </summary>
+    [DataMember(Order = 10, Name = "expiredEvents"), JsonPropertyOrder(10), JsonPropertyName("expiredEvents"), YamlMember(Order = 10, Alias = "expiredEvents")]
+    public virtual ulong? ExpiredEvents { get; set; }
+
 }

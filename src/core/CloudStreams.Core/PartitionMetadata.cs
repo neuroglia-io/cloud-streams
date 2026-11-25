@@ -52,4 +52,10 @@ public record PartitionMetadata
     [DataMember(Order = 5, Name = "length"), JsonPropertyName("length"), YamlMember(Alias = "length")]
     public virtual ulong Length { get; set; }
 
+    /// <summary>
+    /// Gets/sets the offset of the first event the partition retains: the events before it have expired, along with the events of the stream they belong to (see #206)
+    /// </summary>
+    [DataMember(Order = 6, Name = "firstOffset"), JsonPropertyName("firstOffset"), YamlMember(Alias = "firstOffset")]
+    public virtual ulong FirstOffset { get; set; }
+
 }

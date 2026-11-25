@@ -66,10 +66,11 @@ public sealed class StreamPageReader(Func<long, int, CancellationToken, Task<Lis
                 }
                 if (page.Count == this.PageSize)
                 {
-                    prefetchOffset = offset + page.Count;
+                    prefetchOffset = (long)page[^1].Sequence + 1;
                     prefetch = readPage(prefetchOffset, this.PageSize, prefetchCancellationTokenSource.Token);
                 }
-                offset += page.Count;
+                // the next page follows the last record read rather than the amount of records read: the records before the requested offset may have expired, in which case the page starts further (see #206)
+                offset = (long)page[^1].Sequence + 1;
                 yield return page;
             }
         }

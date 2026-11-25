@@ -48,7 +48,7 @@ public sealed class InMemoryCloudEventStore
     /// <summary>
     /// Gets the amount of records currently held, which is also the stream's length
     /// </summary>
-    public ulong Length { get { lock (this._lock) return (ulong)this._records.Count; } }
+    public ulong Length { get { lock (this._lock) return this._records.Count == 0 ? 0 : this._records[^1].Sequence + 1; } }
 
     /// <summary>
     /// Seeds the store with a record per specified subject, in order
@@ -92,7 +92,10 @@ public sealed class InMemoryCloudEventStore
     }
 
     /// <inheritdoc/>
-    public Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default) => Task.FromResult(new StreamMetadata() { Length = this.Length });
+    public Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        lock (this._lock) return Task.FromResult(new StreamMetadata() { Length = this.Length, FirstOffset = this._records.Count == 0 ? null : this._records[0].Sequence });
+    }
 
     /// <inheritdoc/>
     public Task<PartitionMetadata> GetPartitionMetadataAsync(PartitionReference partition, CancellationToken cancellationToken = default) =>

@@ -17,6 +17,7 @@
                 <h2 id="tile-events" class="h6 text-secondary mb-1">Events recorded</h2>
                 <p class="fs-3 mb-0">@(stream?.Length?.ToString("N0") ?? "–")</p>
                 <p class="small text-secondary mb-0">@(stream?.LastEvent is DateTimeOffset last ? $"last {Pages.Partitions.View.Ago(last)}" : "none yet")</p>
+                <p class="small text-secondary mb-0">@RetentionLabel(stream)</p>
             </div>
         </section>
     </div>
@@ -223,6 +224,25 @@
         try { await load(); }
         catch (Exception ex) { onError?.Invoke(ex); }
     }
+
+    /// <summary>
+    /// Describes how long events are kept, according to the retention policy of the stream (see #206)
+    /// </summary>
+    static string RetentionLabel(StreamMetadata? stream)
+    {
+        var retention = stream?.Retention;
+        if (stream == null) return string.Empty;
+        if (retention == null || retention.IsUnlimited) return "kept forever";
+        var parts = new List<string>();
+        if (retention.MaxAge?.ToTimeSpan() is TimeSpan age && age > TimeSpan.Zero) parts.Add($"for {FormatAge(age)}");
+        if (retention.MaxCount > 0) parts.Add($"the latest {retention.MaxCount:N0}");
+        var expired = stream.FirstOffset > 0 ? $", {stream.FirstOffset:N0} expired" : string.Empty;
+        return $"kept {string.Join(", up to ", parts)}{expired}";
+    }
+
+    static string FormatAge(TimeSpan age) => age.TotalDays >= 1 && age.TotalDays == Math.Floor(age.TotalDays) ? $"{age.TotalDays:N0} day(s)"
+        : age.TotalHours >= 1 && age.TotalHours == Math.Floor(age.TotalHours) ? $"{age.TotalHours:N0} hour(s)"
+        : age.ToString();
 
     static ulong Total(StreamActivity activity) => activity.Buckets.Aggregate(0UL, (total, bucket) => total + bucket.Count);
 

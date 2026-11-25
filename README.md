@@ -13,6 +13,7 @@
 	+ [Getting started](#getting-started)
 	+ [Delivery and retries](#delivery-and-retries)
 	+ [Authentication](#authentication)
+	+ [Retention](#retention)
 	+ [Monitoring](#monitoring)
 	+ [API Reference](#api-reference)
 - [Contributing](#contributing)
@@ -97,6 +98,25 @@ The overlay reads its secrets from the environment, and never stores them in the
 export EVENTSTORE_ADMIN_PASSWORD=... KEYCLOAK_ADMIN_PASSWORD=... CLOUDSTREAMS_DEMO_PASSWORD=... CLOUDSTREAMS_INGESTION_API_KEY=...
 docker compose -f "deployments/docker-compose/docker-compose.yml" -f "deployments/docker-compose/docker-compose.secure.yml" up --build
 ```
+
+#### Kubernetes
+
+A Helm chart, published with every release, deploys gateways and brokers. EventStoreDB and Redis are not part of it: point it at existing ones.
+
+```shell
+helm install cloud-streams oci://ghcr.io/neuroglia-io/charts/cloud-streams --version <release> \
+  --set eventstore.connectionString='esdb://eventstore:2113?tls=false' \
+  --set redis.connectionString='redis:6379' \
+  --set gateway.managementApi.port=8081
+```
+
+- **Defaults:** 2 replicas of each, non-root containers listening on 8080, pod disruption budgets, and probes on `/healthz/live` and `/healthz`.
+- **Connection strings:** they are kept in a secret. Pass `eventstore.existingSecret` and `redis.existingSecret` to use secrets of your own instead.
+- **Management API:** `gateway.managementApi.port` serves the management API and the dashboard on a port of their own. `gateway.ingress` then exposes only the public endpoints, and `gateway.managementIngress` exposes the management port, e.g. on an internal ingress class.
+- **Retention:** `retention.maxAge` and `retention.maxCount` set the policy described under [Retention](#retention).
+- **Other settings**, such as authentication, are environment variables, set with `gateway.env` and `broker.env`, e.g. `{ name: Authentication__Dashboard__Enabled, value: "true" }`.
+
+See [values.yaml](deployments/helm/cloud-streams/values.yaml) for every setting.
 
 Now that everything is up and running, you can start publishing cloud events using POST requests on the gateway's ingestion endpoint, at `http://localhost:8080/api/events/pub`:
 
@@ -564,6 +584,27 @@ The broker patches a subscription's status against the latest version it knows o
 `GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`.
 
 Partition ids are kept in an index in Redis, updated as events are ingested, so that listing and searching them never loads them all. Earlier versions listed them with EventStoreDB projections, whose state grows with every partition until it reaches EventStoreDB's maximum projection state size. On upgrade, the index is backfilled once from those projections, which are no longer used afterwards: the `cloud_events_partition_*` projections can then be stopped and deleted from EventStoreDB.
+
+### Retention
+
+By default, events are kept forever. A retention policy makes them expire once they are older than a maximum age, or beyond a maximum count of the latest ones:
+
+```yaml
+Retention:                       # e.g. Retention__MaxAge=P30D
+  MaxAge: P30D                   # an ISO 8601 duration
+  MaxCount: 1000000
+```
+
+- **How it's applied.** Gateways apply the policy at startup, as EventStoreDB's `$maxAge` and `$maxCount` metadata of the `cloud-events` stream, and EventStoreDB enforces it.
+  - The policy belongs to the stream, which every gateway shares: configure the same one on every gateway.
+  - An application without a policy leaves the current one as it is. Setting both values to `0` removes it.
+- **Expired events** can no longer be read, by subscriptions or otherwise, and are removed from disk when EventStoreDB is scavenged. Until then, loosening the policy makes them readable again.
+- **Partitions** skip the events that expired.
+- **Offsets** don't change: the stream's metadata (`GET /api/core/v1/cloud-events/stream`) reports the policy and `firstOffset`, the offset of the first event retained. Partitions report their own `firstOffset`.
+- **Subscriptions behind the retained range** never receive the events that expired. They resume with the first one retained:
+  - the broker logs a warning with the offsets they missed;
+  - the subscription health endpoint reports them as `expiredEvents`;
+  - the dashboard warns on the subscription's page.
 
 ### Working with events
 

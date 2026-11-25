@@ -1,0 +1,26 @@
+Cloud Streams {{ .Values.image.tag | default .Chart.AppVersion }} is deployed.
+{{- if .Values.gateway.enabled }}
+
+Gateway '{{ include "cloud-streams.gatewayName" . }}' ({{ .Values.gateway.replicaCount }} replica(s)):
+  kubectl port-forward svc/{{ include "cloud-streams.fullname" . }}-gateway 8080:80
+  then publish events to http://localhost:8080/api/events/pub
+{{- if and .Values.gateway.managementApi.enabled (ne (toString .Values.gateway.managementApi.port) "") }}
+  The management API and the dashboard are only served on port {{ .Values.gateway.managementApi.port }}:
+  kubectl port-forward svc/{{ include "cloud-streams.fullname" . }}-gateway 8081:{{ .Values.gateway.managementApi.port }}
+  then open http://localhost:8081
+{{- else if .Values.gateway.managementApi.enabled }}
+  and open the dashboard at http://localhost:8080
+{{- end }}
+{{- end }}
+{{- if .Values.broker.enabled }}
+
+Broker '{{ include "cloud-streams.brokerName" . }}' ({{ .Values.broker.replicaCount }} replica(s)).
+{{- end }}
+{{- $secured := false }}
+{{- range .Values.gateway.env }}{{ if eq .name "Authentication__Dashboard__Enabled" }}{{ $secured = true }}{{ end }}{{ end }}
+{{- if and .Values.gateway.managementApi.enabled (not $secured) }}
+
+WARNING: the management API is served without authentication. Anyone who can reach it can change and delete
+subscriptions, brokers and gateways. Configure authentication with 'gateway.env' (see the README's 'Authentication'
+section), or keep it off any public network.
+{{- end }}

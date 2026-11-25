@@ -1,0 +1,119 @@
+{{- if .Values.broker.enabled }}
+{{- $component := dict "root" . "component" "broker" }}
+{{- $fullname := printf "%s-broker" (include "cloud-streams.fullname" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  replicas: {{ .Values.broker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloud-streams.selectorLabels" $component | nindent 8 }}
+        {{- with .Values.broker.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/connections: {{ printf "%s|%s" .Values.eventstore.connectionString .Values.redis.connectionString | sha256sum }}
+        {{- with .Values.broker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "cloud-streams.serviceAccountName" . }}
+      # the variables Kubernetes would inject for every service of the namespace are not used, and some applications mistake them for their own settings
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # a broker that stops gracefully releases its subscriptions, so that the other replicas take them over at once
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: broker
+          image: {{ include "cloud-streams.image" $component }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.broker.port }}
+          env:
+            - name: ASPNETCORE_HTTP_PORTS
+              value: {{ .Values.broker.port | quote }}
+            - name: CLOUDSTREAMS_BROKER_NAME
+              value: {{ include "cloud-streams.brokerName" . | quote }}
+            {{- include "cloud-streams.commonEnv" . | nindent 12 }}
+            {{- with .Values.broker.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.broker.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "cloud-streams.probes" (dict "root" . "port" "http") | nindent 10 }}
+          {{- with .Values.broker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.broker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# the broker serves its health checks, which gateways probe when the broker's 'spec.service' points at this service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  {{- with .Values.broker.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.broker.service.type }}
+  selector:
+    {{- include "cloud-streams.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- if .Values.broker.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  maxUnavailable: {{ .Values.broker.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+{{- end }}
+{{- end }}
