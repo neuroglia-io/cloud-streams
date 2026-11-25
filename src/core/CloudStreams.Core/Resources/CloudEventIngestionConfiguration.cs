@@ -60,4 +60,10 @@ public record CloudEventIngestionConfiguration
     [DataMember(Order = 3, Name = "metadata", IsRequired = true), JsonPropertyName("metadata"), YamlMember(Alias = "metadata")]
     public virtual CloudEventMetadataResolutionConfiguration? Metadata { get; set; }
 
+    /// <summary>
+    /// Gets/sets a reference to the registered schema the data of the cloud events the configuration applies to must be valid against, if any (see #213)
+    /// </summary>
+    [DataMember(Order = 4, Name = "schema"), JsonPropertyName("schema"), YamlMember(Alias = "schema")]
+    public virtual SchemaReference? Schema { get; set; }
+
 }

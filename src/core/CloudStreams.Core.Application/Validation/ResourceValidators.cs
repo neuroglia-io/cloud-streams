@@ -238,6 +238,8 @@ public class GatewayValidator
             {
                 events.RuleFor(e => e.Source).Must(p => p?.Trim() == "*" || ResourceValidationRules.IsValidRegex(p)).OverridePropertyName("source").WithName("source").WithMessage("'source' must be '*' or a valid regular expression");
                 events.RuleFor(e => e.Type).Must(p => p?.Trim() == "*" || ResourceValidationRules.IsValidRegex(p)).OverridePropertyName("type").WithName("type").WithMessage("'type' must be '*' or a valid regular expression");
+                events.RuleFor(e => e.Schema!.Name).NotEmpty().When(e => e.Schema != null).OverridePropertyName("schema.name").WithName("schema.name");
+                events.RuleFor(e => e.Schema!.Version).GreaterThan(0).When(e => e.Schema?.Version != null).OverridePropertyName("schema.version").WithName("schema.version");
             }).When(g => g.Spec.Events != null).OverridePropertyName("spec.events").WithName("spec.events");
             this.When(g => g.Spec.SplitHorizon != null, () =>
             {

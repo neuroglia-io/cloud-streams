@@ -362,7 +362,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 
 | Role | May |
 |---|---|
-| Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the MCP tools, which are all read-only |
+| Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the read-only MCP tools |
 | Operator | also suspend, resume and replay subscriptions, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay` and `.../dead-letters/{offset}/redeliver` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
@@ -486,6 +486,56 @@ SchemaRegistry:
   CacheSize: 1000
 ```
 
+### Schema registry
+
+JSON schemas can be registered as `Schema` resources, at `/api/resources/v1/schemas`:
+
+```yaml
+apiVersion: cloud-streams.io/v1
+kind: Schema
+metadata:
+  name: order-placed
+spec:
+  compatibility: backward       # backward (default), forward, full or none
+  versions:
+    - version: 1
+      schema: { "type": "object", "properties": { "id": { "type": "string" } }, "required": [ "id" ] }
+```
+
+**Versions:**
+- Versions can be added, but neither changed nor removed. Their numbers increase.
+- Each new version must be compatible with the previous one:
+  - **backward:** the new version accepts every document the previous one accepts, so consumers on the new version can read older data;
+  - **forward:** the previous version accepts every document the new one accepts;
+  - **full:** both.
+
+  An incompatible version is refused with `400 Bad Request`, which explains why.
+
+**What the compatibility check verifies:**
+- **Understood keywords:** `type`, `enum`, `const`, `required`, `properties`, `additionalProperties`, `items`, and numeric, length, item and property count bounds.
+- **Other constraints,** such as `pattern`, `format`, `$ref` or `oneOf`: these are only accepted if they're unchanged.
+- **Annotations,** such as `title` or `description`, are ignored.
+- **Open schemas:** as in Confluent's Schema Registry, a schema that doesn't set `additionalProperties: false` accepts any other property. So adding a constrained property to it isn't backward compatible: documents that already carried that property with another value would be refused.
+
+```
+GET  /api/resources/v1/schemas/{name}/versions/{version|latest}   # the JSON schema of a version
+POST /api/resources/v1/schemas/{name}/compatibility               # checks a JSON schema against the latest version, without changing anything
+```
+
+A gateway validates the data of the events an ingestion configuration applies to against a registered schema. The binding uses its latest version, or a pinned one, and applies whatever the validation policy, unless it skips validation:
+
+```yaml
+spec:
+  events:
+    - source: ^https://orders\.example\.com$
+      type: order.placed
+      schema:
+        name: order-placed
+        version: 1              # defaults to the latest version
+```
+
+Events whose data is invalid are refused with `400 Bad Request`, which names the version they were checked against. Gateways read schemas again at most every 10 seconds, so new versions apply shortly after they're registered.
+
 ### Resource validation
 
 Subscriptions, brokers and gateways are validated when they are created, replaced or patched, and rejected with `400 Bad Request` if their spec could only fail at runtime. The response names each invalid field, e.g. *"'spec.subscriber.rateLimit' must be greater than '0'"*. The checks cover:
@@ -534,6 +584,64 @@ Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `War
 ### API Reference
 
 *Please refer to the [wiki](https://github.com/neuroglia-io/cloud-streams/wiki/API-Reference)📚.*
+
+#### MCP
+
+The gateway and the API serve a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp/sse`, so that agents can inspect and operate Cloud Streams. It requires the reader role, and the tools that change something require the operator role, as the endpoints they mirror do.
+
+| Tool | Does | Role |
+|---|---|---|
+| `GetStreamMetadata`, `GetPartitionMetadata` | gets the metadata of the stream, or of a partition | reader |
+| `ListPartitions` | lists the ids of the partitions of a type, page by page | reader |
+| `ReadStream` | reads events from the stream, or from a partition | reader |
+| `ListSubscriptions` | lists the subscriptions, with their phase, lag, subscriber state and fault | reader |
+| `GetSubscription` | gets a subscription, with its spec and status | reader |
+| `ListDeadLetters` | lists the events a subscription failed to deliver | reader |
+| `SuspendSubscription`, `ResumeSubscription` | suspends or resumes a subscription | operator |
+| `ReplaySubscription` | replays a subscription, from the start of the stream or from a point in time | operator |
+| `PublishEvent` | publishes an event, e.g. to test a subscription, through the gateway's admission pipeline. Gateways only | operator |
+
+#### CloudEvents Subscriptions API
+
+Cloud Streams implements the [CloudEvents Subscriptions API](https://github.com/cloudevents/spec/blob/main/subscriptions/spec.md) on top of its subscriptions, at `/api/cloudevents/v1/subscriptions`. The specification's HTTP binding is yet to be defined, so:
+
+| Request | Does | Answers |
+|---|---|---|
+| `POST /api/cloudevents/v1/subscriptions` | creates a subscription, whose id the server assigns | `201 Created`, with its `Location` |
+| `GET /api/cloudevents/v1/subscriptions` | lists the subscriptions, including those created otherwise | `200 OK` |
+| `GET /api/cloudevents/v1/subscriptions/{id}` | gets a subscription | `200 OK`, or `404 Not Found` |
+| `PUT /api/cloudevents/v1/subscriptions/{id}` | updates a subscription. It doesn't create missing ones | `200 OK`, or `404 Not Found` |
+| `DELETE /api/cloudevents/v1/subscriptions/{id}` | deletes a subscription | `200 OK` with the deleted subscription, or `404 Not Found` |
+
+Reading requires the reader role, and writing the admin role. Errors are problem details.
+
+```json
+{
+  "source": "https://github.com/cloudevents",
+  "filters": [
+    { "any": [ { "exact": { "type": "com.github.push" } }, { "prefix": { "type": "com.github.pull_request" } } ] },
+    { "not": { "suffix": { "subject": "/spec" } } }
+  ],
+  "sink": "https://subscriber.example.com/events",
+  "protocol": "HTTP"
+}
+```
+
+**How a subscription maps onto Cloud Streams:**
+- **Sink:** the `sink` is the subscriber.
+- **Filters:** `source`, `types` and `filters` are compiled into the subscription's filter:
+  - `exact`, `prefix` and `suffix` expressions on different attributes become attribute filters;
+  - anything that uses `all`, `any` or `not` otherwise becomes a runtime expression;
+  - matches are case-sensitive, and an event that doesn't define an attribute doesn't match it.
+- **Offset:** the subscription tracks an offset, starting at the end of the stream, which `config.offset` can override.
+- **Round trips:** the subscription as submitted is kept in the `cloudevents.io/subscription` annotation, and returned as is. Subscriptions created otherwise are described as well as they can be: a partition by source or type becomes `source` or `types`, and attribute filters that are anchored literals become `exact`, `prefix` or `suffix` filters. Other filters are left out.
+
+**Refused with `400 Bad Request`:**
+- any `protocol` other than `HTTP`;
+- `sinkcredential`;
+- the `headers` protocol setting, and any `method` other than `POST`;
+- configuration keys other than `offset`;
+- the optional `sql` filter dialect.
 
 ## Contributing
 

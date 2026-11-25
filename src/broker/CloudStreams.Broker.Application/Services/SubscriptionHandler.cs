@@ -66,6 +66,8 @@ public class SubscriptionHandler
     // released when live records tell a subscription delivering in batches or in parallel that there is more to read (see #212)
     readonly SemaphoreSlim _pumpSignal = new(0, 1);
     ulong? _nextOffset;
+    // the offset to start at, instead of the end of the stream, when the stream did not exist yet when the subscription started observing it
+    ulong? _startOffset;
     // the cloud event last sent to the subscriber, as mutated, which is the one that is dead-lettered if its delivery fails for good (see #207)
     (ulong Offset, CloudEvent Event)? _lastAttempt;
     volatile bool _disposed;
@@ -419,7 +421,7 @@ public class SubscriptionHandler
                 this.StreamInitializationCancellationTokenSource = streamInitializationCancellationTokenSource;
                 streamInitializationSessionId = Interlocked.Increment(ref this._streamInitializationSessionId);
                 // the position reached by a previous session is meaningless once the stream is observed again, possibly at another offset
-                lock (this._syncLock) this._nextOffset = null;
+                lock (this._syncLock) { this._nextOffset = null; this._startOffset = null; }
             }
             finally { this.InitLock.Release(); }
 
@@ -453,6 +455,9 @@ public class SubscriptionHandler
                     catch (StreamNotFoundException) when (!streamInitializationToken.IsCancellationRequested)
                     {
                         initializationOutcome = StreamInitializationOutcomes.StreamNotFoundRetry;
+                        // the stream does not exist yet: whatever it will contain is published after the subscription, which must therefore not start at its end, or it would
+                        // skip the events published while it waits for the stream to exist
+                        if (offset == StreamPosition.EndOfStream) lock (this._syncLock) this._startOffset = 0;
                         var delay = 5000;
                         this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds... (attempt: {attemptId}, session: {sessionId})", delay, initializationAttemptId, streamInitializationSessionId);
                         await Task.Delay(delay, streamInitializationToken).ConfigureAwait(false);
@@ -473,6 +478,9 @@ public class SubscriptionHandler
                     catch (StreamNotFoundException) when (!streamInitializationToken.IsCancellationRequested)
                     {
                         initializationOutcome = StreamInitializationOutcomes.StreamNotFoundRetry;
+                        // the stream does not exist yet: whatever it will contain is published after the subscription, which must therefore not start at its end, or it would
+                        // skip the events published while it waits for the stream to exist
+                        if (offset == StreamPosition.EndOfStream) lock (this._syncLock) this._startOffset = 0;
                         var delay = 5000;
                         this.Logger.LogDebug("Failed to observe the cloud event stream because the first cloud event is yet to be published. Retrying in {delay} milliseconds... (attempt: {attemptId}, session: {sessionId})", delay, initializationAttemptId, streamInitializationSessionId);
                         await Task.Delay(delay, streamInitializationToken).ConfigureAwait(false);
@@ -1002,7 +1010,9 @@ public class SubscriptionHandler
                 // start at the stream's current length, so that a new subscription never receives an event published before it was created (see #155)
                 ulong? nextOffset;
                 lock (this._syncLock) nextOffset = this._nextOffset;
-                currentOffset = (long)(nextOffset ?? this.StreamOffset ?? 0);
+                ulong? startOffset;
+                lock (this._syncLock) startOffset = this._startOffset;
+                currentOffset = (long)(nextOffset ?? startOffset ?? this.StreamOffset ?? 0);
             }
             // records are read a page at a time, and the next page is read while the current one is being delivered (see #162)
             var reader = new StreamPageReader(this.ReadPageAsync, this.Options.CatchUp.GetPageSize());
@@ -1095,7 +1105,7 @@ public class SubscriptionHandler
             var position = this.Subscription.GetOffset();
             if (this.CommittedOffset.HasValue && this.CommittedOffsetGeneration == this.Subscription.Metadata.Generation && (long)this.CommittedOffset.Value > position) position = (long)this.CommittedOffset.Value;
             // as with catch-up, the end of the stream is the position after the last record dealt with, or the stream's current length (see #155)
-            if (position == StreamPosition.EndOfStream) lock (this._syncLock) position = (long)(this._nextOffset ?? this.StreamOffset ?? 0);
+            if (position == StreamPosition.EndOfStream) lock (this._syncLock) position = (long)(this._nextOffset ?? this._startOffset ?? this.StreamOffset ?? 0);
             while (!streamInitializationToken.IsCancellationRequested && this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
             {
                 var available = (long)(this.StreamOffset ?? 0) - position;

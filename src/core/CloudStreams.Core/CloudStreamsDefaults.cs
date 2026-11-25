@@ -55,6 +55,11 @@ public static class CloudStreamsDefaults
             public static ResourceDefinition Subscription { get; } = new SubscriptionResourceDefinition();
 
             /// <summary>
+            /// Gets the definition of Schema resources
+            /// </summary>
+            public static ResourceDefinition Schema { get; } = new SchemaResourceDefinition();
+
+            /// <summary>
             /// Gets a new <see cref="IEnumerable{T}"/> containing Cloud Streams default resource definitions
             /// </summary>
             /// <returns></returns>
@@ -63,6 +68,7 @@ public static class CloudStreamsDefaults
                 yield return Broker;
                 yield return Gateway;
                 yield return Subscription;
+                yield return Schema;
             }
 
         }

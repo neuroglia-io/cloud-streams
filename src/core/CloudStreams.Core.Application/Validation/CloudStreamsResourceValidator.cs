@@ -35,7 +35,7 @@ public class CloudStreamsResourceValidator(IJsonSerializer serializer, IEnumerab
     public virtual bool AppliesTo(Operation operation, string group, string version, string plural, string? @namespace = null) =>
         operation is Operation.Create or Operation.Replace or Operation.Patch
         && group == CloudStreamsDefaults.ResourceGroup
-        && plural is "subscriptions" or "brokers" or "gateways";
+        && plural is "subscriptions" or "brokers" or "gateways" or "schemas";
 
     /// <inheritdoc/>
     public virtual async Task<AdmissionReviewResponse> ValidateAsync(AdmissionReviewRequest context, CancellationToken cancellationToken = default)
@@ -49,6 +49,8 @@ public class CloudStreamsResourceValidator(IJsonSerializer serializer, IEnumerab
             "subscriptions" => await new SubscriptionValidator().ValidateAsync(this.Convert<Subscription>(state), cancellationToken).ConfigureAwait(false),
             "brokers" => await new BrokerValidator().ValidateAsync(this.Convert<Broker>(state), cancellationToken).ConfigureAwait(false),
             "gateways" => await new GatewayValidator().ValidateAsync(this.Convert<Gateway>(state), cancellationToken).ConfigureAwait(false),
+            // the versions of a schema are validated against the ones it had before the change (see #213)
+            "schemas" => new SchemaValidator(serializer).Validate(this.Convert<Schema>(state), context.Operation == Operation.Create || context.OriginalState == null ? null : this.Convert<Schema>(context.OriginalState)),
             _ => new ValidationResult()
         };
         if (result.IsValid) return new(context.Uid, true);

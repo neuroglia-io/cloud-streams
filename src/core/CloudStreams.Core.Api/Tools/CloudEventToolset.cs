@@ -13,6 +13,8 @@
 
 using CloudStreams.Core.Application.Queries.Partitions;
 using CloudStreams.Core.Application.Queries.Streams;
+using CloudStreams.Core.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 using Neuroglia.Data.Infrastructure.EventSourcing;
 using Neuroglia.Eventing.CloudEvents;
@@ -27,8 +29,31 @@ namespace CloudStreams.Core.Api.Tools;
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="mediator">The service used to mediate calls</param>
 [McpServerToolType]
-public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator mediator)
+public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator mediator, IServiceProvider serviceProvider, IAuthorizationService authorization, IHttpContextAccessor httpContextAccessor)
 {
+
+    /// <summary>
+    /// Publishes the specified cloud event, as the calling user, through the gateway's admission pipeline (see #217)
+    /// </summary>
+    /// <param name="cloudEvent">The cloud event to publish</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>What became of the cloud event: 'stored', 'ignored' or 'duplicate'</returns>
+    [McpServerTool(Name = "PublishEvent"), Description("Publishes the specified cloud event, e.g. to test a subscription, through the gateway's admission pipeline, which may refuse it. Requires the operator role, and is only available on gateways")]
+    public virtual async Task<string> PublishEventAsync([Description("The cloud event to publish, which must define 'specversion', 'id', 'source' and 'type'")] CloudEvent cloudEvent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(cloudEvent);
+        await ToolAuthorization.AuthorizeAsync(authorization, httpContextAccessor, CloudStreamsAuthenticationDefaults.OperatePolicy).ConfigureAwait(false);
+        var publisher = serviceProvider.GetService<ICloudEventPublisher>() ?? throw new NotSupportedException("Cloud events can only be published through a gateway");
+        var result = await publisher.PublishAsync(cloudEvent, httpContextAccessor.HttpContext!.User, cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess())
+            throw new InvalidOperationException(result.Errors?.Any() == true ? string.Join(Environment.NewLine, result.Errors.Select(e => $"[{e.Status}] {e.Title}: {e.Detail}")) : $"The cloud event has been refused with status '{result.Status}'");
+        return result.Status switch
+        {
+            (int)HttpStatusCode.Accepted => CloudStreamsHeaders.Outcomes.Ignored,
+            (int)HttpStatusCode.OK => CloudStreamsHeaders.Outcomes.Duplicate,
+            _ => CloudStreamsHeaders.Outcomes.Stored
+        };
+    }
 
     /// <summary>
     /// Gets the service used to perform logging
@@ -79,9 +104,7 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="PartitionIdCollection"/> containing the requested page of partition ids</returns>
-    [HttpGet("{type}")]
-    [ProducesResponseType(typeof(PartitionIdCollection), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    [McpServerTool(Name = "ListPartitions"), Description("Lists, page by page, the ids of the cloud event partitions of the specified type, sorted alphabetically")]
     public virtual async Task<PartitionIdCollection> ListPartitionsByType(
         [Description("The type of the partitions to list the ids of")] CloudEventPartitionType type,
         [Description("The prefix, matched case-insensitively, the ids to list must start with, if any")] string? prefix = null,

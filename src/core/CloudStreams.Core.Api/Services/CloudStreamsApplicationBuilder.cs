@@ -122,6 +122,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.TryAddSingleton<IDeadLetterStore, EventStoreDeadLetterStore>();
+        this.Services.TryAddScoped<CloudEventSubscriptionManager>();
         this.Services.AddHostedService<Application.Services.DatabaseInitializer>();
         this.Services.AddSingleton<IAdmissionControl, AdmissionControl>();
         this.Services.AddSingleton<IVersionControl, VersionControl>();

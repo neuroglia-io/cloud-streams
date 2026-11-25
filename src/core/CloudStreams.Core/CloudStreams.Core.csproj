@@ -22,12 +22,14 @@
   <ItemGroup>
     <None Remove="Resources\Broker.yaml" />
     <None Remove="Resources\Subscription.yaml" />
+    <None Remove="Resources\Schema.yaml" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\Subscription.yaml" />
     <EmbeddedResource Include="Resources\Broker.yaml" />
     <EmbeddedResource Include="Resources\Gateway.yaml" />
+    <EmbeddedResource Include="Resources\Schema.yaml" />
   </ItemGroup>
 
   <ItemGroup>

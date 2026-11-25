@@ -31,4 +31,7 @@ public partial class CloudStreamsCoreApiClient
     /// <inheritdoc/>
     public ISubscriptionManagementApi Subscriptions { get; private set; } = null!;
 
+    /// <inheritdoc/>
+    public IResourceManagementApi<Schema> Schemas { get; private set; } = null!;
+
 }
