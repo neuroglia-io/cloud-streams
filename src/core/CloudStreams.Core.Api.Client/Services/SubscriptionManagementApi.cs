@@ -48,6 +48,18 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
     }
 
     /// <inheritdoc/>
+    public virtual async Task<CloudEventRedelivery> RedeliverAsync(string name, CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        ArgumentNullException.ThrowIfNull(request);
+        using var content = new StringContent(this.Serializer.SerializeToText(request), System.Text.Encoding.UTF8, "application/json");
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/redeliver") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<CloudEventRedelivery>(json)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<DeadLetterRedelivery> RedeliverDeadLetterAsync(string name, ulong offset, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));

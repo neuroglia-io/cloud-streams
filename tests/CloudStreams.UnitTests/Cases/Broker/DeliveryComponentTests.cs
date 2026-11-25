@@ -12,6 +12,7 @@
 // limitations under the License.
 
 using CloudStreams.Broker.Application.Services.Delivery;
+using CloudStreams.Core.Application.Services;
 using Json.Patch;
 using Microsoft.Extensions.Logging.Abstractions;
 using Neuroglia.Data.Expressions.Services;

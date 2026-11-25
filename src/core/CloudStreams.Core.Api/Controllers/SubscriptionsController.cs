@@ -170,6 +170,24 @@ public class SubscriptionsController(IMediator mediator)
     }
 
     /// <summary>
+    /// Delivers the specified recorded cloud event to the subscriber of the specified subscription again, once
+    /// </summary>
+    /// <param name="name">The name of the subscription to redeliver the cloud event to</param>
+    /// <param name="request">An object that describes the cloud event to redeliver: its offset, in the stream or in the specified partition</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> that describes the redelivery: <c>502 Bad Gateway</c> if the subscriber refused it</returns>
+    /// <remarks>Requires the operator role (see #222)</remarks>
+    [HttpPost("{name}/redeliver")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(CloudEventRedelivery), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> RedeliverCloudEvent(string name, [FromBody] CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await this.Mediator.ExecuteAsync(new RedeliverCloudEventCommand(name, request), cancellationToken).ConfigureAwait(false);
+        return result.Status is < 200 or >= 300 ? this.Problem(result) : this.Process(result);
+    }
+
+    /// <summary>
     /// Exports the specified subscription
     /// </summary>
     /// <param name="name">The name of the resource to get</param>

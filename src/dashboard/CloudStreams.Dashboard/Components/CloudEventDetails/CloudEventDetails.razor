@@ -1,9 +1,17 @@
 ﻿@namespace CloudStreams.Dashboard.Components
-@using System.Text.Json;
+@using CloudStreams.Core.Resources
+@using Neuroglia.Serialization
+@inject CommonJsInterop JsInterop
+@inject ICloudStreamsCoreApiClient ApiClient
+@inject UserAccess UserAccess
+@inject IJsonSerializer Serializer
 
 <div class="container-fluid">
     <div class="row">
-        <h5>Context Attributes</h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-2">Context Attributes</h5>
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Copy the cloud event, as JSON" @onclick="CopyEventAsync"><Icon Name="IconName.Clipboard" /> Copy event</button>
+        </div>
         <table class="table table-striped mb-3">
             <tbody>
                 <tr>
@@ -56,31 +64,153 @@
         }
     </div>
     <div class="row vh-30">
-        <h5>Data</h5>
-        <pre class="h-100">@(JsonSerializer.Serialize(cloudEvent?.Data, new JsonSerializerOptions() { WriteIndented = true }))</pre>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-2">
+                Data
+                @switch (payload?.Kind)
+                {
+                    case CloudEventPayloadKind.Binary:
+                        <span class="badge text-bg-secondary ms-2" title="The data is binary, and carried as data_base64">binary</span>
+                        break;
+                    case CloudEventPayloadKind.Text:
+                        <span class="badge text-bg-secondary ms-2" title="The data is text, of type @payload.ContentType">text</span>
+                        break;
+                }
+            </h5>
+            @if (payload != null && payload.Kind != CloudEventPayloadKind.None)
+            {
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" title="@(payload.Kind == CloudEventPayloadKind.Binary ? "Copy the data, encoded in base64" : "Copy the data")" @onclick="CopyDataAsync"><Icon Name="IconName.Clipboard" /> Copy</button>
+                    <button type="button" class="btn btn-outline-secondary" title="Download the data, as @payload.ContentType" @onclick="DownloadDataAsync"><Icon Name="IconName.Download" /> Download</button>
+                </div>
+            }
+        </div>
+        @if (payload == null || payload.Kind == CloudEventPayloadKind.None)
+        {
+            <p class="text-secondary">The cloud event carries no data.</p>
+        }
+        else
+        {
+            <pre class="h-100">@payload.Display</pre>
+        }
     </div>
+    @if (canRedeliver && Offset.HasValue)
+    {
+        <div class="row mt-3">
+            <h5>Redeliver</h5>
+            <p class="text-secondary small mb-2">Delivers the cloud event once more to the subscriber of a subscription, mutated as the subscription mutates cloud events. The subscription's offset is left as it is.</p>
+            <div class="input-group input-group-sm">
+                <select class="form-select" aria-label="The subscription to redeliver the cloud event to" @bind="selectedSubscription">
+                    <option value="">Select a subscription…</option>
+                    @foreach (var name in subscriptions)
+                    {
+                        <option value="@name">@name</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-outline-primary" disabled="@(string.IsNullOrWhiteSpace(selectedSubscription) || redelivering)" @onclick="RedeliverAsync"><Icon Name="IconName.ArrowRepeat" /> Redeliver</button>
+            </div>
+            @if (redeliveryResult != null)
+            {
+                <div class="small mt-2 @(redeliverySucceeded ? "text-success" : "text-danger")" role="status">@redeliveryResult</div>
+            }
+        </div>
+    }
+    @if (message != null)
+    {
+        <div class="small text-secondary mt-2" role="status">@message</div>
+    }
 </div>
 
 @code {
 
     CloudEvent? cloudEvent;
+    CloudEventPayload? payload;
+    bool readOnly;
+    bool canRedeliver;
+    List<string> subscriptions = [];
+    string? selectedSubscription;
+    bool redelivering;
+    string? redeliveryResult;
+    bool redeliverySucceeded;
+    string? message;
+
     /// <summary>
     /// Gets/sets the cloud event to display details about
     /// </summary>
     [Parameter] public CloudEvent? CloudEvent { get; set; }
 
-    bool readOnly;
     /// <summary>
     /// Gets/sets a boolean indicating whether or not the modal is in read-only mode
     /// </summary>
     [Parameter] public bool ReadOnly { get; set; }
 
+    /// <summary>
+    /// Gets/sets the partition the offset of the cloud event refers to, if any. If not set, it refers to the whole stream
+    /// </summary>
+    [Parameter] public PartitionReference? Partition { get; set; }
+
+    /// <summary>
+    /// Gets/sets the offset of the cloud event, if known, which is required to redeliver it
+    /// </summary>
+    [Parameter] public ulong? Offset { get; set; }
+
     /// <inheritdoc/>
-    protected override Task OnParametersSetAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        if(this.cloudEvent != this.CloudEvent) this.cloudEvent = this.CloudEvent;
-        if(this.readOnly != this.ReadOnly) this.readOnly = this.ReadOnly;
-        return base.OnParametersSetAsync();
+        if (this.cloudEvent != this.CloudEvent)
+        {
+            this.cloudEvent = this.CloudEvent;
+            this.payload = this.cloudEvent == null ? null : CloudEventPayload.From(this.cloudEvent);
+            this.redeliveryResult = null;
+            this.message = null;
+        }
+        if (this.readOnly != this.ReadOnly) this.readOnly = this.ReadOnly;
+        if (this.Offset.HasValue && !this.canRedeliver && await this.UserAccess.CanOperateAsync())
+        {
+            this.canRedeliver = true;
+            try { this.subscriptions = [.. (await (await this.ApiClient.Resources.Subscriptions.ListAsync()).ToListAsync()).Select(s => s.GetName()).Order()]; }
+            catch (Exception ex) { this.message = $"Failed to list the subscriptions: {ex.Message}"; }
+        }
+        await base.OnParametersSetAsync();
+    }
+
+    async Task CopyEventAsync()
+    {
+        if (this.cloudEvent == null) return;
+        await this.JsInterop.CopyToClipboardAsync(this.Serializer.SerializeToText(this.cloudEvent));
+        this.message = "The cloud event has been copied to the clipboard.";
+    }
+
+    async Task CopyDataAsync()
+    {
+        if (this.payload == null || this.cloudEvent == null) return;
+        await this.JsInterop.CopyToClipboardAsync(this.payload.Kind == CloudEventPayloadKind.Binary ? this.cloudEvent.DataBase64! : System.Text.Encoding.UTF8.GetString(this.payload.Content));
+        this.message = "The data has been copied to the clipboard.";
+    }
+
+    async Task DownloadDataAsync()
+    {
+        if (this.payload == null || this.cloudEvent == null) return;
+        var name = string.Concat((this.cloudEvent.Id ?? "data").Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '_'));
+        await this.JsInterop.DownloadFileAsync($"{name}{this.payload.FileExtension}", this.payload.ContentType, this.payload.Content);
+    }
+
+    async Task RedeliverAsync()
+    {
+        if (string.IsNullOrWhiteSpace(this.selectedSubscription) || !this.Offset.HasValue) return;
+        this.redelivering = true;
+        try
+        {
+            var redelivery = await this.ApiClient.Resources.Subscriptions.RedeliverAsync(this.selectedSubscription, new() { Partition = this.Partition, Offset = this.Offset.Value });
+            this.redeliverySucceeded = true;
+            this.redeliveryResult = $"Redelivered to '{this.selectedSubscription}': the subscriber responded {redelivery.Status}.";
+        }
+        catch (Exception ex)
+        {
+            this.redeliverySucceeded = false;
+            this.redeliveryResult = ex is Neuroglia.ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+        }
+        finally { this.redelivering = false; }
     }
 
 }

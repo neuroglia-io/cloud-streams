@@ -12,8 +12,12 @@
 // limitations under the License.
 
 using FluentValidation;
+using Neuroglia.Data.Expressions;
+using Neuroglia.Data.Expressions.Services;
+using Neuroglia.Serialization;
+using System.Net.Mime;
 
-namespace CloudStreams.Broker.Application.Services.Delivery;
+namespace CloudStreams.Core.Application.Services;
 
 /// <summary>
 /// Represents the pipeline the records consumed by a subscription go through before they are delivered: they are filtered, then mutated, and the mutated cloud

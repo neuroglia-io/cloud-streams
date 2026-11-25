@@ -21,6 +21,12 @@ namespace CloudStreams.Gateway.Api.Hubs;
 public interface ICloudEventHub
 {
 
-
+    /// <summary>
+    /// Only streams the cloud events of the specified source and type to the calling client, rather than all of them (see #221)
+    /// </summary>
+    /// <param name="source">The source of the cloud events to stream, if any. If not set, the cloud events of any source are streamed</param>
+    /// <param name="type">The type of the cloud events to stream, if any. If not set, the cloud events of any type are streamed</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    Task Subscribe(string? source, string? type);
 
 }

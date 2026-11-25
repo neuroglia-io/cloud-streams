@@ -26,6 +26,7 @@ using System.Text.RegularExpressions;
 using CloudStreams.Broker.Application.Configuration;
 using Microsoft.Extensions.Options;
 using CloudStreams.Broker.Application.Services.Delivery;
+using CloudStreams.Core.Application.Services;
 
 namespace CloudStreams.Broker.Application.Services;
 
