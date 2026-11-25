@@ -14,6 +14,7 @@
 using Json.Patch;
 using Json.Pointer;
 using Neuroglia.Data.Infrastructure.EventSourcing;
+using CloudStreams.Core.Application.Services;
 using System.Text.Json.Nodes;
 
 namespace CloudStreams.Core.Application.Commands.Subscriptions;
@@ -107,14 +108,17 @@ public class ResumeSubscriptionCommandHandler(IResourceRepository resources)
 
 }
 
+
 /// <summary>
-/// Represents the command used to replay a <see cref="Subscription"/>, by delivering every cloud event matching it again, from the beginning of the stream
+/// Represents the command used to replay a <see cref="Subscription"/>, by delivering every cloud event matching it again, from the beginning of the stream or from the
+/// specified time
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to replay</param>
+/// <param name="from">The time from which to replay the <see cref="Subscription"/>, if any. If not set, the <see cref="Subscription"/> is replayed from the beginning of the stream</param>
 /// <remarks>
 /// A dedicated command rather than a patch, so that users allowed to operate subscriptions can replay them without being allowed to change their spec (see #147)
 /// </remarks>
-public class ReplaySubscriptionCommand(string name)
+public class ReplaySubscriptionCommand(string name, DateTimeOffset? from = null)
     : Command<Subscription>
 {
 
@@ -123,32 +127,45 @@ public class ReplaySubscriptionCommand(string name)
     /// </summary>
     public string Name { get; } = string.IsNullOrWhiteSpace(name) ? throw new ArgumentNullException(nameof(name)) : name;
 
+    /// <summary>
+    /// Gets the time from which to replay the <see cref="Subscription"/>, if any
+    /// </summary>
+    public DateTimeOffset? From { get; } = from;
+
 }
 
 /// <summary>
 /// Represents the service used to handle <see cref="ReplaySubscriptionCommand"/>s
 /// </summary>
 /// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
-public class ReplaySubscriptionCommandHandler(IResourceRepository resources)
+/// <param name="eventStore">The service used to find the offset of the first cloud event recorded at or after the time to replay from</param>
+public class ReplaySubscriptionCommandHandler(IResourceRepository resources, ICloudEventStore eventStore)
     : ICommandHandler<ReplaySubscriptionCommand, Subscription>
 {
 
     /// <inheritdoc/>
     /// <remarks>
-    /// The broker only reacts to changes of the offset. A subscription that already starts at the beginning of the stream is therefore moved to its end first, then back to
-    /// its beginning: should the second patch fail, the original offset is restored (see #196)
+    /// <para>
+    /// A time is resolved to the offset of the first cloud event recorded at or after it, in the stream or partition the subscription consumes. If none has been, the
+    /// subscription is replayed from the current length of the stream, which is to say from the next cloud event (see #211).
+    /// </para>
+    /// <para>
+    /// The broker only reacts to changes of the offset. A subscription whose offset already is the one to replay from is therefore moved to another offset first, then
+    /// back: should the second patch fail, the original offset is restored (see #196)
+    /// </para>
     /// </remarks>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(ReplaySubscriptionCommand command, CancellationToken cancellationToken = default)
     {
         var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
+        var offset = command.From.HasValue ? await this.ResolveOffsetAsync(subscription, command.From.Value, cancellationToken).ConfigureAwait(false) : StreamPosition.StartOfStream;
         var originalOffset = subscription.Spec.Stream?.Offset;
-        if (originalOffset == StreamPosition.StartOfStream)
+        if (originalOffset == offset)
         {
-            subscription = await this.SetOffsetAsync(subscription, StreamPosition.EndOfStream, cancellationToken).ConfigureAwait(false);
+            subscription = await this.SetOffsetAsync(subscription, offset == StreamPosition.EndOfStream ? StreamPosition.StartOfStream : StreamPosition.EndOfStream, cancellationToken).ConfigureAwait(false);
             try
             {
-                subscription = await this.SetOffsetAsync(subscription, StreamPosition.StartOfStream, cancellationToken).ConfigureAwait(false);
+                subscription = await this.SetOffsetAsync(subscription, offset, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -156,8 +173,33 @@ public class ReplaySubscriptionCommandHandler(IResourceRepository resources)
                 throw;
             }
         }
-        else subscription = await this.SetOffsetAsync(subscription, StreamPosition.StartOfStream, cancellationToken).ConfigureAwait(false);
+        else subscription = await this.SetOffsetAsync(subscription, offset, cancellationToken).ConfigureAwait(false);
         return this.Ok(subscription);
+    }
+
+    /// <summary>
+    /// Resolves the offset of the first cloud event recorded at or after the specified time, in the stream or partition the specified subscription consumes
+    /// </summary>
+    /// <param name="subscription">The subscription to resolve the offset for</param>
+    /// <param name="time">The time to resolve</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The resolved offset</returns>
+    protected virtual async Task<long> ResolveOffsetAsync(Subscription subscription, DateTimeOffset time, CancellationToken cancellationToken)
+    {
+        var partition = subscription.Spec.Partition;
+        var found = await eventStore.FindOffsetAsync(time, partition, cancellationToken).ConfigureAwait(false);
+        if (found.HasValue) return (long)found.Value;
+        try
+        {
+            return (long)(partition == null
+                ? (await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length ?? 0
+                : (await eventStore.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false)).Length);
+        }
+        catch (Exception ex) when (ex is StreamNotFoundException || (ex is ProblemDetailsException notFound && notFound.Problem.Status == (int)HttpStatusCode.NotFound))
+        {
+            // nothing has been recorded yet: the subscription receives every cloud event
+            return StreamPosition.StartOfStream;
+        }
     }
 
     /// <summary>

@@ -239,6 +239,39 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Records are appended in the order they are recorded, so their timestamps never decrease along a stream: the offset is found by a binary search, which reads
+    /// a single record per step (see #211)
+    /// </remarks>
+    public virtual async Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
+    {
+        ulong length;
+        try
+        {
+            length = partition == null
+                ? (await this.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length ?? 0
+                : (await this.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false)).Length;
+        }
+        catch (Exception ex) when (ex is StreamNotFoundException || (ex is ProblemDetailsException notFound && notFound.Problem.Status == (int)HttpStatusCode.NotFound))
+        {
+            return null;
+        }
+        ulong low = 0, high = length;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            var records = partition == null
+                ? this.ReadAsync(StreamReadDirection.Forwards, (long)middle, 1, cancellationToken)
+                : this.ReadPartitionAsync(partition, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken);
+            var record = await records.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            // a record that cannot be read, or whose timestamp is unknown, is deemed recent, which errs on the side of delivering more
+            if (record?.Timestamp == null || record.Timestamp >= time) high = middle;
+            else low = middle + 1;
+        }
+        return low < length ? low : null;
+    }
+
     /// <summary>
     /// Reads the records of the specified stream
     /// </summary>
@@ -549,7 +582,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     protected virtual CloudEventRecord ReadRecord(IEventRecord e)
     {
         ArgumentNullException.ThrowIfNull(e);
-        return new(e.StreamId, e.Offset, new() { ContextAttributes = e.Metadata ?? new Dictionary<string, object>() }, e.Data);
+        return new(e.StreamId, e.Offset, new() { ContextAttributes = e.Metadata ?? new Dictionary<string, object>() }, e.Data) { Timestamp = e.Timestamp };
     }
 
 }

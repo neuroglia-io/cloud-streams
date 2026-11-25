@@ -173,6 +173,8 @@ public class SubscriptionValidator
                     .OverridePropertyName("spec.mutation.webhook.serviceUri").WithName("spec.mutation.webhook.serviceUri").WithMessage("'spec.mutation.webhook.serviceUri' must be an absolute HTTP or HTTPS URI");
             });
             this.RuleFor(s => s.Spec.Stream!.Offset).GreaterThanOrEqualTo(StreamPosition.EndOfStream).When(s => s.Spec.Stream?.Offset != null).OverridePropertyName("spec.stream.offset").WithName("spec.stream.offset");
+            this.RuleFor(s => s.Spec.DeadLetter!.Uri).Must(ResourceValidationRules.IsHttpUri).When(s => s.Spec.DeadLetter?.Uri != null)
+                .OverridePropertyName("spec.deadLetter.uri").WithName("spec.deadLetter.uri").WithMessage("'spec.deadLetter.uri' must be an absolute HTTP or HTTPS URI");
         });
     }
 

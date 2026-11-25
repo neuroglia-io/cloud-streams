@@ -29,9 +29,10 @@ public sealed class BrokerTestContext
 {
 
     BrokerTestContext(TestSubscriptionHandler handler, StubHttpMessageHandler http, HttpClient httpClient, StatusPatchRecorder patches, RecordingBrokerMetrics metrics,
-        InMemoryCloudEventStore eventStore, Subject<IResourceWatchEvent<Subscription>> subscriptionEvents, Subscription subscription, Core.Resources.Broker broker, IResourceRepository repository)
+        InMemoryCloudEventStore eventStore, Subject<IResourceWatchEvent<Subscription>> subscriptionEvents, Subscription subscription, Core.Resources.Broker broker, IResourceRepository repository, InMemoryDeadLetterStore deadLetters)
     {
         this.Repository = repository;
+        this.DeadLetters = deadLetters;
         this.Handler = handler;
         this.Http = http;
         this.HttpClient = httpClient;
@@ -67,6 +68,11 @@ public sealed class BrokerTestContext
     /// Gets the substitute of the <see cref="IResourceRepository"/> handed to the handler, which a test may configure further, for example to simulate concurrent writers
     /// </summary>
     public IResourceRepository Repository { get; }
+
+    /// <summary>
+    /// Gets the store the handler dead-letters cloud events to
+    /// </summary>
+    public InMemoryDeadLetterStore DeadLetters { get; }
 
     /// <summary>
     /// Gets the recorded broker metrics
@@ -148,12 +154,13 @@ public sealed class BrokerTestContext
         var subscriptionController = CreateSubscriptionController(subscriptionEvents);
         var brokerMonitor = CreateBrokerMonitor(broker);
         var metrics = new RecordingBrokerMetrics();
+        var deadLetters = new InMemoryDeadLetterStore();
         var options = new BrokerOptions() { Name = "test-broker" };
         configureOptions?.Invoke(options);
 
         var handler = new TestSubscriptionHandler(NullLoggerFactory.Instance, Substitute.For<IHostApplicationLifetime>(), serializer ?? Substitute.For<IJsonSerializer>(), eventStore, repository,
-            subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, Options.Create(options), subscription);
-        var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker, repository);
+            subscriptionController, brokerMonitor, expressionEvaluator ?? Substitute.For<IExpressionEvaluator>(), cloudEventValidators ?? [], httpClient, metrics, deadLetters, Options.Create(options), subscription);
+        var context = new BrokerTestContext(handler, http, httpClient, patches, metrics, eventStore, subscriptionEvents, subscription, broker, repository, deadLetters);
         try
         {
             await handler.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
@@ -253,8 +260,8 @@ public sealed class BrokerTestContext
 /// <inheritdoc/>
 public class TestSubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore,
     IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController, IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator,
-    IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IOptions<BrokerOptions> options, Subscription subscription)
-    : SubscriptionHandler(loggerFactory, hostApplicationLifetime, serializer, cloudEventStore, resourceRepository, subscriptionController, broker, expressionEvaluator, cloudEventValidators, httpClient, metrics, options, subscription)
+    IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IDeadLetterStore deadLetters, IOptions<BrokerOptions> options, Subscription subscription)
+    : SubscriptionHandler(loggerFactory, hostApplicationLifetime, serializer, cloudEventStore, resourceRepository, subscriptionController, broker, expressionEvaluator, cloudEventValidators, httpClient, metrics, deadLetters, options, subscription)
 {
 
     /// <summary>

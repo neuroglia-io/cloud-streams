@@ -105,6 +105,12 @@ public sealed class InMemoryCloudEventStore
     public List<string> PartitionIds { get; set; } = [];
 
     /// <inheritdoc/>
+    public Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
+    {
+        lock (this._lock) return Task.FromResult(this._records.FirstOrDefault(r => r.Timestamp >= time)?.Sequence);
+    }
+
+    /// <inheritdoc/>
     public Task TruncateAsync(ulong beforeVersion, CancellationToken cancellationToken = default)
     {
         lock (this._lock) this._records.RemoveAll(r => r.Sequence < beforeVersion);

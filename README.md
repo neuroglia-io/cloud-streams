@@ -177,7 +177,48 @@ spec:
         breakDuration: PT30S      # ...for this long
 ```
 
-While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
+While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on, unless they have a dead-letter policy.
+
+#### Dead letters
+
+A subscription with a dead-letter policy sets aside the events it fails to deliver, rather than being faulted or dropping them. That's once the retry policy is exhausted, or when the subscriber responds with a status code the policy doesn't retry. Delivery then carries on with the next event.
+
+```yaml
+spec:
+  deadLetter: {}                                   # dead letters are stored in the subscription's dead-letter stream
+  # deadLetter:
+  #   uri: https://dead-letters.example.com        # or sent there, as structured cloud events
+```
+
+- **Dead-letter stream:** each dead letter records:
+  - the event, as it was sent to the subscriber, so mutated if the subscription mutates events;
+  - its offset;
+  - the reason it couldn't be delivered;
+  - when it was dead-lettered.
+- **Dead-letter service:** the event is sent with the `cloudstreams-subscription` and `cloudstreams-offset` headers, and the reason, percent-encoded, in `cloudstreams-dead-letter-reason`. The service may itself be another Cloud Streams gateway's ingestion endpoint.
+- **If dead-lettering fails:** the subscription is faulted, as it would be without a policy, and the event isn't skipped.
+- **Metric:** dead-lettered events are counted by `cloud_streams_broker_dead_letters_count`.
+
+Dead letters are browsed and redelivered with:
+
+```
+GET  /api/resources/v1/subscriptions/{name}/dead-letters?offset=&length=&direction=   # most recent first by default
+POST /api/resources/v1/subscriptions/{name}/dead-letters/{offset}/redeliver           # requires the operator role
+```
+
+A redelivery posts the dead letter to the subscriber once, without an acknowledgement token. It answers `502 Bad Gateway` with the subscriber's response if the subscriber refuses it again. The dead-letter stream is a log: redelivering a dead letter doesn't remove it.
+
+#### Replay
+
+Operators replay a subscription with `POST /api/resources/v1/subscriptions/{name}/replay`. The subscription delivers every matching event again, from the start of the stream, or from a point in time:
+
+```
+POST /api/resources/v1/subscriptions/{name}/replay?from=2026-11-25T10:00:00Z
+```
+
+- **What the time resolves to:** the first event recorded at or after it, in the stream or partition the subscription consumes. If there's none, it resolves to the next event to be published.
+- **Which time is used:** the time at which the gateway recorded the event, which never decreases along the stream, rather than the event's `time` attribute, which its publisher sets.
+- **Reading the stream:** reads accept `time` instead of `offset` too. Reading forwards starts at the first event recorded at or after it, and reading backwards at the last one recorded before it. Records carry their `timestamp`.
 
 #### Suspension
 
@@ -294,7 +335,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 | Role | May |
 |---|---|
 | Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the MCP tools, which are all read-only |
-| Operator | also suspend, resume and replay subscriptions, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume` and `.../replay` |
+| Operator | also suspend, resume and replay subscriptions, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay` and `.../dead-letters/{offset}/redeliver` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
 A user who has none of the configured roles is denied access (`403`). When no role is configured, every signed-in user is an administrator, as before. The dashboard hides the actions the user may not perform. Acknowledgement endpoints remain anonymous, as the token is their authorization.

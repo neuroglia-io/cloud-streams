@@ -72,6 +72,13 @@ public interface IBrokerMetrics
     void IncrementTotalAcknowledgementTimeouts(string subscription, string stream);
 
     /// <summary>
+    /// Increments the total count of cloud events that could not be delivered, and have been dead-lettered
+    /// </summary>
+    /// <param name="subscription">The qualified name of the subscription that failed to deliver the cloud event</param>
+    /// <param name="stream">The name of the stream or partition the event was published from, or "All" for unpartitioned subscriptions</param>
+    void IncrementTotalDeadLetters(string subscription, string stream);
+
+    /// <summary>
     /// Registers a subscription whose lag, which is to say the amount of records of its stream it has yet to handle, is reported by the lag gauge
     /// </summary>
     /// <param name="subscription">The qualified name of the subscription</param>

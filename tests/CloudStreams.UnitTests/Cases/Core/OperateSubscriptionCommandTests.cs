@@ -43,6 +43,8 @@ public class OperateSubscriptionCommandTests
 
         public IResourceRepository Repository { get; } = Substitute.For<IResourceRepository>();
 
+        public CloudStreams.Core.Application.Services.ICloudEventStore EventStore { get; } = Substitute.For<CloudStreams.Core.Application.Services.ICloudEventStore>();
+
         public Subscription Current { get; private set; }
 
         public List<JsonPatch> SpecPatches { get; } = [];
@@ -202,7 +204,7 @@ public class OperateSubscriptionCommandTests
         var store = new SubscriptionStore(CreateSubscription(42));
 
         // act
-        var result = await new ReplaySubscriptionCommandHandler(store.Repository).HandleAsync(new ReplaySubscriptionCommand("orders"));
+        var result = await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders"));
 
         // assert
         Assert.Equal(200, result.Status);
@@ -217,7 +219,7 @@ public class OperateSubscriptionCommandTests
         var store = new SubscriptionStore(CreateSubscription(null));
 
         // act
-        await new ReplaySubscriptionCommandHandler(store.Repository).HandleAsync(new ReplaySubscriptionCommand("orders"));
+        await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders"));
 
         // assert
         Assert.Equal([StreamPosition.StartOfStream], store.Offsets);
@@ -230,7 +232,7 @@ public class OperateSubscriptionCommandTests
         var store = new SubscriptionStore(CreateSubscription(StreamPosition.StartOfStream));
 
         // act
-        await new ReplaySubscriptionCommandHandler(store.Repository).HandleAsync(new ReplaySubscriptionCommand("orders"));
+        await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders"));
 
         // assert
         Assert.Equal([StreamPosition.EndOfStream, StreamPosition.StartOfStream], store.Offsets);
@@ -243,11 +245,59 @@ public class OperateSubscriptionCommandTests
         var store = new SubscriptionStore(CreateSubscription(StreamPosition.StartOfStream)) { FailingSpecPatch = 2 };
 
         // act
-        await Assert.ThrowsAsync<ProblemDetailsException>(() => new ReplaySubscriptionCommandHandler(store.Repository).HandleAsync(new ReplaySubscriptionCommand("orders")));
+        await Assert.ThrowsAsync<ProblemDetailsException>(() => new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders")));
 
         // assert
         Assert.Equal(3, store.SpecPatches.Count);
         Assert.Equal(StreamPosition.StartOfStream, store.Current.Spec.Stream!.Offset);
+    }
+
+    static readonly DateTimeOffset From = new(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Replaying_From_A_Time_Should_Move_The_Offset_To_The_First_Event_Recorded_At_Or_After_It()
+    {
+        // arrange
+        var subscription = CreateSubscription(42);
+        subscription.Spec.Partition = new(CloudEventPartitionType.BySource, "https://orders.example.com");
+        var store = new SubscriptionStore(subscription);
+        store.EventStore.FindOffsetAsync(From, subscription.Spec.Partition, Arg.Any<CancellationToken>()).Returns((ulong?)17);
+
+        // act
+        var result = await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));
+
+        // assert - the time is resolved in the partition the subscription consumes
+        Assert.Equal(200, result.Status);
+        Assert.Equal([17L], store.Offsets);
+    }
+
+    [Fact]
+    public async Task Replaying_From_A_Time_After_The_Last_Event_Should_Start_With_The_Next_Event()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(StreamPosition.StartOfStream));
+        store.EventStore.FindOffsetAsync(From, null, Arg.Any<CancellationToken>()).Returns((ulong?)null);
+        store.EventStore.GetStreamMetadataAsync(Arg.Any<CancellationToken>()).Returns(new StreamMetadata() { Length = 25 });
+
+        // act
+        await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));
+
+        // assert
+        Assert.Equal([25L], store.Offsets);
+    }
+
+    [Fact]
+    public async Task Replaying_From_A_Time_That_Resolves_To_The_Current_Offset_Should_Change_It_Twice()
+    {
+        // arrange - the broker only reacts to changes of the offset (see #196)
+        var store = new SubscriptionStore(CreateSubscription(17));
+        store.EventStore.FindOffsetAsync(From, null, Arg.Any<CancellationToken>()).Returns((ulong?)17);
+
+        // act
+        await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));
+
+        // assert
+        Assert.Equal([StreamPosition.EndOfStream, 17L], store.Offsets);
     }
 
 }

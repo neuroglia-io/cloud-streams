@@ -464,7 +464,7 @@ public class AuthenticationTests
             }
             Assert.False(anonymous, $"'{route}' should not be anonymous");
             var expected = route.StartsWith("GET ") ? CloudStreamsAuthenticationDefaults.ReadPolicy
-                : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") ? CloudStreamsAuthenticationDefaults.OperatePolicy
+                : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") || route.EndsWith("/redeliver") ? CloudStreamsAuthenticationDefaults.OperatePolicy
                 : CloudStreamsAuthenticationDefaults.AdministerPolicy;
             Assert.True(policies.SequenceEqual([expected]), $"'{route}' should require '{expected}', not '{string.Join(", ", policies)}'");
         }

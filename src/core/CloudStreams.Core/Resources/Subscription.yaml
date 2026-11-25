@@ -186,6 +186,14 @@ spec:
                           description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to the broker setting, or PT5M
                   required:
                     - uri
+                deadLetter:
+                  type: object
+                  description: Sets aside the cloud events the subscription fails to deliver, rather than faulting the subscription or dropping them
+                  properties:
+                    uri:
+                      type: string
+                      format: url
+                      description: The uri of the service to send dead-lettered cloud events to. If not set, they are stored in the subscription's dead-letter stream
                 suspended:
                   type: boolean
                   description: Whether or not the subscription is suspended. While it is, nothing is delivered, and its offset is kept, so that delivery resumes where it stopped

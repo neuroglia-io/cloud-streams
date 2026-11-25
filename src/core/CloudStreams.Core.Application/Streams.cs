@@ -69,6 +69,16 @@ public static class Streams
     public static string ByCausationId(string causationId) => $"{ByCausationIdPrefix}{causationId}";
 
     /// <summary>
+    /// Gets the prefix of the names of the streams that contain the cloud events subscriptions failed to deliver
+    /// </summary>
+    public const string DeadLettersPrefix = "cloud-streams-dead-letters-";
+    /// <summary>
+    /// Gets the name of the stream that contains the cloud events the specified subscription failed to deliver
+    /// </summary>
+    /// <param name="subscription">The qualified name of the subscription</param>
+    public static string DeadLetters(string subscription) => $"{DeadLettersPrefix}{subscription}";
+
+    /// <summary>
     /// Determines whether or not the specified EventStore stream name is the one of a partition of the specified type
     /// </summary>
     /// <param name="streamName">The EventStore stream name</param>
