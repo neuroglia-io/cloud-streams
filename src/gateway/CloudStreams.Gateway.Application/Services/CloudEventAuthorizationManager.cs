@@ -86,7 +86,7 @@ public class CloudEventAuthorizationManager(IJsonSerializer serializer, TimeProv
         {
             case CloudEventAuthorizationRuleType.Attribute:
                 if(!e.TryGetAttribute(rule.AttributeName!, out var value) || value == null) return mismatch;
-                if (!string.IsNullOrWhiteSpace(rule.AttributeValue) && !CloudStreamsRegex.IsMatch(value.ToString() ?? string.Empty, rule.AttributeValue)) return mismatch;
+                if (!string.IsNullOrWhiteSpace(rule.AttributeValue) && !CloudStreamsRegex.IsMatch((value is Uri uri ? uri.OriginalString : value.ToString()) ?? string.Empty, rule.AttributeValue)) return mismatch;
                 break;
             case CloudEventAuthorizationRuleType.Payload:
                 var payloadSize = this.Serializer.SerializeToByteArray(e.Data)!.Length;

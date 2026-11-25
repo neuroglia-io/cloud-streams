@@ -44,7 +44,10 @@ public partial class CloudStreamsCoreApiClient
         {
             var apiType = apiProperty.PropertyType.GetGenericType(typeof(IResourceManagementApi<>))!;
             var resourceType = apiType.GetGenericArguments()[0];
-            var implementationType = apiProperty.PropertyType == typeof(ISubscriptionManagementApi) ? typeof(SubscriptionManagementApi) : typeof(ResourceManagementApi<>).MakeGenericType(resourceType);
+            var implementationType = apiProperty.PropertyType == typeof(ISubscriptionManagementApi) ? typeof(SubscriptionManagementApi)
+                : apiProperty.PropertyType == typeof(IGatewayManagementApi) ? typeof(GatewayManagementApi)
+                : apiProperty.PropertyType == typeof(ISchemaManagementApi) ? typeof(SchemaManagementApi)
+                : typeof(ResourceManagementApi<>).MakeGenericType(resourceType);
             var api = ActivatorUtilities.CreateInstance(this.ServiceProvider, implementationType, this.HttpClient, apiProperty.Name.ToLowerInvariant());
             apiProperty.SetValue(this, api);
         }

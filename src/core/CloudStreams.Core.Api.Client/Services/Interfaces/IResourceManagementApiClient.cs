@@ -22,7 +22,7 @@ public interface IResourceManagementApiClient
     /// <summary>
     /// Gets the API used to manage <see cref="Gateway"/>s
     /// </summary>
-    public IResourceManagementApi<Gateway> Gateways { get; }
+    public IGatewayManagementApi Gateways { get; }
 
     /// <summary>
     /// Gets the API used to manage <see cref="Broker"/>s
@@ -37,6 +37,6 @@ public interface IResourceManagementApiClient
     /// <summary>
     /// Gets the API used to manage <see cref="Schema"/>s
     /// </summary>
-    public IResourceManagementApi<Schema> Schemas { get; }
+    public ISchemaManagementApi Schemas { get; }
 
 }

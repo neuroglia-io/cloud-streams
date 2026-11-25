@@ -512,7 +512,7 @@ public abstract class ResourceFormBase<TResource>
         {
             // the errors of the items of a list are keyed by their index, e.g. spec.filter.attributes[0], and shown with the list
             var key = System.Text.RegularExpressions.Regex.Replace(path.Trim(), @"\[\d+\]", string.Empty);
-            if (this.ServerFields.TryGetValue(key, out var field) || this.ServerFields.TryGetValue(key.ToLowerInvariant(), out field))
+            if (this.TryGetServerField(key, out var field))
             {
                 this._errors[this.FieldId(field.Field)] = string.Join(" ", messages);
                 step = step.HasValue ? Math.Min(step.Value, field.Step) : field.Step;
@@ -523,6 +523,22 @@ public abstract class ResourceFormBase<TResource>
         if (this._errors.Count > 0) this._focus = this._errors.Keys.First();
         if (unmapped.Count > 0) return $"{problem.Problem.Detail ?? problem.Problem.Title} {string.Join(" ", unmapped)}".Trim();
         return step.HasValue ? null : Describe(ex);
+    }
+
+    /// <summary>
+    /// Gets the field the specified path maps to, or, failing that, the field its closest parent maps to, e.g. <c>spec.ingestion.rateLimits.limit</c> to the rate limits
+    /// </summary>
+    /// <param name="path">The path of the field, without the indexes of list items</param>
+    /// <param name="field">The field the path maps to, if any</param>
+    /// <returns>A boolean indicating whether the path maps to a field</returns>
+    bool TryGetServerField(string path, out (string Field, int Step) field)
+    {
+        for (var candidate = path; !string.IsNullOrEmpty(candidate); candidate = candidate.Contains('.') ? candidate[..candidate.LastIndexOf('.')] : string.Empty)
+        {
+            if (this.ServerFields.TryGetValue(candidate, out field)) return true;
+        }
+        field = default;
+        return false;
     }
 
     static string Describe(Exception ex)

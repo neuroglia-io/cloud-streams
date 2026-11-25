@@ -23,7 +23,7 @@ public partial class CloudStreamsCoreApiClient
     public const string ResourceManagementApiPath = ApiVersionPathPrefix + "resources/";
 
     /// <inheritdoc/>
-    public IResourceManagementApi<Gateway> Gateways { get; private set; } = null!;
+    public IGatewayManagementApi Gateways { get; private set; } = null!;
 
     /// <inheritdoc/>
     public IResourceManagementApi<Broker> Brokers { get; private set; } = null!;
@@ -32,6 +32,6 @@ public partial class CloudStreamsCoreApiClient
     public ISubscriptionManagementApi Subscriptions { get; private set; } = null!;
 
     /// <inheritdoc/>
-    public IResourceManagementApi<Schema> Schemas { get; private set; } = null!;
+    public ISchemaManagementApi Schemas { get; private set; } = null!;
 
 }

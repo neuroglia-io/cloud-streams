@@ -87,9 +87,14 @@
 
 <Offcanvas @ref="EditorOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
+<CloudStreams.Dashboard.Components.ResourceForms.ResourceFormModal @ref="FormModal" />
+
 <ConfirmDialog @ref="Dialog" />
 
 @code {
+
+    /// <inheritdoc/>
+    protected override Task? ShowFormAsync(Gateway? resource) => ShowFormAsync<CloudStreams.Dashboard.Pages.Gateways.Form.GatewayForm>(resource);
 
     /// <inheritdoc/>
     protected override void ConfigureSortKeys(IDictionary<string, Func<Gateway, IComparable?>> sortKeys) => sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);

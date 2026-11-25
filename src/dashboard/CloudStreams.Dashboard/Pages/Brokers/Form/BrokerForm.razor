@@ -48,7 +48,7 @@
             break;
         case 2:
             <p class="small text-secondary">The defaults of the subscriptions the broker handles. A subscription that sets its own keeps it.</p>
-            <FormField Id="@FieldId("retry")" Label="Retries">
+            <FormField Id="@FieldId("retry")" Label="Retries" Error="@ErrorOf("retry")">
                 <RetryPolicyInput Id="@FieldId("retry")" Value="Dispatch.RetryPolicy" ValueChanged="p => Dispatch.RetryPolicy = p" InheritedText="@($"Failed deliveries are retried {RetryPolicy.DefaultMaxAttempts} times, with an exponential backoff")" />
             </FormField>
             <div class="row g-3">
@@ -118,6 +118,7 @@
         ["spec.service"] = ("service", 0),
         ["spec.service.uri"] = ("service-uri", 0),
         ["spec.dispatch.ack.callbackUri"] = ("callback", 2),
+        ["spec.dispatch.retryPolicy"] = ("retry", 2),
         ["spec.dispatch.sequencing.attributeName"] = ("sequencing-attribute-name", 2)
     };
 

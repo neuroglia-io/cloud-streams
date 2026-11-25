@@ -1,0 +1,559 @@
+@namespace CloudStreams.Dashboard.Pages.Gateways.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@using System.Globalization
+@using System.Text.RegularExpressions
+@inherits ResourceFormBase<Gateway>
+
+@* A form to create and edit gateways, whose spec decides what is admitted into the stream, with a test of an example event against the edited spec (see #262) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name gateway replicas are started with (CLOUDSTREAMS_GATEWAY_NAME). It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            <FormField Id="@FieldId("service")" Label="Health" Help="The gateway's health is checked at this address, and reported in its status and on the dashboard." Error="@ErrorOf("service")">
+                <ServiceInput Id="@FieldId("service")" @bind-Value="Model.Spec.Service" UriError="@ErrorOf("service-uri")" />
+            </FormField>
+            break;
+        case 1:
+            <div class="form-check form-switch mb-3">
+                <input id="@FieldId("authorization-enabled")" class="form-check-input" type="checkbox" checked="@(Model.Spec.Authorization != null)" @onchange="e => Model.Spec.Authorization = e.Value is true ? new() { DecisionStrategy = RuleBasedDecisionStrategy.Unanimous, Rules = [] } : null" />
+                <label class="form-check-label small" for="@FieldId("authorization-enabled")">@(Model.Spec.Authorization == null ? "Every event is authorized: no authorization policy" : "Authorize events according to rules")</label>
+            </div>
+            @if (Model.Spec.Authorization != null)
+            {
+                var policy = Model.Spec.Authorization;
+                <FormField Id="@FieldId("strategy")" Label="An event is authorized if" CssClass="ps-3">
+                    <select id="@FieldId("strategy")" class="form-select form-select-sm" style="max-width: 24rem" @bind="policy.DecisionStrategy">
+                        <option value="@RuleBasedDecisionStrategy.Unanimous">every rule allows it</option>
+                        <option value="@RuleBasedDecisionStrategy.Consensus">most rules allow it</option>
+                        <option value="@RuleBasedDecisionStrategy.Minority">at least one rule allows it</option>
+                    </select>
+                </FormField>
+                <FormField Id="@FieldId("rules")" Label="Rules" Error="@ErrorOf("rules")" CssClass="ps-3">
+                    <ChildContent>
+                        <div id="@FieldId("rules")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("rules"))">
+                            @for (var i = 0; i < (policy.Rules?.Count ?? 0); i++)
+                            {
+                                var index = i;
+                                var rule = policy.Rules![index];
+                                <div class="border rounded p-2 mb-2">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-sm-3">
+                                            <label class="form-label small mb-1" for="@FieldId($"rule-{index}-effect")">Effect</label>
+                                            <select id="@FieldId($"rule-{index}-effect")" class="form-select form-select-sm" @bind="rule.Effect">
+                                                <option value="@AuthorizationPolicyEffect.Authorize">Authorize</option>
+                                                <option value="@AuthorizationPolicyEffect.Forbid">Forbid</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-sm-4">
+                                            <label class="form-label small mb-1" for="@FieldId($"rule-{index}-type")">Events</label>
+                                            <select id="@FieldId($"rule-{index}-type")" class="form-select form-select-sm" @bind="rule.Type">
+                                                <option value="@CloudEventAuthorizationRuleType.Attribute">whose attribute matches</option>
+                                                <option value="@CloudEventAuthorizationRuleType.Payload">larger than</option>
+                                                <option value="@CloudEventAuthorizationRuleType.Temporary">received between two dates</option>
+                                                <option value="@CloudEventAuthorizationRuleType.TimeOfDay">received between two times of day</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-sm-5 text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="@($"Remove rule {index + 1}")" @onclick="() => policy.Rules!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i> Remove</button>
+                                        </div>
+                                        @switch (rule.Type)
+                                        {
+                                            case CloudEventAuthorizationRuleType.Attribute:
+                                                <div class="col-sm-4">
+                                                    <label class="form-label small mb-1" for="@FieldId($"rule-{index}-attribute")">Attribute</label>
+                                                    <input id="@FieldId($"rule-{index}-attribute")" type="text" class="form-control form-control-sm" list="@FieldId("attributes-list")" placeholder="e.g. source" @bind="rule.AttributeName" />
+                                                </div>
+                                                <div class="col-sm-8">
+                                                    <label class="form-label small mb-1" for="@FieldId($"rule-{index}-value")">Pattern</label>
+                                                    <input id="@FieldId($"rule-{index}-value")" type="text" class="form-control form-control-sm font-monospace" placeholder="a regular expression, e.g. ^https://orders\.example\.com$" @bind="rule.AttributeValue" />
+                                                </div>
+                                                break;
+                                            case CloudEventAuthorizationRuleType.Payload:
+                                                <div class="col-sm-4">
+                                                    <label class="form-label small mb-1" for="@FieldId($"rule-{index}-size")">Bytes</label>
+                                                    <input id="@FieldId($"rule-{index}-size")" type="number" min="1" class="form-control form-control-sm" @bind="rule.MaxSize" />
+                                                </div>
+                                                break;
+                                            default:
+                                                var timeOfDay = rule.Type == CloudEventAuthorizationRuleType.TimeOfDay;
+                                                <div class="col-sm-6">
+                                                    <label class="form-label small mb-1" for="@FieldId($"rule-{index}-from")">From</label>
+                                                    <input id="@FieldId($"rule-{index}-from")" type="@(timeOfDay ? "time" : "datetime-local")" class="form-control form-control-sm" value="@FormatTime(rule.From, timeOfDay)" @onchange="e => rule.From = ParseTime(e.Value?.ToString(), timeOfDay)" />
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="form-label small mb-1" for="@FieldId($"rule-{index}-to")">To</label>
+                                                    <input id="@FieldId($"rule-{index}-to")" type="@(timeOfDay ? "time" : "datetime-local")" class="form-control form-control-sm" value="@FormatTime(rule.To, timeOfDay)" @onchange="e => rule.To = ParseTime(e.Value?.ToString(), timeOfDay)" />
+                                                </div>
+                                                break;
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (policy.Rules ??= []).Add(new() { Type = CloudEventAuthorizationRuleType.Attribute, Effect = AuthorizationPolicyEffect.Authorize })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a rule</button>
+                        </div>
+                    </ChildContent>
+                    <HelpContent>Times are those at which the gateway receives events. A time-of-day range that ends before it starts spans midnight. Patterns are not anchored.</HelpContent>
+                </FormField>
+                <datalist id="@FieldId("attributes-list")">
+                    @foreach (var known in KnownAttributes)
+                    {
+                        <option value="@known"></option>
+                    }
+                </datalist>
+            }
+            break;
+        case 2:
+            <h4 class="h6 small">Validation</h4>
+            <div class="row g-3">
+                <FormField Id="@FieldId("validation")" Label="Invalid events are" CssClass="col-sm-6">
+                    <select id="@FieldId("validation")" class="form-select form-select-sm" value="@ValidationMode" @onchange="e => SetValidationMode(e.Value?.ToString())">
+                        <option value="@CloudEventValidationStrategy.Fail">refused</option>
+                        <option value="@CloudEventValidationStrategy.Warn">accepted, with a warning in the logs</option>
+                        <option value="skip">not validated at all</option>
+                    </select>
+                </FormField>
+                <div class="col-sm-6">
+                    <div class="form-check mt-4">
+                        <input id="@FieldId("schema-required")" class="form-check-input" type="checkbox" checked="@(Model.Spec.Validation?.DataSchema?.Required == true)" @onchange="e => DataSchema.Required = e.Value is true" />
+                        <label class="form-check-label small" for="@FieldId("schema-required")">Events must reference the schema of their data</label>
+                    </div>
+                    <div class="form-check">
+                        <input id="@FieldId("schema-generate")" class="form-check-input" type="checkbox" checked="@(Model.Spec.Validation?.DataSchema?.AutoGenerate == true)" @onchange="e => DataSchema.AutoGenerate = e.Value is true" />
+                        <label class="form-check-label small" for="@FieldId("schema-generate")">Generate a schema for the data of events without one</label>
+                    </div>
+                </div>
+            </div>
+            <h4 class="h6 small mt-2">Ingestion</h4>
+            <div class="row g-3">
+                <FormField Id="@FieldId("max-body")" Label="Largest request" Help="In bytes. The default otherwise." Error="@ErrorOf("max-body")" CssClass="col-sm-4">
+                    <input id="@FieldId("max-body")" type="number" min="1" class="form-control form-control-sm @Invalid("max-body")" placeholder="default" value="@Model.Spec.Ingestion?.MaxRequestBodySize" @onchange="e => Ingestion.MaxRequestBodySize = long.TryParse(e.Value?.ToString(), out var n) ? n : null" aria-describedby="@FormField.DescribedBy(FieldId("max-body"))" />
+                </FormField>
+                <FormField Id="@FieldId("max-batch")" Label="Largest batch" Help="Events per batch. The default otherwise." Error="@ErrorOf("max-batch")" CssClass="col-sm-4">
+                    <input id="@FieldId("max-batch")" type="number" min="1" class="form-control form-control-sm @Invalid("max-batch")" placeholder="default" value="@Model.Spec.Ingestion?.MaxBatchSize" @onchange="e => Ingestion.MaxBatchSize = int.TryParse(e.Value?.ToString(), out var n) ? n : null" aria-describedby="@FormField.DescribedBy(FieldId("max-batch"))" />
+                </FormField>
+                <FormField Id="@FieldId("deduplication")" Label="Ignore events published again within" Help="Events with the same source and id. Not deduplicated otherwise." Error="@ErrorOf("deduplication")" CssClass="col-sm-4">
+                    <DurationInput Id="@FieldId("deduplication")" Value="Model.Spec.Ingestion?.Deduplication?.Window" ValueChanged="d => Ingestion.Deduplication = d == null ? null : new() { Window = d }" DefaultUnit="min" Placeholder="not deduplicated" Invalid="@(ErrorOf("deduplication") != null)" />
+                </FormField>
+            </div>
+            <FormField Id="@FieldId("rate-limits")" Label="Rate limits" Error="@ErrorOf("rate-limits")">
+                <div id="@FieldId("rate-limits")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("rate-limits"))">
+                    @for (var i = 0; i < (Model.Spec.Ingestion?.RateLimits?.Count ?? 0); i++)
+                    {
+                        var index = i;
+                        var limit = Model.Spec.Ingestion!.RateLimits![index];
+                        <div class="input-group input-group-sm mb-1" style="max-width: 40rem">
+                            <span class="input-group-text">At most</span>
+                            <input type="number" min="1" class="form-control" aria-label="@($"Events allowed by rate limit {index + 1}")" @bind="limit.Limit" />
+                            <span class="input-group-text">events per</span>
+                            <select class="form-select" aria-label="@($"What rate limit {index + 1} applies to")" @bind="limit.Partition">
+                                <option value="@CloudEventRateLimitPartitioning.Publisher">publisher</option>
+                                <option value="@CloudEventRateLimitPartitioning.Source">source</option>
+                            </select>
+                            <span class="input-group-text">every</span>
+                            <DurationInput Id="@FieldId($"rate-limit-{index}-period")" Value="limit.Period" ValueChanged="d => limit.Period = d ?? Duration.FromSeconds(1)" />
+                            <button type="button" class="btn btn-outline-secondary" aria-label="@($"Remove rate limit {index + 1}")" @onclick="() => Model.Spec.Ingestion!.RateLimits!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                        </div>
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.RateLimits ??= []).Add(new() { Limit = 100, Partition = CloudEventRateLimitPartitioning.Publisher, Period = Duration.FromSeconds(1) })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a rate limit</button>
+                </div>
+            </FormField>
+            break;
+        case 3:
+            <p class="small text-secondary">How the gateway handles the events of a source and a type: the first configuration whose patterns match applies. Patterns are regular expressions.</p>
+            <FormField Id="@FieldId("events")" Label="Event configurations" Error="@ErrorOf("events")">
+                <div id="@FieldId("events")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("events"))">
+                    @for (var i = 0; i < (Model.Spec.Events?.Count ?? 0); i++)
+                    {
+                        var index = i;
+                        var configuration = Model.Spec.Events![index];
+                        <div class="row g-2 align-items-end border rounded p-2 mb-2">
+                            <div class="col-sm-4">
+                                <label class="form-label small mb-1" for="@FieldId($"event-{index}-source")">Source</label>
+                                <input id="@FieldId($"event-{index}-source")" type="text" class="form-control form-control-sm font-monospace" placeholder="^https://orders\.example\.com$" @bind="configuration.Source" />
+                            </div>
+                            <div class="col-sm-3">
+                                <label class="form-label small mb-1" for="@FieldId($"event-{index}-type")">Type</label>
+                                <input id="@FieldId($"event-{index}-type")" type="text" class="form-control form-control-sm font-monospace" placeholder="order.placed" @bind="configuration.Type" />
+                            </div>
+                            <div class="col-sm-3">
+                                <label class="form-label small mb-1" for="@FieldId($"event-{index}-schema")">Validate data with</label>
+                                <select id="@FieldId($"event-{index}-schema")" class="form-select form-select-sm" value="@configuration.Schema?.Name" @onchange="e => configuration.Schema = string.IsNullOrEmpty(e.Value?.ToString()) ? null : new() { Name = e.Value!.ToString()! }">
+                                    <option value="">no registered schema</option>
+                                    @foreach (var schema in schemas ?? [])
+                                    {
+                                        <option value="@schema.GetName()">@schema.GetName()</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-sm-2 text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="@($"Remove event configuration {index + 1}")" @onclick="() => Model.Spec.Events!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                            </div>
+                            @if (configuration.Metadata?.Properties?.Count > 0)
+                            {
+                                <div class="col-12 small text-secondary">It also extracts @configuration.Metadata.Properties.Count metadata propert@(configuration.Metadata.Properties.Count == 1 ? "y" : "ies"), which the YAML view edits.</div>
+                            }
+                        </div>
+                    }
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Model.Spec.Events ??= []).Add(new() { Source = string.Empty, Type = string.Empty })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a configuration</button>
+                </div>
+            </FormField>
+            @if (Model.Spec.Sources?.Count > 0)
+            {
+                <p class="small text-secondary">The gateway also has policies for @Model.Spec.Sources.Count specific source(s), which the YAML view edits.</p>
+            }
+            break;
+        case 4:
+            <div class="form-check form-switch mb-2">
+                <input id="@FieldId("split-horizon-enabled")" class="form-check-input" type="checkbox" checked="@(Model.Spec.SplitHorizon != null)" @onchange="e => Model.Spec.SplitHorizon = e.Value is true ? new() { OriginAttribute = SplitHorizonPolicy.DefaultAttributeName } : null" />
+                <label class="form-check-label small" for="@FieldId("split-horizon-enabled")">@(Model.Spec.SplitHorizon == null ? "No split-horizon policy" : "Detect events that loop between gateways")</label>
+            </div>
+            <p class="small text-secondary">Needed when gateways forward events to each other, e.g. through subscriptions that publish to another Cloud Streams: each gateway adds itself to an attribute of the events it ingests, and recognizes the events that come back. Republishing an event from the dashboard removes that attribute.</p>
+            @if (Model.Spec.SplitHorizon != null)
+            {
+                var policy = Model.Spec.SplitHorizon;
+                <div class="row g-3 ps-3">
+                    <FormField Id="@FieldId("origin-attribute")" Label="Attribute" Required="true" Error="@ErrorOf("origin-attribute")" CssClass="col-sm-4">
+                        <input id="@FieldId("origin-attribute")" type="text" class="form-control form-control-sm @Invalid("origin-attribute")" @bind="policy.OriginAttribute" aria-describedby="@FormField.DescribedBy(FieldId("origin-attribute"))" />
+                    </FormField>
+                    <FormField Id="@FieldId("tracking")" Label="Remember" CssClass="col-sm-4">
+                        <select id="@FieldId("tracking")" class="form-select form-select-sm" @bind="policy.TrackingMode">
+                            <option value="@HorizonTrackingMode.Single">the last gateway only</option>
+                            <option value="@HorizonTrackingMode.Chain">every gateway</option>
+                        </select>
+                    </FormField>
+                    <FormField Id="@FieldId("evaluation")" Label="It is a loop if this gateway is" CssClass="col-sm-4">
+                        <select id="@FieldId("evaluation")" class="form-select form-select-sm" @bind="policy.EvaluationMode">
+                            <option value="@HorizonEvaluationMode.Last">the last one</option>
+                            <option value="@HorizonEvaluationMode.Contains">any of them</option>
+                            <option value="@HorizonEvaluationMode.Single">the only one</option>
+                        </select>
+                    </FormField>
+                    <FormField Id="@FieldId("loop-action")" Label="Loops are" CssClass="col-sm-4">
+                        <select id="@FieldId("loop-action")" class="form-select form-select-sm" @bind="policy.LoopAction">
+                            <option value="@LoopAction.Ignore">ignored, with a success</option>
+                            <option value="@LoopAction.Reject">refused, with 409 Conflict</option>
+                        </select>
+                    </FormField>
+                    @if (policy.TrackingMode == HorizonTrackingMode.Chain)
+                    {
+                        <FormField Id="@FieldId("max-chain")" Label="Most gateways an event may go through" Help="Longer chains are treated as loops. No limit otherwise." Error="@ErrorOf("max-chain")" CssClass="col-sm-4">
+                            <input id="@FieldId("max-chain")" type="number" min="1" class="form-control form-control-sm @Invalid("max-chain")" placeholder="no limit" @bind="policy.MaxChainLength" aria-describedby="@FormField.DescribedBy(FieldId("max-chain"))" />
+                        </FormField>
+                    }
+                    <FormField Id="@FieldId("allowed-origins")" Label="Only accept events from" Help="Gateway names, comma-separated. Any by default." CssClass="col-sm-6">
+                        <input id="@FieldId("allowed-origins")" type="text" class="form-control form-control-sm" value="@Join(policy.AllowedOrigins)" @onchange="e => policy.AllowedOrigins = Split(e.Value?.ToString())" aria-describedby="@FormField.DescribedBy(FieldId("allowed-origins"))" />
+                    </FormField>
+                    <FormField Id="@FieldId("excluded-origins")" Label="Refuse events from" Help="Gateway names, comma-separated." CssClass="col-sm-6">
+                        <input id="@FieldId("excluded-origins")" type="text" class="form-control form-control-sm" value="@Join(policy.ExcludedOrigins)" @onchange="e => policy.ExcludedOrigins = Split(e.Value?.ToString())" aria-describedby="@FormField.DescribedBy(FieldId("excluded-origins"))" />
+                    </FormField>
+                </div>
+            }
+            break;
+        case 5:
+            <p class="small text-secondary">Check what the edited gateway would do with an event, before saving it. Nothing is stored, the event is not counted, and rate limits and deduplication do not apply.</p>
+            <FormField Id="@FieldId("test-event")" Label="Example event" Help="A cloud event, as JSON." Error="@testError">
+                <textarea id="@FieldId("test-event")" rows="10" class="form-control form-control-sm font-monospace" spellcheck="false" @bind="testEvent" aria-describedby="@FormField.DescribedBy(FieldId("test-event"))"></textarea>
+            </FormField>
+            <button type="button" class="btn btn-sm btn-outline-primary" disabled="@testing" @onclick="TestAsync"><i class="bi bi-play" aria-hidden="true"></i> Test the event</button>
+            <div aria-live="polite" class="mt-3">
+                @if (testResult != null)
+                {
+                    <div class="border rounded p-2 small">
+                        @switch (testResult.Outcome)
+                        {
+                            case GatewayAdmissionTestResult.Accepted:
+                                <span class="badge text-bg-success"><i class="bi bi-check-circle" aria-hidden="true"></i> accepted</span> <span>It would be stored.</span>
+                                break;
+                            case GatewayAdmissionTestResult.Ignored:
+                                <span class="badge text-bg-secondary"><i class="bi bi-dash-circle" aria-hidden="true"></i> ignored</span>
+                                break;
+                            case GatewayAdmissionTestResult.Rejected:
+                                <span class="badge text-bg-danger"><i class="bi bi-x-octagon" aria-hidden="true"></i> rejected</span>
+                                break;
+                            default:
+                                <span class="badge text-bg-warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> invalid</span>
+                                break;
+                        }
+                        <span class="text-secondary ms-1">Status @testResult.Status</span>
+                        @if (testResult.Reason != null)
+                        {
+                            <p class="mb-1 mt-1">@testResult.Reason</p>
+                        }
+                        @if (testResult.Errors?.Count > 0)
+                        {
+                            <ul class="mb-1">
+                                @foreach (var (key, messages) in testResult.Errors)
+                                {
+                                    <li><code>@key</code>: @string.Join(" ", messages)</li>
+                                }
+                            </ul>
+                        }
+                        @if (testResult.Attributes?.Count > 0)
+                        {
+                            <details class="mt-1">
+                                <summary>The attributes it would be stored with</summary>
+                                <pre class="mb-0">@ResourceDocuments.ToJson(JsonSerializer.SerializeToNode(testResult.Attributes)!)</pre>
+                            </details>
+                        }
+                        @if (testResult.Metadata?.Count > 0)
+                        {
+                            <details class="mt-1">
+                                <summary>The metadata it extracts</summary>
+                                <pre class="mb-0">@ResourceDocuments.ToJson(JsonSerializer.SerializeToNode(testResult.Metadata)!)</pre>
+                            </details>
+                        }
+                    </div>
+                }
+            </div>
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    static readonly string[] KnownAttributes = ["source", "type", "subject", "id", "datacontenttype", "dataschema"];
+
+    List<Schema>? schemas;
+    string testEvent = string.Empty;
+    string? testError;
+    bool testing;
+    GatewayAdmissionTestResult? testResult;
+
+    CloudEventIngestionPolicy Ingestion => Model.Spec.Ingestion ??= new();
+
+    DataSchemaValidationPolicy DataSchema => (Model.Spec.Validation ??= new()).DataSchema ??= new();
+
+    string ValidationMode => Model.Spec.Validation?.SkipValidation == true ? "skip" : Model.Spec.Validation?.ValidationStrategy ?? CloudEventValidationStrategy.Fail;
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Gateway", "Authorization", "Validation and ingestion", "Events", "Split horizon", "Test"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.service"] = ("service", 0),
+        ["spec.authorization"] = ("rules", 1),
+        ["spec.ingestion.maxRequestBodySize"] = ("max-body", 2),
+        ["spec.ingestion.maxBatchSize"] = ("max-batch", 2),
+        ["spec.ingestion.deduplication"] = ("deduplication", 2),
+        ["spec.ingestion.rateLimits"] = ("rate-limits", 2),
+        ["spec.events"] = ("events", 3),
+        ["spec.splitHorizon.originAttribute"] = ("origin-attribute", 4),
+        ["spec.splitHorizon.maxChainLength"] = ("max-chain", 4)
+    };
+
+    /// <inheritdoc/>
+    protected override Gateway CreateDefault() => new() { Metadata = new() { Name = string.Empty }, Spec = new() };
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        testEvent = ResourceDocuments.ToJson(JsonSerializer.SerializeToNode(new CloudEvent()
+        {
+            SpecVersion = CloudEventSpecVersion.V1.Version,
+            Id = Guid.NewGuid().ToString(),
+            Time = DateTimeOffset.Now,
+            Source = new("https://orders.example.com"),
+            Type = "order.placed",
+            DataContentType = "application/json",
+            Data = new Dictionary<string, object>() { ["id"] = "1234", ["total"] = 42 }
+        })!);
+        try { schemas = await (await Api.Resources.Schemas.ListAsync()).ToListAsync(); }
+        catch (Exception) { schemas = []; }
+    }
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        switch (step)
+        {
+            case 0:
+                if (IsNew)
+                {
+                    if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+                    else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+                }
+                if (Model.Spec.Service != null && Model.Spec.Service.Uri == null) errors["service-uri"] = "Enter the absolute address of the gateway";
+                break;
+            case 1:
+                for (var i = 0; i < (Model.Spec.Authorization?.Rules?.Count ?? 0); i++)
+                {
+                    var rule = Model.Spec.Authorization!.Rules![i];
+                    var error = rule.Type switch
+                    {
+                        CloudEventAuthorizationRuleType.Attribute when string.IsNullOrWhiteSpace(rule.AttributeName) => "enter the attribute",
+                        CloudEventAuthorizationRuleType.Attribute when !IsValidPattern(rule.AttributeValue) => "the pattern is not a valid regular expression",
+                        CloudEventAuthorizationRuleType.Payload when rule.MaxSize is not > 0 => "enter a positive size",
+                        CloudEventAuthorizationRuleType.Temporary or CloudEventAuthorizationRuleType.TimeOfDay when rule.From == null || rule.To == null => "enter both bounds",
+                        CloudEventAuthorizationRuleType.Temporary when rule.From > rule.To => "the start must precede the end",
+                        _ => null
+                    };
+                    if (error != null)
+                    {
+                        errors["rules"] = $"Rule {i + 1}: {error}";
+                        break;
+                    }
+                }
+                break;
+            case 2:
+                if (Model.Spec.Ingestion?.MaxRequestBodySize is <= 0) errors["max-body"] = "Enter a positive size, or leave empty";
+                if (Model.Spec.Ingestion?.MaxBatchSize is <= 0) errors["max-batch"] = "Enter a positive size, or leave empty";
+                if (Model.Spec.Ingestion?.Deduplication?.Window.ToTimeSpan() <= TimeSpan.Zero) errors["deduplication"] = "Enter a positive duration, or leave empty";
+                if (Model.Spec.Ingestion?.RateLimits?.Any(l => l.Limit < 1 || l.Period.ToTimeSpan() <= TimeSpan.Zero) == true) errors["rate-limits"] = "Every rate limit needs a positive number of events and a positive period";
+                break;
+            case 3:
+                var invalid = Model.Spec.Events?.Select((c, i) => (c, i)).FirstOrDefault(e => string.IsNullOrWhiteSpace(e.c.Source) || string.IsNullOrWhiteSpace(e.c.Type) || !IsValidPattern(e.c.Source) || !IsValidPattern(e.c.Type));
+                if (invalid is { c: not null } found) errors["events"] = $"Configuration {found.i + 1}: enter a source and a type, as valid regular expressions";
+                break;
+            case 4:
+                var policy = Model.Spec.SplitHorizon;
+                if (policy != null && !Regex.IsMatch(policy.OriginAttribute ?? string.Empty, "^[a-z0-9]+$")) errors["origin-attribute"] = "Enter an attribute name, made of lower-case letters and digits";
+                if (policy?.MaxChainLength is 0) errors["max-chain"] = "Enter at least 1, or leave empty";
+                break;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void Normalize(Gateway resource)
+    {
+        var spec = resource.Spec;
+        if (spec.Ingestion != null)
+        {
+            if (spec.Ingestion.RateLimits?.Count == 0) spec.Ingestion.RateLimits = null;
+            if (spec.Ingestion.MaxRequestBodySize == null && spec.Ingestion.MaxBatchSize == null && spec.Ingestion.Deduplication == null && spec.Ingestion.RateLimits == null) spec.Ingestion = null;
+        }
+        if (spec.Validation?.DataSchema is { Required: false, AutoGenerate: false }) spec.Validation.DataSchema = null;
+        if (spec.Validation is { SkipValidation: false, DataSchema: null } && spec.Validation.ValidationStrategy == CloudEventValidationStrategy.Fail) spec.Validation = null;
+        if (spec.Events?.Count == 0) spec.Events = null;
+        if (resource.Metadata.Labels?.Count == 0) resource.Metadata.Labels = null;
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        var spec = Model.Spec;
+        <p class="mb-2"><strong>@Model.GetName()</strong> admits events as follows:</p>
+        <ul class="small">
+            <li>@AuthorizationSummary(spec.Authorization)</li>
+            <li>@(spec.Validation?.SkipValidation == true ? "Events are not validated." : spec.Validation?.ValidationStrategy == CloudEventValidationStrategy.Warn ? "Invalid events are accepted, with a warning." : "Invalid events are refused.")@(spec.Validation?.DataSchema?.Required == true ? " Events must reference the schema of their data." : "")</li>
+            @if (spec.Ingestion?.Deduplication != null)
+            {
+                <li>Events published again within @spec.Ingestion.Deduplication.Window are ignored.</li>
+            }
+            @foreach (var limit in spec.Ingestion?.RateLimits ?? [])
+            {
+                <li>At most @limit.Limit events per @limit.Partition every @limit.Period.</li>
+            }
+            @if (spec.Events?.Count > 0)
+            {
+                <li>@spec.Events.Count event configuration(s)@(spec.Events.Count(e => e.Schema != null) is > 0 and var bound ? $", {bound} of which validate data against a registered schema" : "").</li>
+            }
+            <li>@(spec.SplitHorizon == null ? "Loops between gateways are not detected." : $"Loops between gateways are {(spec.SplitHorizon.LoopAction == LoopAction.Reject ? "refused" : "ignored")}, using the '{spec.SplitHorizon.OriginAttribute}' attribute.")</li>
+        </ul>
+    };
+
+    static string AuthorizationSummary(CloudEventAuthorizationPolicy? policy)
+    {
+        if (policy == null || policy.Rules is not { Count: > 0 }) return "Every event is authorized.";
+        var strategy = policy.DecisionStrategy switch
+        {
+            RuleBasedDecisionStrategy.Consensus => "most of these rules allow it",
+            RuleBasedDecisionStrategy.Minority => "at least one of these rules allows it",
+            _ => "every one of these rules allows it"
+        };
+        var rules = policy.Rules.Select(r => $"{(r.Effect == AuthorizationPolicyEffect.Forbid ? "forbids" : "authorizes")} " + r.Type switch
+        {
+            CloudEventAuthorizationRuleType.Attribute => $"events whose {r.AttributeName} matches {r.AttributeValue}",
+            CloudEventAuthorizationRuleType.Payload => $"events larger than {r.MaxSize} bytes",
+            CloudEventAuthorizationRuleType.TimeOfDay => $"events received between {r.From?.LocalDateTime:t} and {r.To?.LocalDateTime:t}",
+            _ => $"events received between {r.From?.LocalDateTime:g} and {r.To?.LocalDateTime:g}"
+        });
+        return $"An event is authorized if {strategy}: {string.Join("; ", rules)}.";
+    }
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+    void SetValidationMode(string? mode)
+    {
+        var validation = Model.Spec.Validation ??= new();
+        validation.SkipValidation = mode == "skip";
+        validation.ValidationStrategy = mode is CloudEventValidationStrategy.Warn ? CloudEventValidationStrategy.Warn : CloudEventValidationStrategy.Fail;
+    }
+
+    /// <summary>
+    /// Evaluates the example event against the gateway as edited, without saving it nor ingesting the event
+    /// </summary>
+    async Task TestAsync()
+    {
+        testError = null;
+        testResult = null;
+        CloudEvent? e;
+        try { e = JsonSerializer.Deserialize<CloudEvent>(testEvent); }
+        catch (Exception ex) { testError = $"The event is not valid JSON: {ex.Message}"; return; }
+        if (e == null)
+        {
+            testError = "Enter an event";
+            return;
+        }
+        testing = true;
+        try
+        {
+            var gateway = Prepare();
+            var name = string.IsNullOrWhiteSpace(gateway.Metadata.Name) ? "new-gateway" : gateway.GetName();
+            testResult = await Api.Resources.Gateways.TestAdmissionAsync(name, new() { Spec = gateway.Spec, Event = e });
+        }
+        catch (ProblemDetailsException ex)
+        {
+            testError = ex.Problem.Status == 501 ? "Events can only be tested when the dashboard is served by a gateway" : ex.Problem.Detail ?? ex.Problem.Title;
+        }
+        catch (Exception ex)
+        {
+            testError = ex.Message;
+        }
+        finally
+        {
+            testing = false;
+        }
+    }
+
+    static string FormatTime(DateTimeOffset? value, bool timeOfDay) => value == null ? string.Empty : timeOfDay ? value.Value.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture) : value.Value.LocalDateTime.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Parses the value of a date and time input, or of a time input, whose day is then today's, as a local time
+    /// </summary>
+    static DateTimeOffset? ParseTime(string? value, bool timeOfDay)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (timeOfDay) return TimeOnly.TryParse(value, CultureInfo.InvariantCulture, out var time) ? new DateTimeOffset(DateOnly.FromDateTime(DateTime.Today).ToDateTime(time)) : null;
+        return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dateTime) ? new DateTimeOffset(dateTime) : null;
+    }
+
+    static string Join(List<string>? values) => values == null ? string.Empty : string.Join(", ", values);
+
+    static List<string>? Split(string? text)
+    {
+        var values = (text ?? string.Empty).Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
+        return values.Count == 0 ? null : values;
+    }
+
+    static bool IsValidPattern(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern)) return true;
+        try { _ = new Regex(pattern); return true; }
+        catch (ArgumentException) { return false; }
+    }
+
+}
