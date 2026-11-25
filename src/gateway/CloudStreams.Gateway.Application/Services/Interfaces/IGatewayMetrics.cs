@@ -50,6 +50,12 @@ public interface IGatewayMetrics
     void IncrementTotalIgnoredEvents(Uri source);
 
     /// <summary>
+    /// Increments the total count of cloud events published again within the deduplication window, which have not been stored again
+    /// </summary>
+    /// <param name="source">The source of the duplicate cloud event</param>
+    void IncrementTotalDuplicateEvents(Uri source);
+
+    /// <summary>
     /// Increments the total count of admitted cloud events that could not be appended to the event store
     /// </summary>
     /// <param name="source">The source of the cloud event that could not be appended</param>

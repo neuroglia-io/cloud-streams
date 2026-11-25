@@ -341,6 +341,65 @@ OutboundRequests:
   DenyPrivateNetworks: false
 ```
 
+### Ingestion
+
+The ingestion endpoint (`POST /api/events/pub`) accepts every content mode of the [CloudEvents HTTP binding](https://github.com/cloudevents/spec/blob/main/cloudevents/bindings/http-protocol-binding.md).
+
+| Mode | Request | Response |
+|---|---|---|
+| Structured | the body is a cloud event, with `Content-Type: application/cloudevents+json` | `204 No Content` |
+| Binary | the body is the event's data, and its context attributes are `ce-` prefixed headers, e.g. `ce-specversion`, `ce-id`, `ce-source`, `ce-type` | `204 No Content` |
+| Batched | the body is an array of cloud events, with `Content-Type: application/cloudevents-batch+json` | `200 OK`, with one result per event |
+
+**Binary mode:**
+- the `Content-Type` header is the event's `datacontenttype`;
+- JSON data is stored as JSON, and text as a string;
+- any other data is stored and delivered as `data_base64`.
+
+**Batches:**
+- events are ingested one at a time, in order;
+- each event is admitted on its own, so an invalid or refused event doesn't prevent the others from being stored;
+- each result gives the event's `index`, `id`, `source` and `status`, which is what the gateway would have answered had the event been published alone, plus an `outcome` or a `problem`.
+
+```json
+[
+  { "index": 0, "id": "1", "source": "https://orders.example.com", "status": 201, "outcome": "stored" },
+  { "index": 1, "status": 400, "problem": { "title": "Bad Request", "detail": "The cloud event at index 1 is not a valid cloud event: ..." } }
+]
+```
+
+Requests in any other format are refused with `415 Unsupported Media Type`.
+
+A gateway's `spec.ingestion` limits the size of requests, deduplicates events, and limits the rate at which they're published:
+
+```yaml
+spec:
+  ingestion:
+    maxRequestBodySize: 1048576     # bytes, larger requests are refused with 413. Defaults to the server's limit (30 MB)
+    maxBatchSize: 100               # events per batch, larger batches are refused with 413. Unlimited by default
+    deduplication:
+      window: PT10M                 # how long a stored event is remembered by its source and id
+    rateLimits:
+      - partition: publisher        # each publisher, by the name it authenticated with. Anonymous publishers share a limit
+        limit: 100
+        period: PT1S
+      - partition: source           # each source of events
+        limit: 1000000
+        period: P1D                 # a long period makes the limit a quota
+```
+
+**Deduplication:**
+- A publisher that retries after a timeout may publish the same event twice. Within the window, an event whose `source` and `id` have already been stored is answered as a success (`204`, with `cloudstreams-outcome: duplicate`), but isn't stored again.
+- An event that's still being ingested is answered `503` with `Retry-After`. Retrying tells whether it has been stored.
+- An event that fails to be stored, or is refused, isn't remembered.
+
+**Rate limits:**
+- Events are counted in fixed windows of each limit's period. The counters are kept in Redis and shared by every replica of the gateway.
+- An event beyond any limit is refused with `429 Too Many Requests`, and a `Retry-After` header that tells when its window ends.
+- Refused events count against the limits too.
+
+Duplicates are counted by the `cloud_streams_gateway_events_duplicate_count` metric. Rate-limited events are counted as rejected, with the `rate_limit` reason.
+
 ### Admission
 
 Until a gateway has loaded its configuration, it answers `503 Service Unavailable` (with `Retry-After`), rather than admitting events its policies were not applied to.

@@ -28,7 +28,11 @@ public static class IngestionOutcome
     /// </summary>
     public const string Ignored = "ignored";
     /// <summary>
-    /// Indicates that the cloud event has been rejected by the authorization or split-horizon policies
+    /// Indicates that the cloud event has already been stored within the deduplication window, and has not been stored again
+    /// </summary>
+    public const string Duplicate = "duplicate";
+    /// <summary>
+    /// Indicates that the cloud event has been rejected by the authorization or split-horizon policies, or by a rate limit
     /// </summary>
     public const string Rejected = "rejected";
     /// <summary>
@@ -56,6 +60,36 @@ public static class RejectionReason
     /// Indicates that the gateway's authorization policy refused the cloud event
     /// </summary>
     public const string Authorization = "authorization";
+    /// <summary>
+    /// Indicates that the cloud event exceeded one of the gateway's rate limits
+    /// </summary>
+    public const string RateLimit = "rate_limit";
+
+}
+
+/// <summary>
+/// Describes the result of the ingestion of a cloud event
+/// </summary>
+public record IngestionResult
+    : OperationResult
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="IngestionResult"/>
+    /// </summary>
+    /// <param name="status">The status of the ingestion</param>
+    /// <param name="retryAfter">The amount of time after which the cloud event may be published again, if any</param>
+    /// <param name="errors">The errors that occurred, if any</param>
+    public IngestionResult(int status, TimeSpan? retryAfter = null, params Error[] errors)
+        : base(status, null, errors)
+    {
+        this.RetryAfter = retryAfter;
+    }
+
+    /// <summary>
+    /// Gets the amount of time after which the cloud event may be published again, if any
+    /// </summary>
+    public TimeSpan? RetryAfter { get; }
 
 }
 

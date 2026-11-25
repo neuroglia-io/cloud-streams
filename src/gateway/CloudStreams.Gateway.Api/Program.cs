@@ -67,6 +67,8 @@ builder.Services.AddSingleton<IJsonSchemaGenerator, JsonSchemaGenerator>();
 builder.Services.Configure<JsonSchemaRegistryOptions>(builder.Configuration.GetSection(JsonSchemaRegistryOptions.ConfigurationSectionName));
 builder.Services.AddSingleton<IJsonSchemaRegistry, MemoryJsonSchemaRegistry>();
 builder.Services.AddSingleton<IGatewayMetrics, GatewayMetrics>();
+builder.Services.AddSingleton<ICloudEventRateLimiter, RedisCloudEventRateLimiter>();
+builder.Services.AddSingleton<ICloudEventDeduplicator, RedisCloudEventDeduplicator>();
 
 using var app = builder.Build();
 

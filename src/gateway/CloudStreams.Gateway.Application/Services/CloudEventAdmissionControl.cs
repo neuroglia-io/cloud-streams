@@ -117,6 +117,9 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// </summary>
     public bool IsReady => this.Configuration != null;
 
+    /// <inheritdoc/>
+    public Core.Resources.Gateway? Gateway => this.Configuration?.Resource;
+
     /// <summary>
     /// Converts the specified failed <see cref="OperationResult"/> into a failed <see cref="OperationResult{T}"/>, keeping its errors
     /// </summary>
@@ -349,6 +352,8 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         ArgumentNullException.ThrowIfNull(e);
         if (!e.Time.HasValue) e.Time = DateTimeOffset.UtcNow;
         var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+        // binary data is not a context attribute, and would otherwise be lost: it is kept with them, the event's data being stored as JSON
+        if (e.Data == null && !string.IsNullOrEmpty(e.DataBase64)) metadata.ContextAttributes[CloudEventAttributes.DataBase64] = e.DataBase64;
         var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
         if (splitHorizon != null)
         {
