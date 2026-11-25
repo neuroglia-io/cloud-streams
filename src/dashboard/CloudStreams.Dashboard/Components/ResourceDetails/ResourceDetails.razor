@@ -1,71 +1,99 @@
 ﻿@namespace CloudStreams.Dashboard.Components
-@using System.Text.Json
+@using Neuroglia.Serialization
+@using System.Text.Json.Nodes
 @typeparam TResource where TResource : Resource, new()
+@inject IJsonSerializer JsonSerializer
+@inject IYamlSerializer YamlSerializer
 
+@* The read-only details of a resource, from which administrators may edit it (see #227) *@
 <div class="container-fluid">
-    <div class="row">
-        <table class="table table-striped mb-3">
-            <tbody>
-                <tr>
-                    <td>API Version</td>
-                    <td>@resource?.ApiVersion</td>
-                </tr>
-                <tr>
-                    <td>Kind</td>
-                    <td>@resource?.Kind</td>
-                </tr>
-                <tr>
-                    <td>Name</td>
-                    <td>@resource?.GetName()</td>
-                </tr>
-                @if (resource?.IsNamespaced() == true)
-                {
-                    <tr>
-                        <td>Namespace</td>
-                        <td>@resource?.GetNamespace()</td>
-                    </tr>
-                }
-                <tr>
-                    <td>Created At</td>
-                    <td>@resource?.Metadata.CreationTimestamp?.ToString("R")</td>
-                </tr>
-                <tr>
-                    <td>Generation</td>
-                    <td>@resource?.Metadata.Generation</td>
-                </tr>
-                @if (resource?.Metadata.Labels?.Any() == true)
-                {
-                    <tr>
-                        <td>Labels</td>
-                        <td>
-                            @foreach(var label in resource.Metadata.Labels)
-                            {
-                                <span class="badge bg-primary text-dark m-1">@label.Key: @label.Value</span>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <div class="d-flex justify-content-end gap-2 mb-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OnExport.InvokeAsync(Resource)"><Icon Name="IconName.Download" /> Export</button>
+        @if (CanEdit)
+        {
+            <button type="button" class="btn btn-sm btn-primary" @onclick="() => OnEdit.InvokeAsync(Resource)"><Icon Name="IconName.Pencil" /> Edit</button>
+        }
     </div>
+    <table class="table table-sm table-striped mb-3">
+        <caption class="visually-hidden">Metadata</caption>
+        <tbody>
+            <tr><th scope="row">Kind</th><td>@Resource?.Kind (@Resource?.ApiVersion)</td></tr>
+            <tr><th scope="row">Name</th><td>@Resource?.GetName()</td></tr>
+            <tr><th scope="row">Created</th><td>@Resource?.Metadata.CreationTimestamp?.LocalDateTime.ToString("F")</td></tr>
+            <tr><th scope="row">Generation</th><td>@Resource?.Metadata.Generation</td></tr>
+            <tr>
+                <th scope="row">Labels</th>
+                <td>
+                    @if (Resource?.Metadata.Labels?.Count > 0)
+                    {
+                        @foreach (var label in Resource.Metadata.Labels.OrderBy(l => l.Key))
+                        {
+                            <span class="badge text-bg-secondary me-1 font-monospace">@label.Key=@label.Value</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">none</span>
+                    }
+                </td>
+            </tr>
+            @if (Resource?.Metadata.Annotations?.Count > 0)
+            {
+                <tr>
+                    <th scope="row">Annotations</th>
+                    <td>
+                        @foreach (var annotation in Resource.Metadata.Annotations.OrderBy(a => a.Key))
+                        {
+                            <div class="font-monospace small">@annotation.Key: @annotation.Value</div>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <h2 class="h6">Specification</h2>
+    <pre class="border rounded p-2 small mb-3" tabindex="0" aria-label="The specification, as YAML">@spec</pre>
+    @if (status != null)
+    {
+        <h2 class="h6">Status</h2>
+        <pre class="border rounded p-2 small" tabindex="0" aria-label="The status, as YAML">@status</pre>
+    }
 </div>
 
 @code {
 
-    TResource? resource;
+    TResource? lastResource;
+    string? spec;
+    string? status;
+
     /// <summary>
     /// Gets/sets the resource to display details about
     /// </summary>
     [Parameter] public TResource? Resource { get; set; }
 
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the user may edit the resource
+    /// </summary>
+    [Parameter] public bool CanEdit { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked to edit the resource
+    /// </summary>
+    [Parameter] public EventCallback<TResource?> OnEdit { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked to export the resource
+    /// </summary>
+    [Parameter] public EventCallback<TResource?> OnExport { get; set; }
+
     /// <inheritdoc/>
-    protected override Task OnParametersSetAsync()
+    protected override void OnParametersSet()
     {
-        if(this.resource != this.Resource)
-        {
-            this.resource = this.Resource;
-        }
-        return base.OnParametersSetAsync();
+        if (ReferenceEquals(this.lastResource, this.Resource)) return;
+        this.lastResource = this.Resource;
+        var node = this.Resource == null ? null : JsonNode.Parse(this.JsonSerializer.SerializeToText(this.Resource));
+        this.spec = node?["spec"] is JsonNode s ? ResourceDocuments.ToYaml(s, this.YamlSerializer) : "{}";
+        this.status = node?["status"] is JsonNode t ? ResourceDocuments.ToYaml(t, this.YamlSerializer) : null;
     }
 
 }

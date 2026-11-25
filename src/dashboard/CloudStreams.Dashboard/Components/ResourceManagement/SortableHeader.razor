@@ -1,0 +1,51 @@
+@namespace CloudStreams.Dashboard.Components
+
+@* A column header that sorts the resources it heads when activated, by mouse or keyboard (see #227 and #198) *@
+<th class="sticky-header @CssClass" aria-sort="@AriaSort">
+    <button type="button" class="btn btn-link btn-sm p-0 text-reset text-decoration-none fw-semibold" title="Sort by @Title" @onclick="() => OnSort.InvokeAsync(Column)">
+        @Title
+        @if (IsSorted)
+        {
+            <i class="bi @(Descending ? "bi-caret-down-fill" : "bi-caret-up-fill") ms-1" aria-hidden="true"></i>
+            <span class="visually-hidden">(sorted @(Descending ? "descending" : "ascending"))</span>
+        }
+    </button>
+</th>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the key of the column
+    /// </summary>
+    [Parameter, EditorRequired] public string Column { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the title of the column
+    /// </summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the key of the column the resources are sorted by
+    /// </summary>
+    [Parameter] public string? SortColumn { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the resources are sorted in descending order
+    /// </summary>
+    [Parameter] public bool Descending { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked, with the key of the column, to sort the resources by the column
+    /// </summary>
+    [Parameter] public EventCallback<string> OnSort { get; set; }
+
+    /// <summary>
+    /// Gets/sets additional CSS classes of the header
+    /// </summary>
+    [Parameter] public string? CssClass { get; set; }
+
+    bool IsSorted => SortColumn == Column;
+
+    string AriaSort => !IsSorted ? "none" : Descending ? "descending" : "ascending";
+
+}

@@ -67,7 +67,7 @@ else
         try
         {
             // the latest event of each source and type is offered as a template
-            var latest = await this.ApiClient.CloudEvents.Stream.ReadStreamAsync(new StreamReadOptions(StreamReadDirection.Backwards, length: 200));
+            var latest = await this.ApiClient.CloudEvents.Stream.ReadStreamAsync(new StreamReadOptions(StreamReadDirection.Backwards, length: StreamReadOptions.MaxLength));
             await foreach (var e in latest)
             {
                 if (e == null || this.templates.Any(t => t.Source == e.Source && t.Type == e.Type)) continue;

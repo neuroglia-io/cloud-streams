@@ -306,6 +306,7 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     /// </remarks>
     public async Task UpdateResourceAsync()
     {
+        this.CancelReview();
         this.SetProblemDetails(null);
         var resource = this.Get(state => state.Resource);
         if (resource == null) return;
@@ -353,19 +354,48 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     /// </summary>
     /// <param name="resource">The resource to get the editable document of</param>
     /// <returns>A new <see cref="JsonElement"/> of the form <c>{ "metadata": { "labels": ..., "annotations": ... }, "spec": ... }</c></returns>
-    JsonElement GetEditableDocument(TResource? resource)
+    JsonElement GetEditableDocument(TResource? resource) => JsonDocument.Parse(ResourceDocuments.GetEditableDocument(resource, jsonSerializer).ToJsonString()).RootElement;
+
+    /// <summary>
+    /// Compares the editable parts of the resource to the editor's, and sets the differences as the changes to review before they are saved (see #227)
+    /// </summary>
+    /// <remarks>Nothing is set if the editor's value is invalid, which is reported, or if nothing changed, which the success message says</remarks>
+    public void ReviewChanges()
     {
-        var node = resource == null ? null : JsonNode.Parse(jsonSerializer.SerializeToElement(resource)!.Value.GetRawText()) as JsonObject;
-        // 'metadata' is always present, so that the diff targets '/metadata/labels' or '/metadata/annotations', and never replaces the whole metadata
-        var editableMetadata = new JsonObject();
-        var document = new JsonObject() { ["metadata"] = editableMetadata };
-        if (node != null && node.TryGetPropertyValue("metadata", out var metadataNode) && metadataNode is JsonObject metadata)
+        this.SetProblemDetails(null);
+        var resource = this.Get(state => state.Resource);
+        if (resource == null) return;
+        try
         {
-            foreach (var property in new[] { "labels", "annotations" }) if (metadata.TryGetPropertyValue(property, out var value) && value != null) editableMetadata[property] = value.DeepClone();
+            var textEditorValue = this.Get(state => state.TextEditorValue);
+            if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) textEditorValue = yamlSerializer.ConvertToJson(textEditorValue);
+            var updatedResource = jsonSerializer.Deserialize<TResource>(textEditorValue);
+            if (!this.ValidateMappedProperties(textEditorValue, updatedResource)) return;
+            var original = ResourceDocuments.ToYaml(ResourceDocuments.GetEditableDocument(resource, jsonSerializer), yamlSerializer);
+            var modified = ResourceDocuments.ToYaml(ResourceDocuments.GetEditableDocument(updatedResource, jsonSerializer), yamlSerializer);
+            var changes = TextDiff.Compute(original, modified);
+            if (changes.All(l => l.Kind == TextDiffLineKind.Unchanged))
+            {
+                this.SetSuccessMessage("Neither the specification, the labels nor the annotations have changed: there is nothing to update");
+                return;
+            }
+            this.Reduce(state => state with { PendingChanges = changes });
         }
-        if (node != null && node.TryGetPropertyValue("spec", out var spec) && spec != null) document["spec"] = spec.DeepClone();
-        return JsonDocument.Parse(document.ToJsonString()).RootElement;
+        catch (Exception ex)
+        {
+            this.SetProblemDetails(new ProblemDetails(ProblemTypes.SchemaValidationFailed, "Invalid resource", 400, ex.Message));
+        }
     }
+
+    /// <summary>
+    /// Discards the changes under review, to go back to editing
+    /// </summary>
+    public void CancelReview() => this.Reduce(state => state with { PendingChanges = null });
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the changes to review before they are saved
+    /// </summary>
+    public IObservable<IReadOnlyList<TextDiffLine>?> PendingChanges => this.Select(state => state.PendingChanges).DistinctUntilChanged();
 
     /// <summary>
     /// Gets the options used to format JSON in the editor

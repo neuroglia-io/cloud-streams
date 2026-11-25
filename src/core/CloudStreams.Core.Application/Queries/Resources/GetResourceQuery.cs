@@ -79,7 +79,9 @@ public class GetResourceQueryHandler(IResourceRepository repository)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<IResource>> HandleAsync(GetResourceQuery query, CancellationToken cancellationToken)
     {
-        return this.Ok(await repository.GetAsync(query.Group, query.Version, query.Plural, query.Name, query.Namespace, cancellationToken).ConfigureAwait(false));
+        var resource = await repository.GetAsync(query.Group, query.Version, query.Plural, query.Name, query.Namespace, cancellationToken).ConfigureAwait(false);
+        if (resource == null) return new OperationResult<IResource>((int)HttpStatusCode.NotFound, errors: [new Error(ProblemTypes.NotFound, "Not Found", (int)HttpStatusCode.NotFound, $"There is no {query.Plural} resource named '{query.Name}'")]);
+        return this.Ok(resource);
     }
 
 }

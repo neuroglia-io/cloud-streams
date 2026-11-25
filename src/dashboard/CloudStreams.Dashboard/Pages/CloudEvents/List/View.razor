@@ -27,7 +27,7 @@
         <tbody>
             <Virtualize @ref="virtualize" Context="e" ItemsProvider="@Store.ProvideCloudEvents" ItemSize="61">
                 <ItemContent>
-                    <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" class="cursor-pointer">
+                    <tr @onclick="async _ => await OnShowCloudEventOffcanvasAsync(e)" @onkeydown="k => KeyboardActivation.OnKeyDown(k, () => OnShowCloudEventOffcanvasAsync(e))" tabindex="0" class="cursor-pointer">
                         <td>
                             <div class="contained">
                                 @(e.ExtensionAttributes?[CloudEventExtensionAttributes.Sequence] ?? "")

@@ -77,7 +77,7 @@
             }
             @foreach (var (received, e) in events)
             {
-                <tr class="cursor-pointer" @onclick="() => ShowDetailsAsync(e)">
+                <tr class="cursor-pointer" tabindex="0" @onclick="() => ShowDetailsAsync(e)" @onkeydown="k => KeyboardActivation.OnKeyDown(k, () => ShowDetailsAsync(e))">
                     <td>@received.LocalDateTime.ToString("HH:mm:ss.fff")</td>
                     <td>@e.Id</td>
                     <td>@e.Source</td>

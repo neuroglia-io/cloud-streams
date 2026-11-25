@@ -18,31 +18,18 @@
             </div>
         </div>
     }
-    <div class="d-flex flex-row justify-content-between align-items-center">
-        <h4>Subscriptions</h4>
-        <span>@(Resources?.Count ?? 0) items</span>
-        <div class="d-flex">
-            <input type="search" class="form-control rounded my-2 me-2" placeholder="Search" value="@SearchTerm" @oninput="OnSearchInput" />
-            <div class="dropdown d-flex align-content-center p-1">
-                <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnExportSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Download" /> Export selected</a></li>
-                    @if (CanAdminister)
-                    {
-                        <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
-                    }
-                </ul>
-            </div>
-        </div>
-    </div>
+    <ResourceListToolbar Id="subscriptions" Title="Subscriptions" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+                         LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
+                         OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">
+        <caption class="visually-hidden">Subscriptions. Select a row, or press Enter on it, to see its details. Rows of subscriptions that are behind their stream are highlighted, and their length is marked as behind.</caption>
         <thead>
             <tr>
-                <th class="sticky-header">Name</th>
-                <th class="sticky-header text-center">Created At</th>
-                <th class="sticky-header text-center">Status</th>
+                <SortableHeader Column="@ResourceSortColumns.Name" Title="Name" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" />
+                <SortableHeader Column="@ResourceSortColumns.Created" Title="Created At" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
+                <SortableHeader Column="phase" Title="Status" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Subscriber</th>
-                <th class="sticky-header text-center">Subscriber Status</th>
+                <SortableHeader Column="subscriber" Title="Subscriber Status" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Rate Limit</th>
                 <th class="sticky-header text-center">Partition Type</th>
                 <th class="sticky-header text-center">Partition ID</th>
@@ -51,9 +38,9 @@
                 <th class="sticky-header text-center">Mutate</th>
                 <th class="sticky-header text-center">Offset</th>
                 <th class="sticky-header text-center">Length</th>
-                <th class="sticky-header"></th>
+                <th class="sticky-header"><span class="visually-hidden">Actions</span></th>
                 <th class="sticky-header text-center align-middle">
-                    <input @ref="CheckboxAll" type="checkbox" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                    <input @ref="CheckboxAll" type="checkbox" aria-label="Select all subscriptions" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
                 </th>
             </tr>
         </thead>
@@ -64,9 +51,9 @@
                     @{
                         var streamLength = subscriptionLengths.Keys.Contains(resource.GetName()) ? subscriptionLengths[resource.GetName()] : (ulong)0;
                     }
-                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer @(IsBehind(resource, streamLength) ? "warning-row" : "")">
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer @(IsBehind(resource, streamLength) ? "warning-row" : "")">
                         <td>@resource.Metadata.Name</td>
-                        <td class="text-center">@resource.Metadata.CreationTimestamp?.ToString("R")</td>
+                        <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">
                             @switch (resource.Status?.Phase)
                             {
@@ -134,10 +121,16 @@
                             }
                         </td>
                         <td class="text-center">@(resource.Spec?.Stream == null ? "-" : resource.Status == null || resource.Status?.Stream == null ? "" : resource.Status?.Stream?.AckedOffset)</td>
-                        <td class="text-center">@(streamLength)</td>
+                        <td class="text-center">
+                            @streamLength
+                            @if (IsBehind(resource, streamLength))
+                            {
+                                <span class="badge text-bg-warning ms-1" title="The subscription has not acknowledged every event of its stream">behind by @(streamLength - (resource.Status?.Stream?.AckedOffset ?? 0))</span>
+                            }
+                        </td>
                         <td class="text-end">
                             <div class="dropdown">
-                                <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
+                                <button class="btn btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Actions on the subscription '{resource.Metadata.Name}'")" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
                                 <ul class="dropdown-menu">
                                     @if (CanOperate)
                                     {
@@ -156,7 +149,7 @@
                                         </li>
                                     }
                                     <li>
-                                        <a href="@($"/api/resources/v1/subscriptions/{resource.Metadata.Name}/export")" target="_blank" class="dropdown-item" title="Export the @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name' definition" @onclick:stopPropagation><Icon Name="IconName.Download" /> Export</a>
+                                        <button class="dropdown-item" title="Export the subscription '@resource.Metadata.Name'" @onclick="async _ => await OnExportAsync([resource])" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Download" /> Export</button>
                                     </li>
                                     @if (CanAdminister)
                                     {
@@ -174,7 +167,7 @@
                             </div>
                         </td>
                         <td class="text-center align-middle">
-                            <input type="checkbox" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                            <input type="checkbox" aria-label="@($"Select the subscription '{resource.Metadata.Name}'")" @onkeydown:stopPropagation="true" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
                         </td>
                     </tr>
                 </Virtualize>
@@ -185,7 +178,7 @@
 
 @if (CanAdminister)
 {
-    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()" aria-label="Create a subscription" title="Create a subscription"><Icon Name="IconName.Plus" /></Button>
 }
 
 <Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
@@ -197,6 +190,25 @@
 @code
 {
     EquatableDictionary<string, ulong> subscriptionLengths = [];
+
+    /// <inheritdoc/>
+    protected override void ConfigureSortKeys(IDictionary<string, Func<Subscription, IComparable?>> sortKeys)
+    {
+        // faulted subscriptions come first, then suspended, inactive and active ones
+        sortKeys["phase"] = s => s.Status?.Stream?.Fault != null ? 0 : s.Status?.Phase switch
+        {
+            SubscriptionStatusPhase.Suspended => 1,
+            SubscriptionStatusPhase.Inactive => 2,
+            SubscriptionStatusPhase.Active => 3,
+            _ => 4
+        };
+        sortKeys["subscriber"] = s => (s.Status?.Subscriber?.State ?? SubscriberState.Unknown) switch
+        {
+            SubscriberState.Unreachable => 0,
+            SubscriberState.Unknown => 1,
+            _ => 2
+        };
+    }
 
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()

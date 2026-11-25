@@ -6,12 +6,15 @@
 @inject IJSRuntime JSRuntime
 
 <div class="container-fluid d-flex flex-grow flex-column">
-    <div class="row flex-grow">
+    <div class="row flex-grow @(pendingChanges != null ? "align-content-start" : "")">
+        @* while changes are reviewed, the diff takes the place of the editor, which keeps its value (see #227) *@
+        <div style="display: @(pendingChanges == null ? "contents" : "none")">
         <PreferredLanguageSelector PreferedLanguageChange="ToggleTextBasedEditorLanguageAsync" />
         <StandaloneCodeEditor @ref="textBasedEditor"
             ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(this.textEditorValue, false, this.MonacoEditorHelper.PreferredLanguage)"
             OnDidInit="OnTextBasedEditorInit"
             OnDidChangeModelContent="OnTextBasedValueChanged" />
+        </div>
         <div class="problems">
             @if (!string.IsNullOrWhiteSpace(successMessage))
             {
@@ -38,16 +41,28 @@
                 }
             }
         </div>
-        <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.SubmitResourceAsync()">
-            @if (resource?.Metadata?.Generation == null || resource?.Metadata?.Generation == 0)
-            {
-                <span>Create</span>
-            }
-            else
-            {
-                <span>Update</span>
-            }
-        </Button>
+        @if (pendingChanges != null)
+        {
+            <section class="resource-diff col-12 align-self-start mb-2" aria-labelledby="resource-diff-title">
+                <h2 id="resource-diff-title" class="h6">Changes to save</h2>
+                <p class="small text-secondary mb-1">Removed lines start with <code>-</code>, added lines with <code>+</code>. Only the specification, labels and annotations are saved.</p>
+                <pre class="border rounded p-2 small overflow-auto" style="max-height: 70vh" tabindex="0" aria-label="The changes to save">@foreach (var line in pendingChanges)
+{<span class="@GetDiffLineClass(line.Kind)">@(line.Kind switch { TextDiffLineKind.Added => "+ ", TextDiffLineKind.Removed => "- ", _ => "  " })@line.Text
+</span>}</pre>
+            <div class="col-12 d-flex align-items-start gap-2">
+                <Button Color="ButtonColor.Primary" Disabled="saving" Loading="saving" @onclick="async _ => await Store.UpdateResourceAsync()">Update</Button>
+                <Button Color="ButtonColor.Secondary" Outline="true" Disabled="saving" @onclick="() => Store.CancelReview()">Back to editing</Button>
+            </div>
+            </section>
+        }
+        else if (resource?.Metadata?.Generation == null || resource?.Metadata?.Generation == 0)
+        {
+            <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" Loading="saving" @onclick="async _ => await Store.SubmitResourceAsync()">Create</Button>
+        }
+        else
+        {
+            <Button Color="ButtonColor.Primary" Outline="true" Disabled="updating || saving" @onclick="() => Store.ReviewChanges()">Review changes</Button>
+        }
     </div>
 </div>
 
@@ -104,6 +119,18 @@
     /// </summary>
     private TResource? lastResourceParameter;
 
+    /// <summary>
+    /// The changes to review before they are saved, if any
+    /// </summary>
+    private IReadOnlyList<TextDiffLine>? pendingChanges;
+
+    static string GetDiffLineClass(TextDiffLineKind kind) => kind switch
+    {
+        TextDiffLineKind.Added => "d-block text-success-emphasis bg-success-subtle",
+        TextDiffLineKind.Removed => "d-block text-danger-emphasis bg-danger-subtle",
+        _ => "d-block"
+    };
+
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
@@ -113,6 +140,12 @@
         this.Store.Updating.Subscribe(updating => this.OnStateChanged(cmp => cmp.updating = updating), token: this.CancellationTokenSource.Token);
         this.Store.ProblemDetails.Subscribe(problemDetails => this.OnStateChanged(cmp => cmp.problemDetails = problemDetails), token: this.CancellationTokenSource.Token);
         this.Store.SuccessMessage.Subscribe(successMessage => this.OnStateChanged(cmp => cmp.successMessage = successMessage), token: this.CancellationTokenSource.Token);
+        this.Store.PendingChanges.Subscribe(changes => this.OnStateChanged(cmp =>
+        {
+            cmp.pendingChanges = changes;
+            // the editor is read-only while its changes are reviewed, so that what is saved is what was reviewed
+            cmp.textBasedEditor?.UpdateOptions(new EditorUpdateOptions() { ReadOnly = changes != null || cmp.saving });
+        }), token: this.CancellationTokenSource.Token);
         this.textEditorInput
             .Throttle(TimeSpan.FromMilliseconds(300))
             .DistinctUntilChanged()
@@ -145,7 +178,7 @@
     private void OnSavingChanged(bool saving)
     {
         this.saving = saving;
-        if (this.textBasedEditor != null) this.textBasedEditor.UpdateOptions(new EditorUpdateOptions() { ReadOnly = saving });
+        if (this.textBasedEditor != null) this.textBasedEditor.UpdateOptions(new EditorUpdateOptions() { ReadOnly = saving || this.pendingChanges != null });
     }
 
     /// <summary>

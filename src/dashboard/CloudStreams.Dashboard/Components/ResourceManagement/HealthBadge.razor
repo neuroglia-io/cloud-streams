@@ -1,0 +1,51 @@
+@namespace CloudStreams.Dashboard.Components
+
+@* Shows a health status with an icon and a word, never by color alone (see #198) *@
+<span class="text-nowrap @ColorClass" title="@Detail">
+    <i class="bi @IconClass me-1" aria-hidden="true"></i>@Label
+</span>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the health status to show, if known
+    /// </summary>
+    [Parameter] public string? Status { get; set; }
+
+    /// <summary>
+    /// Gets/sets a description of the health status, if any, shown as a tooltip
+    /// </summary>
+    [Parameter] public string? Detail { get; set; }
+
+    /// <summary>
+    /// Orders health statuses from the worst to the best, so that sorting by health brings unhealthy resources first
+    /// </summary>
+    /// <param name="status">The health status to order</param>
+    /// <returns>The rank of the health status</returns>
+    public static int Order(string? status) => status switch
+    {
+        HealthStatus.Unhealthy => 0,
+        HealthStatus.Degraded => 1,
+        HealthStatus.Healthy => 3,
+        _ => 2
+    };
+
+    string Label =>string.IsNullOrWhiteSpace(Status) ? "unknown" : Status.ToLowerInvariant();
+
+    string IconClass => Status switch
+    {
+        HealthStatus.Healthy => "bi-check-circle-fill",
+        HealthStatus.Degraded => "bi-exclamation-triangle-fill",
+        HealthStatus.Unhealthy => "bi-x-octagon-fill",
+        _ => "bi-question-circle"
+    };
+
+    string ColorClass => Status switch
+    {
+        HealthStatus.Healthy => "text-success",
+        HealthStatus.Degraded => "text-warning",
+        HealthStatus.Unhealthy => "text-danger",
+        _ => "text-secondary"
+    };
+
+}

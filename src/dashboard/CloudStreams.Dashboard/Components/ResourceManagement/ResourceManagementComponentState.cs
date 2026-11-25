@@ -17,6 +17,7 @@ namespace CloudStreams.Dashboard.Components.ResourceManagement;
 /// Represents the state of a resource management component
 /// </summary>
 /// <typeparam name="TResource">The type of managed <see cref="IResource"/>s</typeparam>
+/// <remarks>Cloud Streams resources are cluster-scoped: they are not filtered by namespace</remarks>
 public record ResourceManagementComponentState<TResource>
     where TResource : Resource, new()
 {
@@ -30,16 +31,6 @@ public record ResourceManagementComponentState<TResource>
     /// Gets/sets a <see cref="List{T}"/> that contains all <see cref="IResource"/>s
     /// </summary>
     public EquatableList<TResource> Resources { get; set; } = [];
-
-    /// <summary>
-    /// Gets a <see cref="EquatableList{T}"/> that contains all <see cref="Neuroglia.Data.Infrastructure.ResourceOriented.Namespace"/>s
-    /// </summary>
-    public EquatableList<Namespace>? Namespaces { get; set; }
-
-    /// <summary>
-    /// Gets the <see cref="Neuroglia.Data.Infrastructure.ResourceOriented.Namespace"/> the (namespaced) resources to list belong to, if any
-    /// </summary>
-    public string? Namespace { get; set; }
 
     /// <summary>
     /// Gets/sets a <see cref="List{T}"/> that contains all selected <see cref="IResource"/>s
@@ -57,6 +48,16 @@ public record ResourceManagementComponentState<TResource>
     public string? SearchTerm { get; set; }
 
     /// <summary>
+    /// Gets/sets the key of the column the resources are sorted by (see #227)
+    /// </summary>
+    public string SortColumn { get; set; } = ResourceSortColumns.Name;
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the resources are sorted in descending order
+    /// </summary>
+    public bool SortDescending { get; set; }
+
+    /// <summary>
     /// Gets/sets a boolean value that indicates whether data is currently being gathered
     /// </summary>
     public bool Loading { get; set; } = true;
@@ -65,4 +66,27 @@ public record ResourceManagementComponentState<TResource>
     /// Gets/sets the name of the selected resource
     /// </summary>
     public string ActiveResourceName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Exposes the keys of the columns every resource can be sorted by
+/// </summary>
+public static class ResourceSortColumns
+{
+
+    /// <summary>
+    /// Gets the key of the column that holds the name of resources
+    /// </summary>
+    public const string Name = "name";
+
+    /// <summary>
+    /// Gets the key of the column that holds the creation time of resources
+    /// </summary>
+    public const string Created = "created";
+
+    /// <summary>
+    /// Gets the key of the column that holds the generation of resources
+    /// </summary>
+    public const string Generation = "generation";
+
 }

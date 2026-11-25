@@ -1,0 +1,39 @@
+/*
+ * Adapts the dashboard's stylesheets, designed for the dark theme, to the light theme (see #229).
+ * Loaded after app.css: the rules below only apply to the light theme.
+ */
+
+[data-bs-theme=light] {
+    /* the brand's cyan is too light for text on white: links and emphasized text use a darker shade, for a contrast of at least 4.5:1 */
+    --bs-link-color: #0b6e88;
+    --bs-link-color-rgb: 11, 110, 136;
+    --bs-link-hover-color: #07536a;
+    --bs-link-hover-color-rgb: 7, 83, 106;
+    --bs-primary-text-emphasis: #07536a;
+}
+
+[data-bs-theme=light] #blazor-error-ui {
+    background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme=light] ::-webkit-scrollbar-track {
+    background: var(--bs-body-bg);
+}
+
+[data-bs-theme=light] ::-webkit-scrollbar-track:hover,
+[data-bs-theme=light] ::-webkit-scrollbar-track:active {
+    background: var(--bs-secondary-bg);
+}
+
+[data-bs-theme=light] .text-primary {
+    color: var(--bs-primary-text-emphasis) !important;
+}
+
+/* native controls, such as checkboxes and scrollbars, follow the theme rather than the system's */
+[data-bs-theme=light] {
+    color-scheme: light;
+}
+
+[data-bs-theme=dark] {
+    color-scheme: dark;
+}

@@ -59,7 +59,10 @@ public class GetResourceQueryHandler<TResource>(IResourceRepository repository)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<TResource>> HandleAsync(GetResourceQuery<TResource> query, CancellationToken cancellationToken)
     {
-        return this.Ok(await repository.GetAsync<TResource>(query.Name, query.Namespace, cancellationToken).ConfigureAwait(false));
+        // a missing resource is reported as such, rather than as a successful response without content (see #227)
+        var resource = await repository.GetAsync<TResource>(query.Name, query.Namespace, cancellationToken).ConfigureAwait(false);
+        if (resource == null) return new OperationResult<TResource>((int)HttpStatusCode.NotFound, errors: [new Error(ProblemTypes.NotFound, "Not Found", (int)HttpStatusCode.NotFound, $"There is no {typeof(TResource).Name.ToLowerInvariant()} named '{query.Name}'")]);
+        return this.Ok(resource);
     }
 
 }
