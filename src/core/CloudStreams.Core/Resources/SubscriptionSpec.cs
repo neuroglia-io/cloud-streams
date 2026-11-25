@@ -64,4 +64,11 @@ public record SubscriptionSpec
     [DataMember(Order = 6, Name = "suspended"), JsonPropertyName("suspended"), YamlMember(Alias = "suspended")]
     public virtual bool Suspended { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure what becomes of the cloud events the subscription fails to deliver, if any. If not set, a subscription that tracks an
+    /// offset is faulted, and one that does not drops the cloud event
+    /// </summary>
+    [DataMember(Order = 7, Name = "deadLetter"), JsonPropertyName("deadLetter"), YamlMember(Alias = "deadLetter")]
+    public virtual DeadLetterPolicy? DeadLetter { get; set; }
+
 }

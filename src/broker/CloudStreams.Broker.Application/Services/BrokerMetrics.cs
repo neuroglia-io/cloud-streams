@@ -53,6 +53,7 @@ public class BrokerMetrics
         this.AcknowledgementDuration = this.Meter.CreateHistogram<double>($"{MetricsPrefix}ack_duration", "s", "How long deferred acknowledgements have been pending before being acknowledged, negatively acknowledged or expiring",
             advice: new() { HistogramBucketBoundaries = AcknowledgementDurationBuckets });
         this.TotalAcknowledgementTimeouts = this.Meter.CreateCounter<int>($"{MetricsPrefix}ack_timeouts_count", "{timeout}", "The total amount of deferred acknowledgements that expired before the subscriber called back");
+        this.TotalDeadLetters = this.Meter.CreateCounter<int>($"{MetricsPrefix}dead_letters_count", "{event}", "The total amount of cloud events that could not be delivered, and have been dead-lettered");
         this.Meter.CreateObservableGauge($"{MetricsPrefix}subscription_lag", this.ObserveLags, "{event}", "The amount of records of its stream a subscription has yet to handle");
     }
 
@@ -91,6 +92,11 @@ public class BrokerMetrics
     /// </summary>
     protected Counter<int> TotalAcknowledgementTimeouts { get; }
 
+    /// <summary>
+    /// Gets the counter used to track the total amount of dead-lettered cloud events
+    /// </summary>
+    protected Counter<int> TotalDeadLetters { get; }
+
     /// <inheritdoc/>
     public virtual void IncrementTotalPublishedEvents(string subscription, string stream) => this.TotalPublishedEvents.Add(1, Tags(subscription, stream));
 
@@ -108,6 +114,9 @@ public class BrokerMetrics
 
     /// <inheritdoc/>
     public virtual void IncrementTotalAcknowledgementTimeouts(string subscription, string stream) => this.TotalAcknowledgementTimeouts.Add(1, Tags(subscription, stream));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalDeadLetters(string subscription, string stream) => this.TotalDeadLetters.Add(1, Tags(subscription, stream));
 
     /// <inheritdoc/>
     public virtual IDisposable ObserveLag(string subscription, Func<(string Stream, ulong Lag)?> observe)

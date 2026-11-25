@@ -53,6 +53,15 @@ public interface ICloudEventStore
     IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Finds the offset of the first cloud event recorded at or after the specified time
+    /// </summary>
+    /// <param name="time">The time to find the offset of</param>
+    /// <param name="partition">The partition to search, if any. If not set, searches the whole stream</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The offset of the first cloud event recorded at or after the specified time, or null if none has been, or if the stream does not exist</returns>
+    Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Reads recorded <see cref="CloudEvent"/>s
     /// </summary>
     /// <param name="readDirection">The direction in which to read the stream</param>

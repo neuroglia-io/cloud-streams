@@ -42,11 +42,32 @@ public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
 {
 
     /// <inheritdoc/>
-    public Task<IOperationResult<IAsyncEnumerable<object>>> HandleAsync(ReadEventStreamQuery query, CancellationToken cancellationToken)
+    public async Task<IOperationResult<IAsyncEnumerable<object>>> HandleAsync(ReadEventStreamQuery query, CancellationToken cancellationToken)
     {
         var length = query.Options.Length > StreamReadOptions.MaxLength ? StreamReadOptions.MaxLength : query.Options.Length;
         if (length < 1) length = 1;
         var offset = query.Options.Offset;
+        if (offset.HasValue && query.Options.Time.HasValue)
+            return new OperationResult<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest, errors: [new Error(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, "Either 'offset' or 'time' may be set, but not both")]);
+        if (query.Options.Time.HasValue)
+        {
+            // the first cloud event recorded at or after the specified time, if any (see #211)
+            var found = await eventStore.FindOffsetAsync(query.Options.Time.Value, query.Options.Partition, cancellationToken).ConfigureAwait(false);
+            switch (query.Options.Direction)
+            {
+                case StreamReadDirection.Forwards:
+                    if (!found.HasValue) return this.Ok(AsyncEnumerable.Empty<object>());
+                    offset = (long)found.Value;
+                    break;
+                case StreamReadDirection.Backwards:
+                    // reading backwards starts at the last cloud event recorded before the specified time: every cloud event has been, if none has been at or after it
+                    if (found == 0) return this.Ok(AsyncEnumerable.Empty<object>());
+                    offset = found.HasValue ? (long)found.Value - 1 : StreamPosition.EndOfStream;
+                    break;
+                default:
+                    return new OperationResult<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest);
+            }
+        }
         if (!offset.HasValue)
         {
             switch (query.Options.Direction)
@@ -58,7 +79,7 @@ public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
                     offset = StreamPosition.EndOfStream;
                     break;
                 default:
-                    return Task.FromResult((IOperationResult<IAsyncEnumerable<object>>)new OperationResult<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest));
+                    return new OperationResult<IAsyncEnumerable<object>>((int)HttpStatusCode.BadRequest);
             }
         }
         var events = query.Options.Partition == null ?
@@ -69,7 +90,7 @@ public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
             StreamReadOutputFormat.Event => events.Select(e => e.ToCloudEvent(default)).OfType<object>(),
             _ => events
         };
-        return Task.FromResult(this.Ok(results));
+        return this.Ok(results);
     }
 
 }

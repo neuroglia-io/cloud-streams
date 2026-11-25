@@ -97,4 +97,12 @@ public record StreamReadOptions
     [DataMember(Order = 5, Name = "outputFormat"), JsonPropertyName("outputFormat"), YamlMember(Alias = "outputFormat")]
     public virtual StreamReadOutputFormat Format { get; set; } = StreamReadOutputFormat.Event;
 
+    /// <summary>
+    /// Gets/sets the time starting from which to read the stream, as an alternative to <see cref="Offset"/>. Reading forwards starts at the first cloud event
+    /// recorded at or after that time, and reading backwards at the last one recorded before it
+    /// </summary>
+    [Description("The time starting from which to read the stream, as an alternative to the offset")]
+    [DataMember(Order = 6, Name = "time"), JsonPropertyName("time"), YamlMember(Alias = "time")]
+    public virtual DateTimeOffset? Time { get; set; }
+
 }

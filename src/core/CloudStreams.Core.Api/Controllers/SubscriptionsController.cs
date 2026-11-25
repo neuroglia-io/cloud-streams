@@ -14,6 +14,7 @@
 using CloudStreams.Core.Application.Commands.Subscriptions;
 using CloudStreams.Core.Application.Queries.Subscriptions;
 using Microsoft.AspNetCore.Authorization;
+using Neuroglia.Data.Infrastructure.EventSourcing;
 
 namespace CloudStreams.Core.Api.Controllers;
 
@@ -117,9 +118,10 @@ public class SubscriptionsController(IMediator mediator)
     }
 
     /// <summary>
-    /// Replays the specified subscription, by delivering every cloud event matching it again, from the beginning of the stream
+    /// Replays the specified subscription, by delivering every cloud event matching it again, from the beginning of the stream or from the specified time
     /// </summary>
     /// <param name="name">The name of the subscription to replay</param>
+    /// <param name="from">The time, in ISO 8601 format, from which to replay the subscription, if any: it is replayed from the first cloud event recorded at or after that time</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the replayed subscription</returns>
     /// <remarks>Requires the operator role, which, unlike the admin role, does not allow patching the subscription (see #147)</remarks>
@@ -127,9 +129,44 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ReplaySubscription(string name, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ReplaySubscription(string name, [FromQuery] DateTimeOffset? from = null, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new ReplaySubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ReplaySubscriptionCommand(name, from), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Reads the cloud events the specified subscription failed to deliver, and has stored in its dead-letter stream, most recent first by default
+    /// </summary>
+    /// <param name="name">The name of the subscription to read the dead letters of</param>
+    /// <param name="direction">The direction in which to read the dead letters</param>
+    /// <param name="offset">The offset starting from which to read the dead letters, if any</param>
+    /// <param name="length">The maximum amount of dead letters to read</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is the dead letters read</returns>
+    [HttpGet("{name}/dead-letters")]
+    [ProducesResponseType(typeof(IAsyncEnumerable<DeadLetter>), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> ReadDeadLetters(string name, [FromQuery] StreamReadDirection direction = StreamReadDirection.Backwards, [FromQuery] long? offset = null, [FromQuery] ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
+    {
+        return this.Process(await this.Mediator.ExecuteAsync(new ReadSubscriptionDeadLettersQuery(name, direction, offset, length), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Delivers the specified dead letter to the subscriber again, once
+    /// </summary>
+    /// <param name="name">The name of the subscription the dead letter belongs to</param>
+    /// <param name="offset">The offset of the dead letter in the subscription's dead-letter stream</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> that describes the redelivery: <c>502 Bad Gateway</c> if the subscriber refused it again</returns>
+    /// <remarks>Requires the operator role (see #207)</remarks>
+    [HttpPost("{name}/dead-letters/{offset}/redeliver")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(DeadLetterRedelivery), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> RedeliverDeadLetter(string name, ulong offset, CancellationToken cancellationToken = default)
+    {
+        var result = await this.Mediator.ExecuteAsync(new RedeliverDeadLetterCommand(name, offset), cancellationToken).ConfigureAwait(false);
+        return result.Status is < 200 or >= 300 ? this.Problem(result) : this.Process(result);
     }
 
     /// <summary>

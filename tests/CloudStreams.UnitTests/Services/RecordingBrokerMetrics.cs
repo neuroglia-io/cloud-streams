@@ -70,6 +70,16 @@ public class RecordingBrokerMetrics
     /// <inheritdoc/>
     public void IncrementTotalAcknowledgementTimeouts(string subscription, string stream) => Interlocked.Increment(ref this._totalAcknowledgementTimeouts);
 
+    int _totalDeadLetters;
+
+    /// <summary>
+    /// Gets the amount of times <see cref="IncrementTotalDeadLetters"/> has been called
+    /// </summary>
+    public int TotalDeadLetters => Volatile.Read(ref this._totalDeadLetters);
+
+    /// <inheritdoc/>
+    public void IncrementTotalDeadLetters(string subscription, string stream) => Interlocked.Increment(ref this._totalDeadLetters);
+
     readonly List<(string Outcome, TimeSpan Duration)> _deliveryDurations = [];
     readonly List<(string Outcome, TimeSpan Duration)> _acknowledgementDurations = [];
     Func<(string Stream, ulong Lag)?>? _lag;

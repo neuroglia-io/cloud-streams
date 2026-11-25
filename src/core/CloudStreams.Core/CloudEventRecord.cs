@@ -56,4 +56,12 @@ public record CloudEventRecord
     [DataMember(Order = 2, Name = "sequence"), JsonPropertyName("sequence"), YamlMember(Alias = "sequence")]
     public virtual ulong Sequence { get; set; }
 
+    /// <summary>
+    /// Gets/sets the date and time at which the cloud event has been recorded, if known. Unlike the cloud event's <c>time</c> attribute, which its publisher may set,
+    /// it never decreases along the stream
+    /// </summary>
+    [Description("The date and time at which the cloud event has been recorded, if known")]
+    [DataMember(Order = 3, Name = "timestamp"), JsonPropertyName("timestamp"), YamlMember(Alias = "timestamp")]
+    public virtual DateTimeOffset? Timestamp { get; set; }
+
 }

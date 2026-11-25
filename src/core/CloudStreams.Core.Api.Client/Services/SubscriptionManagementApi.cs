@@ -34,7 +34,28 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
     public virtual Task<Subscription> ResumeAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "resume", cancellationToken);
 
     /// <inheritdoc/>
-    public virtual Task<Subscription> ReplayAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "replay", cancellationToken);
+    public virtual Task<Subscription> ReplayAsync(string name, DateTimeOffset? from = null, CancellationToken cancellationToken = default) => this.PostAsync(name, from.HasValue ? $"replay?from={Uri.EscapeDataString(from.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : "replay", cancellationToken);
+
+    /// <inheritdoc/>
+    public virtual async Task<IReadOnlyList<DeadLetter>> GetDeadLettersAsync(string name, long? offset = null, ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        var query = $"length={length}" + (offset.HasValue ? $"&offset={offset.Value}" : string.Empty);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{this.GetResourceUri(name)}/dead-letters?{query}"), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<List<DeadLetter>>(json) ?? [];
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<DeadLetterRedelivery> RedeliverDeadLetterAsync(string name, ulong offset, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/dead-letters/{offset}/redeliver"), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<DeadLetterRedelivery>(json)!;
+    }
 
     /// <summary>
     /// Posts an operation to the specified <see cref="Subscription"/>

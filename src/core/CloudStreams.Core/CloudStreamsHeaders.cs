@@ -40,6 +40,11 @@ public static class CloudStreamsHeaders
     public const string AckUri = "cloudstreams-ack-uri";
 
     /// <summary>
+    /// Gets the name of the header that conveys, percent-encoded, why a cloud event sent to a dead-letter service could not be delivered to its subscriber
+    /// </summary>
+    public const string DeadLetterReason = "cloudstreams-dead-letter-reason";
+
+    /// <summary>
     /// Gets the name of the header with which the gateway tells publishers what became of a cloud event it accepted: either <c>stored</c>, <c>ignored</c> when
     /// the split-horizon policy dropped it as looping, or <c>duplicate</c> when it had already been stored within the deduplication window
     /// </summary>
