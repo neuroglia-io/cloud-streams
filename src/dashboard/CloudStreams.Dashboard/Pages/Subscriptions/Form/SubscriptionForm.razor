@@ -33,7 +33,7 @@
                             <DurationInput Id="@FieldId("timeout")" @bind-Value="Model.Spec.Subscriber.Timeout" Placeholder="default" />
                         </FormField>
                     </div>
-                    <FormField Id="@FieldId("retry")" Label="Retries" Help="What to do when a delivery fails. Without a policy of its own, the subscription uses its broker's.">
+                    <FormField Id="@FieldId("retry")" Label="Retries" Error="@ErrorOf("retry")" Help="What to do when a delivery fails. Without a policy of its own, the subscription uses its broker's.">
                         <RetryPolicyInput Id="@FieldId("retry")" @bind-Value="Model.Spec.Subscriber.RetryPolicy" InheritedText="The broker's retry policy applies" />
                     </FormField>
                     <FormField Id="@FieldId("mode")" Label="Delivery" Error="@ErrorOf("mode")">
@@ -242,6 +242,7 @@
         ["spec.subscriber.ordering.key"] = ("ordering-key", 0),
         ["spec.subscriber.ordering.maxConcurrency"] = ("concurrency", 0),
         ["spec.subscriber"] = ("mode", 0),
+        ["spec.subscriber.retryPolicy"] = ("retry", 0),
         ["spec.partition.id"] = ("partition", 1),
         ["spec.filter.attributes"] = ("attributes", 1),
         ["spec.filter.expression"] = ("expression", 1),

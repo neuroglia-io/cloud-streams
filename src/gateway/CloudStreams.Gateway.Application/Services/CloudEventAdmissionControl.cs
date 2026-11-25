@@ -46,7 +46,7 @@ namespace CloudStreams.Gateway.Application.Services;
 /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
 public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogger<CloudEventAdmissionControl> logger, IOptions<GatewayOptions> gatewayOptions, IJsonSerializer serializer, IGatewayMetrics metrics, ICloudEventAuthorizationManager authorizationManager,
     IJsonSchemaGenerator schemaGenerator, IJsonSchemaRegistry schemaRegistry, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators)
-        : BackgroundService, ICloudEventAdmissionControl, IDisposable
+        : BackgroundService, ICloudEventAdmissionControl, IGatewayAdmissionTester, IDisposable
 {
 
     /// <summary>
@@ -181,6 +181,21 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         {
             return new((int)HttpStatusCode.ServiceUnavailable, errors: [new Error(new Uri("https://cloud-streams.io/problems/gateway-unavailable"), "Service Unavailable", (int)HttpStatusCode.ServiceUnavailable, "The gateway is starting: its configuration has not been loaded yet. Please retry later")]);
         }
+        return await this.EvaluateAsync(e, this.Configuration.Resource, allowedSources, this._metrics, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Evaluates the specified cloud event against the policies of the specified gateway
+    /// </summary>
+    /// <param name="e">The cloud event to evaluate</param>
+    /// <param name="gateway">The gateway whose policies to evaluate the cloud event against</param>
+    /// <param name="allowedSources">The sources the publisher is allowed to publish cloud events of, if it is bound to any</param>
+    /// <param name="metrics">The service used to count the outcomes, if they are to be counted</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The result of the evaluation: the cloud event to store, '202 Accepted' if it is to be ignored, or why it is refused</returns>
+    protected virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, Core.Resources.Gateway gateway, IReadOnlyCollection<string>? allowedSources, IGatewayMetrics? metrics, CancellationToken cancellationToken)
+    {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.EvaluateAgainst");
         activity?.SetTag("event.id", e.Id);
         activity?.SetTag("event.source", e.Source.ToString());
         activity?.SetTag("event.type", e.Type);
@@ -189,7 +204,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         foreach (var validator in this.Validators) validationResults.Add(await validator.ValidateAsync(e, cancellationToken).ConfigureAwait(false));
         if (!validationResults.All(r => r.IsValid))
         {
-            this._metrics.IncrementTotalInvalidEvents(InvalidityReason.Attributes);
+            metrics?.IncrementTotalInvalidEvents(InvalidityReason.Attributes);
             return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid", (int)HttpStatusCode.BadRequest, errors: validationResults
                 .Where(r => !r.IsValid)
                 .SelectMany(r => r.Errors)
@@ -201,33 +216,33 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         if (allowedSources != null && !CloudEventSourcePattern.IsMatchAny(e.Source, allowedSources))
         {
             this.Logger.LogDebug("The cloud event with id '{eventId}' has been rejected: its publisher is not allowed to publish cloud events of source '{source}'", e.Id, e.Source);
-            this._metrics.IncrementTotalRejectedEvents(RejectionReason.Authorization);
+            metrics?.IncrementTotalRejectedEvents(RejectionReason.Authorization);
             return new((int)HttpStatusCode.Forbidden, errors: [new Error(SourceNotAllowedProblemType, "Forbidden", (int)HttpStatusCode.Forbidden, $"The publisher is not allowed to publish cloud events of source '{e.Source.OriginalString}'")]);
         }
-        var result = await this.AuthorizeAsync(e, cancellationToken).ConfigureAwait(false);
+        var result = await this.AuthorizeAsync(e, gateway, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
             // an ignored loop is a success without data: the publisher is told it has been ignored, and it is counted as such rather than as rejected (see #179)
-            if (result.Status == (int)HttpStatusCode.Conflict && this.Configuration?.Resource.Spec.SplitHorizon?.LoopAction == LoopAction.Ignore)
+            if (result.Status == (int)HttpStatusCode.Conflict && gateway.Spec.SplitHorizon?.LoopAction == LoopAction.Ignore)
             {
-                this._metrics.IncrementTotalIgnoredEvents(e.Source);
+                metrics?.IncrementTotalIgnoredEvents(e.Source);
                 return new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.Accepted);
             }
             // the split-horizon policy is the only one to answer '409 Conflict', the authorization policy answering '401 Unauthorized' or '403 Forbidden'
-            this._metrics.IncrementTotalRejectedEvents(result.Status == (int)HttpStatusCode.Conflict ? RejectionReason.SplitHorizon : RejectionReason.Authorization);
+            metrics?.IncrementTotalRejectedEvents(result.Status == (int)HttpStatusCode.Conflict ? RejectionReason.SplitHorizon : RejectionReason.Authorization);
             return Failure(result);
         }
-        result = await this.ValidateAsync(e, cancellationToken).ConfigureAwait(false);
+        result = await this.ValidateAsync(e, gateway, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
         {
             this.Logger.LogDebug("Admission evaluation failed with status code '{statusCode}' for cloud event with id '{eventId}'", result.Status, e.Id);
-            this._metrics.IncrementTotalInvalidEvents(InvalidityReason.Schema);
+            metrics?.IncrementTotalInvalidEvents(InvalidityReason.Schema);
             return Failure(result);
         }
         this.Logger.LogDebug("Admission evaluation for cloud event with id '{eventId}' completed successfully", e.Id);
         this.Logger.LogDebug("Extracting metadata from the cloud event with id '{eventId}'", e.Id);
-        var metadata = await this.ExtractMetadataAsync(e, cancellationToken).ConfigureAwait(false);
+        var metadata = await this.ExtractMetadataAsync(e, gateway, cancellationToken).ConfigureAwait(false);
         this.Logger.LogDebug("Metadata successfully extracted from the cloud event with id '{eventId}'", e.Id);
         return new((int)HttpStatusCode.OK, new CloudEventDescriptor(metadata, e.Data));
     }
@@ -238,11 +253,11 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <param name="e">The <see cref="CloudEvent"/> to authorize</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A <see cref="OperationResult"/> that describes the result of the operation</returns>
-    protected virtual async Task<OperationResult> AuthorizeAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    protected virtual async Task<OperationResult> AuthorizeAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
         this.Logger.LogDebug("Authorizing cloud event with id '{eventId}'...", e.Id);
-        var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
+        var splitHorizon = gateway.Spec.SplitHorizon;
         if (splitHorizon != null && e.ExtensionAttributes?.TryGetValue(splitHorizon.OriginAttribute, out var origin) == true)
         {
             var origins = origin.ToString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -251,7 +266,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             if (!string.IsNullOrWhiteSpace(lastOrigin) && ((splitHorizon.AllowedOrigins != null && !splitHorizon.AllowedOrigins.Contains(lastOrigin)) || (splitHorizon.ExcludedOrigins != null && splitHorizon.ExcludedOrigins.Contains(lastOrigin)))) reject = true;
             else
             {
-                var gatewayName = this.Configuration!.Resource.GetQualifiedName();
+                var gatewayName = gateway.GetQualifiedName();
                 var loopDetected = splitHorizon.EvaluationMode switch
                 {
                     HorizonEvaluationMode.Last => origins.LastOrDefault() == gatewayName,
@@ -269,7 +284,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
                 return new((int)HttpStatusCode.Conflict);
             }
         }
-        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? this.Configuration?.Resource.Spec.Authorization;
+        var policy = gateway.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Authorization ?? gateway.Spec.Authorization;
         if (policy == null) return new((int)HttpStatusCode.OK);
         var result = await this.AuthorizationManager.EvaluateAsync(e, policy, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
@@ -287,13 +302,13 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <param name="e">The <see cref="CloudEvent"/> to validate</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A <see cref="OperationResult"/> that describes the result of the operation</returns>
-    protected virtual async Task<OperationResult> ValidateAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    protected virtual async Task<OperationResult> ValidateAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
-        var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? this.Configuration?.Resource.Spec.Validation;
+        var policy = gateway.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? gateway.Spec.Validation;
         // a registered schema bound to the cloud event's source and type applies whatever the validation policy, unless it skips validation (see #213)
-        var binding = this.Configuration?.Resource.Spec.Events?.LastOrDefault(c => c.AppliesTo(e))?.Schema;
+        var binding = gateway.Spec.Events?.LastOrDefault(c => c.AppliesTo(e))?.Schema;
         if (binding != null && policy?.SkipValidation != true)
         {
             var resolver = this.ServiceProvider.GetService<RegisteredSchemaResolver>() ?? ActivatorUtilities.CreateInstance<RegisteredSchemaResolver>(this.ServiceProvider);
@@ -323,7 +338,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         JsonSchema? schema = null;
         if (e.DataSchema == null)
         {
-            dataSchemaPolicy ??= this.Configuration?.Resource.Spec.Validation?.DataSchema;
+            dataSchemaPolicy ??= gateway.Spec.Validation?.DataSchema;
             if (dataSchemaPolicy?.Required == true)
             {
                 this.Logger.LogDebug("Validation of cloud event with id '{eventId}' failed: the validation policy for source '{sourceUri}' requires the cloud event's 'dataSchema' attribute to be set", e.Id, e.Source);
@@ -368,22 +383,22 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// <param name="e">The <see cref="CloudEvent"/> to extract metadata from</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The metadata extracted from the specified <see cref="CloudEvent"/></returns>
-    protected virtual async Task<CloudEventMetadata> ExtractMetadataAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    protected virtual async Task<CloudEventMetadata> ExtractMetadataAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
         if (!e.Time.HasValue) e.Time = DateTimeOffset.UtcNow;
         var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         // binary data is not a context attribute, and would otherwise be lost: it is kept with them, the event's data being stored as JSON
         if (e.Data == null && !string.IsNullOrEmpty(e.DataBase64)) metadata.ContextAttributes[CloudEventAttributes.DataBase64] = e.DataBase64;
-        var splitHorizon = this.Configuration?.Resource.Spec.SplitHorizon;
+        var splitHorizon = gateway.Spec.SplitHorizon;
         if (splitHorizon != null)
         {
             var origins = new List<string>();
             if (e.ExtensionAttributes?.TryGetValue(splitHorizon.OriginAttribute, out var origin) == true) origins = [.. origin.ToString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
-            origins.Add(this.Configuration!.Resource.GetQualifiedName());
+            origins.Add(gateway.GetQualifiedName());
             metadata.ContextAttributes[splitHorizon.OriginAttribute] = string.Join(' ', origins);
         }
-        var ingestionConfiguration = this.Configuration?.Resource.Spec.Events?.LastOrDefault(c => c.AppliesTo(e));
+        var ingestionConfiguration = gateway.Spec.Events?.LastOrDefault(c => c.AppliesTo(e));
         if (ingestionConfiguration == null || ingestionConfiguration.Metadata?.Properties == null) return metadata;
         foreach (var property in ingestionConfiguration.Metadata.Properties)
         {
@@ -399,7 +414,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
                             this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': failed to find a context attribute with name '{attributeName}'", property.Name, e.Id, property.Attribute.Name);
                             continue;
                         }
-                        if (!string.IsNullOrWhiteSpace(property.Attribute.Value) && !CloudStreamsRegex.IsMatch(attributeValue?.ToString() ?? string.Empty, property.Attribute.Value))
+                        if (!string.IsNullOrWhiteSpace(property.Attribute.Value) && !CloudStreamsRegex.IsMatch((attributeValue is Uri uri ? uri.OriginalString : attributeValue?.ToString()) ?? string.Empty, property.Attribute.Value))
                         {
                             this.Logger.LogWarning("Failed to extract the configured metadata property '{property}' from the cloud event with id '{eventId}': the value of the context attribute with name '{attributeName}' does not match the configured pattern '{attributeValue}'", property.Name, e.Id, property.Attribute.Name, property.Attribute.Value);
                             continue;
@@ -422,6 +437,57 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
             }
         }
         return await Task.FromResult(metadata);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The cloud event goes through the same pipeline as ingested ones, against the specified gateway rather than the configured one. Nothing is stored nor counted, and the
+    /// cloud event is copied first, since validation may set its data schema
+    /// </remarks>
+    public virtual async Task<GatewayAdmissionTestResult> TestAsync(Core.Resources.Gateway gateway, CloudEvent e, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(gateway);
+        ArgumentNullException.ThrowIfNull(e);
+        var copy = this.Serializer.Deserialize<CloudEvent>(this.Serializer.SerializeToText(e))!;
+        var result = await this.EvaluateAsync(copy, gateway, null, null, cancellationToken).ConfigureAwait(false);
+        var error = result.Errors?.FirstOrDefault();
+        var errors = error?.Errors?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        return result.Status switch
+        {
+            (int)HttpStatusCode.OK => new()
+            {
+                Outcome = GatewayAdmissionTestResult.Accepted,
+                Status = (int)HttpStatusCode.NoContent,
+                Attributes = result.Data?.Metadata.ContextAttributes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                Metadata = result.Data?.Metadata.ExtensionData?.Count > 0 ? new Dictionary<string, object>(result.Data.Metadata.ExtensionData) : null
+            },
+            (int)HttpStatusCode.Accepted => new()
+            {
+                Outcome = GatewayAdmissionTestResult.Ignored,
+                Status = (int)HttpStatusCode.NoContent,
+                Reason = "The split-horizon policy detected a loop: the cloud event has already gone through this gateway, and is ignored"
+            },
+            (int)HttpStatusCode.Conflict => new()
+            {
+                Outcome = GatewayAdmissionTestResult.Rejected,
+                Status = result.Status,
+                Reason = "The split-horizon policy detected a loop, or a chain of gateways that is too long, or an origin that is not allowed"
+            },
+            (int)HttpStatusCode.Unauthorized or (int)HttpStatusCode.Forbidden => new()
+            {
+                Outcome = GatewayAdmissionTestResult.Rejected,
+                Status = result.Status,
+                Reason = error?.Detail ?? error?.Title ?? "The authorization policy denies the cloud event",
+                Errors = errors
+            },
+            _ => new()
+            {
+                Outcome = GatewayAdmissionTestResult.Invalid,
+                Status = result.Status,
+                Reason = error?.Detail ?? error?.Title ?? "The cloud event is invalid",
+                Errors = errors
+            }
+        };
     }
 
     /// <summary>

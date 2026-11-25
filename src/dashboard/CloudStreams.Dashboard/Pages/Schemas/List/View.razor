@@ -1,0 +1,94 @@
+@namespace CloudStreams.Dashboard.Pages.Schemas.List
+@page "/schemas"
+@inherits ResourceManagementComponent<Schema>
+
+@* The schema registry: the JSON schemas gateways validate the data of events against, and their versions (see #264) *@
+
+<ApplicationTitle>Schemas</ApplicationTitle>
+
+<div class="table-container">
+    @if (Loading)
+    {
+        <div class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    <ResourceListToolbar Id="schemas" Title="Schemas" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+                         LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
+                         OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
+    <table class="table table-striped table-hover">
+        <caption class="visually-hidden">Schemas. Select a row, or press Enter on it, to see its details.</caption>
+        <thead>
+            <tr>
+                <SortableHeader Column="@ResourceSortColumns.Name" Title="Name" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" />
+                <SortableHeader Column="@ResourceSortColumns.Created" Title="Created At" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
+                <th class="sticky-header text-center">Compatibility</th>
+                <SortableHeader Column="version" Title="Latest Version" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
+                <th class="sticky-header"><span class="visually-hidden">Actions</span></th>
+                <th class="sticky-header text-center align-middle">
+                    <input @ref="CheckboxAll" type="checkbox" aria-label="Select all schemas" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Resources != null && Resources.Any())
+            {
+                <Virtualize Context="resource" Items="@Resources">
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer">
+                        <td>@resource.Metadata.Name</td>
+                        <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
+                        <td class="text-center">@resource.Spec.GetCompatibility()</td>
+                        <td class="text-center">@(resource.Spec.GetVersion()?.Version.ToString() ?? "-")</td>
+                        <td class="text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Actions on the schema '{resource.Metadata.Name}'")" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <button class="dropdown-item" title="Export the schema '@resource.Metadata.Name'" @onclick="async _ => await OnExportAsync([resource])" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Download" /> Export</button>
+                                    </li>
+                                    @if (CanAdminister)
+                                    {
+                                        <li>
+                                            <button class="dropdown-item" title="Add a version to, or edit, the schema '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item text-danger" title="Delete the schema '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </td>
+                        <td class="text-center align-middle">
+                            <input type="checkbox" aria-label="@($"Select the schema '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
+                        </td>
+                    </tr>
+                </Virtualize>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (CanAdminister)
+{
+    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()" aria-label="Register a schema" title="Register a schema"><Icon Name="IconName.Plus" /></Button>
+}
+
+<Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+
+<Offcanvas @ref="EditorOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
+
+<CloudStreams.Dashboard.Components.ResourceForms.ResourceFormModal @ref="FormModal" />
+
+<ConfirmDialog @ref="Dialog" />
+
+@code {
+
+    /// <inheritdoc/>
+    protected override Task? ShowFormAsync(Schema? resource) => ShowFormAsync<CloudStreams.Dashboard.Pages.Schemas.Form.SchemaForm>(resource);
+
+    /// <inheritdoc/>
+    protected override void ConfigureSortKeys(IDictionary<string, Func<Schema, IComparable?>> sortKeys) => sortKeys["version"] = s => s.Spec.GetVersion()?.Version ?? 0;
+
+}

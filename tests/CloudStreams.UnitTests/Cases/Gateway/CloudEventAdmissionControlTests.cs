@@ -159,6 +159,118 @@ public class CloudEventAdmissionControlTests
         Assert.Equal((int)HttpStatusCode.Forbidden, result.Status);
     }
 
+    static global::CloudStreams.Core.Resources.Gateway Candidate(GatewaySpec spec) => new(new ResourceMetadata(GatewayName), spec);
+
+    [Fact]
+    public async Task Testing_An_Admissible_Event_Should_Report_It_As_Accepted_Without_Counting_It()
+    {
+        // arrange
+        var metrics = Substitute.For<IGatewayMetrics>();
+        var admission = Create(new(), metrics);
+        var e = CreateEvent("gateway-b");
+
+        // act
+        var result = await admission.TestAsync(Candidate(new()), e);
+
+        // assert
+        Assert.Equal(GatewayAdmissionTestResult.Accepted, result.Outcome);
+        Assert.Equal((int)HttpStatusCode.NoContent, result.Status);
+        Assert.NotNull(result.Attributes);
+        Assert.Equal(e.Type, result.Attributes!["type"]?.ToString());
+        Assert.Empty(metrics.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task Testing_Should_Evaluate_The_Candidate_Spec_Rather_Than_The_Running_One()
+    {
+        // arrange
+        var admission = Create(new() { LoopAction = LoopAction.Ignore });
+        var candidate = Candidate(new() { SplitHorizon = new() { EvaluationMode = HorizonEvaluationMode.Last, LoopAction = LoopAction.Reject } });
+
+        // act
+        var result = await admission.TestAsync(candidate, CreateEvent(GatewayName));
+
+        // assert
+        Assert.Equal(GatewayAdmissionTestResult.Rejected, result.Outcome);
+        Assert.Equal((int)HttpStatusCode.Conflict, result.Status);
+    }
+
+    [Fact]
+    public async Task Testing_A_Loop_The_Candidate_Ignores_Should_Report_It_As_Ignored()
+    {
+        // arrange
+        var admission = Create(new());
+        var candidate = Candidate(new() { SplitHorizon = new() { EvaluationMode = HorizonEvaluationMode.Last, LoopAction = LoopAction.Ignore } });
+
+        // act
+        var result = await admission.TestAsync(candidate, CreateEvent(GatewayName));
+
+        // assert
+        Assert.Equal(GatewayAdmissionTestResult.Ignored, result.Outcome);
+        Assert.NotNull(result.Reason);
+    }
+
+    [Fact]
+    public async Task Testing_An_Event_The_Candidate_Forbids_Should_Report_It_As_Rejected_With_The_Reason()
+    {
+        // arrange
+        var admission = Create(new());
+        var candidate = Candidate(new()
+        {
+            Authorization = new()
+            {
+                DecisionStrategy = RuleBasedDecisionStrategy.Unanimous,
+                Rules = [new() { Type = CloudEventAuthorizationRuleType.Attribute, Effect = AuthorizationPolicyEffect.Authorize, AttributeName = "source", AttributeValue = "^https://orders\\.example\\.com$" }]
+            }
+        });
+
+        // act
+        var result = await admission.TestAsync(candidate, CreateEvent("gateway-b"));
+
+        // assert
+        Assert.Equal(GatewayAdmissionTestResult.Rejected, result.Outcome);
+        Assert.Equal((int)HttpStatusCode.Forbidden, result.Status);
+        Assert.False(string.IsNullOrWhiteSpace(result.Reason));
+    }
+
+    [Fact]
+    public async Task An_Anchored_Source_Pattern_Should_Match_The_Source_As_Published()
+    {
+        // arrange - a source without a path must not be compared with the trailing slash Uri.ToString() adds
+        var admission = Create(new());
+        var candidate = Candidate(new()
+        {
+            Authorization = new()
+            {
+                DecisionStrategy = RuleBasedDecisionStrategy.Unanimous,
+                Rules = [new() { Type = CloudEventAuthorizationRuleType.Attribute, Effect = AuthorizationPolicyEffect.Authorize, AttributeName = "source", AttributeValue = "^https://orders\\.example\\.com$" }]
+            }
+        });
+        var e = CreateEvent("gateway-b");
+        e.Source = new("https://orders.example.com");
+
+        // act
+        var result = await admission.TestAsync(candidate, e);
+
+        // assert
+        Assert.Equal(GatewayAdmissionTestResult.Accepted, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Testing_Should_Not_Change_The_Tested_Event()
+    {
+        // arrange
+        var admission = Create(new());
+        var candidate = Candidate(new() { SplitHorizon = new() { TrackingMode = HorizonTrackingMode.Chain } });
+        var e = CreateEvent("gateway-b");
+
+        // act
+        await admission.TestAsync(candidate, e);
+
+        // assert
+        Assert.Equal("gateway-b", e.ExtensionAttributes![SplitHorizonPolicy.DefaultAttributeName]?.ToString());
+    }
+
     sealed class TestAdmissionControl
         : CloudEventAdmissionControl
     {

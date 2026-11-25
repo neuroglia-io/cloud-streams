@@ -1,0 +1,317 @@
+@namespace CloudStreams.Dashboard.Pages.Schemas.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Microsoft.AspNetCore.Components.Forms
+@inherits ResourceFormBase<Schema>
+
+@* A form to register schemas and versions of them, which checks new versions against the latest one before saving them (see #264) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name gateways bind events to, e.g. order-placed. It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("compatibility")" Label="Each new version must be" Error="@ErrorOf("compatibility")">
+                <div id="@FieldId("compatibility")" role="radiogroup" aria-describedby="@FormField.DescribedBy(FieldId("compatibility"))">
+                    @Radio(SchemaCompatibility.Backward, "Backward compatible: it accepts every document the previous version accepts, so consumers on the new version can read older data")
+                    @Radio(SchemaCompatibility.Forward, "Forward compatible: the previous version accepts every document it accepts, so consumers on the previous version can read newer data")
+                    @Radio(SchemaCompatibility.Full, "Fully compatible: both")
+                    @Radio(SchemaCompatibility.None, "Anything: versions are not checked")
+                </div>
+            </FormField>
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            break;
+        case 1:
+            @if (existingVersions.Count > 0)
+            {
+                <section class="mb-3" aria-labelledby="@FieldId("versions-title")">
+                    <h4 id="@FieldId("versions-title")" class="h6 small">Saved versions</h4>
+                    <div class="d-flex flex-wrap gap-2 align-items-center small mb-2">
+                        <label for="@FieldId("compare-from")">Compare version</label>
+                        <select id="@FieldId("compare-from")" class="form-select form-select-sm w-auto" @bind="compareFrom">
+                            @foreach (var version in existingVersions)
+                            {
+                                <option value="@version.Version">@version.Version</option>
+                            }
+                        </select>
+                        <label for="@FieldId("compare-to")">with</label>
+                        <select id="@FieldId("compare-to")" class="form-select form-select-sm w-auto" @bind="compareTo">
+                            @foreach (var version in existingVersions)
+                            {
+                                <option value="@version.Version">@version.Version</option>
+                            }
+                            @if (pendingSchema != null)
+                            {
+                                <option value="@NextVersion">@NextVersion (new)</option>
+                            }
+                        </select>
+                    </div>
+                    <pre class="border rounded p-2 small overflow-auto" style="max-height: 30vh" tabindex="0" aria-label="@($"The changes from version {compareFrom} to version {compareTo}")">@foreach (var line in Compare())
+{<span class="@DiffClass(line.Kind)">@(line.Kind switch { TextDiffLineKind.Added => "+ ", TextDiffLineKind.Removed => "- ", _ => "  " })@line.Text
+</span>}</pre>
+                </section>
+            }
+            <FormField Id="@FieldId("schema")" Label="@(IsNew ? "The JSON schema of version 1" : $"A new version, {NextVersion}")" Required="@IsNew" Error="@ErrorOf("schema")">
+                <ChildContent>
+                    <textarea id="@FieldId("schema")" rows="12" class="form-control form-control-sm font-monospace @Invalid("schema")" spellcheck="false" placeholder="@(IsNew ? "{ \"type\": \"object\", \"properties\": { ... } }" : "Leave empty to keep the versions as they are")" value="@schemaText" @onchange="OnSchemaChanged" aria-describedby="@FormField.DescribedBy(FieldId("schema"))"></textarea>
+                </ChildContent>
+                <HelpContent>Versions can be added, but neither changed nor removed. A JSON schema, which may also be uploaded, or generated from the data of the latest event of a type.</HelpContent>
+            </FormField>
+            <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+                <div>
+                    <label for="@FieldId("upload")" class="form-label small mb-1">Upload a schema</label>
+                    <InputFile id="@FieldId("upload")" class="form-control form-control-sm" accept=".json,application/json,application/schema+json" OnChange="OnUploadAsync" />
+                </div>
+                <div>
+                    <label for="@FieldId("generate-type")" class="form-label small mb-1">Generate from the latest event of type</label>
+                    <div class="input-group input-group-sm">
+                        <input id="@FieldId("generate-type")" type="text" class="form-control" list="@FieldId("types")" placeholder="e.g. order.placed" @bind="generateType" />
+                        <button type="button" class="btn btn-outline-secondary" disabled="@generating" @onclick="GenerateAsync">Generate</button>
+                    </div>
+                    <datalist id="@FieldId("types")">
+                        @foreach (var type in types)
+                        {
+                            <option value="@type"></option>
+                        }
+                    </datalist>
+                </div>
+                @if (!IsNew)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@(pendingSchema == null || checking)" @onclick="CheckAsync"><i class="bi bi-check2-circle" aria-hidden="true"></i> Check compatibility</button>
+                }
+            </div>
+            <div aria-live="polite" class="small">
+                @if (generateError != null)
+                {
+                    <p class="text-danger-emphasis mb-1">@generateError</p>
+                }
+                @if (compatibility != null)
+                {
+                    @if (compatibility.Compatible)
+                    {
+                        <p class="mb-0"><span class="badge text-bg-success"><i class="bi bi-check-circle" aria-hidden="true"></i> compatible</span> Version @NextVersion is @compatibility.Compatibility compatible with version @compatibility.Version.</p>
+                    }
+                    else
+                    {
+                        <p class="mb-1"><span class="badge text-bg-danger"><i class="bi bi-x-octagon" aria-hidden="true"></i> incompatible</span> Version @NextVersion is not @compatibility.Compatibility compatible with version @compatibility.Version:</p>
+                        <ul class="mb-0">
+                            @foreach (var error in compatibility.Errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    List<SchemaVersion> existingVersions = [];
+    List<string> types = [];
+    string? schemaText;
+    JsonNode? pendingSchema;
+    int compareFrom;
+    int compareTo;
+    string? generateType;
+    string? generateError;
+    bool generating;
+    bool checking;
+    SchemaCompatibilityResult? compatibility;
+
+    int NextVersion => (existingVersions.Count == 0 ? 0 : existingVersions.Max(v => v.Version)) + 1;
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Schema", "Versions"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.compatibility"] = ("compatibility", 0),
+        ["spec.versions"] = ("schema", 1)
+    };
+
+    /// <inheritdoc/>
+    protected override Schema CreateDefault() => new(new() { Name = string.Empty }, new() { Compatibility = SchemaCompatibility.Backward });
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        try { types = [.. (await Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType, maxResults: 100)).Items]; }
+        catch (Exception) { types = []; }
+    }
+
+    /// <inheritdoc/>
+    protected override void OnModelReplaced()
+    {
+        // the versions saved so far are those of the original resource: a version added in the YAML view counts as the new one
+        existingVersions = [.. (Resource?.Spec.Versions ?? []).OrderBy(v => v.Version)];
+        var added = Model.Spec.Versions.Where(v => existingVersions.All(e => e.Version != v.Version)).LastOrDefault();
+        pendingSchema = added == null ? null : JsonSerializer.SerializeToNode(added.Schema);
+        schemaText = pendingSchema == null ? null : ResourceDocuments.ToJson(pendingSchema);
+        compareFrom = existingVersions.Count > 1 ? existingVersions[^2].Version : existingVersions.FirstOrDefault()?.Version ?? 0;
+        compareTo = existingVersions.LastOrDefault()?.Version ?? 0;
+    }
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        switch (step)
+        {
+            case 0:
+                if (IsNew)
+                {
+                    if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+                    else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+                }
+                break;
+            case 1:
+                if (!string.IsNullOrWhiteSpace(schemaText) && pendingSchema == null) errors["schema"] = "The schema is not valid JSON";
+                else if (pendingSchema != null && pendingSchema is not JsonObject && !(pendingSchema is JsonValue value && value.GetValueKind() is JsonValueKind.True or JsonValueKind.False)) errors["schema"] = "A JSON schema is an object, or a boolean";
+                else if (IsNew && pendingSchema == null) errors["schema"] = "Enter, upload or generate the first version";
+                break;
+        }
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        <p class="mb-0">
+            <strong>@Model.GetName()</strong> requires each new version to be @(Model.Spec.GetCompatibility() == SchemaCompatibility.None ? "anything: versions are not checked" : $"{Model.Spec.GetCompatibility()} compatible with the previous one").
+            @if (pendingSchema != null)
+            {
+                <text> Version @NextVersion is added@(IsNew ? "" : ", which the server has checked against the latest version").</text>
+            }
+            else
+            {
+                <text> No version is added.</text>
+            }
+        </p>
+    };
+
+    RenderFragment Radio(string value, string label) => __builder =>
+    {
+        <div class="form-check">
+            <input id="@FieldId($"compatibility-{value}-option")" class="form-check-input" type="radio" name="@FieldId("compatibility")" checked="@(Model.Spec.GetCompatibility() == value)" @onchange="_ => Model.Spec.Compatibility = value" />
+            <label class="form-check-label small" for="@FieldId($"compatibility-{value}-option")">@label</label>
+        </div>
+    };
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+    void OnSchemaChanged(ChangeEventArgs e) => SetSchema(e.Value?.ToString());
+
+    /// <summary>
+    /// Sets the new version to the specified JSON schema, or removes it if there is none
+    /// </summary>
+    void SetSchema(string? text)
+    {
+        schemaText = text;
+        compatibility = null;
+        try { pendingSchema = string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text); }
+        catch (JsonException) { pendingSchema = null; }
+        Model.Spec.Versions = [.. existingVersions.Select(v => new SchemaVersion() { Version = v.Version, Schema = v.Schema })];
+        if (pendingSchema != null)
+        {
+            Model.Spec.Versions.Add(new() { Version = NextVersion, Schema = pendingSchema.DeepClone() });
+            compareTo = NextVersion;
+        }
+    }
+
+    async Task OnUploadAsync(InputFileChangeEventArgs e)
+    {
+        generateError = null;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(1024 * 1024));
+            SetSchema(await reader.ReadToEndAsync());
+            if (pendingSchema == null) generateError = $"'{e.File.Name}' is not valid JSON";
+            else schemaText = ResourceDocuments.ToJson(pendingSchema);
+        }
+        catch (Exception ex)
+        {
+            generateError = $"Failed to read '{e.File.Name}': {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Generates a JSON schema from the data of the latest event of the specified type
+    /// </summary>
+    async Task GenerateAsync()
+    {
+        generateError = null;
+        if (string.IsNullOrWhiteSpace(generateType))
+        {
+            generateError = "Enter the type of the event to generate a schema from";
+            return;
+        }
+        generating = true;
+        try
+        {
+            CloudEvent? latest = null;
+            await foreach (var e in await Api.CloudEvents.Stream.ReadStreamAsync(new StreamReadOptions(new PartitionReference(CloudEventPartitionType.ByType, generateType.Trim()), Neuroglia.Data.Infrastructure.EventSourcing.StreamReadDirection.Backwards, length: 1)))
+            {
+                latest = e;
+                break;
+            }
+            if (latest?.Data == null)
+            {
+                generateError = latest == null ? $"No event of type '{generateType}' has been recorded" : $"The latest event of type '{generateType}' has no data";
+                return;
+            }
+            var schema = JsonSchemaInference.Infer(JsonSerializer.SerializeToNode(latest.Data));
+            SetSchema(ResourceDocuments.ToJson(schema));
+        }
+        catch (Exception ex)
+        {
+            generateError = ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+        }
+        finally
+        {
+            generating = false;
+        }
+    }
+
+    async Task CheckAsync()
+    {
+        if (pendingSchema == null) return;
+        checking = true;
+        try { compatibility = await Api.Resources.Schemas.CheckCompatibilityAsync(Model.GetName(), pendingSchema); }
+        catch (Exception ex) { generateError = ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message; }
+        finally { checking = false; }
+    }
+
+    /// <summary>
+    /// Computes the changes between the versions to compare
+    /// </summary>
+    IReadOnlyList<TextDiffLine> Compare()
+    {
+        string Text(int version)
+        {
+            var schema = version == NextVersion && pendingSchema != null ? pendingSchema : JsonSerializer.SerializeToNode(existingVersions.FirstOrDefault(v => v.Version == version)?.Schema);
+            return schema == null ? string.Empty : ResourceDocuments.ToJson(schema);
+        }
+        return TextDiff.Compute(Text(compareFrom), Text(compareTo));
+    }
+
+    static string DiffClass(TextDiffLineKind kind) => kind switch
+    {
+        TextDiffLineKind.Added => "d-block text-success-emphasis bg-success-subtle",
+        TextDiffLineKind.Removed => "d-block text-danger-emphasis bg-danger-subtle",
+        _ => "d-block"
+    };
+
+}
