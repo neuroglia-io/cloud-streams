@@ -232,6 +232,18 @@ spec:
                                   required:
                                     - name
                                     - expression
+                      schema:
+                        type: object
+                        description: The registered schema the data of the cloud events the configuration applies to must be valid against
+                        properties:
+                          name:
+                            type: string
+                          version:
+                            type: integer
+                            minimum: 1
+                            description: The version of the schema. Defaults to the latest one
+                        required:
+                          - name
                     required:
                       - source
                       - type

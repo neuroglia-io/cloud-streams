@@ -292,6 +292,27 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         ArgumentNullException.ThrowIfNull(e);
         this.Logger.LogDebug("Validating cloud event with id '{eventId}'...", e.Id);
         var policy = this.Configuration?.Resource.Spec.Sources?.FirstOrDefault(s => s.Uri == e.Source)?.Validation ?? this.Configuration?.Resource.Spec.Validation;
+        // a registered schema bound to the cloud event's source and type applies whatever the validation policy, unless it skips validation (see #213)
+        var binding = this.Configuration?.Resource.Spec.Events?.LastOrDefault(c => c.AppliesTo(e))?.Schema;
+        if (binding != null && policy?.SkipValidation != true)
+        {
+            var resolver = this.ServiceProvider.GetService<RegisteredSchemaResolver>() ?? ActivatorUtilities.CreateInstance<RegisteredSchemaResolver>(this.ServiceProvider);
+            var (bound, version, error) = await resolver.ResolveAsync(binding, cancellationToken).ConfigureAwait(false);
+            if (bound == null)
+            {
+                this.Logger.LogWarning("Validation of cloud event with id '{eventId}' failed: {reason}", e.Id, error);
+                return new((int)HttpStatusCode.BadRequest, errors: [new Error(ProblemTypes.SchemaValidationFailed, "Invalid data schema", (int)HttpStatusCode.BadRequest, error)]);
+            }
+            var boundResults = bound.Evaluate(this.Serializer.SerializeToNode(e.Data), new EvaluationOptions() { OutputFormat = OutputFormat.List });
+            if (!boundResults.IsValid)
+            {
+                var errors = (boundResults.Details ?? []).Where(d => d.Errors != null).SelectMany(d => d.Errors!.Select(kvp => new KeyValuePair<string, string>(d.InstanceLocation.ToString() is { Length: > 0 } location ? location : "/", kvp.Value)))
+                    .GroupBy(kvp => kvp.Key).Select(g => new KeyValuePair<string, string[]>(g.Key, g.Select(kvp => kvp.Value).ToArray())).ToArray();
+                this.Logger.LogDebug("Validation of cloud event with id '{eventId}' against version {version} of schema '{schema}' failed", e.Id, version, binding.Name);
+                return new((int)HttpStatusCode.BadRequest, null, [new Error(ProblemTypes.SchemaValidationFailed, "Invalid", (int)HttpStatusCode.BadRequest, $"The data of the cloud event is not valid against version {version} of the schema '{binding.Name}'", errors: errors)]);
+            }
+            return new((int)HttpStatusCode.OK);
+        }
         if (policy == null) return new((int)HttpStatusCode.OK);
         if (policy.SkipValidation)
         {

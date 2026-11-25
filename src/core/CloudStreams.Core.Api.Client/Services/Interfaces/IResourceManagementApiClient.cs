@@ -34,4 +34,9 @@ public interface IResourceManagementApiClient
     /// </summary>
     public ISubscriptionManagementApi Subscriptions { get; }
 
+    /// <summary>
+    /// Gets the API used to manage <see cref="Schema"/>s
+    /// </summary>
+    public IResourceManagementApi<Schema> Schemas { get; }
+
 }

@@ -70,6 +70,7 @@ builder.Services.AddSingleton<IGatewayMetrics, GatewayMetrics>();
 builder.Services.AddSingleton<ICloudEventRateLimiter, RedisCloudEventRateLimiter>();
 builder.Services.AddSingleton<ICloudEventDeduplicator, RedisCloudEventDeduplicator>();
 builder.Services.AddScoped<ICloudEventPublisher, MediatorCloudEventPublisher>();
+builder.Services.AddSingleton<RegisteredSchemaResolver>();
 
 using var app = builder.Build();
 

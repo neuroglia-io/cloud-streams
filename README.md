@@ -486,6 +486,56 @@ SchemaRegistry:
   CacheSize: 1000
 ```
 
+### Schema registry
+
+JSON schemas can be registered as `Schema` resources, at `/api/resources/v1/schemas`:
+
+```yaml
+apiVersion: cloud-streams.io/v1
+kind: Schema
+metadata:
+  name: order-placed
+spec:
+  compatibility: backward       # backward (default), forward, full or none
+  versions:
+    - version: 1
+      schema: { "type": "object", "properties": { "id": { "type": "string" } }, "required": [ "id" ] }
+```
+
+**Versions:**
+- Versions can be added, but neither changed nor removed. Their numbers increase.
+- Each new version must be compatible with the previous one:
+  - **backward:** the new version accepts every document the previous one accepts, so consumers on the new version can read older data;
+  - **forward:** the previous version accepts every document the new one accepts;
+  - **full:** both.
+
+  An incompatible version is refused with `400 Bad Request`, which explains why.
+
+**What the compatibility check verifies:**
+- **Understood keywords:** `type`, `enum`, `const`, `required`, `properties`, `additionalProperties`, `items`, and numeric, length, item and property count bounds.
+- **Other constraints,** such as `pattern`, `format`, `$ref` or `oneOf`: these are only accepted if they're unchanged.
+- **Annotations,** such as `title` or `description`, are ignored.
+- **Open schemas:** as in Confluent's Schema Registry, a schema that doesn't set `additionalProperties: false` accepts any other property. So adding a constrained property to it isn't backward compatible: documents that already carried that property with another value would be refused.
+
+```
+GET  /api/resources/v1/schemas/{name}/versions/{version|latest}   # the JSON schema of a version
+POST /api/resources/v1/schemas/{name}/compatibility               # checks a JSON schema against the latest version, without changing anything
+```
+
+A gateway validates the data of the events an ingestion configuration applies to against a registered schema. The binding uses its latest version, or a pinned one, and applies whatever the validation policy, unless it skips validation:
+
+```yaml
+spec:
+  events:
+    - source: ^https://orders\.example\.com$
+      type: order.placed
+      schema:
+        name: order-placed
+        version: 1              # defaults to the latest version
+```
+
+Events whose data is invalid are refused with `400 Bad Request`, which names the version they were checked against. Gateways read schemas again at most every 10 seconds, so new versions apply shortly after they're registered.
+
 ### Resource validation
 
 Subscriptions, brokers and gateways are validated when they are created, replaced or patched, and rejected with `400 Bad Request` if their spec could only fail at runtime. The response names each invalid field, e.g. *"'spec.subscriber.rateLimit' must be greater than '0'"*. The checks cover:
