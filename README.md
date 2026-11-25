@@ -362,7 +362,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 
 | Role | May |
 |---|---|
-| Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the MCP tools, which are all read-only |
+| Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the read-only MCP tools |
 | Operator | also suspend, resume and replay subscriptions, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay` and `.../dead-letters/{offset}/redeliver` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
@@ -534,6 +534,22 @@ Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `War
 ### API Reference
 
 *Please refer to the [wiki](https://github.com/neuroglia-io/cloud-streams/wiki/API-Reference)📚.*
+
+#### MCP
+
+The gateway and the API serve a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp/sse`, so that agents can inspect and operate Cloud Streams. It requires the reader role, and the tools that change something require the operator role, as the endpoints they mirror do.
+
+| Tool | Does | Role |
+|---|---|---|
+| `GetStreamMetadata`, `GetPartitionMetadata` | gets the metadata of the stream, or of a partition | reader |
+| `ListPartitions` | lists the ids of the partitions of a type, page by page | reader |
+| `ReadStream` | reads events from the stream, or from a partition | reader |
+| `ListSubscriptions` | lists the subscriptions, with their phase, lag, subscriber state and fault | reader |
+| `GetSubscription` | gets a subscription, with its spec and status | reader |
+| `ListDeadLetters` | lists the events a subscription failed to deliver | reader |
+| `SuspendSubscription`, `ResumeSubscription` | suspends or resumes a subscription | operator |
+| `ReplaySubscription` | replays a subscription, from the start of the stream or from a point in time | operator |
+| `PublishEvent` | publishes an event, e.g. to test a subscription, through the gateway's admission pipeline. Gateways only | operator |
 
 ## Contributing
 
