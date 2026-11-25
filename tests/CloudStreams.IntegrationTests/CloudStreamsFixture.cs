@@ -83,12 +83,17 @@ public sealed class CloudStreamsFixture
             ["ConnectionStrings__eventstore"] = $"esdb://{this._eventStore.Hostname}:{this._eventStore.GetMappedPublicPort(2113)}?tls=false",
             ["ConnectionStrings__redis"] = this._redis.GetConnectionString()
         };
-        var gatewayPort = GetFreePort();
+        // both ports are reserved at once: a port released before the process that is to listen on it has started could otherwise be handed out again, and the
+        // broker could take the gateway's port, answering its health checks while the gateway fails to start
+        var ports = GetFreePorts(2);
+        var (gatewayPort, brokerPort) = (ports[0], ports[1]);
         this.GatewayUri = new($"http://127.0.0.1:{gatewayPort}/");
         var gateway = this.Start("gateway", "src/gateway/CloudStreams.Gateway.Api", "CloudStreams.Gateway.Api", gatewayPort, new(environment) { ["CLOUDSTREAMS_GATEWAY_NAME"] = "gateway-e2e" });
-        var brokerPort = GetFreePort();
         var broker = this.Start("broker", "src/broker/CloudStreams.Broker.Api", "CloudStreams.Broker.Api", brokerPort, new(environment) { ["CLOUDSTREAMS_BROKER_NAME"] = "broker-e2e", ["Logging__LogLevel__CloudStreams"] = "Debug", ["Logging__LogLevel__System.Net.Http"] = "Warning" });
         await Task.WhenAll(gateway.WaitUntilReadyAsync(new($"http://127.0.0.1:{gatewayPort}/healthz")), broker.WaitUntilReadyAsync(new($"http://127.0.0.1:{brokerPort}/healthz")));
+        // a process that failed to start, e.g. because its port was taken, may have answered nothing at all: whatever answered its health check was not it
+        gateway.EnsureRunning();
+        broker.EnsureRunning();
         this.Gateway = new HttpClient() { BaseAddress = this.GatewayUri };
         var services = new ServiceCollection().AddLogging().AddSingleton<IJsonSerializer>(Neuroglia.Serialization.Json.JsonSerializer.Default).BuildServiceProvider();
         this.Api = new CloudStreamsCoreApiClient(services, NullLoggerFactory.Instance, Neuroglia.Serialization.Json.JsonSerializer.Default, new HttpClient() { BaseAddress = this.GatewayUri });
@@ -125,11 +130,21 @@ public sealed class CloudStreamsFixture
         return process;
     }
 
-    static int GetFreePort()
+    /// <summary>
+    /// Gets the specified amount of distinct free ports, which are all held while they are chosen
+    /// </summary>
+    static int[] GetFreePorts(int count)
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
+        var listeners = Enumerable.Range(0, count).Select(_ => new TcpListener(IPAddress.Loopback, 0)).ToList();
+        try
+        {
+            foreach (var listener in listeners) listener.Start();
+            return [.. listeners.Select(l => ((IPEndPoint)l.LocalEndpoint).Port)];
+        }
+        finally
+        {
+            foreach (var listener in listeners) listener.Stop();
+        }
     }
 
     static string FindRepositoryRoot()
@@ -187,6 +202,16 @@ public sealed class CloudStreamsFixture
                 await Task.Delay(250);
             }
             throw new TimeoutException($"The {this._name} was not ready within 90 seconds:{Environment.NewLine}{this.GetLogs()}");
+        }
+
+        /// <summary>
+        /// Ensures that the process is still running, which it is not if it failed to start after something else answered its health check
+        /// </summary>
+        public void EnsureRunning()
+        {
+            // a host that fails to bind its port stops within moments of starting its hosted services
+            Thread.Sleep(500);
+            if (this._process.HasExited) throw new InvalidOperationException($"The {this._name} exited with code {this._process.ExitCode} after its health check succeeded, which another process must have answered:{Environment.NewLine}{this.GetLogs()}");
         }
 
         public int LogLength { get { lock (this._logs) return this._logs.Length; } }

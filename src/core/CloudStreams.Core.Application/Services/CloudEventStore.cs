@@ -81,12 +81,19 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The store is registered both as itself and, through factories, as the services it implements: the container disposes of it once per registration, so
+    /// disposing of it more than once must not throw, or every graceful shutdown would end with an unhandled exception
+    /// </remarks>
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref this._disposed, 1) == 1) return;
         this._cancellationTokenSource.Cancel();
         this._cancellationTokenSource.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    int _disposed;
 
     /// <inheritdoc/>
     public virtual async Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default)
