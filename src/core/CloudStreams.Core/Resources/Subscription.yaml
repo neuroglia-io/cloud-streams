@@ -107,7 +107,8 @@ spec:
                   properties:
                     uri:
                       type: string
-                      format: url
+                      format: uri
+                      description: Where cloud events are delivered, over HTTP or HTTPS, or to a Kafka topic (kafka://), a NATS subject (nats://), an AMQP exchange (amqp://, amqps://) or another Cloud Streams gateway (cloudstreams://)
                     rateLimit:
                       type: number
                       exclusiveMinimum: 0
@@ -217,7 +218,7 @@ spec:
                   properties:
                     uri:
                       type: string
-                      format: url
+                      format: uri
                       description: The uri of the service to send dead-lettered cloud events to. If not set, they are stored in the subscription's dead-letter stream
                 suspended:
                   type: boolean

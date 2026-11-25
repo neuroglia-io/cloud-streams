@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\core\CloudStreams.Core.Application\CloudStreams.Core.Application.csproj" />
+    <ProjectReference Include="..\..\core\CloudStreams.Core.Transports\CloudStreams.Core.Transports.csproj" />
   </ItemGroup>
 
 </Project>

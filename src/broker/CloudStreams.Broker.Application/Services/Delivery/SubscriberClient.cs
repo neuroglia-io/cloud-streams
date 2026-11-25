@@ -11,19 +11,98 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports.Services;
+
 namespace CloudStreams.Broker.Application.Services.Delivery;
 
 /// <summary>
-/// Represents the service used to post cloud events, or batches of cloud events, to subscribers and dead-letter services (see #163)
+/// Represents the service used to deliver cloud events, or batches of cloud events, to subscribers and dead-letter services, over HTTP or over the transport the scheme
+/// of their address selects (see #163, #218)
 /// </summary>
 /// <param name="httpClient">The service used to perform HTTP requests</param>
-public class SubscriberClient(HttpClient httpClient)
+/// <param name="sinks">The transports, other than HTTP, cloud events can be delivered over</param>
+/// <remarks>
+/// Whatever the transport, a failed delivery is reported as an <see cref="HttpRequestException"/>: with the status code the subscriber responded with, if it refused the
+/// cloud events, or without one if it could not be reached, which retry policies always retry. Retries, circuit breakers and dead letters therefore work the same
+/// with every transport
+/// </remarks>
+public class SubscriberClient(HttpClient httpClient, IEnumerable<ICloudEventSink>? sinks = null)
 {
 
     /// <summary>
     /// Gets the service used to perform HTTP requests
     /// </summary>
     protected HttpClient HttpClient { get; } = httpClient;
+
+    /// <summary>
+    /// Gets the transports, other than HTTP, cloud events can be delivered over
+    /// </summary>
+    protected IReadOnlyList<ICloudEventSink> Sinks { get; } = sinks?.ToList() ?? [];
+
+    /// <summary>
+    /// Delivers the specified cloud event to the specified address
+    /// </summary>
+    /// <param name="uri">The address to deliver the cloud event to</param>
+    /// <param name="e">The cloud event to deliver</param>
+    /// <param name="headers">The headers to send</param>
+    /// <param name="description">A description of the recipient, used in error messages</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which may bound the duration of the delivery</param>
+    /// <returns>The success status code the recipient responded with, or <see cref="HttpStatusCode.OK"/> if the transport has no status codes</returns>
+    /// <exception cref="HttpRequestException">The recipient could not be reached, or refused the cloud event</exception>
+    public virtual Task<HttpStatusCode> SendAsync(Uri uri, CloudEvent e, IEnumerable<KeyValuePair<string, string>> headers, string description, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return this.DeliverAsync(uri, [e], false, headers, description, cancellationToken);
+    }
+
+    /// <summary>
+    /// Delivers the specified cloud events, as a batch, to the specified address
+    /// </summary>
+    /// <param name="uri">The address to deliver the cloud events to</param>
+    /// <param name="events">The cloud events to deliver, in order</param>
+    /// <param name="headers">The headers to send</param>
+    /// <param name="description">A description of the recipient, used in error messages</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which may bound the duration of the delivery</param>
+    /// <returns>The success status code the recipient responded with, or <see cref="HttpStatusCode.OK"/> if the transport has no status codes</returns>
+    /// <exception cref="HttpRequestException">The recipient could not be reached, or refused the cloud events</exception>
+    /// <remarks>Over HTTP, the batch is posted as <c>application/cloudevents-batch+json</c>. Over transports without batches, each cloud event is a message of its own</remarks>
+    public virtual Task<HttpStatusCode> SendBatchAsync(Uri uri, IReadOnlyList<CloudEvent> events, IEnumerable<KeyValuePair<string, string>> headers, string description, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        return this.DeliverAsync(uri, events, true, headers, description, cancellationToken);
+    }
+
+    /// <summary>
+    /// Delivers the specified cloud events to the specified address
+    /// </summary>
+    /// <param name="uri">The address to deliver the cloud events to</param>
+    /// <param name="events">The cloud events to deliver, in order</param>
+    /// <param name="batch">A boolean indicating whether the cloud events are delivered as a batch, over HTTP</param>
+    /// <param name="headers">The headers to send</param>
+    /// <param name="description">A description of the recipient, used in error messages</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which may bound the duration of the delivery</param>
+    /// <returns>The success status code the recipient responded with</returns>
+    protected virtual async Task<HttpStatusCode> DeliverAsync(Uri uri, IReadOnlyList<CloudEvent> events, bool batch, IEnumerable<KeyValuePair<string, string>> headers, string description, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(headers);
+        if (!TransportAddress.IsTransport(uri))
+        {
+            using var content = batch ? events.ToBatchHttpContent() : events[0].ToHttpContent();
+            return await this.PostAsync(uri, content, headers, description, cancellationToken).ConfigureAwait(false);
+        }
+        if (!TransportAddress.TryParse(uri, false, out var address, out var error)) throw new HttpRequestException($"{description} has an invalid address '{uri}': {error}");
+        var sink = this.Sinks.FirstOrDefault(s => s.Schemes.Contains(address.Scheme)) ?? throw new HttpRequestException($"The broker does not support the '{address.Scheme}' transport, which {description.ToLowerInvariant()} at '{uri}' uses");
+        try
+        {
+            await sink.SendAsync(address, events, [.. headers], cancellationToken).ConfigureAwait(false);
+            return HttpStatusCode.OK;
+        }
+        catch (Exception ex) when (ex is not HttpRequestException && ex is not OperationCanceledException)
+        {
+            throw new HttpRequestException($"{description} at '{uri}' could not be delivered to: {ex.Message}", ex);
+        }
+    }
 
     /// <summary>
     /// Posts the specified content to the specified service

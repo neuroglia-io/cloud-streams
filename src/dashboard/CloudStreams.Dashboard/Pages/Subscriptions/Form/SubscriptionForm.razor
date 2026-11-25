@@ -16,8 +16,15 @@
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
             }
-            <FormField Id="@FieldId("uri")" Label="Subscriber" Required="true" Help="The HTTP or HTTPS address events are delivered to, with a POST of each event." Error="@ErrorOf("uri")">
-                <input id="@FieldId("uri")" type="url" class="form-control form-control-sm @Invalid("uri")" placeholder="https://orders.example.com/events" value="@subscriberUri" @onchange="OnSubscriberUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("uri"))" />
+            <FormField Id="@FieldId("uri")" Label="Subscriber" Required="true" Error="@ErrorOf("uri")">
+                <ChildContent>
+                    <input id="@FieldId("uri")" type="text" inputmode="url" autocomplete="off" spellcheck="false" class="form-control form-control-sm @Invalid("uri")" placeholder="https://orders.example.com/events" value="@subscriberUri" @onchange="OnSubscriberUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("uri"))" />
+                </ChildContent>
+                <HelpContent>
+                    Where events are delivered: an HTTP or HTTPS address, which receives a POST of each event, a Kafka topic (<code>kafka://kafka:9092/orders</code>), a NATS subject
+                    (<code>nats://nats:4222/orders?jetstream=true</code>), an AMQP exchange (<code>amqp://rabbitmq/?exchange=orders</code>) or another Cloud Streams gateway
+                    (<code>cloudstreams://gateway.example.com</code>). Credentials are named with <code>credentials=</code>, and configured on the broker.
+                </HelpContent>
             </FormField>
             <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional. Brokers select the subscriptions they handle by label, and lists can be filtered by them.">
                 <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
@@ -65,9 +72,13 @@
                             </FormField>
                         </div>
                     }
-                    <FormField Id="@FieldId("ack-timeout")" Label="Deferred acknowledgement timeout" Help="How long the subscriber may take to acknowledge an event it accepted with 202 Accepted. The broker's default by default.">
-                        <DurationInput Id="@FieldId("ack-timeout")" Value="Model.Spec.Subscriber.Ack?.Timeout" ValueChanged="SetAckTimeout" DefaultUnit="min" Placeholder="default" />
-                    </FormField>
+                    @if (!TransportAddress.IsTransport(Model.Spec.Subscriber.Uri))
+                    {
+                        @* only HTTP subscribers can defer their acknowledgement, by answering '202 Accepted' *@
+                        <FormField Id="@FieldId("ack-timeout")" Label="Deferred acknowledgement timeout" Help="How long the subscriber may take to acknowledge an event it accepted with 202 Accepted. The broker's default by default.">
+                            <DurationInput Id="@FieldId("ack-timeout")" Value="Model.Spec.Subscriber.Ack?.Timeout" ValueChanged="SetAckTimeout" DefaultUnit="min" Placeholder="default" />
+                        </FormField>
+                    }
                 </div>
             </details>
             break;
@@ -197,8 +208,8 @@
             </FormField>
             @if (deadLetterMode == "send")
             {
-                <FormField Id="@FieldId("dead-letter-uri")" Label="Address" Required="true" Error="@ErrorOf("dead-letter-uri")" CssClass="ps-3">
-                    <input id="@FieldId("dead-letter-uri")" type="url" class="form-control form-control-sm @Invalid("dead-letter-uri")" value="@deadLetterUri" @onchange="OnDeadLetterUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("dead-letter-uri"))" />
+                <FormField Id="@FieldId("dead-letter-uri")" Label="Address" Required="true" Help="An HTTP or HTTPS address, or the address of a Kafka topic, a NATS subject, an AMQP exchange or another gateway, like the subscriber's." Error="@ErrorOf("dead-letter-uri")" CssClass="ps-3">
+                    <input id="@FieldId("dead-letter-uri")" type="text" inputmode="url" autocomplete="off" spellcheck="false" class="form-control form-control-sm @Invalid("dead-letter-uri")" value="@deadLetterUri" @onchange="OnDeadLetterUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("dead-letter-uri"))" />
                 </FormField>
             }
             <div class="form-check">
@@ -291,7 +302,7 @@
                     if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
                     else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
                 }
-                if (!IsHttpUri(subscriberUri)) errors["uri"] = "Enter an absolute HTTP or HTTPS address";
+                if (InvalidAddress(subscriberUri) is { } subscriberError) errors["uri"] = subscriberError;
                 if (spec.Subscriber.RateLimit is <= 0) errors["rate-limit"] = "Enter a positive number, or leave empty for no limit";
                 if (spec.Subscriber.Batch is { MaxSize: < 1 }) errors["batch-size"] = "Enter at least 1";
                 if (spec.Subscriber.Ordering != null && !Regex.IsMatch(spec.Subscriber.Ordering.Key ?? string.Empty, "^[a-z0-9]+$")) errors["ordering-key"] = "Enter the name of a context attribute, made of lower-case letters and digits, e.g. subject";
@@ -313,7 +324,7 @@
                 break;
             case 3:
                 if (startMode == "offset" && spec.Stream?.Offset is not >= 0) errors["offset"] = "Enter an offset, 0 or more";
-                if (deadLetterMode == "send" && !IsHttpUri(deadLetterUri)) errors["dead-letter-uri"] = "Enter an absolute HTTP or HTTPS address";
+                if (deadLetterMode == "send" && InvalidAddress(deadLetterUri) is { } deadLetterError) errors["dead-letter-uri"] = deadLetterError;
                 break;
         }
     }
@@ -489,6 +500,17 @@
         {
             previewing = false;
         }
+    }
+
+    /// <summary>
+    /// Validates the specified address that events are delivered to, over HTTP or over another transport (see #218)
+    /// </summary>
+    /// <returns>Why the address is not valid, or null if it is</returns>
+    static string? InvalidAddress(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Enter the address events are delivered to";
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)) return "Enter an absolute address, e.g. https://orders.example.com/events or kafka://kafka:9092/orders";
+        return TransportAddress.IsValidSink(uri, out var error) ? null : error;
     }
 
     static bool IsHttpUri(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);

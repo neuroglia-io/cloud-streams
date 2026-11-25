@@ -136,6 +136,8 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
     {
         // arrange
         await PublishAsync(Source(), 3, "past");
+        // the end of the stream is resolved in the partition, which must hold the past events by then
+        await fixture.WaitForPartitionAsync(CloudEventPartitionType.BySource, Source().OriginalString, 3);
         var endpoint = fixture.Subscriber.Register(Name());
         await SubscribeAsync(Name(), Source(), endpoint, spec => spec.Stream = new() { Offset = StreamPosition.EndOfStream });
         await WaitForAsync(Name(), s => s.Status?.Phase == SubscriptionStatusPhase.Active, "active");
