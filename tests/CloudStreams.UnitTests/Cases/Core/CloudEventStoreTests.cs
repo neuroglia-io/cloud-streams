@@ -89,4 +89,13 @@ public class CloudEventStoreTests
         Assert.Null(metadata.LastEvent);
     }
 
+    [Fact]
+    public void Disposing_The_Store_More_Than_Once_Should_Not_Throw()
+    {
+        // the container disposes of the store once per registration, at every graceful shutdown: a second disposal used to crash the process
+        var store = CreateStore();
+        store.Dispose();
+        store.Dispose();
+    }
+
 }
