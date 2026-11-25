@@ -1,0 +1,249 @@
+@namespace CloudStreams.Dashboard.Pages.Brokers.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@using System.Text.RegularExpressions
+@inherits ResourceFormBase<Broker>
+
+@* A form to create and edit brokers, which shows the subscriptions they handle and how their settings change (see #263) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name broker replicas are started with (CLOUDSTREAMS_BROKER_NAME). It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            <FormField Id="@FieldId("service")" Label="Health" Help="Gateways check the health of the broker at this address, and report it in its status and on the dashboard." Error="@ErrorOf("service")">
+                <ServiceInput Id="@FieldId("service")" @bind-Value="Model.Spec.Service" UriError="@ErrorOf("service-uri")" />
+            </FormField>
+            break;
+        case 1:
+            <FormField Id="@FieldId("selector")" Label="Handle the subscriptions labelled" Error="@ErrorOf("selector")">
+                <ChildContent>
+                    <KeyValueInput Id="@FieldId("selector")" Value="Model.Spec.Selector" ValueChanged="s => Model.Spec.Selector = s" KeyLabel="Label" ValueLabel="Value" AddText="Add a label" KeySuggestions="KnownLabels" />
+                </ChildContent>
+                <HelpContent>A subscription is handled if it has every label, with the same value. Without labels, the broker handles every subscription.</HelpContent>
+            </FormField>
+            <div class="border rounded p-2 small" aria-live="polite">
+                @if (subscriptions == null)
+                {
+                    <span class="text-secondary">Loading the subscriptions...</span>
+                }
+                else
+                {
+                    var matching = Matching().ToList();
+                    <strong>@matching.Count</strong> <text>of the @subscriptions.Count subscriptions match</text>@(matching.Count > 0 ? ":" : ".")
+                    @if (matching.Count > 0)
+                    {
+                        <span class="text-secondary">@string.Join(", ", matching.Take(10).Select(s => s.GetName()))@(matching.Count > 10 ? $" and {matching.Count - 10} more" : "")</span>
+                    }
+                }
+            </div>
+            break;
+        case 2:
+            <p class="small text-secondary">The defaults of the subscriptions the broker handles. A subscription that sets its own keeps it.</p>
+            <FormField Id="@FieldId("retry")" Label="Retries">
+                <RetryPolicyInput Id="@FieldId("retry")" Value="Dispatch.RetryPolicy" ValueChanged="p => Dispatch.RetryPolicy = p" InheritedText="@($"Failed deliveries are retried {RetryPolicy.DefaultMaxAttempts} times, with an exponential backoff")" />
+            </FormField>
+            <div class="row g-3">
+                <FormField Id="@FieldId("timeout")" Label="Timeout" Help="How long to wait for subscribers to respond." CssClass="col-sm-6">
+                    <DurationInput Id="@FieldId("timeout")" Value="Dispatch.Timeout" ValueChanged="d => Dispatch.Timeout = d" Placeholder="default" />
+                </FormField>
+                <FormField Id="@FieldId("ack-timeout")" Label="Deferred acknowledgement timeout" Help="How long subscribers may take to acknowledge an event they accepted with 202 Accepted." CssClass="col-sm-6">
+                    <DurationInput Id="@FieldId("ack-timeout")" Value="Dispatch.Ack?.Timeout" ValueChanged="SetAckTimeout" DefaultUnit="min" Placeholder="5 minutes" />
+                </FormField>
+            </div>
+            <FormField Id="@FieldId("callback")" Label="Acknowledgement address" Help="The address of a gateway, as subscribers reach it, which they call back to acknowledge deferred events. Optional." Error="@ErrorOf("callback")">
+                <input id="@FieldId("callback")" type="url" class="form-control form-control-sm @Invalid("callback")" placeholder="https://cloud-streams.example.com" value="@callbackUri" @onchange="OnCallbackChanged" aria-describedby="@FormField.DescribedBy(FieldId("callback"))" />
+            </FormField>
+            <FormField Id="@FieldId("sequencing")" Label="Offset of delivered events">
+                <div id="@FieldId("sequencing")" role="radiogroup">
+                    <div class="form-check">
+                        <input id="@FieldId("sequencing-none")" class="form-check-input" type="radio" name="@FieldId("sequencing")" checked="@(Dispatch.Sequencing?.Strategy != CloudEventSequencingStrategy.Attribute)" @onchange="_ => SetSequencing(false)" />
+                        <label class="form-check-label small" for="@FieldId("sequencing-none")">Don't add it to delivered events</label>
+                    </div>
+                    <div class="form-check">
+                        <input id="@FieldId("sequencing-attribute")" class="form-check-input" type="radio" name="@FieldId("sequencing")" checked="@(Dispatch.Sequencing?.Strategy == CloudEventSequencingStrategy.Attribute)" @onchange="_ => SetSequencing(true)" />
+                        <label class="form-check-label small" for="@FieldId("sequencing-attribute")">Add it as an extension attribute, so that subscribers can tell where they are</label>
+                    </div>
+                </div>
+            </FormField>
+            @if (Dispatch.Sequencing?.Strategy == CloudEventSequencingStrategy.Attribute)
+            {
+                <div class="row g-3 ps-3">
+                    <FormField Id="@FieldId("sequencing-attribute-name")" Label="Attribute" Required="true" Error="@ErrorOf("sequencing-attribute-name")" CssClass="col-sm-4">
+                        <input id="@FieldId("sequencing-attribute-name")" type="text" class="form-control form-control-sm @Invalid("sequencing-attribute-name")" @bind="Dispatch.Sequencing.AttributeName" aria-describedby="@FormField.DescribedBy(FieldId("sequencing-attribute-name"))" />
+                    </FormField>
+                    <FormField Id="@FieldId("sequencing-conflict")" Label="If events already have it" CssClass="col-sm-4">
+                        <select id="@FieldId("sequencing-conflict")" class="form-select form-select-sm" @bind="Dispatch.Sequencing.AttributeConflictResolution">
+                            <option value="@CloudEventAttributeConflictResolution.Overwrite">Overwrite it</option>
+                            <option value="@CloudEventAttributeConflictResolution.Fallback">Use another attribute</option>
+                        </select>
+                    </FormField>
+                    @if (Dispatch.Sequencing.AttributeConflictResolution == CloudEventAttributeConflictResolution.Fallback)
+                    {
+                        <FormField Id="@FieldId("sequencing-fallback")" Label="Other attribute" Required="true" Error="@ErrorOf("sequencing-fallback")" CssClass="col-sm-4">
+                            <input id="@FieldId("sequencing-fallback")" type="text" class="form-control form-control-sm @Invalid("sequencing-fallback")" @bind="Dispatch.Sequencing.FallbackAttributeName" aria-describedby="@FormField.DescribedBy(FieldId("sequencing-fallback"))" />
+                        </FormField>
+                    }
+                </div>
+            }
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    List<Subscription>? subscriptions;
+    string? callbackUri;
+    Broker? saved;
+
+    BrokerDispatchConfiguration Dispatch => Model.Spec.Dispatch ??= new();
+
+    IEnumerable<string> KnownLabels => (subscriptions ?? []).SelectMany(s => s.Metadata.Labels?.Keys ?? []).Distinct().Order();
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Broker", "Subscriptions", "Delivery defaults"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.service"] = ("service", 0),
+        ["spec.service.uri"] = ("service-uri", 0),
+        ["spec.dispatch.ack.callbackUri"] = ("callback", 2),
+        ["spec.dispatch.sequencing.attributeName"] = ("sequencing-attribute-name", 2)
+    };
+
+    /// <inheritdoc/>
+    protected override Broker CreateDefault() => new() { Metadata = new() { Name = string.Empty }, Spec = new() };
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        saved = Resource;
+        try { subscriptions = await (await Api.Resources.Subscriptions.ListAsync()).ToListAsync(); }
+        catch (Exception) { subscriptions = []; }
+    }
+
+    /// <inheritdoc/>
+    protected override void OnModelReplaced() => callbackUri = Model.Spec.Dispatch?.Ack?.CallbackUri?.OriginalString;
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        switch (step)
+        {
+            case 0:
+                if (IsNew)
+                {
+                    if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+                    else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+                }
+                if (Model.Spec.Service != null && Model.Spec.Service.Uri == null) errors["service-uri"] = "Enter the absolute address of the broker";
+                break;
+            case 2:
+                if (!string.IsNullOrWhiteSpace(callbackUri) && !(Uri.TryCreate(callbackUri, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))) errors["callback"] = "Enter an absolute HTTP or HTTPS address, or leave empty";
+                var sequencing = Model.Spec.Dispatch?.Sequencing;
+                if (sequencing?.Strategy == CloudEventSequencingStrategy.Attribute)
+                {
+                    if (!IsAttributeName(sequencing.AttributeName)) errors["sequencing-attribute-name"] = "Enter an attribute name, made of lower-case letters and digits";
+                    if (sequencing.AttributeConflictResolution == CloudEventAttributeConflictResolution.Fallback && !IsAttributeName(sequencing.FallbackAttributeName)) errors["sequencing-fallback"] = "Enter an attribute name, made of lower-case letters and digits";
+                }
+                break;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void Normalize(Broker resource)
+    {
+        var dispatch = resource.Spec.Dispatch;
+        if (dispatch != null)
+        {
+            if (dispatch.Ack != null && dispatch.Ack.Timeout == null && dispatch.Ack.CallbackUri == null) dispatch.Ack = null;
+            if (dispatch.Sequencing?.Strategy == CloudEventSequencingStrategy.None) dispatch.Sequencing = null;
+            if (dispatch.RetryPolicy == null && dispatch.Sequencing == null && dispatch.Timeout == null && dispatch.Ack == null) resource.Spec.Dispatch = null;
+        }
+        if (resource.Spec.Selector?.Count == 0) resource.Spec.Selector = null;
+        if (resource.Metadata.Labels?.Count == 0) resource.Metadata.Labels = null;
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        var matching = Matching().ToList();
+        <p class="mb-2">
+            <strong>@Model.GetName()</strong> handles @(Model.Spec.Selector is { Count: > 0 } ? $"the subscriptions labelled {string.Join(", ", Model.Spec.Selector.Select(s => $"{s.Key}={s.Value}"))}" : "every subscription"),
+            which is @matching.Count of them today.
+        </p>
+        var impacts = Impacts(matching).ToList();
+        @if (!IsNew && impacts.Count > 0)
+        {
+            <h4 class="h6 small">What changes for the subscriptions it handles</h4>
+            <ul class="small">
+                @foreach (var impact in impacts)
+                {
+                    <li>@impact</li>
+                }
+            </ul>
+        }
+    };
+
+    IEnumerable<Subscription> Matching() => (subscriptions ?? []).Where(s => Model.Spec.Selector == null || Model.Spec.Selector.All(l => s.Metadata.Labels?.TryGetValue(l.Key, out var value) == true && value == l.Value));
+
+    /// <summary>
+    /// Describes how the effective settings of the matching subscriptions change, compared with the saved broker: only those that do not set their own are affected
+    /// </summary>
+    IEnumerable<string> Impacts(IReadOnlyList<Subscription> matching)
+    {
+        var before = saved?.Spec.Dispatch;
+        var after = Prepare().Spec.Dispatch;
+        string Describe(IEnumerable<Subscription> affected, string what)
+        {
+            var names = affected.Select(s => s.GetName()).ToList();
+            return $"{names.Count} subscription(s) {what}: {string.Join(", ", names.Take(5))}{(names.Count > 5 ? $" and {names.Count - 5} more" : "")}";
+        }
+        if (Text(before?.RetryPolicy) != Text(after?.RetryPolicy) && matching.Where(s => s.Spec.Subscriber.RetryPolicy == null).ToList() is { Count: > 0 } retried)
+            yield return Describe(retried, "without a retry policy of their own now retry " + (after?.RetryPolicy == null ? $"{RetryPolicy.DefaultMaxAttempts} times, the default" : after.RetryPolicy.MaxAttempts < 0 ? "forever" : $"{after.RetryPolicy.MaxAttempts ?? RetryPolicy.DefaultMaxAttempts} times"));
+        if (before?.Timeout?.ToTimeSpan() != after?.Timeout?.ToTimeSpan() && matching.Where(s => s.Spec.Subscriber.Timeout == null).ToList() is { Count: > 0 } timed)
+            yield return Describe(timed, $"without a timeout of their own now wait {(after?.Timeout == null ? "the default" : after.Timeout.ToString())} for responses");
+        if (before?.Ack?.Timeout?.ToTimeSpan() != after?.Ack?.Timeout?.ToTimeSpan() && matching.Where(s => s.Spec.Subscriber.Ack?.Timeout == null).ToList() is { Count: > 0 } acknowledged)
+            yield return Describe(acknowledged, $"without an acknowledgement timeout of their own now wait {(after?.Ack?.Timeout == null ? "the default" : after.Ack.Timeout.ToString())} for deferred acknowledgements");
+        if (Text(before?.Sequencing) != Text(after?.Sequencing) && matching.Count > 0)
+            yield return Describe(matching, after?.Sequencing == null ? "no longer receive the offset of events" : $"receive the offset of events in the '{after.Sequencing.AttributeName}' attribute");
+    }
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+    void SetAckTimeout(Duration? timeout)
+    {
+        var ack = Dispatch.Ack ??= new();
+        ack.Timeout = timeout;
+    }
+
+    void OnCallbackChanged(ChangeEventArgs e)
+    {
+        callbackUri = e.Value?.ToString()?.Trim();
+        var ack = Dispatch.Ack ??= new();
+        ack.CallbackUri = Uri.TryCreate(callbackUri, UriKind.Absolute, out var uri) ? uri : null;
+    }
+
+    void SetSequencing(bool enabled)
+    {
+        Dispatch.Sequencing = enabled
+            ? Dispatch.Sequencing ?? new() { Strategy = CloudEventSequencingStrategy.Attribute, AttributeName = "sequence", AttributeConflictResolution = CloudEventAttributeConflictResolution.Overwrite }
+            : null;
+    }
+
+    string Text(object? value) => value == null ? string.Empty : JsonSerializer.SerializeToText(value);
+
+    static bool IsAttributeName(string? name) => !string.IsNullOrEmpty(name) && Regex.IsMatch(name, "^[a-z0-9]+$");
+
+}

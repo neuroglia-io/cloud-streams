@@ -75,6 +75,17 @@ public class CommonJsInterop(IJSRuntime jsRuntime)
         await module.InvokeVoidAsync("downloadFile", fileName, contentType, Convert.ToBase64String(content));
     }
 
+    /// <summary>
+    /// Moves the focus to the element with the specified id, if any
+    /// </summary>
+    /// <param name="id">The id of the element to focus</param>
+    /// <returns>A <see cref="ValueTask"/></returns>
+    public async ValueTask FocusAsync(string id)
+    {
+        var module = await moduleTask.Value;
+        await module.InvokeVoidAsync("focusElement", id);
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {

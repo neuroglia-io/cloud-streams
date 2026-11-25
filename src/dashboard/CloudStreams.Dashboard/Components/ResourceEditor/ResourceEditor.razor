@@ -75,6 +75,11 @@
     [Parameter] public TResource? Resource { get; set; }
 
     /// <summary>
+    /// Gets/sets the draft to show in place of the resource, if any, e.g. what has been filled in a form, which is compared with the resource when saved (see #260)
+    /// </summary>
+    [Parameter] public TResource? Draft { get; set; }
+
+    /// <summary>
     /// The reference of the <see cref="StandaloneCodeEditor" />
     /// </summary>
     private StandaloneCodeEditor? textBasedEditor;
@@ -167,6 +172,7 @@
             this.lastResourceParameter = this.Resource;
             this.resource = this.Resource; // should happen in this.Store.Resource.Subscribe but prevents possible race when multiple params are set
             this.Store.SetResource(this.Resource);
+            if (this.Draft != null) this.Store.SetDraft(this.Draft);
         }
         return base.OnParametersSetAsync();
     }

@@ -1,0 +1,104 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core.Resources
+
+@* The service a gateway or a broker is reachable at, and how its health is checked, which gateways and brokers share (see #260) *@
+
+<fieldset id="@Id" aria-describedby="@FormField.DescribedBy(Id)">
+    <div class="form-check form-switch mb-2">
+        <input id="@(Id)-enabled" class="form-check-input" type="checkbox" checked="@(Value != null)" @onchange="OnEnabledChangedAsync" />
+        <label class="form-check-label small" for="@(Id)-enabled">@(Value == null ? "Its health is not checked" : "Check its health")</label>
+    </div>
+    @if (Value != null)
+    {
+        <div class="row g-2 ps-3 border-start">
+            <div class="col-12">
+                <label for="@(Id)-uri" class="form-label small mb-1">Base address *</label>
+                <input id="@(Id)-uri" type="url" class="form-control form-control-sm @(UriError != null ? "is-invalid" : "")" placeholder="http://broker.cloud-streams.svc.cluster.local" value="@uri" @onchange="OnUriChangedAsync" aria-describedby="@(Id)-uri-error" aria-invalid="@(UriError != null ? "true" : "false")" />
+                <div id="@(Id)-uri-error" class="invalid-feedback small @(UriError != null ? "d-block" : "")">@UriError</div>
+            </div>
+            @if (Value.HealthChecks != null)
+            {
+                <div class="col-sm-3">
+                    <label for="@(Id)-method" class="form-label small mb-1">Method</label>
+                    <select id="@(Id)-method" class="form-select form-select-sm" value="@Value.HealthChecks.Request.Method" @onchange="e => UpdateAsync(s => s.HealthChecks!.Request.Method = e.Value!.ToString()!)">
+                        <option>GET</option>
+                        <option>HEAD</option>
+                        <option>POST</option>
+                    </select>
+                </div>
+                <div class="col-sm-5">
+                    <label for="@(Id)-path" class="form-label small mb-1">Path</label>
+                    <input id="@(Id)-path" type="text" class="form-control form-control-sm" value="@Value.HealthChecks.Request.Path" @onchange="e => UpdateAsync(s => s.HealthChecks!.Request.Path = e.Value?.ToString() ?? HealthCheckPath)" />
+                </div>
+                <div class="col-sm-4">
+                    <label for="@(Id)-interval" class="form-label small mb-1">Every</label>
+                    <DurationInput Id="@(Id + "-interval")" Value="Value.HealthChecks.Interval" ValueChanged="d => UpdateAsync(s => s.HealthChecks!.Interval = d)" Placeholder="default" />
+                </div>
+            }
+        </div>
+    }
+</fieldset>
+
+@code {
+
+    const string HealthCheckPath = "/healthz";
+
+    string? uri;
+    ServiceConfiguration? lastValue;
+
+    /// <summary>
+    /// Gets/sets the id of the group of inputs
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the service, if any
+    /// </summary>
+    [Parameter] public ServiceConfiguration? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the service changes
+    /// </summary>
+    [Parameter] public EventCallback<ServiceConfiguration?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets the error of the base address, if any
+    /// </summary>
+    [Parameter] public string? UriError { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (ReferenceEquals(this.Value, this.lastValue)) return;
+        this.lastValue = this.Value;
+        this.uri = this.Value?.Uri?.OriginalString;
+    }
+
+    async Task OnEnabledChangedAsync(ChangeEventArgs e)
+    {
+        this.lastValue = e.Value is true ? new ServiceConfiguration() { Uri = null!, HealthChecks = new() { Request = new() { Method = "GET", Path = HealthCheckPath } } } : null;
+        this.uri = null;
+        await this.ValueChanged.InvokeAsync(this.lastValue);
+    }
+
+    async Task OnUriChangedAsync(ChangeEventArgs e)
+    {
+        this.uri = e.Value?.ToString()?.Trim();
+        // an invalid address is kept as typed, and reported by the form's validation
+        await this.UpdateAsync(s => s.Uri = Uri.TryCreate(this.uri, UriKind.Absolute, out var parsed) ? parsed : null!);
+    }
+
+    async Task UpdateAsync(Action<ServiceConfiguration> update)
+    {
+        if (this.Value == null) return;
+        update(this.Value);
+        await this.ValueChanged.InvokeAsync(this.Value);
+    }
+
+    /// <summary>
+    /// Gets the base address as typed, which may not be a valid uri
+    /// </summary>
+    public string? TypedUri => this.uri;
+
+}

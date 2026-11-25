@@ -1,0 +1,67 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+
+@* A labelled field, with its help and its error, which the input refers to with aria-describedby="{Id}-help {Id}-error" (see #260) *@
+
+<div class="mb-3 @CssClass">
+    @if (Label != null)
+    {
+        <label for="@Id" class="form-label small fw-semibold mb-1">@Label@(Required ? " *" : "")</label>
+    }
+    @ChildContent
+    @if (Help != null || HelpContent != null)
+    {
+        <div id="@(Id)-help" class="form-text small mt-1">@Help@HelpContent</div>
+    }
+    <div id="@(Id)-error" class="invalid-feedback small @(Error != null ? "d-block" : "")" role="@(Error != null ? "alert" : null)">@Error</div>
+</div>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the id of the input of the field
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the label of the field, if any
+    /// </summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the field is required
+    /// </summary>
+    [Parameter] public bool Required { get; set; }
+
+    /// <summary>
+    /// Gets/sets the help of the field, if any
+    /// </summary>
+    [Parameter] public string? Help { get; set; }
+
+    /// <summary>
+    /// Gets/sets help with markup, if any
+    /// </summary>
+    [Parameter] public RenderFragment? HelpContent { get; set; }
+
+    /// <summary>
+    /// Gets/sets the error of the field, if any
+    /// </summary>
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>
+    /// Gets/sets additional classes of the field
+    /// </summary>
+    [Parameter] public string? CssClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets the input of the field
+    /// </summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Gets the value of the aria-describedby attribute of the input of the specified field
+    /// </summary>
+    /// <param name="id">The id of the input of the field</param>
+    /// <returns>The ids of the help and of the error of the field</returns>
+    public static string DescribedBy(string id) => $"{id}-help {id}-error";
+
+}

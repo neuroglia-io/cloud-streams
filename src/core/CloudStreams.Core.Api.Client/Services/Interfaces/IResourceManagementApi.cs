@@ -31,6 +31,15 @@ public interface IResourceManagementApi<TResource>
     Task<TResource> CreateAsync(TResource resource, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Creates a new <see cref="IResource"/>, or only validates it
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to create</param>
+    /// <param name="dryRun">A boolean indicating whether to only validate the <see cref="IResource"/>, without creating it</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The created <see cref="IResource"/>, or the one that would have been created</returns>
+    Task<TResource> CreateAsync(TResource resource, bool dryRun, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the <see cref="ResourceDefinition"/> for the managed <see cref="IResource"/> type
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -64,6 +73,15 @@ public interface IResourceManagementApi<TResource>
     Task<TResource> UpdateAsync(TResource resource, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Updates the specified <see cref="IResource"/>, or only validates the update
+    /// </summary>
+    /// <param name="resource">The <see cref="IResource"/> to update</param>
+    /// <param name="dryRun">A boolean indicating whether to only validate the update, without saving it</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The updated <see cref="IResource"/>, or the one that would have been saved</returns>
+    Task<TResource> UpdateAsync(TResource resource, bool dryRun, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Patches the specified <see cref="IResource"/>
     /// </summary>
     /// <param name="patch">The <see cref="Patch"/> to apply</param>
@@ -72,6 +90,17 @@ public interface IResourceManagementApi<TResource>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The patched <see cref="IResource"/></returns>
     Task<TResource> PatchAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Patches the specified <see cref="IResource"/>, or only validates the patch
+    /// </summary>
+    /// <param name="patch">The <see cref="Patch"/> to apply</param>
+    /// <param name="name">The name of the resource to patch</param>
+    /// <param name="namespace">The namespace the resource to patch belongs to, if any</param>
+    /// <param name="dryRun">A boolean indicating whether to only validate the patch, without saving the result</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The patched <see cref="IResource"/>, or the one that would have been saved</returns>
+    Task<TResource> PatchAsync(Patch patch, string name, string? @namespace, bool dryRun, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Patches the status of the specified <see cref="IResource"/>

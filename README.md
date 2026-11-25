@@ -569,6 +569,13 @@ Subscriptions, brokers and gateways are validated when they are created, replace
 
 Status updates are never validated, so a broker can still record the state of a subscription that was stored before these checks existed.
 
+`?dryRun=true` on `POST`, `PUT` and `PATCH` validates a resource without saving it, which is how the dashboard's forms check what they are about to save:
+- **Validated:** `200 OK`.
+- **Refused:** `400 Bad Request`, with the errors keyed by the path of each invalid field, e.g. `{ "errors": { "spec.subscriber.uri": [ "..." ] } }`.
+- **Creating a resource that already exists:** `409 Conflict`.
+
+A dry-run creation used to save the resource anyway.
+
 ### Concurrent updates
 
 Every update of a resource is atomic: it only applies to the state it was computed against, so concurrent writers, such as the broker, the acknowledgement endpoints and the dashboard, never overwrite each other.
@@ -625,6 +632,12 @@ The details of an event show its data as indented JSON, as text, or, for binary 
   - filtered by name, or by labels with the same selectors as the API (`env=prod,tier!=db`, `tier in (edge,core)`).
 - **Details.** Selecting a row, or pressing Enter on it, opens the resource's read-only details, from which administrators edit it.
 - **Saving changes.** Before an edit is saved, the editor shows the changes it makes to the specification, labels and annotations, which are all it saves.
+- **Forms.** Subscriptions and brokers are created and edited with guided forms, in a modal.
+  - **Steps:** the subscription form asks for the subscriber, the events (a partition, attribute patterns or a jq condition, with a preview on the latest events), a transformation, and where delivery starts and what happens to failures. The broker form asks for its health check, the subscriptions it handles, with a live count, and their delivery defaults.
+  - **Form or YAML:** the YAML tab shows the same resource, and edits in either show in the other. *Open in the advanced editor* carries what has been filled in to the editor.
+  - **Validation:** each step is checked before the next. The server then validates the resource without saving it, and its errors are shown next to the fields they concern.
+  - **Review:** before saving, the form summarizes the resource in plain language, and shows the changes an edit makes. For a broker, it lists the subscriptions whose effective settings change.
+  - **Gateways:** they are still edited with the editor.
 - **Export and import.**
   - Export downloads the selected resources as one YAML file, holding only what users own: name, labels, annotations and spec.
   - Import, for administrators, reads such a file, or JSON. Each resource is created, or updated if it exists, and the dashboard reports what became of each one.

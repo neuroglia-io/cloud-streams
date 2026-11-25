@@ -1,0 +1,505 @@
+@namespace CloudStreams.Dashboard.Pages.Subscriptions.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@using System.Text.RegularExpressions
+@inherits ResourceFormBase<Subscription>
+
+@* A guided form to create and edit subscriptions (see #261) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="Lower-case letters, digits and dashes, e.g. orders-audit. It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("uri")" Label="Subscriber" Required="true" Help="The HTTP or HTTPS address events are delivered to, with a POST of each event." Error="@ErrorOf("uri")">
+                <input id="@FieldId("uri")" type="url" class="form-control form-control-sm @Invalid("uri")" placeholder="https://orders.example.com/events" value="@subscriberUri" @onchange="OnSubscriberUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("uri"))" />
+            </FormField>
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional. Brokers select the subscriptions they handle by label, and lists can be filtered by them.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            <details class="mb-2" open="@advancedSubscriber">
+                <summary class="small fw-semibold">Advanced delivery settings</summary>
+                <div class="pt-3">
+                    <div class="row g-3">
+                        <FormField Id="@FieldId("rate-limit")" Label="Rate limit" Help="The most events delivered per second. No limit by default." Error="@ErrorOf("rate-limit")" CssClass="col-sm-6">
+                            <input id="@FieldId("rate-limit")" type="number" min="0" step="any" class="form-control form-control-sm @Invalid("rate-limit")" placeholder="no limit" @bind="Model.Spec.Subscriber.RateLimit" aria-describedby="@FormField.DescribedBy(FieldId("rate-limit"))" />
+                        </FormField>
+                        <FormField Id="@FieldId("timeout")" Label="Timeout" Help="How long to wait for the subscriber to respond. The broker's default by default." CssClass="col-sm-6">
+                            <DurationInput Id="@FieldId("timeout")" @bind-Value="Model.Spec.Subscriber.Timeout" Placeholder="default" />
+                        </FormField>
+                    </div>
+                    <FormField Id="@FieldId("retry")" Label="Retries" Help="What to do when a delivery fails. Without a policy of its own, the subscription uses its broker's.">
+                        <RetryPolicyInput Id="@FieldId("retry")" @bind-Value="Model.Spec.Subscriber.RetryPolicy" InheritedText="The broker's retry policy applies" />
+                    </FormField>
+                    <FormField Id="@FieldId("mode")" Label="Delivery" Error="@ErrorOf("mode")">
+                        <div id="@FieldId("mode")" role="radiogroup" aria-describedby="@FormField.DescribedBy(FieldId("mode"))">
+                            @Radio("mode", "one", "One event at a time, in order", deliveryMode == "one", () => SetDeliveryMode("one"))
+                            @Radio("mode", "batch", "In batches, as application/cloudevents-batch+json", deliveryMode == "batch", () => SetDeliveryMode("batch"))
+                            @Radio("mode", "parallel", "In parallel, in order per value of an attribute", deliveryMode == "parallel", () => SetDeliveryMode("parallel"))
+                        </div>
+                    </FormField>
+                    @if (Model.Spec.Subscriber.Batch != null)
+                    {
+                        <div class="row g-3 ps-3">
+                            <FormField Id="@FieldId("batch-size")" Label="Events per batch" Required="true" Error="@ErrorOf("batch-size")" CssClass="col-sm-6">
+                                <input id="@FieldId("batch-size")" type="number" min="1" class="form-control form-control-sm @Invalid("batch-size")" @bind="Model.Spec.Subscriber.Batch.MaxSize" aria-describedby="@FormField.DescribedBy(FieldId("batch-size"))" />
+                            </FormField>
+                            <FormField Id="@FieldId("linger")" Label="Wait for a full batch for up to" Help="Optional. Smaller batches are sent at once by default." CssClass="col-sm-6">
+                                <DurationInput Id="@FieldId("linger")" @bind-Value="Model.Spec.Subscriber.Batch.Linger" DefaultUnit="ms" Placeholder="no wait" />
+                            </FormField>
+                        </div>
+                    }
+                    @if (Model.Spec.Subscriber.Ordering != null)
+                    {
+                        <div class="row g-3 ps-3">
+                            <FormField Id="@FieldId("ordering-key")" Label="Keep in order the events of the same" Required="true" Help="A context attribute, e.g. subject: events with the same value are delivered in order." Error="@ErrorOf("ordering-key")" CssClass="col-sm-6">
+                                <input id="@FieldId("ordering-key")" type="text" class="form-control form-control-sm @Invalid("ordering-key")" list="@FieldId("attributes-list")" @bind="Model.Spec.Subscriber.Ordering.Key" aria-describedby="@FormField.DescribedBy(FieldId("ordering-key"))" />
+                            </FormField>
+                            <FormField Id="@FieldId("concurrency")" Label="Deliveries at once" Help="@($"{SubscriberOrderingConfiguration.DefaultMaxConcurrency} by default.")" Error="@ErrorOf("concurrency")" CssClass="col-sm-6">
+                                <input id="@FieldId("concurrency")" type="number" min="1" class="form-control form-control-sm" placeholder="@SubscriberOrderingConfiguration.DefaultMaxConcurrency" @bind="Model.Spec.Subscriber.Ordering.MaxConcurrency" aria-describedby="@FormField.DescribedBy(FieldId("concurrency"))" />
+                            </FormField>
+                        </div>
+                    }
+                    <FormField Id="@FieldId("ack-timeout")" Label="Deferred acknowledgement timeout" Help="How long the subscriber may take to acknowledge an event it accepted with 202 Accepted. The broker's default by default.">
+                        <DurationInput Id="@FieldId("ack-timeout")" Value="Model.Spec.Subscriber.Ack?.Timeout" ValueChanged="SetAckTimeout" DefaultUnit="min" Placeholder="default" />
+                    </FormField>
+                </div>
+            </details>
+            break;
+        case 1:
+            <FormField Id="@FieldId("source")" Label="Read from">
+                <div id="@FieldId("source")" role="radiogroup">
+                    @Radio("source", "stream", "The whole stream", Model.Spec.Partition == null, () => SetPartition(null))
+                    @Radio("source", "partition", "A partition: the events of a source, a type, a subject...", Model.Spec.Partition != null, () => SetPartition(Model.Spec.Partition ?? new() { Type = CloudEventPartitionType.BySource, Id = string.Empty }))
+                </div>
+            </FormField>
+            @if (Model.Spec.Partition != null)
+            {
+                <FormField Id="@FieldId("partition")" Label="Partition" Required="true" Help="Reading a partition costs less than filtering the whole stream." Error="@ErrorOf("partition")" CssClass="ps-3">
+                    <PartitionInput Id="@FieldId("partition")" Value="Model.Spec.Partition" ValueChanged="SetPartition" Invalid="@(ErrorOf("partition") != null)" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("filter")" Label="Deliver">
+                <div id="@FieldId("filter")" role="radiogroup">
+                    @Radio("filter", "all", "Every event", filterMode == "all", () => SetFilterMode("all"))
+                    @Radio("filter", "attributes", "The events whose attributes match patterns", filterMode == "attributes", () => SetFilterMode("attributes"))
+                    @Radio("filter", "expression", "The events that satisfy a jq condition", filterMode == "expression", () => SetFilterMode("expression"))
+                </div>
+            </FormField>
+            @if (filterMode == "attributes")
+            {
+                <FormField Id="@FieldId("attributes")" Label="Attribute patterns" Required="true" Error="@ErrorOf("attributes")" CssClass="ps-3">
+                    <ChildContent>
+                        <KeyValueInput Id="@FieldId("attributes")" Value="Model.Spec.Filter?.Attributes" ValueChanged="SetAttributes" KeyLabel="Attribute" ValueLabel="Pattern" KeyPlaceholder="attribute, e.g. type" ValuePlaceholder="regular expression, e.g. ^com\.example\.order\." ValueClass="font-monospace" KeySuggestions="KnownAttributes" AddText="Add a pattern" />
+                    </ChildContent>
+                    <HelpContent>Every pattern must match. Patterns are regular expressions, and are not anchored: <code>order</code> also matches <code>reorder</code>. Use <code>^order$</code> to match the whole value.</HelpContent>
+                </FormField>
+            }
+            @if (filterMode == "expression")
+            {
+                <FormField Id="@FieldId("expression")" Label="Condition" Required="true" Error="@ErrorOf("expression")" CssClass="ps-3">
+                    <ChildContent>
+                        <textarea id="@FieldId("expression")" rows="3" class="form-control form-control-sm font-monospace @Invalid("expression")" spellcheck="false" placeholder="${ .metadata.contextAttributes.type == &quot;com.example.order.created&quot; }" value="@Model.Spec.Filter?.Expression" @onchange="SetExpression" aria-describedby="@FormField.DescribedBy(FieldId("expression"))"></textarea>
+                    </ChildContent>
+                    <HelpContent>A jq condition on the record: its attributes are under <code>.metadata.contextAttributes</code>, and its data under <code>.data</code>.</HelpContent>
+                </FormField>
+            }
+            <datalist id="@FieldId("attributes-list")">
+                @foreach (var known in KnownAttributes)
+                {
+                    <option value="@known"></option>
+                }
+            </datalist>
+            <div class="border rounded p-2 small">
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@previewing" @onclick="PreviewAsync"><i class="bi bi-eye" aria-hidden="true"></i> Preview with the latest events</button>
+                    <span class="text-secondary" aria-live="polite">@previewSummary</span>
+                </div>
+                @if (preview?.Items.Count > 0)
+                {
+                    <ul class="list-unstyled mb-0 mt-2">
+                        @foreach (var item in preview.Items.Take(8))
+                        {
+                            <li class="text-truncate">
+                                @if (item.Error != null)
+                                {
+                                    <span class="badge text-bg-danger">failed</span> <span class="text-danger-emphasis">@item.Error</span>
+                                }
+                                else if (item.Matched)
+                                {
+                                    <span class="badge text-bg-success">delivered</span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">skipped</span>
+                                }
+                                <span class="ms-1">@item.Event.Type</span> <span class="text-secondary">from @item.Event.Source</span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+            break;
+        case 2:
+            <FormField Id="@FieldId("mutation")" Label="Before delivering an event">
+                <div id="@FieldId("mutation")" role="radiogroup">
+                    @Radio("mutation", "none", "Deliver it as it is", Model.Spec.Mutation == null, () => SetMutation(null))
+                    @Radio("mutation", "expression", "Transform it with a jq expression", Model.Spec.Mutation?.Type == CloudEventMutationType.Expression, () => SetMutation(CloudEventMutationType.Expression))
+                    @Radio("mutation", "webhook", "Transform it with a webhook", Model.Spec.Mutation?.Type == CloudEventMutationType.Webhook, () => SetMutation(CloudEventMutationType.Webhook))
+                </div>
+            </FormField>
+            @if (Model.Spec.Mutation?.Type == CloudEventMutationType.Expression)
+            {
+                <FormField Id="@FieldId("mutation-expression")" Label="Expression" Required="true" Error="@ErrorOf("mutation-expression")" CssClass="ps-3">
+                    <ChildContent>
+                        <textarea id="@FieldId("mutation-expression")" rows="3" class="form-control form-control-sm font-monospace @Invalid("mutation-expression")" spellcheck="false" placeholder="${ . + { subject: &quot;audited&quot; } }" value="@(Model.Spec.Mutation.Expression as string)" @onchange="e => { Model.Spec.Mutation.Expression = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString(); }" aria-describedby="@FormField.DescribedBy(FieldId("mutation-expression"))"></textarea>
+                    </ChildContent>
+                    <HelpContent>A jq expression on the cloud event, which returns the cloud event to deliver. Unlike filters, it applies to the event itself: <code>.type</code>, <code>.data</code>... The preview of the previous step shows its result.</HelpContent>
+                </FormField>
+            }
+            @if (Model.Spec.Mutation?.Type == CloudEventMutationType.Webhook)
+            {
+                <FormField Id="@FieldId("webhook")" Label="Webhook" Required="true" Help="Receives each event with a POST, and responds with the event to deliver. Previews do not call it." Error="@ErrorOf("webhook")" CssClass="ps-3">
+                    <input id="@FieldId("webhook")" type="url" class="form-control form-control-sm @Invalid("webhook")" placeholder="https://mutations.example.com/orders" value="@webhookUri" @onchange="OnWebhookChanged" aria-describedby="@FormField.DescribedBy(FieldId("webhook"))" />
+                </FormField>
+            }
+            break;
+        case 3:
+            <FormField Id="@FieldId("start")" Label="Deliver" Error="@ErrorOf("start")">
+                <div id="@FieldId("start")" role="radiogroup" aria-describedby="@FormField.DescribedBy(FieldId("start"))">
+                    @Radio("start", "live", "Only the events published while the subscription is active, without tracking an offset", startMode == "live", () => SetStart("live"))
+                    @Radio("start", "new", "The events published from now on, resuming where it stopped after an interruption", startMode == "new", () => SetStart("new"))
+                    @Radio("start", "beginning", "Every event, from the beginning of the stream", startMode == "beginning", () => SetStart("beginning"))
+                    @Radio("start", "offset", "The events from an offset", startMode == "offset", () => SetStart("offset"))
+                </div>
+            </FormField>
+            @if (startMode == "offset")
+            {
+                <FormField Id="@FieldId("offset")" Label="Offset" Required="true" Help="In the stream, or in the partition the subscription reads." Error="@ErrorOf("offset")" CssClass="ps-3">
+                    <input id="@FieldId("offset")" type="number" min="0" class="form-control form-control-sm @Invalid("offset")" style="max-width: 12rem" value="@Model.Spec.Stream?.Offset" @onchange="e => { if (Model.Spec.Stream != null) Model.Spec.Stream.Offset = long.TryParse(e.Value?.ToString(), out var o) ? o : null; }" aria-describedby="@FormField.DescribedBy(FieldId("offset"))" />
+                </FormField>
+            }
+            @if (!IsNew && startChanged)
+            {
+                <div class="alert alert-warning small py-2" role="status">Changing where the subscription starts moves it: the events between its current position and the new one are delivered again, or skipped.</div>
+            }
+            <FormField Id="@FieldId("dead-letters")" Label="When an event cannot be delivered" Error="@ErrorOf("dead-letters")">
+                <div id="@FieldId("dead-letters")" role="radiogroup" aria-describedby="@FormField.DescribedBy(FieldId("dead-letters"))">
+                    @Radio("dead-letters", "fault", "Stop, until someone retries or skips it", deadLetterMode == "fault", () => SetDeadLetters("fault"))
+                    @Radio("dead-letters", "store", "Set it aside as a dead letter, which can be redelivered later, and carry on", deadLetterMode == "store", () => SetDeadLetters("store"))
+                    @Radio("dead-letters", "send", "Send it to another address, and carry on", deadLetterMode == "send", () => SetDeadLetters("send"))
+                </div>
+            </FormField>
+            @if (deadLetterMode == "send")
+            {
+                <FormField Id="@FieldId("dead-letter-uri")" Label="Address" Required="true" Error="@ErrorOf("dead-letter-uri")" CssClass="ps-3">
+                    <input id="@FieldId("dead-letter-uri")" type="url" class="form-control form-control-sm @Invalid("dead-letter-uri")" value="@deadLetterUri" @onchange="OnDeadLetterUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("dead-letter-uri"))" />
+                </FormField>
+            }
+            <div class="form-check">
+                <input id="@FieldId("suspended")" class="form-check-input" type="checkbox" @bind="Model.Spec.Suspended" />
+                <label class="form-check-label small" for="@FieldId("suspended")">Suspended: nothing is delivered until the subscription is resumed</label>
+            </div>
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    static readonly string[] KnownAttributes = ["type", "source", "subject", "datacontenttype", "dataschema", "id"];
+
+    string? subscriberUri;
+    string? webhookUri;
+    string? deadLetterUri;
+    string deliveryMode = "one";
+    string filterMode = "all";
+    string startMode = "new";
+    string deadLetterMode = "fault";
+    string? originalStartMode;
+    long? originalOffset;
+    bool advancedSubscriber;
+    bool previewing;
+    string? previewSummary;
+    SubscriptionTestResult? preview;
+
+    bool startChanged => startMode != originalStartMode || (startMode == "offset" && Model.Spec.Stream?.Offset != originalOffset);
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Subscriber", "Events", "Transformation", "Delivery"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.subscriber.uri"] = ("uri", 0),
+        ["spec.subscriber.rateLimit"] = ("rate-limit", 0),
+        ["spec.subscriber.batch.maxSize"] = ("batch-size", 0),
+        ["spec.subscriber.ordering.key"] = ("ordering-key", 0),
+        ["spec.subscriber.ordering.maxConcurrency"] = ("concurrency", 0),
+        ["spec.subscriber"] = ("mode", 0),
+        ["spec.partition.id"] = ("partition", 1),
+        ["spec.filter.attributes"] = ("attributes", 1),
+        ["spec.filter.expression"] = ("expression", 1),
+        ["spec.mutation.expression"] = ("mutation-expression", 2),
+        ["spec.mutation.webhook.serviceUri"] = ("webhook", 2),
+        ["spec.deadLetter.uri"] = ("dead-letter-uri", 3)
+    };
+
+    /// <inheritdoc/>
+    protected override Subscription CreateDefault() => new()
+    {
+        Metadata = new() { Name = string.Empty },
+        // tracking an offset from now on is the safe default: nothing published before is delivered, and nothing is lost after an interruption
+        Spec = new() { Subscriber = new() { Uri = null! }, Stream = new() { Offset = StreamPosition.EndOfStream } }
+    };
+
+    /// <inheritdoc/>
+    protected override void OnModelReplaced()
+    {
+        var spec = Model.Spec;
+        spec.Subscriber ??= new() { Uri = null! };
+        subscriberUri = spec.Subscriber.Uri?.OriginalString;
+        webhookUri = spec.Mutation?.Webhook?.ServiceUri?.OriginalString;
+        deadLetterUri = spec.DeadLetter?.Uri?.OriginalString;
+        deliveryMode = spec.Subscriber.Batch != null ? "batch" : spec.Subscriber.Ordering != null ? "parallel" : "one";
+        filterMode = spec.Filter == null ? "all" : spec.Filter.Type == CloudEventFilterType.Expression ? "expression" : "attributes";
+        startMode = spec.Stream == null ? "live" : spec.Stream.Offset switch { null or StreamPosition.EndOfStream => "new", 0 => "beginning", _ => "offset" };
+        deadLetterMode = spec.DeadLetter == null ? "fault" : spec.DeadLetter.Uri == null ? "store" : "send";
+        advancedSubscriber = spec.Subscriber.RateLimit != null || spec.Subscriber.Timeout != null || spec.Subscriber.RetryPolicy != null || deliveryMode != "one" || spec.Subscriber.Ack != null;
+        if (originalStartMode == null)
+        {
+            originalStartMode = startMode;
+            originalOffset = spec.Stream?.Offset;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        var spec = Model.Spec;
+        switch (step)
+        {
+            case 0:
+                if (IsNew)
+                {
+                    if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+                    else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+                }
+                if (!IsHttpUri(subscriberUri)) errors["uri"] = "Enter an absolute HTTP or HTTPS address";
+                if (spec.Subscriber.RateLimit is <= 0) errors["rate-limit"] = "Enter a positive number, or leave empty for no limit";
+                if (spec.Subscriber.Batch is { MaxSize: < 1 }) errors["batch-size"] = "Enter at least 1";
+                if (spec.Subscriber.Ordering != null && !Regex.IsMatch(spec.Subscriber.Ordering.Key ?? string.Empty, "^[a-z0-9]+$")) errors["ordering-key"] = "Enter the name of a context attribute, made of lower-case letters and digits, e.g. subject";
+                if (spec.Subscriber.Ordering?.MaxConcurrency is < 1) errors["concurrency"] = "Enter at least 1";
+                break;
+            case 1:
+                if (spec.Partition != null && string.IsNullOrWhiteSpace(spec.Partition.Id)) errors["partition"] = "Enter or pick the id of the partition";
+                else if (spec.Partition?.Type == CloudEventPartitionType.BySource && !Uri.TryCreate(spec.Partition.Id, UriKind.RelativeOrAbsolute, out _)) errors["partition"] = "The id of a source partition is the URI of the source";
+                if (filterMode == "attributes")
+                {
+                    if (spec.Filter?.Attributes is not { Count: > 0 }) errors["attributes"] = "Add at least one pattern, or deliver every event";
+                    else if (spec.Filter.Attributes.FirstOrDefault(a => !IsValidPattern(a.Value)) is { Key: not null } invalid) errors["attributes"] = $"The pattern of '{invalid.Key}' is not a valid regular expression";
+                }
+                if (filterMode == "expression" && string.IsNullOrWhiteSpace(spec.Filter?.Expression)) errors["expression"] = "Enter a condition, or deliver every event";
+                break;
+            case 2:
+                if (spec.Mutation?.Type == CloudEventMutationType.Expression && string.IsNullOrWhiteSpace(spec.Mutation.Expression as string)) errors["mutation-expression"] = "Enter an expression, or deliver events as they are";
+                if (spec.Mutation?.Type == CloudEventMutationType.Webhook && !IsHttpUri(webhookUri)) errors["webhook"] = "Enter an absolute HTTP or HTTPS address";
+                break;
+            case 3:
+                if (startMode == "offset" && spec.Stream?.Offset is not >= 0) errors["offset"] = "Enter an offset, 0 or more";
+                if (deadLetterMode == "send" && !IsHttpUri(deadLetterUri)) errors["dead-letter-uri"] = "Enter an absolute HTTP or HTTPS address";
+                break;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void Normalize(Subscription resource)
+    {
+        var subscriber = resource.Spec.Subscriber;
+        if (subscriber.Ack != null && subscriber.Ack.Timeout == null) subscriber.Ack = null;
+        if (resource.Spec.Filter?.Type == CloudEventFilterType.Attributes && resource.Spec.Filter.Attributes is not { Count: > 0 }) resource.Spec.Filter = null;
+        if (resource.Metadata.Labels?.Count == 0) resource.Metadata.Labels = null;
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        var spec = Model.Spec;
+        <p class="mb-2">
+            <strong>@Model.GetName()</strong> delivers
+            @switch (filterMode)
+            {
+                case "attributes":
+                    <text>the events whose @string.Join(" and ", spec.Filter!.Attributes!.Select(a => $"{a.Key} matches {a.Value}"))</text>
+                    break;
+                case "expression":
+                    <text>the events that satisfy <code>@spec.Filter!.Expression</code></text>
+                    break;
+                default:
+                    <text>every event</text>
+                    break;
+            }
+            @(spec.Partition == null ? " of the stream" : $" of the {PartitionInput.Describe(spec.Partition.Type).ToLowerInvariant()} partition '{spec.Partition.Id}'"),
+            @(startMode switch { "live" => "while it is active", "beginning" => "from the beginning", "offset" => $"from offset {spec.Stream?.Offset}", _ => "from now on" }),
+            to <code>@subscriberUri</code>@(spec.Mutation == null ? "" : spec.Mutation.Type == CloudEventMutationType.Webhook ? ", transformed by a webhook" : ", transformed by an expression").
+        </p>
+        <ul class="small text-secondary mb-0">
+            <li>@(spec.Subscriber.RetryPolicy == null ? "Failed deliveries are retried as its broker retries them." : $"Failed deliveries are retried {(spec.Subscriber.RetryPolicy.MaxAttempts < 0 ? "forever" : $"{spec.Subscriber.RetryPolicy.MaxAttempts ?? RetryPolicy.DefaultMaxAttempts} times")}.")</li>
+            <li>@(spec.DeadLetter == null ? "An event that cannot be delivered stops the subscription, until someone retries or skips it." : spec.DeadLetter.Uri == null ? "An event that cannot be delivered is set aside as a dead letter." : $"An event that cannot be delivered is sent to {spec.DeadLetter.Uri}.")</li>
+            @if (spec.Suspended)
+            {
+                <li>It is suspended: nothing is delivered until it is resumed.</li>
+            }
+        </ul>
+    };
+
+    RenderFragment Radio(string group, string value, string label, bool isChecked, Action onSelected) => __builder =>
+    {
+        <div class="form-check">
+            <input id="@FieldId($"{group}-{value}-option")" class="form-check-input" type="radio" name="@FieldId(group)" checked="@isChecked" @onchange="_ => onSelected()" />
+            <label class="form-check-label small" for="@FieldId($"{group}-{value}-option")">@label</label>
+        </div>
+    };
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+    void OnSubscriberUriChanged(ChangeEventArgs e)
+    {
+        subscriberUri = e.Value?.ToString()?.Trim();
+        Model.Spec.Subscriber.Uri = Uri.TryCreate(subscriberUri, UriKind.Absolute, out var uri) ? uri : null!;
+    }
+
+    void OnWebhookChanged(ChangeEventArgs e)
+    {
+        webhookUri = e.Value?.ToString()?.Trim();
+        if (Model.Spec.Mutation != null) Model.Spec.Mutation.Webhook = Uri.TryCreate(webhookUri, UriKind.Absolute, out var uri) ? new() { ServiceUri = uri } : null;
+    }
+
+    void OnDeadLetterUriChanged(ChangeEventArgs e)
+    {
+        deadLetterUri = e.Value?.ToString()?.Trim();
+        Model.Spec.DeadLetter = new() { Uri = Uri.TryCreate(deadLetterUri, UriKind.Absolute, out var uri) ? uri : null };
+    }
+
+    void SetDeliveryMode(string mode)
+    {
+        deliveryMode = mode;
+        Model.Spec.Subscriber.Batch = mode == "batch" ? Model.Spec.Subscriber.Batch ?? new() { MaxSize = 100 } : null;
+        Model.Spec.Subscriber.Ordering = mode == "parallel" ? Model.Spec.Subscriber.Ordering ?? new() { Key = "subject" } : null;
+    }
+
+    void SetAckTimeout(Duration? timeout)
+    {
+        if (timeout == null) Model.Spec.Subscriber.Ack = null;
+        else (Model.Spec.Subscriber.Ack ??= new()).Timeout = timeout;
+    }
+
+    void SetPartition(PartitionReference? partition)
+    {
+        Model.Spec.Partition = partition;
+        preview = null;
+        previewSummary = null;
+    }
+
+    void SetFilterMode(string mode)
+    {
+        filterMode = mode;
+        Model.Spec.Filter = mode switch
+        {
+            "attributes" => new() { Type = CloudEventFilterType.Attributes, Attributes = Model.Spec.Filter?.Attributes ?? new Dictionary<string, string>() },
+            "expression" => new() { Type = CloudEventFilterType.Expression, Expression = Model.Spec.Filter?.Expression },
+            _ => null
+        };
+    }
+
+    void SetAttributes(IDictionary<string, string>? attributes)
+    {
+        Model.Spec.Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = attributes ?? new Dictionary<string, string>() };
+    }
+
+    void SetExpression(ChangeEventArgs e)
+    {
+        Model.Spec.Filter = new() { Type = CloudEventFilterType.Expression, Expression = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString() };
+    }
+
+    void SetMutation(CloudEventMutationType? type)
+    {
+        Model.Spec.Mutation = type switch
+        {
+            CloudEventMutationType.Expression => new() { Type = CloudEventMutationType.Expression, Expression = Model.Spec.Mutation?.Expression as string },
+            CloudEventMutationType.Webhook => new() { Type = CloudEventMutationType.Webhook, Webhook = Uri.TryCreate(webhookUri, UriKind.Absolute, out var uri) ? new() { ServiceUri = uri } : null },
+            _ => null
+        };
+    }
+
+    void SetStart(string mode)
+    {
+        startMode = mode;
+        Model.Spec.Stream = mode switch
+        {
+            "live" => null,
+            "beginning" => new() { Offset = StreamPosition.StartOfStream },
+            "offset" => new() { Offset = Model.Spec.Stream?.Offset is > 0 ? Model.Spec.Stream.Offset : null },
+            _ => new() { Offset = StreamPosition.EndOfStream }
+        };
+    }
+
+    void SetDeadLetters(string mode)
+    {
+        deadLetterMode = mode;
+        Model.Spec.DeadLetter = mode switch
+        {
+            "store" => new(),
+            "send" => new() { Uri = Uri.TryCreate(deadLetterUri, UriKind.Absolute, out var uri) ? uri : null },
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Runs the filter, and the expression mutation if any, against the latest events of the stream or partition, without delivering anything (see #224)
+    /// </summary>
+    async Task PreviewAsync()
+    {
+        previewing = true;
+        previewSummary = "Reading the latest events...";
+        try
+        {
+            var request = new SubscriptionTestRequest()
+            {
+                Partition = Model.Spec.Partition is { Id.Length: > 0 } ? Model.Spec.Partition : null,
+                Filter = filterMode == "all" ? null : Model.Spec.Filter,
+                Mutation = Model.Spec.Mutation?.Type == CloudEventMutationType.Expression ? Model.Spec.Mutation : null,
+                Length = 20
+            };
+            preview = await Api.Resources.Subscriptions.TestAsync(request);
+            previewSummary = preview.Items.Count == 0 ? "There is no event to preview yet." : $"{preview.Items.Count(i => i.Matched)} of the {preview.Items.Count} latest events would be delivered.";
+        }
+        catch (Exception ex)
+        {
+            preview = null;
+            previewSummary = ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+        }
+        finally
+        {
+            previewing = false;
+        }
+    }
+
+    static bool IsHttpUri(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// Determines whether the specified attribute pattern is valid: a regular expression, or a runtime expression, which the server validates
+    /// </summary>
+    static bool IsValidPattern(string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern) || pattern.TrimStart().StartsWith("${", StringComparison.Ordinal)) return true;
+        try { _ = new Regex(pattern); return true; }
+        catch (ArgumentException) { return false; }
+    }
+
+}

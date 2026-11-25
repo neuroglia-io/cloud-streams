@@ -186,10 +186,15 @@
 
 <Offcanvas @ref="EditorOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
+<CloudStreams.Dashboard.Components.ResourceForms.ResourceFormModal @ref="FormModal" />
+
 <ConfirmDialog @ref="Dialog" />
 
 @code
 {
+    /// <inheritdoc/>
+    protected override Task? ShowFormAsync(Subscription? resource) => ShowFormAsync<CloudStreams.Dashboard.Pages.Subscriptions.Form.SubscriptionForm>(resource);
+
     EquatableDictionary<string, ulong> subscriptionLengths = [];
 
     /// <inheritdoc/>

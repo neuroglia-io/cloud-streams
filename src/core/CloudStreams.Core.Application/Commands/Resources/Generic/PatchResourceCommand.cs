@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Services;
+
 namespace CloudStreams.Core.Application.Commands.Resources.Generic;
 
 /// <summary>
@@ -65,7 +67,8 @@ public class PatchResourceCommand<TResource>
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to patch</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class PatchResourceCommandHandler<TResource>(IResourceRepository repository)
+/// <param name="dryRun">The service used to validate changes without performing them</param>
+public class PatchResourceCommandHandler<TResource>(IResourceRepository repository, ResourceDryRun dryRun)
     : ICommandHandler<PatchResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {
@@ -79,6 +82,14 @@ public class PatchResourceCommandHandler<TResource>(IResourceRepository reposito
         activity?.SetTag("resource.namespace", command.Namespace);
         activity?.SetTag("dryRun", command.DryRun);
         activity?.SetTag("patch.type", command.Patch.Type);
+        if (command.DryRun)
+        {
+            // reviewed first, so that a refusal carries the errors of each field (see #260)
+            var original = await repository.GetAsync<TResource>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
+            if (original == null) return new OperationResult<TResource>((int)HttpStatusCode.NotFound, errors: [new Error(ProblemTypes.NotFound, "Not Found", (int)HttpStatusCode.NotFound, $"There is no {new TResource().Definition.Kind.ToLowerInvariant()} named '{command.Name}'")]);
+            var problem = await dryRun.ReviewAsync<TResource>(Operation.Patch, command.Name, command.Namespace, null, original, command.Patch, cancellationToken).ConfigureAwait(false);
+            if (problem != null) return ResourceDryRun.Refused<TResource>(problem);
+        }
         var resource = await repository.PatchAsync<TResource>(command.Patch, command.Name, command.Namespace, null, command.DryRun, cancellationToken).ConfigureAwait(false);
         return this.Ok(resource);
     }

@@ -149,6 +149,18 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
     }
 
     /// <summary>
+    /// Shows the specified draft in the editor, in place of the resource, which remains what the changes are computed against: the draft of a form is carried over to
+    /// the editor this way, without being mistaken for the saved resource (see #260)
+    /// </summary>
+    /// <param name="draft">The draft to show</param>
+    public void SetDraft(TResource draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        if (monacoEditorHelper.PreferredLanguage == PreferredLanguage.YAML) this.SetEditorValue(YamlSerializer.Default.Serialize(draft));
+        else this.SetEditorValue(JsonNode.Parse(jsonSerializer.SerializeToText(draft))!.ToJsonString(IndentedJsonOptions));
+    }
+
+    /// <summary>
     /// Sets the state's <see cref="ResourceEditorState{TResource}.Definition"/>
     /// </summary>
     /// <param name="definition">The new <see cref="ResourceEditorState{TResource}.Definition"/> value</param>
