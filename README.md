@@ -551,6 +551,48 @@ The gateway and the API serve a [Model Context Protocol](https://modelcontextpro
 | `ReplaySubscription` | replays a subscription, from the start of the stream or from a point in time | operator |
 | `PublishEvent` | publishes an event, e.g. to test a subscription, through the gateway's admission pipeline. Gateways only | operator |
 
+#### CloudEvents Subscriptions API
+
+Cloud Streams implements the [CloudEvents Subscriptions API](https://github.com/cloudevents/spec/blob/main/subscriptions/spec.md) on top of its subscriptions, at `/api/cloudevents/v1/subscriptions`. The specification's HTTP binding is yet to be defined, so:
+
+| Request | Does | Answers |
+|---|---|---|
+| `POST /api/cloudevents/v1/subscriptions` | creates a subscription, whose id the server assigns | `201 Created`, with its `Location` |
+| `GET /api/cloudevents/v1/subscriptions` | lists the subscriptions, including those created otherwise | `200 OK` |
+| `GET /api/cloudevents/v1/subscriptions/{id}` | gets a subscription | `200 OK`, or `404 Not Found` |
+| `PUT /api/cloudevents/v1/subscriptions/{id}` | updates a subscription. It doesn't create missing ones | `200 OK`, or `404 Not Found` |
+| `DELETE /api/cloudevents/v1/subscriptions/{id}` | deletes a subscription | `200 OK` with the deleted subscription, or `404 Not Found` |
+
+Reading requires the reader role, and writing the admin role. Errors are problem details.
+
+```json
+{
+  "source": "https://github.com/cloudevents",
+  "filters": [
+    { "any": [ { "exact": { "type": "com.github.push" } }, { "prefix": { "type": "com.github.pull_request" } } ] },
+    { "not": { "suffix": { "subject": "/spec" } } }
+  ],
+  "sink": "https://subscriber.example.com/events",
+  "protocol": "HTTP"
+}
+```
+
+**How a subscription maps onto Cloud Streams:**
+- **Sink:** the `sink` is the subscriber.
+- **Filters:** `source`, `types` and `filters` are compiled into the subscription's filter:
+  - `exact`, `prefix` and `suffix` expressions on different attributes become attribute filters;
+  - anything that uses `all`, `any` or `not` otherwise becomes a runtime expression;
+  - matches are case-sensitive, and an event that doesn't define an attribute doesn't match it.
+- **Offset:** the subscription tracks an offset, starting at the end of the stream, which `config.offset` can override.
+- **Round trips:** the subscription as submitted is kept in the `cloudevents.io/subscription` annotation, and returned as is. Subscriptions created otherwise are described as well as they can be: a partition by source or type becomes `source` or `types`, and attribute filters that are anchored literals become `exact`, `prefix` or `suffix` filters. Other filters are left out.
+
+**Refused with `400 Bad Request`:**
+- any `protocol` other than `HTTP`;
+- `sinkcredential`;
+- the `headers` protocol setting, and any `method` other than `POST`;
+- configuration keys other than `offset`;
+- the optional `sql` filter dialect.
+
 ## Contributing
 
 👋 **Welcome Contributors!**
