@@ -260,7 +260,7 @@
 
         <div class="card mb-3">
             <div class="card-body">
-                <SubscriptionTester Id="playground" Spec="subscription.Spec" Partition="subscription.Spec.Partition" />
+                <SubscriptionTester @key="Name" Id="playground" Spec="subscription.Spec" Partition="subscription.Spec.Partition" />
             </div>
         </div>
     }
@@ -279,7 +279,7 @@
     const int DeadLetterPageSize = 20;
 
     readonly CancellationTokenSource cancellation = new();
-    readonly SubscriptionSampleHistory history = new();
+    SubscriptionSampleHistory history = new();
     Subscription? subscription;
     SubscriptionHealth? health;
     IReadOnlyList<DeadLetter>? deadLetters;
@@ -307,6 +307,9 @@
         if (loadedName == Name) return;
         loadedName = Name;
         subscription = null;
+        // the page is reused when navigating from a subscription to another: nothing of the previous one is kept
+        history = new();
+        health = null;
         deadLetters = null;
         notFound = false;
         await RefreshAsync(true);

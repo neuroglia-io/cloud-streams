@@ -12,6 +12,11 @@
 {
     <Callout Type="CalloutType.Warning">Publishing cloud events requires the operator role.</Callout>
 }
+else if (canOperate == null)
+{
+    @* the editor is only created once its initial value is known: it reads its value when it is created *@
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+}
 else
 {
     <p class="text-secondary small">
@@ -34,7 +39,7 @@ else
         </div>
     </div>
     <div class="publish-editor border mb-2" style="height: 60vh">
-        <StandaloneCodeEditor @ref="editor" ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(initialValue, false, PreferredLanguage.JSON)" />
+        <StandaloneCodeEditor @ref="editor" CssClass="h-100" ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(initialValue, false, PreferredLanguage.JSON)" />
     </div>
     @if (result != null && succeeded)
     {
@@ -89,7 +94,10 @@ else
         Data = new Dictionary<string, object>()
     };
 
-    string Serialize(CloudEvent e) => System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(this.Serializer.SerializeToText(e)), new System.Text.Json.JsonSerializerOptions() { WriteIndented = true });
+    string Serialize(CloudEvent e) => System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(this.Serializer.SerializeToText(e)), IndentedJson);
+
+    // the event is displayed, not embedded in HTML: characters such as the + of time offsets are kept as they are
+    static readonly System.Text.Json.JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     async Task OnTemplateSelectedAsync(ChangeEventArgs args)
     {
@@ -101,6 +109,8 @@ else
             // the template is a copy, with a new id and time, and without the attributes the gateway added
             template = this.Serializer.Deserialize<CloudEvent>(this.Serializer.SerializeToText(e))!;
             template.ExtensionAttributes?.Remove(CloudEventExtensionAttributes.Sequence);
+            // an event that carries the origin of this gateway would be ignored by its split-horizon policy, as one it has already ingested. Only the default attribute is known here
+            template.ExtensionAttributes?.Remove(CloudStreams.Core.Resources.SplitHorizonPolicy.DefaultAttributeName);
             template.Id = Guid.NewGuid().ToString();
             template.Time = DateTimeOffset.Now;
         }
@@ -117,7 +127,7 @@ else
             var node = System.Text.Json.Nodes.JsonNode.Parse(await this.editor.GetValue())!.AsObject();
             node["id"] = Guid.NewGuid().ToString();
             node["time"] = DateTimeOffset.Now.ToString("O");
-            await this.editor.SetValue(node.ToJsonString(new System.Text.Json.JsonSerializerOptions() { WriteIndented = true }));
+            await this.editor.SetValue(node.ToJsonString(IndentedJson));
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NullReferenceException)
         {
