@@ -1669,6 +1669,13 @@ public class SubscriptionHandler
     protected virtual async Task OnSubscriptionErrorAsync(Exception ex)
     {
         if (this._disposed) return;
+        // a canceled stream is the consequence of stopping it, for example to fault the subscription, not a fault of its own: recording it would replace the actual fault
+        // with 'The operation was canceled'
+        if ((ex is OperationCanceledException && ex.InnerException is not TimeoutException) || (ex is RpcException cancelled && cancelled.StatusCode == StatusCode.Cancelled))
+        {
+            this.Logger.LogDebug(ex, "The stream of subscription '{subscription}' has been canceled", this.Subscription.GetQualifiedName());
+            return;
+        }
         try { this.StreamInitializationCancellationTokenSource?.Cancel(); }
         catch (ObjectDisposedException) { }
         this.Logger.LogError(ex, "An error occurred while streaming cloud events for subscription '{subscription}'", this.Subscription.GetQualifiedName());
@@ -1685,7 +1692,8 @@ public class SubscriptionHandler
                 {
                     resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
                     resource.Status.Stream ??= new();
-                    resource.Status.Stream.Fault = fault;
+                    // the first fault is the one that explains why the subscription stopped: the errors it causes in turn must not replace it. Resuming clears it
+                    resource.Status.Stream.Fault ??= fault;
                 }).ConfigureAwait(false);
                 return;
             }

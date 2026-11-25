@@ -223,6 +223,50 @@ public class SubscriptionHandlerRobustnessTests
     }
 
     [Fact]
+    public async Task A_Canceled_Stream_Should_Not_Be_Recorded_As_A_Fault()
+    {
+        // arrange - faulting a subscription stops its stream, whose cancellation is then reported in turn
+        await using var context = await BrokerTestContext.CreateAsync();
+
+        // act
+        await context.Handler.ReportErrorAsync(new OperationCanceledException());
+        await context.Handler.ReportErrorAsync(new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.Cancelled, "Call canceled by the client.")));
+
+        // assert
+        Assert.Equal(0, context.Patches.Count);
+    }
+
+    [Fact]
+    public async Task A_Timeout_Should_Be_Recorded_As_A_Fault_Even_When_Reported_As_A_Cancellation()
+    {
+        // arrange
+        await using var context = await BrokerTestContext.CreateAsync();
+
+        // act - the way HttpClient reports a timeout
+        await context.Handler.ReportErrorAsync(new TaskCanceledException("The request was canceled due to the configured timeout", new TimeoutException()));
+
+        // assert
+        Assert.Equal(1, context.Patches.Count);
+    }
+
+    [Fact]
+    public async Task A_Recorded_Fault_Should_Not_Be_Replaced_By_The_Errors_It_Causes()
+    {
+        // arrange
+        await using var context = await BrokerTestContext.CreateAsync(configureSubscription: s =>
+        {
+            s.Status ??= new();
+            s.Status.Stream = new() { Fault = new TimeoutException("The subscriber returned '202 Accepted' but never acknowledged it").ToProblemDetails() };
+        }, waitForStreamInitialization: false);
+
+        // act
+        await context.Handler.ReportErrorAsync(new InvalidOperationException("boom"));
+
+        // assert
+        Assert.Equal(0, context.Patches.Count);
+    }
+
+    [Fact]
     public async Task A_Disposed_Handler_Should_Stop_Observing_Subscription_Updates()
     {
         // arrange

@@ -29,12 +29,13 @@ namespace CloudStreams.Core.Api.Services;
 /// <param name="repository">The service used to manage resources</param>
 /// <param name="monitor">The service used to monitor the handled resource</param>
 /// <param name="httpClient">The service used to perform HTTP requests</param>
+/// <param name="leases">The service used to manage the leases that let a single process at a time monitor the health of a resource</param>
 /// <remarks>
 /// A single timer is (re)scheduled after every check and whenever the health check configuration changes, so that checks never overlap, monitoring starts when
 /// health checks are configured after the resource has been created, honours the time elapsed since the last check, and stops for good once the monitor has been
 /// stopped (see #180)
 /// </remarks>
-public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSerializer serializer, IResourceRepository repository, IResourceMonitor<TResource> monitor, HttpClient httpClient)
+public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSerializer serializer, IResourceRepository repository, IResourceMonitor<TResource> monitor, HttpClient httpClient, IHealthMonitorLeaseManager leases)
     : IHostedService, IDisposable, IAsyncDisposable
     where TResource : class, IResource, new()
 {
@@ -44,7 +45,14 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
     /// </summary>
     protected const int DefaultInterval = 15;
 
+    /// <summary>
+    /// Gets the time a lease outlives the interval between checks, so that it does not expire while its owner is checking
+    /// </summary>
+    static readonly TimeSpan LeaseGracePeriod = TimeSpan.FromSeconds(10);
+
     readonly Lock _lock = new();
+    string? _leaseKey;
+    volatile bool _holdsLease;
     IDisposable? _configurationSubscription;
     DateTimeOffset? _lastCheckAt;
     int _checking;
@@ -148,7 +156,37 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
         this._configurationSubscription = null;
         try { this.CancellationTokenSource?.Cancel(); }
         catch (ObjectDisposedException) { }
-        return Task.CompletedTask;
+        return this.ReleaseLeaseAsync();
+    }
+
+    /// <summary>
+    /// Gets the interval between health checks
+    /// </summary>
+    /// <param name="healthChecks">The health check configuration</param>
+    /// <returns>The interval between health checks</returns>
+    protected static TimeSpan GetInterval(ServiceHealthCheckConfiguration healthChecks)
+    {
+        var interval = healthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval);
+        return interval <= TimeSpan.Zero ? TimeSpan.FromSeconds(DefaultInterval) : interval;
+    }
+
+    /// <summary>
+    /// Releases the lease on the monitored resource, if the monitor holds it, so that another process takes over without waiting for it to expire
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task ReleaseLeaseAsync()
+    {
+        if (!this._holdsLease || this._leaseKey == null) return;
+        this._holdsLease = false;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await leases.ReleaseAsync(this._leaseKey, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            this.Logger.LogDebug(ex, "Failed to release the health monitoring lease of {kind} '{name}': it will expire", this.Resource.Kind, this.Resource.GetQualifiedName());
+        }
     }
 
     /// <summary>
@@ -166,8 +204,7 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
                 this.HealthCheckTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 return;
             }
-            var interval = healthChecks.Interval?.ToTimeSpan() ?? TimeSpan.FromSeconds(DefaultInterval);
-            if (interval <= TimeSpan.Zero) interval = TimeSpan.FromSeconds(DefaultInterval);
+            var interval = GetInterval(healthChecks);
             var dueTime = interval;
             if (resumed)
             {
@@ -213,6 +250,10 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
         var cancellationToken = this.CancellationTokenSource?.Token ?? CancellationToken.None;
         var service = this.GetService(this.Resource);
         if (service?.HealthChecks == null) return;
+        // only the process that holds the lease checks the service: the others keep trying to acquire it, and take over when its owner stops or dies (see #180)
+        this._leaseKey ??= $"{this.Resource.Kind.ToLowerInvariant()}:{this.Resource.GetQualifiedName()}";
+        this._holdsLease = await leases.TryAcquireAsync(this._leaseKey, GetInterval(service.HealthChecks) * 2 + LeaseGracePeriod, cancellationToken).ConfigureAwait(false);
+        if (!this._holdsLease) return;
         var baseUri = service.Uri.OriginalString.TrimEnd('/');
         var path = service.HealthChecks.Request.Path;
         if (!path.StartsWith('/')) path = $"/{path}";
@@ -289,6 +330,7 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
         this._configurationSubscription?.Dispose();
         try { this.CancellationTokenSource?.Cancel(); }
         catch (ObjectDisposedException) { }
+        await this.ReleaseLeaseAsync().ConfigureAwait(false);
         if (timer != null) await timer.DisposeAsync().ConfigureAwait(false);
         this.CancellationTokenSource?.Dispose();
     }
