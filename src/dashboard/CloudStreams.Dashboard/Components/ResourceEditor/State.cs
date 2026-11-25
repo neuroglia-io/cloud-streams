@@ -73,4 +73,9 @@ public record ResourceEditorState<TResource>
     /// Gets/sets the message to display once the resource has been successfully saved, if any
     /// </summary>
     public string? SuccessMessage { get; set; }
+
+    /// <summary>
+    /// Gets/sets the changes to review before they are saved, if any: the differences between the editable parts of the resource and the editor's (see #227)
+    /// </summary>
+    public IReadOnlyList<TextDiffLine>? PendingChanges { get; set; }
 }

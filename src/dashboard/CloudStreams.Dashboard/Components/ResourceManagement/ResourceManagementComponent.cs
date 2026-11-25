@@ -14,6 +14,7 @@
 using BlazorBootstrap;
 using CloudStreams.Dashboard.Components.ResourceManagement;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Neuroglia.Serialization;
 
 namespace CloudStreams.Dashboard.Components;
@@ -50,6 +51,12 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// </summary>
     [Inject]
     protected IJsonSerializer Serializer { get; set; } = null!;
+
+    /// <summary>
+    /// Gets the service used to serialize/deserialize objects to/from YAML
+    /// </summary>
+    [Inject]
+    protected IYamlSerializer YamlSerializer { get; set; } = null!;
 
     /// <summary>
     /// Gets the service used to notify users of the outcome of their actions
@@ -135,6 +142,31 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// </summary>
     protected ElementReference? CheckboxAll { get; set; } = null;
 
+    /// <summary>
+    /// Gets the key of the column the resources are sorted by
+    /// </summary>
+    protected string SortColumn { get; private set; } = ResourceSortColumns.Name;
+
+    /// <summary>
+    /// Gets a boolean indicating whether the resources are sorted in descending order
+    /// </summary>
+    protected bool SortDescending { get; private set; }
+
+    /// <summary>
+    /// Gets the label selector the resources are filtered by, if any
+    /// </summary>
+    protected string? LabelSelector { get; private set; }
+
+    /// <summary>
+    /// Gets the reason why the label selector could not be applied, if any
+    /// </summary>
+    protected string? LabelSelectorError { get; private set; }
+
+    /// <summary>
+    /// Gets the maximum size of the files that can be imported
+    /// </summary>
+    protected const long MaxImportFileSize = 1024 * 1024;
+
     string activeResourceName = null!;
     /// <summary>
     /// Gets/sets the name of the active resource
@@ -146,6 +178,12 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     {
         CanOperate = await UserAccess.CanOperateAsync();
         CanAdminister = await UserAccess.CanAdministerAsync();
+        ConfigureSortKeys(Store.SortKeys);
+        Store.Sort.Subscribe(sort => OnStateChanged(_ =>
+        {
+            SortColumn = sort.Column;
+            SortDescending = sort.Descending;
+        }), token: CancellationTokenSource.Token);
         Observable.CombineLatest(
             Store.Resources,
             Store.SelectedResourceNames,
@@ -203,14 +241,96 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     }
 
     /// <summary>
+    /// Adds the functions used to get the value of the page's own sortable columns
+    /// </summary>
+    /// <param name="sortKeys">The functions used to get the value of each sortable column of a resource, by column key</param>
+    protected virtual void ConfigureSortKeys(IDictionary<string, Func<TResource, IComparable?>> sortKeys) { }
+
+    /// <summary>
+    /// Sorts the resources by the specified column, or reverses their order if they already are
+    /// </summary>
+    /// <param name="column">The key of the column to sort the resources by</param>
+    protected void OnSort(string column) => Store.ToggleSort(column);
+
+    /// <summary>
+    /// Filters the resources by the specified comma-separated label selectors, e.g. <c>env=prod,tier!=db</c>, or stops filtering them if none
+    /// </summary>
+    /// <param name="labelSelector">The label selectors to filter the resources by</param>
+    protected void OnLabelSelector(string? labelSelector)
+    {
+        labelSelector = string.IsNullOrWhiteSpace(labelSelector) ? null : labelSelector.Trim();
+        EquatableList<LabelSelector> selectors;
+        try { selectors = labelSelector == null ? [] : new(Neuroglia.Data.Infrastructure.ResourceOriented.LabelSelector.ParseList(labelSelector)); }
+        catch (Exception ex)
+        {
+            OnStateChanged(_ => LabelSelectorError = $"Invalid label selector: {ex.Message}");
+            return;
+        }
+        OnStateChanged(_ =>
+        {
+            LabelSelector = labelSelector;
+            LabelSelectorError = null;
+        });
+        Store.SetLabelSelectors(selectors);
+    }
+
+    /// <summary>
+    /// Downloads the specified resources as a YAML stream, which can be imported back
+    /// </summary>
+    /// <param name="resources">The resources to export</param>
+    protected async Task OnExportAsync(IEnumerable<TResource> resources)
+    {
+        var list = resources.ToList();
+        if (list.Count == 0) return;
+        var yaml = ResourceDocuments.ExportYaml(list, Serializer, YamlSerializer);
+        var fileName = list.Count == 1 ? $"{list[0].GetName()}.yaml" : $"{typeof(TResource).Name.ToLowerInvariant()}s.yaml";
+        await CommonJsInterop.DownloadFileAsync(fileName, "application/yaml", System.Text.Encoding.UTF8.GetBytes(yaml));
+    }
+
+    /// <summary>
     /// Exports the selected resources
     /// </summary>
-    /// <returns></returns>
-    protected async Task OnExportSelectedResourcesAsync()
+    protected Task OnExportSelectedResourcesAsync() => OnExportAsync((Resources ?? []).Where(r => SelectedResourceNames.Contains(r.GetName())));
+
+    /// <summary>
+    /// Imports the resources described by the specified file, a YAML stream or JSON, creating them or updating those that exist
+    /// </summary>
+    /// <param name="e">The event that describes the file to import</param>
+    protected async Task OnImportAsync(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
     {
-        if (this.SelectedResourceNames.Count == 0) return;
-        await this.CommonJsInterop.VisitUrlsAsync(this.SelectedResourceNames.Select(name => $"/api/resources/v1/subscriptions/{name}/export").ToList());
+        var kind = typeof(TResource).Name.ToLowerInvariant();
+        string text;
+        try
+        {
+            if (e.File.Size > MaxImportFileSize) throw new InvalidOperationException($"the file is larger than {MaxImportFileSize / 1024} KB");
+            using var reader = new StreamReader(e.File.OpenReadStream(MaxImportFileSize));
+            text = await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure($"Failed to read '{e.File.Name}'", ex);
+            return;
+        }
+        IReadOnlyList<System.Text.Json.Nodes.JsonObject> documents;
+        try { documents = ResourceDocuments.ParseDocuments(text, YamlSerializer); }
+        catch (FormatException ex)
+        {
+            NotifyFailure($"Failed to import '{e.File.Name}'", ex);
+            return;
+        }
+        var result = await Store.ImportAsync(documents, Serializer, CancellationTokenSource.Token);
+        if (result.Failed.Count == 0) NotifySuccess($"Imported '{e.File.Name}': {result}");
+        else ToastService.Notify(new(ToastType.Warning, $"Imported '{e.File.Name}' ({kind}s): {result}. {string.Join(" ", result.Failed)}"));
+        // the watch reports what changed, but missing an event must not leave the list stale after an import
+        await Store.RefreshAsync();
     }
+
+    /// <summary>
+    /// Activates the specified action when Enter or Space is pressed, as a click would, so that rows can be used with the keyboard (see #198)
+    /// </summary>
+    /// <param name="e">The keyboard event to handle</param>
+    /// <param name="action">The action to activate</param>
+    protected static Task OnActivationKeyDown(KeyboardEventArgs e, Func<Task> action) => KeyboardActivation.OnKeyDown(e, action);
 
     /// <summary>
     /// Handles search input value changes
@@ -285,15 +405,22 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// Opens the targeted <see cref="Resource"/>'s details
     /// </summary>
     /// <param name="resource">The <see cref="Resource"/> to show the details for</param>
+    /// <remarks>The details are read-only: administrators edit the resource from them (see #227)</remarks>
     protected virtual Task OnShowResourceDetailsAsync(TResource resource)
     {
-        //if (DetailsOffCanvas == null) return Task.CompletedTask;
-        //var parameters = new Dictionary<string, object>
-        //{
-        //    { nameof(ResourceDetails<TResource>.Resource), resource }
-        //};
-        //return DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: typeof(TResource).Name + " details", parameters: parameters);
-        return OnShowResourceEditorAsync(resource);
+        if (DetailsOffCanvas == null) return Task.CompletedTask;
+        var parameters = new Dictionary<string, object>
+        {
+            { nameof(ResourceDetails<TResource>.Resource), resource },
+            { nameof(ResourceDetails<TResource>.CanEdit), CanAdminister },
+            { nameof(ResourceDetails<TResource>.OnEdit), EventCallback.Factory.Create<TResource?>(this, async r =>
+                {
+                    await DetailsOffCanvas.HideAsync();
+                    await OnShowResourceEditorAsync(r);
+                }) },
+            { nameof(ResourceDetails<TResource>.OnExport), EventCallback.Factory.Create<TResource?>(this, r => r == null ? Task.CompletedTask : OnExportAsync([r])) }
+        };
+        return DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: $"{typeof(TResource).Name} '{resource.GetName()}'", parameters: parameters);
     }
 
     /// <summary>

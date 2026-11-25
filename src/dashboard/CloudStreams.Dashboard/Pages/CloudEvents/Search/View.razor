@@ -85,7 +85,7 @@
                 }
                 @foreach (var (record, e) in records)
                 {
-                    <tr class="cursor-pointer" @onclick="() => ShowDetailsAsync(record, e)">
+                    <tr class="cursor-pointer" tabindex="0" @onclick="() => ShowDetailsAsync(record, e)" @onkeydown="k => KeyboardActivation.OnKeyDown(k, () => ShowDetailsAsync(record, e))">
                         <td>@record.Sequence</td>
                         <td>@e.Id</td>
                         <td>@record.Timestamp?.LocalDateTime</td>

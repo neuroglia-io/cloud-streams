@@ -576,6 +576,18 @@ The details of an event show its data as indented JSON, as text, or, for binary 
 
 `POST /api/resources/v1/subscriptions/{name}/redeliver`, with `{ "offset": 42 }` (an offset in the stream) or `{ "partition": { "type": "by-source", "id": "…" }, "offset": 3 }`, delivers a recorded event to the subscriber of a subscription once more, mutated as the subscription mutates events, without going through its filter or moving its offset. It requires the operator role, returns the subscriber's status, or `502` if the subscriber refused it, and is offered by the details of an event in the list and in search results.
 
+### Dashboard
+
+- **Resources.** The gateway, broker and subscription lists can be:
+  - sorted by clicking their column headers;
+  - filtered by name, or by labels with the same selectors as the API (`env=prod,tier!=db`, `tier in (edge,core)`).
+- **Details.** Selecting a row, or pressing Enter on it, opens the resource's read-only details, from which administrators edit it.
+- **Saving changes.** Before an edit is saved, the editor shows the changes it makes to the specification, labels and annotations, which are all it saves.
+- **Export and import.**
+  - Export downloads the selected resources as one YAML file, holding only what users own: name, labels, annotations and spec.
+  - Import, for administrators, reads such a file, or JSON. Each resource is created, or updated if it exists, and the dashboard reports what became of each one.
+- **Theme.** The dashboard follows the system's light or dark theme. The navigation bar can force either, and the browser remembers the choice.
+
 ### Monitoring
 
 Gateways, brokers and the API expose two health endpoints, suited to liveness and readiness probes:

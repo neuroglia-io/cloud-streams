@@ -15,6 +15,7 @@ using CloudStreams.Core;
 using CloudStreams.Core.Api.Client.Services;
 using CloudStreams.Core.Resources;
 using CloudStreams.Dashboard.Components.ResourceManagement;
+using CloudStreams.Dashboard.Services;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -209,6 +210,110 @@ public sealed class ResourceManagementComponentStoreTests
         Assert.Equal(["/api/resources/v1/subscriptions/a", "/api/resources/v1/subscriptions/c"], this._requests.Select(r => r.RequestUri!.AbsolutePath));
         Assert.Equal(["b"], this._store.State.Resources!.Select(r => r.GetName()));
         Assert.Empty(this._store.State.SelectedResourceNames);
+    }
+
+    // ---------- sorting and import (#227) ----------
+
+    [Fact]
+    public async Task The_Listed_Resources_Should_Be_Sorted_By_Name_By_Default_Then_By_The_Toggled_Column()
+    {
+        // arrange
+        var start = new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+        foreach (var (name, minutes) in new[] { ("b", 1), ("c", 0), ("a", 2) })
+        {
+            var subscription = Subscription(name);
+            subscription.Metadata.CreationTimestamp = start.AddMinutes(minutes);
+            await this._store.RaiseAsync(ResourceWatchEventType.Created, subscription);
+        }
+        static async Task<string[]> NamesAsync(TestStore store, string first) => [.. (await store.Resources.Where(r => r?.Count == 3 && r[0].GetName() == first).FirstAsync().Timeout(TimeSpan.FromSeconds(5)))!.Select(r => r.GetName())];
+
+        // act & assert
+        Assert.Equal(["a", "b", "c"], await NamesAsync(this._store, "a"));
+        this._store.ToggleSort(ResourceSortColumns.Name);
+        Assert.Equal(["c", "b", "a"], await NamesAsync(this._store, "c"));
+        this._store.ToggleSort(ResourceSortColumns.Created);
+        Assert.Equal(["c", "b", "a"], await NamesAsync(this._store, "c"));
+        Assert.False(this._store.State.SortDescending);
+        this._store.ToggleSort(ResourceSortColumns.Created);
+        Assert.Equal(["a", "b", "c"], await NamesAsync(this._store, "a"));
+        Assert.True(this._store.State.SortDescending);
+    }
+
+    [Fact]
+    public async Task Importing_Should_Create_Missing_Resources_Patch_Changed_Ones_And_Report_The_Others()
+    {
+        // arrange
+        var existing = Subscription("changed", new Dictionary<string, string>() { ["tier"] = "edge" });
+        existing.Metadata.Generation = 1;
+        var unchanged = Subscription("unchanged");
+        unchanged.Metadata.Generation = 1;
+        var bodies = new List<(HttpMethod Method, string Path, string? Body)>();
+        this._respond = request =>
+        {
+            var name = request.RequestUri!.Segments[^1];
+            bodies.Add((request.Method, request.RequestUri.AbsolutePath, request.Content?.ReadAsStringAsync().Result));
+            if (request.Method == HttpMethod.Get)
+            {
+                return name switch
+                {
+                    "changed" => new(HttpStatusCode.OK) { Content = new StringContent(Json(existing), Encoding.UTF8, "application/json") },
+                    "unchanged" => new(HttpStatusCode.OK) { Content = new StringContent(Json(unchanged), Encoding.UTF8, "application/json") },
+                    _ => new(HttpStatusCode.NotFound) { Content = new StringContent("""{"type":"https://cloud-streams.io/problems/not-found","title":"Not Found","status":404}""", Encoding.UTF8, "application/problem+json") }
+                };
+            }
+            return new(HttpStatusCode.OK) { Content = new StringContent(Json(Subscription(name)), Encoding.UTF8, "application/json") };
+        };
+        var yaml = """
+            apiVersion: cloud-streams.io/v1
+            kind: Subscription
+            metadata:
+              name: changed
+              labels:
+                tier: core
+            spec:
+              subscriber:
+                uri: https://changed.example.com/events
+                rateLimit: 5
+            ---
+            kind: Subscription
+            metadata:
+              name: created
+            spec:
+              subscriber:
+                uri: https://created.example.com/events
+            ---
+            kind: Subscription
+            metadata:
+              name: unchanged
+            spec:
+              subscriber:
+                uri: https://unchanged.example.com/events
+            ---
+            kind: Gateway
+            metadata:
+              name: a-gateway
+            ---
+            kind: Subscription
+            spec: {}
+            """;
+        var documents = ResourceDocuments.ParseDocuments(yaml, Neuroglia.Serialization.Yaml.YamlSerializer.Default);
+
+        // act
+        var result = await this._store.ImportAsync(documents, Neuroglia.Serialization.Json.JsonSerializer.Default);
+
+        // assert
+        Assert.Equal(["created"], result.Created);
+        Assert.Equal(["changed"], result.Updated);
+        Assert.Equal(["unchanged"], result.Unchanged);
+        Assert.Equal(2, result.Failed.Count);
+        Assert.Contains("'a-gateway': it is a Gateway, not a subscription", result.Failed);
+        Assert.Contains("document #5: it has no 'metadata.name'", result.Failed);
+        Assert.Equal("1 created, 1 updated, 1 unchanged, 2 failed", result.ToString());
+        var patch = Assert.Single(bodies, b => b.Method == HttpMethod.Patch);
+        Assert.EndsWith("/subscriptions/changed", patch.Path);
+        Assert.Contains("/metadata/labels/tier", patch.Body);
+        Assert.Contains("/spec/subscriber/rateLimit", patch.Body);
+        Assert.Single(bodies, b => b.Method == HttpMethod.Post && b.Body!.Contains("\"created\""));
     }
 
     sealed class TestStore(ICloudStreamsCoreApiClient client, ResourceWatchEventHubClient hub)

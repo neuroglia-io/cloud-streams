@@ -26,6 +26,8 @@ public abstract class ComponentStore<TState>
     private BehaviorSubject<TState> _Subject;
     private TState _State;
     private bool _Disposed;
+    readonly Queue<TState> _pending = new();
+    bool _delivering;
 
     /// <summary>
     /// Initializes a new <see cref="ComponentStore{TState}"/>
@@ -50,10 +52,45 @@ public abstract class ComponentStore<TState>
     /// Sets the <see cref="ComponentStore{TState}"/>'s state
     /// </summary>
     /// <param name="state">The updated state to set</param>
+    /// <remarks>
+    /// Observers often update the state as they observe it. Such an update is delivered once the state being delivered has reached every observer, rather than
+    /// in the middle of its delivery: otherwise, the observers that had not received the older state yet would receive it after the newer one, and end on it. Every
+    /// state is delivered, in order (see #199)
+    /// </remarks>
     protected virtual void Set(TState state)
     {
-        this._State = state;
-        this._Subject.OnNext(this._State);
+        lock (this._pending)
+        {
+            this._State = state;
+            this._pending.Enqueue(state);
+            if (this._delivering) return;
+            this._delivering = true;
+        }
+        try
+        {
+            while (true)
+            {
+                TState next;
+                lock (this._pending)
+                {
+                    if (!this._pending.TryDequeue(out next!))
+                    {
+                        this._delivering = false;
+                        return;
+                    }
+                }
+                this._Subject.OnNext(next);
+            }
+        }
+        catch
+        {
+            lock (this._pending)
+            {
+                this._pending.Clear();
+                this._delivering = false;
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -84,7 +121,8 @@ public abstract class ComponentStore<TState>
     }
 
     /// <inheritdoc/>
-    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Throttle(TimeSpan.FromMicroseconds(1)).Subscribe(observer);
+    /// <remarks>Every state is observed: throttling, even briefly, would drop the intermediate ones (see #199)</remarks>
+    public virtual IDisposable Subscribe(IObserver<TState> observer) => this._Subject.Subscribe(observer);
 
     /// <summary>
     /// Disposes of the <see cref="ComponentStore{TState}"/>

@@ -37,11 +37,8 @@ builder.Services.AddCloudStreamsCoreApiClient(options =>
 {
     options.BaseAddress = builder.HostEnvironment.BaseAddress;
 });
-builder.Services.AddFlux(flux =>
-{
-    flux.ScanMarkupTypeAssembly<App>();
-});
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
+builder.Services.AddSingleton<ThemeService>();
 builder.Services.AddScoped<UserAccess>();
 builder.Services.AddSingleton<CommonJsInterop>();
 builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
@@ -51,4 +48,6 @@ builder.Services.AddBlazorBootstrap();
 
 var app = builder.Build();
 
+// the theme, applied before the first paint, is read before the first render, so that editors match it (see #229)
+await app.Services.GetRequiredService<ThemeService>().InitializeAsync();
 await app.RunAsync();

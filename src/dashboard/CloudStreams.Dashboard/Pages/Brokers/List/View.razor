@@ -13,34 +13,22 @@
             </div>
         </div>
     }
-    <div class="d-flex flex-row justify-content-between align-items-center">
-        <h4>Brokers</h4>
-        <span>@(Resources?.Count ?? 0) items</span>
-        <div class="d-flex">
-            <input type="search" class="form-control rounded my-2 me-2" placeholder="Search" value="@SearchTerm" @oninput="OnSearchInput" />
-            <div class="dropdown d-flex align-content-center p-1 @(CanAdminister ? "" : "invisible")">
-                <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
-                <ul class="dropdown-menu">
-                    @if (CanAdminister)
-                    {
-                        <li><a class="dropdown-item @(SelectedResourceNames.Count == 0 ? "text-mute" : "text-danger")" href="#" @onclick="async _ => await (SelectedResourceNames.Count == 0 ?  Task.CompletedTask : OnDeleteSelectedResourcesAsync())" @onclick:preventDefault="true" @onclick:stopPropagation="true"><Icon Name="IconName.Trash" /> Delete selected</a></li>
-                    }
-                </ul>
-            </div>
-        </div>
-    </div>
+    <ResourceListToolbar Id="brokers" Title="Brokers" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+                         LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
+                         OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">
+        <caption class="visually-hidden">Brokers. Select a row, or press Enter on it, to see its details.</caption>
         <thead>
             <tr>
-                <th class="sticky-header text-start">Name</th>
-                <th class="sticky-header text-center">Created At</th>
-                <th class="sticky-header text-center">Generation</th>
+                <SortableHeader Column="@ResourceSortColumns.Name" Title="Name" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" />
+                <SortableHeader Column="@ResourceSortColumns.Created" Title="Created At" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
+                <SortableHeader Column="@ResourceSortColumns.Generation" Title="Generation" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Retry Policy</th>
                 <th class="sticky-header text-center">Circuit Breaker</th>
-                <th class="sticky-header text-center">Health Status</th>
-                <th class="sticky-header text-end"></th>
+                <SortableHeader Column="health" Title="Health" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
+                <th class="sticky-header"><span class="visually-hidden">Actions</span></th>
                 <th class="sticky-header text-center align-middle">
-                    <input @ref="CheckboxAll" type="checkbox" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                    <input @ref="CheckboxAll" type="checkbox" aria-label="Select all brokers" @onclick="(_) => Store.ToggleResourceSelection()" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
                 </th>
             </tr>
         </thead>
@@ -48,34 +36,34 @@
             @if (Resources != null && Resources.Any())
             {
                 <Virtualize Context="resource" Items="@Resources">
-                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" class="cursor-pointer">
-                        <td class="text-start">@resource.Metadata.Name</td>
-                        <td class="text-center">@resource.Metadata.CreationTimestamp.ToString()</td>
+                    <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer">
+                        <td>@resource.Metadata.Name</td>
+                        <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">@resource.Metadata.Generation</td>
                         <td class="text-center">@(resource.Spec?.Dispatch?.RetryPolicy == null ? "no" : "yes")</td>
                         <td class="text-center">@(resource.Spec?.Dispatch?.RetryPolicy?.CircuitBreaker == null ? "no" : "yes")</td>
-                        <td class="text-center"><span class="bi-circle-fill @GetCssClassFor(resource.Status?.HealthStatus)"></span></td>
+                        <td class="text-center"><HealthBadge Status="@resource.Status?.HealthStatus" /></td>
                         <td class="text-end">
-                            <div class="dropdown @(CanAdminister ? "" : "invisible")">
-                                <button class="btn btn-sm" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical"></i></button>
+                            <div class="dropdown">
+                                <button class="btn btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Actions on the broker '{resource.Metadata.Name}'")" @onclick:stopPropagation="true"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
                                 <ul class="dropdown-menu">
+                                    <li>
+                                        <button class="dropdown-item" title="Export the broker '@resource.Metadata.Name'" @onclick="async _ => await OnExportAsync([resource])" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Download" /> Export</button>
+                                    </li>
                                     @if (CanAdminister)
                                     {
                                         <li>
-                                            <button class="dropdown-item" title="Edit the @(typeof(Broker).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
+                                            <button class="dropdown-item" title="Edit the broker '@resource.Metadata.Name'" @onclick="async _ => await OnShowResourceEditorAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Pencil" /> Edit</button>
                                         </li>
-                                    }
-                                    @if (CanAdminister)
-                                    {
                                         <li>
-                                            <button class="dropdown-item text-danger" title="Delete the @(typeof(Broker).Name.ToLower()) '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
+                                            <button class="dropdown-item text-danger" title="Delete the broker '@resource.Metadata.Name'" @onclick="async _ => await OnDeleteResourceAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.Trash" /> Delete</button>
                                         </li>
                                     }
                                 </ul>
                             </div>
                         </td>
                         <td class="text-center align-middle">
-                            <input type="checkbox" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                            <input type="checkbox" aria-label="@($"Select the broker '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
                         </td>
                     </tr>
                 </Virtualize>
@@ -86,7 +74,7 @@
 
 @if (CanAdminister)
 {
-    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()"><Icon Name="IconName.Plus" /></Button>
+    <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()" aria-label="Create a broker" title="Create a broker"><Icon Name="IconName.Plus" /></Button>
 }
 
 <Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
@@ -97,15 +85,7 @@
 
 @code {
 
-    string GetCssClassFor(string? healthStatus)
-    {
-        return healthStatus switch
-        {
-            HealthStatus.Degraded => "text-warning",
-            HealthStatus.Healthy => "text-primary",
-            HealthStatus.Unhealthy => "text-danger",
-            _ => "text-secondary"
-        };
-    }
+    /// <inheritdoc/>
+    protected override void ConfigureSortKeys(IDictionary<string, Func<Broker, IComparable?>> sortKeys) => sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);
 
 }

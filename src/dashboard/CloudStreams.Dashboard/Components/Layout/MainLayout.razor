@@ -1,15 +1,19 @@
 ﻿@namespace CloudStreams.Dashboard
 @inherits LayoutComponentBase
 
-<div class="page h-100 d-flex flex-column">    
-    <nav class="header navbar navbar-expand-lg flex-row navbar-dark bg-dark-subtle">        
-        <a class="navbar-brand d-flex flex-row align-items-center justify-content-center" href="#">        
-            <svg class="logo" viewBox="0 0 2132 2132">
+<div class="page h-100 d-flex flex-column">
+    <a class="visually-hidden-focusable position-absolute top-0 start-0 p-2 bg-body z-3" href="#main-content">Skip to the content</a>
+    <nav class="header navbar navbar-expand-lg bg-body-tertiary" aria-label="Main">
+        <a class="navbar-brand d-flex flex-row align-items-center justify-content-center" href="">
+            <svg class="logo" viewBox="0 0 2132 2132" aria-hidden="true" focusable="false">
                 <use xlink:href="#logo" />
             </svg>
             <span class="logo-typing">Cloud Streams</span>
         </a>
-        <div class="navbar-collapse">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-navigation" aria-controls="main-navigation" aria-expanded="false" aria-label="Toggle the navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="main-navigation">
             <ul class="navbar-nav">
                 <li class="nav-item dropdown">
                     <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -77,18 +81,35 @@
                     <i class="bi bi-wifi-off" aria-hidden="true"></i> Offline
                 </span>
             }
+            <div class="dropdown me-3">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Color theme: {ThemeLabel(ThemeService.Preference)}")" title="Color theme">
+                    <i class="bi @ThemeIcon(ThemeService.Theme)" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    @foreach (var theme in new[] { Themes.Auto, Themes.Light, Themes.Dark })
+                    {
+                        <li>
+                            <button type="button" class="dropdown-item d-flex align-items-center gap-2 @(ThemeService.Preference == theme ? "active" : "")" aria-pressed="@(ThemeService.Preference == theme ? "true" : "false")" @onclick="() => ThemeService.SetPreferenceAsync(theme)">
+                                <i class="bi @(theme == Themes.Auto ? "bi-circle-half" : ThemeIcon(theme))" aria-hidden="true"></i> @ThemeLabel(theme)
+                            </button>
+                        </li>
+                    }
+                </ul>
+            </div>
             @if (user?.Enabled == true && user.Authenticated)
             {
                 <span class="navbar-text me-3">@user.Name</span>
                 <form method="post" action="auth/logout" target="_top" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-outline-light me-2" title="Sign out">Sign out</button>
+                    <button type="submit" class="btn btn-sm btn-outline-secondary me-2">Sign out</button>
                 </form>
             }
         </div>
     </nav>
-    <div class="content flex-grow d-flex flex-column p-3">
+    <main id="main-content" class="content flex-grow d-flex flex-column p-3">
+        @* every page has a heading, which is focused on navigation so that screen readers announce the new page (see #198) *@
+        <h1 class="visually-hidden" tabindex="-1">@(Layout.Title?.ChildContent ?? (RenderFragment)(b => b.AddContent(0, "Cloud Streams")))</h1>
         @Body
-    </div>
+    </main>
 </div>
 <Toasts class="p-3" AutoHide="true" Delay="6000" Placement="ToastsPlacement.TopRight" />
 @implements IDisposable
@@ -113,8 +134,30 @@
         });
     }
 
+    [Inject] ThemeService ThemeService { get; set; } = null!;
+
+    [Inject] IApplicationLayout Layout { get; set; } = null!;
+
+    static string ThemeLabel(string theme) => theme switch
+    {
+        Themes.Light => "Light",
+        Themes.Dark => "Dark",
+        _ => "Same as the system"
+    };
+
+    static string ThemeIcon(string theme) => theme == Themes.Light ? "bi-sun-fill" : "bi-moon-stars-fill";
+
+    void OnThemeChanged() => InvokeAsync(StateHasChanged);
+
+    void OnLayoutChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
     /// <inheritdoc/>
-    public void Dispose() => connectionStateSubscription?.Dispose();
+    public void Dispose()
+    {
+        connectionStateSubscription?.Dispose();
+        ThemeService.Changed -= OnThemeChanged;
+        Layout.PropertyChanged -= OnLayoutChanged;
+    }
 
     [Inject] UserAccess UserAccess { get; set; } = null!;
 
@@ -124,6 +167,8 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
+        ThemeService.Changed += OnThemeChanged;
+        Layout.PropertyChanged += OnLayoutChanged;
         user = await UserAccess.GetUserAsync();
     }
 

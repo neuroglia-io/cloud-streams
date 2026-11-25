@@ -1,0 +1,128 @@
+@namespace CloudStreams.Dashboard.Components
+@using Microsoft.AspNetCore.Components.Forms
+
+@* The toolbar of resource lists: search, label filter, import, and the actions on selected resources (see #227) *@
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <div class="d-flex align-items-baseline gap-3">
+        <h2 class="h4 mb-0">@Title</h2>
+        <span class="text-secondary small" role="status">@Count @(Count == 1 ? "item" : "items")@(SelectedCount > 0 ? $", {SelectedCount} selected" : string.Empty)</span>
+    </div>
+    <div class="d-flex flex-wrap align-items-start gap-2">
+        <div>
+            <label class="visually-hidden" for="@($"{Id}-search")">Search by name</label>
+            <input id="@($"{Id}-search")" type="search" class="form-control form-control-sm" placeholder="Search by name" value="@SearchTerm" @oninput="e => OnSearch.InvokeAsync(e.Value?.ToString())" />
+        </div>
+        <form @onsubmit="ApplyLabelSelectorAsync" @onsubmit:preventDefault>
+            <label class="visually-hidden" for="@($"{Id}-labels")">Filter by labels</label>
+            <div class="input-group input-group-sm has-validation">
+                <input id="@($"{Id}-labels")" class="form-control font-monospace @(LabelSelectorError == null ? "" : "is-invalid")" placeholder="Labels, e.g. env=prod,tier!=db" title="A comma-separated list of label selectors: key, key=value, key!=value, key in (a,b) or key notin (a,b)" aria-describedby="@(LabelSelectorError == null ? null : $"{Id}-labels-error")" @bind="labelSelector" />
+                <button type="submit" class="btn btn-outline-secondary" aria-label="Apply the label filter"><Icon Name="IconName.Funnel" /></button>
+                @if (LabelSelectorError != null)
+                {
+                    <div id="@($"{Id}-labels-error")" class="invalid-feedback">@LabelSelectorError</div>
+                }
+            </div>
+        </form>
+        @if (CanAdminister)
+        {
+            <label class="btn btn-sm btn-outline-secondary mb-0" title="Import @Title.ToLowerInvariant() from a YAML or JSON file: each is created, or updated if it exists">
+                <Icon Name="IconName.Upload" /> Import
+                <InputFile class="visually-hidden" accept=".yaml,.yml,.json" OnChange="args => OnImport.InvokeAsync(args)" aria-label="@($"Import {Title.ToLowerInvariant()} from a YAML or JSON file")" />
+            </label>
+        }
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Actions on the selected {Title.ToLowerInvariant()}")" title="Actions on the selected @Title.ToLowerInvariant()"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><button type="button" class="dropdown-item" disabled="@(SelectedCount == 0)" @onclick="() => OnExportSelected.InvokeAsync()"><Icon Name="IconName.Download" /> Export selected</button></li>
+                @if (CanAdminister)
+                {
+                    <li><button type="button" class="dropdown-item text-danger" disabled="@(SelectedCount == 0)" @onclick="() => OnDeleteSelected.InvokeAsync()"><Icon Name="IconName.Trash" /> Delete selected</button></li>
+                }
+            </ul>
+        </div>
+    </div>
+</div>
+
+@code {
+
+    string? labelSelector;
+    string? lastLabelSelector;
+
+    /// <summary>
+    /// Gets/sets the id prefix of the toolbar's controls
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the title of the list, e.g. "Subscriptions"
+    /// </summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the amount of resources listed
+    /// </summary>
+    [Parameter] public int Count { get; set; }
+
+    /// <summary>
+    /// Gets/sets the amount of resources selected
+    /// </summary>
+    [Parameter] public int SelectedCount { get; set; }
+
+    /// <summary>
+    /// Gets/sets the search term
+    /// </summary>
+    [Parameter] public string? SearchTerm { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the search term changes
+    /// </summary>
+    [Parameter] public EventCallback<string?> OnSearch { get; set; }
+
+    /// <summary>
+    /// Gets/sets the label selector applied
+    /// </summary>
+    [Parameter] public string? LabelSelector { get; set; }
+
+    /// <summary>
+    /// Gets/sets the reason why the label selector could not be applied, if any
+    /// </summary>
+    [Parameter] public string? LabelSelectorError { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked to apply a label selector
+    /// </summary>
+    [Parameter] public EventCallback<string?> OnLabelSelector { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the user may import and delete resources
+    /// </summary>
+    [Parameter] public bool CanAdminister { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when a file to import has been chosen
+    /// </summary>
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnImport { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked to export the selected resources
+    /// </summary>
+    [Parameter] public EventCallback OnExportSelected { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked to delete the selected resources
+    /// </summary>
+    [Parameter] public EventCallback OnDeleteSelected { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        if (this.LabelSelector != this.lastLabelSelector)
+        {
+            this.lastLabelSelector = this.LabelSelector;
+            this.labelSelector = this.LabelSelector;
+        }
+    }
+
+    Task ApplyLabelSelectorAsync() => this.OnLabelSelector.InvokeAsync(this.labelSelector);
+
+}

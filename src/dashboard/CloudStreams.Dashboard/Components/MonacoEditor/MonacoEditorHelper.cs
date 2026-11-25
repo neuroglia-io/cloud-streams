@@ -14,7 +14,8 @@
 namespace CloudStreams.Dashboard.Components;
 
 /// <inheritdoc />
-public class MonacoEditorHelper
+/// <param name="themeService">The service used to get the color theme the editors must match (see #229)</param>
+public class MonacoEditorHelper(ThemeService themeService)
     : IMonacoEditorHelper
 {
     /// <inheritdoc />
@@ -27,7 +28,7 @@ public class MonacoEditorHelper
     public Func<StandaloneCodeEditor, StandaloneEditorConstructionOptions> GetStandaloneEditorConstructionOptions(string value = "", bool readOnly = false, string language = "yaml") {
         return (StandaloneCodeEditor editor) => new StandaloneEditorConstructionOptions
         {
-            Theme = "vs-dark",
+            Theme = themeService.EditorTheme,
             AutomaticLayout = true,
             Minimap = new EditorMinimapOptions { Enabled = false },
             Language = language,

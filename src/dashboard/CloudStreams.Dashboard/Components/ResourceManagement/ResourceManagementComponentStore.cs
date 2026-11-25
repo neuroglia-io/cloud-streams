@@ -12,6 +12,9 @@
 // limitations under the License.
 
 using CloudStreams.Core.Api.Client.Services;
+using Neuroglia.Data;
+using Neuroglia.Serialization;
+using System.Net;
 
 namespace CloudStreams.Dashboard.Components.ResourceManagement;
 
@@ -69,16 +72,6 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public IObservable<EquatableList<string>> SelectedResourceNames => this.Select(s => s.SelectedResourceNames).DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe <see cref="Namespace"/>s
-    /// </summary>
-    public IObservable<EquatableList<Namespace>?> Namespaces => this.Select(s => s.Namespaces).DistinctUntilChanged();
-
-    /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe current namespace
-    /// </summary>
-    public IObservable<string?> Namespace => this.Select(s => s.Namespace).DistinctUntilChanged();
-
-    /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the  <see cref="ResourceManagementComponentState{TResource}.SearchTerm"/> changes
     /// </summary>
     public IObservable<string?> SearchTerm => this.Select(state => state.SearchTerm).DistinctUntilChanged();
@@ -99,33 +92,59 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public IObservable<EquatableList<TResource>?> Resources => Observable.CombineLatest(
             InternalResources,
             SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
-            (resources, searchTerm) =>
+            Sort,
+            (resources, searchTerm, sort) =>
             {
-                if (resources == null)
-                {
-                    return [];
-                }
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    return resources!;
-                }
-                return new EquatableList<TResource>(resources!.Where(r => r.GetName().Contains(searchTerm)));
+                if (resources == null) return [];
+                IEnumerable<TResource> filtered = string.IsNullOrWhiteSpace(searchTerm) ? resources : resources.Where(r => r.GetName().Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+                return new EquatableList<TResource>(this.SortResources(filtered, sort.Column, sort.Descending));
             }
          )
         .DistinctUntilChanged();
 
     /// <summary>
-    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourcesFilter"/> 
+    /// Gets an <see cref="IObservable{T}"/> used to observe the column the resources are sorted by, and in which order
     /// </summary>
-    protected virtual IObservable<ResourcesFilter> Filter => Observable.CombineLatest(
-            Namespace,
-            LabelSelectors,
-            (@namespace, labelSelectors) => new ResourcesFilter()
-            {
-                Namespace = @namespace,
-                LabelSelectors = labelSelectors
-            }
-        )
+    public IObservable<(string Column, bool Descending)> Sort => this.Select(state => (state.SortColumn, state.SortDescending)).DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets the functions used to get the value of each sortable column of a resource, by column key. Defaults to the name, creation time and generation of resources
+    /// </summary>
+    /// <remarks>Pages add the columns of their own, which are compared as <see cref="IComparable"/>s, absent values coming first</remarks>
+    public IDictionary<string, Func<TResource, IComparable?>> SortKeys { get; } = new Dictionary<string, Func<TResource, IComparable?>>()
+    {
+        [ResourceSortColumns.Name] = r => r.GetName(),
+        [ResourceSortColumns.Created] = r => r.Metadata.CreationTimestamp,
+        [ResourceSortColumns.Generation] = r => r.Metadata.Generation
+    };
+
+    /// <summary>
+    /// Sorts the specified resources by the specified column, then by name
+    /// </summary>
+    /// <param name="resources">The resources to sort</param>
+    /// <param name="column">The key of the column to sort the resources by</param>
+    /// <param name="descending">A boolean indicating whether to sort the resources in descending order</param>
+    /// <returns>The sorted resources</returns>
+    protected virtual IEnumerable<TResource> SortResources(IEnumerable<TResource> resources, string column, bool descending)
+    {
+        var key = this.SortKeys.TryGetValue(column, out var k) ? k : this.SortKeys[ResourceSortColumns.Name];
+        var comparer = Comparer<IComparable?>.Create((x, y) => (x, y) switch
+        {
+            (null, null) => 0,
+            (null, _) => -1,
+            (_, null) => 1,
+            _ when x.GetType() == y.GetType() => x.CompareTo(y),
+            _ => string.Compare(x.ToString(), y.ToString(), StringComparison.OrdinalIgnoreCase)
+        });
+        var sorted = descending ? resources.OrderByDescending(key, comparer) : resources.OrderBy(key, comparer);
+        return sorted.ThenBy(r => r.GetName(), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourcesFilter"/>
+    /// </summary>
+    protected virtual IObservable<ResourcesFilter> Filter => LabelSelectors
+        .Select(labelSelectors => new ResourcesFilter() { LabelSelectors = labelSelectors })
         .DistinctUntilChanged();
 
     /// <summary>
@@ -146,14 +165,16 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
 
     #region Setters
     /// <summary>
-    /// Sets the <see cref="ResourceManagementComponentState{TResource}.Namespace"/>
+    /// Sorts the resources by the specified column: in ascending order, or, if they already are, in descending order
     /// </summary>
-    /// <param name="namespace">The new namespace</param>
-    public void SetNamespace(string? @namespace)
+    /// <param name="column">The key of the column to sort the resources by</param>
+    public virtual void ToggleSort(string column)
     {
+        if (string.IsNullOrWhiteSpace(column)) return;
         Reduce(state => state with
         {
-            Namespace = @namespace
+            SortColumn = column,
+            SortDescending = state.SortColumn == column && !state.SortDescending
         });
     }
 
@@ -272,7 +293,6 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {
-        await ListNamespacesAsync().ConfigureAwait(false);
         await GetResourceDefinitionAsync().ConfigureAwait(false);
         // real-time updates are a nicety: failing to establish them must not prevent the resources from being listed (see #192)
         try
@@ -295,7 +315,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         }
         // whatever changed while the connection was down is fetched again once it is re-established
         ResourceEventHub.Reconnected.SubscribeAsync(
-            onNextAsync: _ => ListResourcesAsync(Get(state => new ResourcesFilter() { Namespace = state.Namespace, LabelSelectors = state.LabelSelectors })),
+            onNextAsync: _ => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors })),
             onErrorAsync: _ => Task.CompletedTask,
             onCompletedAsync: () => Task.CompletedTask,
             cancellationToken: CancellationTokenSource.Token
@@ -357,18 +377,66 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     }
 
     /// <summary>
-    /// Lists all available <see cref="Namespace"/>s
+    /// Imports the specified documents: each creates the resource it describes, or updates its spec, labels and annotations if it already exists (see #227)
+    /// </summary>
+    /// <param name="documents">The documents to import</param>
+    /// <param name="serializer">The service used to read the documents</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>An object that describes what became of each document</returns>
+    /// <remarks>Documents are imported one at a time, and one failing does not prevent the others from being imported</remarks>
+    public virtual async Task<ResourceImportResult> ImportAsync(IEnumerable<System.Text.Json.Nodes.JsonObject> documents, IJsonSerializer serializer, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        var result = new ResourceImportResult();
+        var expectedKind = typeof(TResource).Name;
+        var api = ResourceManagementApi.Manage<TResource>();
+        var index = 0;
+        foreach (var document in documents)
+        {
+            index++;
+            var name = document["metadata"]?["name"]?.GetValue<string>();
+            var label = string.IsNullOrWhiteSpace(name) ? $"document #{index}" : $"'{name}'";
+            try
+            {
+                var kind = document["kind"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(kind) && !kind.Equals(expectedKind, StringComparison.OrdinalIgnoreCase)) throw new FormatException($"it is a {kind}, not a {expectedKind.ToLowerInvariant()}");
+                if (string.IsNullOrWhiteSpace(name)) throw new FormatException("it has no 'metadata.name'");
+                var resource = serializer.Deserialize<TResource>(document.ToJsonString()) ?? throw new FormatException("it is empty");
+                TResource? existing;
+                try { existing = await api.GetAsync(name, null, cancellationToken).ConfigureAwait(false); }
+                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { existing = null; }
+                if (existing == null)
+                {
+                    resource.Metadata.ResourceVersion = null;
+                    await api.CreateAsync(resource, cancellationToken).ConfigureAwait(false);
+                    result.Created.Add(name);
+                    continue;
+                }
+                var patch = JsonCons.Utilities.JsonPatch.FromDiff(
+                    System.Text.Json.JsonDocument.Parse(ResourceDocuments.GetEditableDocument(existing, serializer).ToJsonString()).RootElement,
+                    System.Text.Json.JsonDocument.Parse(ResourceDocuments.GetEditableDocument(resource, serializer).ToJsonString()).RootElement);
+                if (patch.RootElement.GetArrayLength() < 1)
+                {
+                    result.Unchanged.Add(name);
+                    continue;
+                }
+                await api.PatchAsync(new Patch(PatchType.JsonPatch, patch), name, null, cancellationToken).ConfigureAwait(false);
+                result.Updated.Add(name);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                var detail = ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+                result.Failed.Add($"{label}: {detail}");
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Lists the resources again, filtered as they currently are
     /// </summary>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    public virtual async Task ListNamespacesAsync()
-    {
-        await Task.CompletedTask;
-        //var namespaceList = new EquatableList<Namespace>(await (await ResourceManagementApi.Namespaces.ListAsync().ConfigureAwait(false)).OrderBy(ns => ns.GetQualifiedName()).ToListAsync().ConfigureAwait(false));
-        //Reduce(s => s with
-        //{
-        //    Namespaces = namespaceList
-        //});
-    }
+    public virtual Task RefreshAsync() => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors }));
 
     /// <summary>
     /// Lists all the resources managed by CloudStreams
@@ -383,7 +451,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         {
             Loading = true
         });
-        var resources = new EquatableList<TResource>(await (await ResourceManagementApi.Manage<TResource>().ListAsync(filter?.Namespace, filter?.LabelSelectors).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
+        var resources = new EquatableList<TResource>(await (await ResourceManagementApi.Manage<TResource>().ListAsync(null, filter?.LabelSelectors).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
         Reduce(s => s with
         {
             Resources = resources,
