@@ -1,0 +1,4 @@
+/* the heading of a step receives the focus programmatically, so that screen readers announce it: it shows no focus ring, since it cannot be reached with the keyboard */
+h3:focus {
+    outline: none;
+}

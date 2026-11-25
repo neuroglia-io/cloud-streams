@@ -1,0 +1,137 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+
+@* The frame every resource form shares: the form and YAML views of the same resource, the steps, the review and the buttons (see #260) *@
+
+<div class="resource-form">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <ul class="nav nav-pills small" role="tablist" aria-label="View">
+            <li class="nav-item" role="presentation">
+                <button type="button" role="tab" class="nav-link @(Form.ShowingYaml ? "" : "active")" aria-selected="@(Form.ShowingYaml ? "false" : "true")" @onclick="Form.ShowForm">Form</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button type="button" role="tab" class="nav-link @(Form.ShowingYaml ? "active" : "")" aria-selected="@(Form.ShowingYaml ? "true" : "false")" @onclick="Form.ShowYaml">YAML</button>
+            </li>
+        </ul>
+        @if (Form.CanOpenEditor)
+        {
+            <button type="button" class="btn btn-link btn-sm ms-auto" @onclick="Form.OpenEditorAsync" title="Edit the resource in the editor, with what has been filled in so far">Open in the advanced editor</button>
+        }
+    </div>
+
+    @if (Form.ShowingYaml)
+    {
+        <label for="@(Form.Id)-yaml" class="form-label small text-secondary">The name, labels, annotations and spec of the resource. What you change here shows in the form, and the other way around.</label>
+        <textarea id="@(Form.Id)-yaml" class="form-control font-monospace small" rows="20" spellcheck="false" aria-invalid="@(Form.YamlError != null ? "true" : "false")" aria-describedby="@(Form.Id)-yaml-error" @bind="Form.Yaml"></textarea>
+        <div id="@(Form.Id)-yaml-error" class="text-danger small mt-1" role="alert">@Form.YamlError</div>
+    }
+    else
+    {
+        <nav aria-label="Steps" class="mb-3">
+            <ol class="resource-form-steps list-unstyled d-flex flex-wrap gap-1 mb-0">
+                @for (var i = 0; i < Form.Steps.Count; i++)
+                {
+                    var step = i;
+                    var current = step == Form.CurrentStep;
+                    <li>
+                        <button type="button" class="btn btn-sm @(current ? "btn-primary" : step < Form.CurrentStep ? "btn-outline-primary" : "btn-outline-secondary")" aria-current="@(current ? "step" : null)" disabled="@Form.Busy" @onclick="() => Form.GoToAsync(step)">
+                            <span class="badge rounded-pill text-bg-light me-1">@(step + 1)</span>@Form.Steps[step]
+                        </button>
+                    </li>
+                }
+            </ol>
+        </nav>
+        <h3 id="@(Form.Id)-step-title" class="h6 mb-3" tabindex="-1">@Form.Steps[Form.CurrentStep]</h3>
+        @if (Form.IsReview)
+        {
+            <div class="mb-3">@Form.Summary</div>
+            @if (Form.Diff != null)
+            {
+                <h4 class="h6 small">Changes to save</h4>
+                @if (Form.Diff.All(l => l.Kind == TextDiffLineKind.Unchanged))
+                {
+                    <p class="small text-secondary">Nothing has changed.</p>
+                }
+                else
+                {
+                    <pre class="border rounded p-2 small overflow-auto" style="max-height: 40vh" tabindex="0" aria-label="The changes to save">@foreach (var line in Form.Diff)
+{<span class="@DiffClass(line.Kind)">@(line.Kind switch { TextDiffLineKind.Added => "+ ", TextDiffLineKind.Removed => "- ", _ => "  " })@line.Text
+</span>}</pre>
+                }
+            }
+            else
+            {
+                <details class="small">
+                    <summary>The resource, as YAML</summary>
+                    <pre class="border rounded p-2 mt-1 overflow-auto" style="max-height: 40vh">@Form.Yaml</pre>
+                </details>
+            }
+        }
+        else
+        {
+            @ChildContent
+        }
+    }
+
+    <div aria-live="polite">
+        @if (Form.Problem != null)
+        {
+            <div class="alert alert-danger small mt-3 mb-0" role="alert">
+                <strong>The server refused the resource:</strong> @Form.Problem
+            </div>
+        }
+        @if (Form.Errors.Count > 0 && !Form.ShowingYaml)
+        {
+            <p class="text-danger small mt-3 mb-0">Correct the highlighted fields to continue.</p>
+        }
+    </div>
+
+    <div class="d-flex gap-2 mt-3 pt-3 border-top">
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Form.Busy" @onclick="Form.CancelAsync">Cancel</button>
+        @if (!Form.ShowingYaml && Form.CurrentStep > 0)
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" disabled="@Form.Busy" @onclick="Form.Back">Back</button>
+        }
+        <span class="@(!Form.ShowingYaml && Form.CurrentStep > 0 ? "" : "ms-auto")"></span>
+        @if (Form.ShowingYaml || !Form.IsReview)
+        {
+            <button type="button" class="btn btn-sm btn-primary" disabled="@Form.Busy" @onclick="() => Form.ShowingYaml ? Form.GoToAsync(Form.Steps.Count - 1) : Form.NextAsync()">
+                @if (Form.Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                }
+                @(Form.ShowingYaml || Form.CurrentStep == Form.Steps.Count - 2 ? "Review" : "Next")
+            </button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-sm btn-primary" disabled="@(Form.Busy || (Form.Diff?.All(l => l.Kind == TextDiffLineKind.Unchanged) ?? false))" @onclick="Form.SaveAsync">
+                @if (Form.Busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                }
+                @(Form.IsNew ? "Create" : "Save")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the form to lay out
+    /// </summary>
+    [Parameter, EditorRequired] public IResourceForm Form { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the fields of the current step
+    /// </summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    static string DiffClass(TextDiffLineKind kind) => kind switch
+    {
+        TextDiffLineKind.Added => "d-block text-success-emphasis bg-success-subtle",
+        TextDiffLineKind.Removed => "d-block text-danger-emphasis bg-danger-subtle",
+        _ => "d-block"
+    };
+
+}

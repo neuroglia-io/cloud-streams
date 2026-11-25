@@ -1,0 +1,88 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core.Resources
+@using System.Globalization
+
+@* A duration as an amount and a unit, which produces the ISO 8601 duration resources expect (see #260) *@
+
+<div class="input-group input-group-sm" style="max-width: 16rem">
+    <input id="@Id" type="number" min="0" step="any" class="form-control @(Invalid ? "is-invalid" : "")" placeholder="@Placeholder" aria-describedby="@FormField.DescribedBy(Id)" aria-invalid="@(Invalid ? "true" : "false")"
+           value="@(amount?.ToString(CultureInfo.InvariantCulture))" @onchange="OnAmountChangedAsync" />
+    <select class="form-select" style="max-width: 7rem" aria-label="Unit" value="@unit" @onchange="OnUnitChangedAsync">
+        <option value="ms">ms</option>
+        <option value="s">seconds</option>
+        <option value="min">minutes</option>
+        <option value="h">hours</option>
+        <option value="d">days</option>
+    </select>
+</div>
+
+@code {
+
+    double? amount;
+    string unit = "s";
+    Duration? lastValue;
+
+    /// <summary>
+    /// Gets/sets the id of the input
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the duration, if any
+    /// </summary>
+    [Parameter] public Duration? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the duration changes
+    /// </summary>
+    [Parameter] public EventCallback<Duration?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets the unit to start with when there is no value
+    /// </summary>
+    [Parameter] public string DefaultUnit { get; set; } = "s";
+
+    /// <summary>
+    /// Gets/sets the text shown when there is no value, e.g. the default
+    /// </summary>
+    [Parameter] public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the value is invalid
+    /// </summary>
+    [Parameter] public bool Invalid { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (ReferenceEquals(this.Value, this.lastValue) && this.lastValue != null) return;
+        this.lastValue = this.Value;
+        if (this.Value == null)
+        {
+            this.amount = null;
+            this.unit = this.DefaultUnit;
+            return;
+        }
+        (this.amount, this.unit) = ResourceFormDocuments.ToAmount(this.Value.ToTimeSpan());
+    }
+
+    async Task OnAmountChangedAsync(ChangeEventArgs e)
+    {
+        this.amount = double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0 ? parsed : null;
+        await this.NotifyAsync();
+    }
+
+    async Task OnUnitChangedAsync(ChangeEventArgs e)
+    {
+        this.unit = e.Value?.ToString() ?? "s";
+        await this.NotifyAsync();
+    }
+
+    async Task NotifyAsync()
+    {
+        this.lastValue = this.amount.HasValue ? Duration.FromTimeSpan(ResourceFormDocuments.FromAmount(this.amount.Value, this.unit)) : null;
+        await this.ValueChanged.InvokeAsync(this.lastValue);
+    }
+
+}

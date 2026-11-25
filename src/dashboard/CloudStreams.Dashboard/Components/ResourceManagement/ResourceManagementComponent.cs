@@ -427,13 +427,55 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// Opens the targeted <see cref="Resource"/>'s edition
     /// </summary>
     /// <param name="resource">The <see cref="Resource"/> to edit</param>
-    protected virtual Task OnShowResourceEditorAsync(TResource? resource = null)
+    /// <remarks>Kinds of resources that have a form are created and edited with it, from which the advanced editor remains one click away (see #260)</remarks>
+    protected virtual Task OnShowResourceEditorAsync(TResource? resource = null) => this.ShowFormAsync(resource) ?? this.ShowAdvancedEditorAsync(resource);
+
+    /// <summary>
+    /// Gets/sets the modal resource forms are shown in, if the kind of resource has one
+    /// </summary>
+    protected Components.ResourceForms.ResourceFormModal? FormModal { get; set; }
+
+    /// <summary>
+    /// Shows the form used to create or edit the specified resource, if its kind has one
+    /// </summary>
+    /// <param name="resource">The resource to edit, if any. Without one, a resource is created</param>
+    /// <returns>A new awaitable <see cref="Task"/>, or null if the kind of resource has no form</returns>
+    protected virtual Task? ShowFormAsync(TResource? resource) => null;
+
+    /// <summary>
+    /// Shows the specified form, which opens the advanced editor when asked to, and notifies the user once the resource is saved
+    /// </summary>
+    /// <typeparam name="TForm">The type of the form to show</typeparam>
+    /// <param name="resource">The resource to edit, if any. Without one, a resource is created</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected Task? ShowFormAsync<TForm>(TResource? resource)
+        where TForm : Components.ResourceForms.ResourceFormBase<TResource>
+    {
+        if (this.FormModal == null) return null;
+        var kind = typeof(TResource).Name.ToLowerInvariant();
+        return this.FormModal.ShowAsync<TForm, TResource>(resource == null ? $"New {kind}" : $"Edit the {kind} '{resource.GetName()}'", resource,
+            saved =>
+            {
+                this.NotifySuccess(resource == null ? $"The {kind} '{saved.GetName()}' has been created" : $"The {kind} '{saved.GetName()}' has been saved");
+                return Task.CompletedTask;
+            },
+            draft => this.ShowAdvancedEditorAsync(resource, draft));
+    }
+
+    /// <summary>
+    /// Opens the advanced editor of the specified resource
+    /// </summary>
+    /// <param name="resource">The resource to edit, if any. Without one, a resource is created</param>
+    /// <param name="draft">What has been filled in a form so far, if anything, which the editor starts with</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual Task ShowAdvancedEditorAsync(TResource? resource, TResource? draft = null)
     {
         if (EditorOffCanvas == null) return Task.CompletedTask;
         var parameters = new Dictionary<string, object>
         {
             { nameof(ResourceEditor<TResource>.Resource), resource! }
         };
+        if (draft != null) parameters[nameof(ResourceEditor<TResource>.Draft)] = draft;
         string actionType = resource == null ? "creation" : "edition";
         return EditorOffCanvas.ShowAsync<ResourceEditor<TResource>>(title: typeof(TResource).Name + " " + actionType, parameters: parameters);
     }

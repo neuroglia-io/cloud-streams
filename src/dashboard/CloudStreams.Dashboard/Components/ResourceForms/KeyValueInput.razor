@@ -1,0 +1,113 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+
+@* Pairs of a key and a value, such as labels or attribute filters, edited as rows (see #260) *@
+
+<div id="@Id" role="group" aria-describedby="@FormField.DescribedBy(Id)">
+    @for (var i = 0; i < rows.Count; i++)
+    {
+        var index = i;
+        <div class="input-group input-group-sm mb-1">
+            @if (KeySuggestions != null)
+            {
+                <datalist id="@(Id)-keys">
+                    @foreach (var suggestion in KeySuggestions)
+                    {
+                        <option value="@suggestion"></option>
+                    }
+                </datalist>
+            }
+            <input type="text" class="form-control" placeholder="@KeyPlaceholder" aria-label="@($"{KeyLabel} {index + 1}")" list="@(KeySuggestions != null ? Id + "-keys" : null)" value="@rows[index].Key" @onchange="e => OnChangedAsync(index, e.Value?.ToString(), null)" />
+            <input type="text" class="form-control @(ValueClass)" placeholder="@ValuePlaceholder" aria-label="@($"{ValueLabel} {index + 1}")" value="@rows[index].Value" @onchange="e => OnChangedAsync(index, null, e.Value?.ToString())" />
+            <button type="button" class="btn btn-outline-secondary" aria-label="@($"Remove {KeyLabel.ToLowerInvariant()} {index + 1}")" @onclick="() => RemoveAsync(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+    }
+    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Add"><i class="bi bi-plus-lg" aria-hidden="true"></i> @AddText</button>
+</div>
+
+@code {
+
+    List<(string Key, string Value)> rows = [];
+    IDictionary<string, string>? lastValue;
+
+    /// <summary>
+    /// Gets/sets the id of the group of inputs
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the pairs, if any
+    /// </summary>
+    [Parameter] public IDictionary<string, string>? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the pairs change. Rows without a key are left out, and no row at all produces null
+    /// </summary>
+    [Parameter] public EventCallback<IDictionary<string, string>?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets what keys are, for accessible names
+    /// </summary>
+    [Parameter] public string KeyLabel { get; set; } = "Key";
+
+    /// <summary>
+    /// Gets/sets what values are, for accessible names
+    /// </summary>
+    [Parameter] public string ValueLabel { get; set; } = "Value";
+
+    /// <summary>
+    /// Gets/sets the placeholder of keys
+    /// </summary>
+    [Parameter] public string KeyPlaceholder { get; set; } = "key";
+
+    /// <summary>
+    /// Gets/sets the placeholder of values
+    /// </summary>
+    [Parameter] public string ValuePlaceholder { get; set; } = "value";
+
+    /// <summary>
+    /// Gets/sets the keys to suggest, if any
+    /// </summary>
+    [Parameter] public IEnumerable<string>? KeySuggestions { get; set; }
+
+    /// <summary>
+    /// Gets/sets additional classes of value inputs, e.g. 'font-monospace' for expressions
+    /// </summary>
+    [Parameter] public string? ValueClass { get; set; }
+
+    /// <summary>
+    /// Gets/sets the text of the button that adds a row
+    /// </summary>
+    [Parameter] public string AddText { get; set; } = "Add";
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (ReferenceEquals(this.Value, this.lastValue)) return;
+        this.lastValue = this.Value;
+        this.rows = this.Value == null ? [] : [.. this.Value.Select(kvp => (kvp.Key, kvp.Value))];
+    }
+
+    void Add() => this.rows.Add((string.Empty, string.Empty));
+
+    async Task OnChangedAsync(int index, string? key, string? value)
+    {
+        var row = this.rows[index];
+        this.rows[index] = (key ?? row.Key, value ?? row.Value);
+        await this.NotifyAsync();
+    }
+
+    async Task RemoveAsync(int index)
+    {
+        this.rows.RemoveAt(index);
+        await this.NotifyAsync();
+    }
+
+    async Task NotifyAsync()
+    {
+        var pairs = this.rows.Where(r => !string.IsNullOrWhiteSpace(r.Key)).GroupBy(r => r.Key.Trim()).ToDictionary(g => g.Key, g => g.Last().Value ?? string.Empty);
+        this.lastValue = pairs.Count == 0 ? null : pairs;
+        await this.ValueChanged.InvokeAsync(this.lastValue);
+    }
+
+}

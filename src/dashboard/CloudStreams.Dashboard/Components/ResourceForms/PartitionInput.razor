@@ -1,0 +1,99 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core.Resources
+@inject ICloudStreamsCoreApiClient Api
+
+@* A partition: a type, and an id picked from the partitions that exist, which are searched as you type (see #226, #260) *@
+
+<div class="row g-2">
+    <div class="col-sm-4">
+        <label for="@(Id)-type" class="visually-hidden">Partition type</label>
+        <select id="@(Id)-type" class="form-select form-select-sm" value="@Value?.Type" @onchange="OnTypeChangedAsync">
+            @foreach (var type in Enum.GetValues<CloudEventPartitionType>())
+            {
+                <option value="@type">@Describe(type)</option>
+            }
+        </select>
+    </div>
+    <div class="col-sm-8">
+        <label for="@Id" class="visually-hidden">Partition id</label>
+        <input id="@Id" type="text" class="form-control form-control-sm @(Invalid ? "is-invalid" : "")" list="@(Id)-ids" autocomplete="off" placeholder="Start typing to search the existing partitions"
+               aria-describedby="@FormField.DescribedBy(Id)" aria-invalid="@(Invalid ? "true" : "false")" value="@Value?.Id" @oninput="OnSearchAsync" @onchange="OnIdChangedAsync" />
+        <datalist id="@(Id)-ids">
+            @foreach (var id in suggestions)
+            {
+                <option value="@id"></option>
+            }
+        </datalist>
+    </div>
+</div>
+
+@code {
+
+    List<string> suggestions = [];
+    CancellationTokenSource? search;
+
+    /// <summary>
+    /// Gets/sets the id of the input of the partition id
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the partition
+    /// </summary>
+    [Parameter] public PartitionReference? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the partition changes
+    /// </summary>
+    [Parameter] public EventCallback<PartitionReference?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the value is invalid
+    /// </summary>
+    [Parameter] public bool Invalid { get; set; }
+
+    /// <summary>
+    /// Describes the specified type of partition
+    /// </summary>
+    public static string Describe(CloudEventPartitionType type) => type switch
+    {
+        CloudEventPartitionType.BySource => "Source",
+        CloudEventPartitionType.ByType => "Type",
+        CloudEventPartitionType.BySubject => "Subject",
+        CloudEventPartitionType.ByCorrelationId => "Correlation id",
+        CloudEventPartitionType.ByCausationId => "Causation id",
+        _ => type.ToString()
+    };
+
+    /// <inheritdoc/>
+    protected override Task OnInitializedAsync() => this.SearchAsync(this.Value?.Id);
+
+    async Task OnTypeChangedAsync(ChangeEventArgs e)
+    {
+        var type = Enum.Parse<CloudEventPartitionType>(e.Value!.ToString()!);
+        // the id may be empty while the partition is being chosen: the form validates it
+        await this.ValueChanged.InvokeAsync(new() { Type = type, Id = this.Value?.Id ?? string.Empty });
+        await this.SearchAsync(null, type);
+    }
+
+    async Task OnIdChangedAsync(ChangeEventArgs e) => await this.ValueChanged.InvokeAsync(new() { Type = this.Value?.Type ?? CloudEventPartitionType.BySource, Id = e.Value?.ToString()?.Trim() ?? string.Empty });
+
+    Task OnSearchAsync(ChangeEventArgs e) => this.SearchAsync(e.Value?.ToString());
+
+    async Task SearchAsync(string? prefix, CloudEventPartitionType? type = null)
+    {
+        this.search?.Cancel();
+        var cancellation = this.search = new CancellationTokenSource();
+        try
+        {
+            // the requests that follow quickly are coalesced
+            await Task.Delay(200, cancellation.Token);
+            var page = await this.Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(type ?? this.Value?.Type ?? CloudEventPartitionType.BySource, string.IsNullOrWhiteSpace(prefix) ? null : prefix, 20, null, cancellation.Token);
+            this.suggestions = [.. page.Items];
+            this.StateHasChanged();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { this.suggestions = []; }
+    }
+
+}

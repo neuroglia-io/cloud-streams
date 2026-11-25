@@ -1,0 +1,76 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+
+@* The modal resource forms are shown in (see #260). Its backdrop is static, so that a click beside it does not lose what has been filled in *@
+
+<Modal @ref="modal" Size="ModalSize.ExtraLarge" IsScrollable="true" UseStaticBackdrop="true" CloseOnEscape="false" Title="@title" OnHidden="OnHidden">
+    <BodyTemplate>
+        @if (formType != null)
+        {
+            <DynamicComponent @key="version" Type="formType" Parameters="parameters" />
+        }
+    </BodyTemplate>
+</Modal>
+
+@code {
+
+    Modal? modal;
+    string title = string.Empty;
+    Type? formType;
+    IDictionary<string, object>? parameters;
+    int version;
+
+    /// <summary>
+    /// Shows the specified form
+    /// </summary>
+    /// <typeparam name="TForm">The type of the form to show</typeparam>
+    /// <typeparam name="TResource">The type of the resource the form creates or edits</typeparam>
+    /// <param name="title">The title of the modal</param>
+    /// <param name="resource">The resource to edit, if any. Without one, the form creates a resource</param>
+    /// <param name="onSaved">A callback invoked once the resource has been saved, if any</param>
+    /// <param name="onOpenEditor">A callback invoked to open the advanced editor instead, with what has been filled in so far, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public async Task ShowAsync<TForm, TResource>(string title, TResource? resource, Func<TResource, Task>? onSaved = null, Func<TResource, Task>? onOpenEditor = null)
+        where TForm : ResourceFormBase<TResource>
+        where TResource : Resource, new()
+    {
+        if (this.modal == null) return;
+        this.title = title;
+        this.formType = typeof(TForm);
+        this.version++;
+        var parameters = new Dictionary<string, object>()
+        {
+            [nameof(ResourceFormBase<TResource>.OnSaved)] = EventCallback.Factory.Create<TResource>(this, async saved =>
+            {
+                await this.HideAsync();
+                if (onSaved != null) await onSaved(saved);
+            }),
+            [nameof(ResourceFormBase<TResource>.OnCancel)] = EventCallback.Factory.Create(this, this.HideAsync)
+        };
+        if (resource != null) parameters[nameof(ResourceFormBase<TResource>.Resource)] = resource;
+        if (onOpenEditor != null) parameters[nameof(ResourceFormBase<TResource>.OnOpenEditor)] = EventCallback.Factory.Create<TResource>(this, async edited =>
+        {
+            await this.HideAsync();
+            await onOpenEditor(edited);
+        });
+        this.parameters = parameters;
+        this.StateHasChanged();
+        await this.modal.ShowAsync();
+    }
+
+    /// <summary>
+    /// Hides the form
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    public async Task HideAsync()
+    {
+        if (this.modal != null) await this.modal.HideAsync();
+    }
+
+    void OnHidden()
+    {
+        // the form is disposed of once hidden, so that the next one starts afresh
+        this.formType = null;
+        this.parameters = null;
+    }
+
+}

@@ -1,0 +1,108 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core.Resources
+@using System.Globalization
+
+@* A retry policy, which subscriptions and brokers share: without one, the default applies (see #260) *@
+
+<fieldset id="@Id" aria-describedby="@FormField.DescribedBy(Id)">
+    <div class="form-check form-switch mb-2">
+        <input id="@(Id)-custom" class="form-check-input" type="checkbox" checked="@(Value != null)" @onchange="OnCustomChangedAsync" />
+        <label class="form-check-label small" for="@(Id)-custom">@(Value == null ? InheritedText : "Custom retry policy")</label>
+    </div>
+    @if (Value != null)
+    {
+        <div class="row g-2 ps-3 border-start">
+            <div class="col-sm-4">
+                <label for="@(Id)-attempts" class="form-label small mb-1">Retries</label>
+                <input id="@(Id)-attempts" type="number" min="-1" class="form-control form-control-sm" placeholder="@RetryPolicy.DefaultMaxAttempts" value="@Value.MaxAttempts" @onchange="e => UpdateAsync(p => p.MaxAttempts = int.TryParse(e.Value?.ToString(), out var n) ? n : null)" aria-describedby="@(Id)-attempts-help" />
+                <div id="@(Id)-attempts-help" class="form-text small">-1 retries forever</div>
+            </div>
+            <div class="col-sm-4">
+                <label for="@(Id)-backoff" class="form-label small mb-1">Backoff</label>
+                <select id="@(Id)-backoff" class="form-select form-select-sm" value="@Value.BackoffDuration.Type" @onchange="e => UpdateAsync(p => p.BackoffDuration.Type = Enum.Parse<RetryBackoffDurationType>(e.Value!.ToString()!))">
+                    <option value="@RetryBackoffDurationType.Constant">constant</option>
+                    <option value="@RetryBackoffDurationType.Incremental">incremental</option>
+                    <option value="@RetryBackoffDurationType.Exponential">exponential</option>
+                </select>
+            </div>
+            <div class="col-sm-4">
+                <label for="@(Id)-period" class="form-label small mb-1">Delay</label>
+                <DurationInput Id="@(Id + "-period")" Value="Value.BackoffDuration.Period" ValueChanged="d => UpdateAsync(p => p.BackoffDuration.Period = d ?? Duration.FromSeconds(1))" />
+            </div>
+            @if (Value.BackoffDuration.Type == RetryBackoffDurationType.Exponential)
+            {
+                <div class="col-sm-4">
+                    <label for="@(Id)-exponent" class="form-label small mb-1">Exponent</label>
+                    <input id="@(Id)-exponent" type="number" min="1" step="0.1" class="form-control form-control-sm" placeholder="2" value="@(Value.BackoffDuration.Exponent?.ToString(CultureInfo.InvariantCulture))" @onchange="e => UpdateAsync(p => p.BackoffDuration.Exponent = double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ? x : null)" />
+                </div>
+                <div class="col-sm-8">
+                    <label for="@(Id)-max-delay" class="form-label small mb-1">Longest delay</label>
+                    <DurationInput Id="@(Id + "-max-delay")" Value="Value.BackoffDuration.MaxDelay" ValueChanged="d => UpdateAsync(p => p.BackoffDuration.MaxDelay = d)" Placeholder="no limit" />
+                </div>
+            }
+            <div class="col-sm-6">
+                <label for="@(Id)-status-codes" class="form-label small mb-1">Status codes to retry</label>
+                <input id="@(Id)-status-codes" type="text" class="form-control form-control-sm" placeholder="any error" value="@(Value.StatusCodes == null ? null : string.Join(", ", Value.StatusCodes))" @onchange="e => UpdateAsync(p => p.StatusCodes = ParseStatusCodes(e.Value?.ToString()))" aria-describedby="@(Id)-status-codes-help" />
+                <div id="@(Id)-status-codes-help" class="form-text small">Comma-separated, e.g. 429, 503. Others fail at once</div>
+            </div>
+            <div class="col-sm-6">
+                <div class="form-check mt-4">
+                    <input id="@(Id)-breaker" class="form-check-input" type="checkbox" checked="@(Value.CircuitBreaker != null)" @onchange="e => UpdateAsync(p => p.CircuitBreaker = e.Value is true ? new() { BreakAfter = 5, BreakDuration = Duration.FromSeconds(30) } : null)" />
+                    <label class="form-check-label small" for="@(Id)-breaker">Pause after consecutive failures</label>
+                </div>
+                @if (Value.CircuitBreaker != null)
+                {
+                    <div class="d-flex gap-2 align-items-center small mt-1">
+                        <span>after</span>
+                        <input type="number" min="1" class="form-control form-control-sm" style="max-width: 5rem" aria-label="Failures before pausing" value="@Value.CircuitBreaker.BreakAfter" @onchange="e => UpdateAsync(p => p.CircuitBreaker!.BreakAfter = int.TryParse(e.Value?.ToString(), out var n) && n > 0 ? n : 1)" />
+                        <span>failures, for</span>
+                        <DurationInput Id="@(Id + "-break")" Value="Value.CircuitBreaker.BreakDuration" ValueChanged="d => UpdateAsync(p => p.CircuitBreaker!.BreakDuration = d ?? Duration.FromSeconds(30))" />
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</fieldset>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the id of the group of inputs
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the retry policy, if any
+    /// </summary>
+    [Parameter] public HttpClientRetryPolicy? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the retry policy changes
+    /// </summary>
+    [Parameter] public EventCallback<HttpClientRetryPolicy?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets what happens without a policy of its own
+    /// </summary>
+    [Parameter] public string InheritedText { get; set; } = "The default retry policy applies";
+
+    async Task OnCustomChangedAsync(ChangeEventArgs e)
+    {
+        var policy = e.Value is true ? new HttpClientRetryPolicy() { MaxAttempts = RetryPolicy.DefaultMaxAttempts, BackoffDuration = RetryBackoffDuration.Exponential(Duration.FromSeconds(1), 2) } : null;
+        await this.ValueChanged.InvokeAsync(policy);
+    }
+
+    async Task UpdateAsync(Action<HttpClientRetryPolicy> update)
+    {
+        if (this.Value == null) return;
+        update(this.Value);
+        await this.ValueChanged.InvokeAsync(this.Value);
+    }
+
+    static List<int>? ParseStatusCodes(string? text)
+    {
+        var codes = (text ?? string.Empty).Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries).Select(c => int.TryParse(c, out var code) ? code : 0).Where(c => c is >= 100 and < 600).Distinct().ToList();
+        return codes.Count == 0 ? null : codes;
+    }
+
+}

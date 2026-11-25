@@ -132,6 +132,7 @@ public class CloudStreamsApplicationBuilder
         this.Services.TryAddScoped<CloudEventSubscriptionManager>();
         this.Services.AddHostedService<Application.Services.DatabaseInitializer>();
         this.Services.AddSingleton<IAdmissionControl, AdmissionControl>();
+        this.Services.AddSingleton<ResourceDryRun>();
         this.Services.AddSingleton<IVersionControl, VersionControl>();
         this.Services.AddSingleton<IResourceRepository, ResourceRepository>();
         this.Services.AddSingleton<IPatchHandler, JsonMergePatchHandler>();

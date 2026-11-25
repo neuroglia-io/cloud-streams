@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Application.Services;
+
 namespace CloudStreams.Core.Application.Commands.Resources.Generic;
 
 /// <summary>
@@ -45,7 +47,8 @@ public class ReplaceResourceCommand<TResource>(TResource resource, bool dryRun)
 /// </summary>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to replace</typeparam>
 /// <param name="repository">The service used to manage <see cref="IResource"/>s</param>
-public class ReplaceResourceCommandHandler<TResource>(IResourceRepository repository)
+/// <param name="dryRun">The service used to validate changes without performing them</param>
+public class ReplaceResourceCommandHandler<TResource>(IResourceRepository repository, ResourceDryRun dryRun)
     : ICommandHandler<ReplaceResourceCommand<TResource>, TResource>
     where TResource : class, IResource, new()
 {
@@ -58,6 +61,14 @@ public class ReplaceResourceCommandHandler<TResource>(IResourceRepository reposi
         activity?.SetTag("resource.name", command.Resource.GetName());
         activity?.SetTag("resource.namespace", command.Resource.GetNamespace());
         activity?.SetTag("dryRun", command.DryRun);
+        if (command.DryRun)
+        {
+            // reviewed first, so that a refusal carries the errors of each field (see #260)
+            var original = await repository.GetAsync<TResource>(command.Resource.GetName(), command.Resource.GetNamespace(), cancellationToken).ConfigureAwait(false);
+            if (original == null) return new OperationResult<TResource>((int)HttpStatusCode.NotFound, errors: [new Error(ProblemTypes.NotFound, "Not Found", (int)HttpStatusCode.NotFound, $"There is no {new TResource().Definition.Kind.ToLowerInvariant()} named '{command.Resource.GetName()}'")]);
+            var problem = await dryRun.ReviewAsync(Operation.Replace, command.Resource.GetName(), command.Resource.GetNamespace(), command.Resource, original, null, cancellationToken).ConfigureAwait(false);
+            if (problem != null) return ResourceDryRun.Refused<TResource>(problem);
+        }
         var resource = await repository.ReplaceAsync(command.Resource, command.DryRun, cancellationToken).ConfigureAwait(false);
         return new OperationResult<TResource>((int)HttpStatusCode.OK, resource);
     }

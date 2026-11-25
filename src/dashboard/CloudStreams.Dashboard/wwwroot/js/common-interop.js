@@ -66,3 +66,16 @@ export function downloadFile(fileName, contentType, base64) {
     anchor.remove();
     URL.revokeObjectURL(url);
 }
+
+/**
+ * Moves the focus to the element with the specified id, if any, e.g. the first invalid field of a form (see #260)
+ * @param {string} id The id of the element to focus
+ */
+export function focusElement(id) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    // a group, such as radio buttons or a list of inputs, is focused through its first control
+    const focusable = 'input, select, textarea, button, [tabindex]';
+    const target = element.matches(focusable) ? element : element.querySelector(focusable) || element;
+    target.focus();
+}

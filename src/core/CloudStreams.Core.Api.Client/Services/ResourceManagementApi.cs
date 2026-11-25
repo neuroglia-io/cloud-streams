@@ -61,13 +61,24 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     /// <remarks>Cloud Streams resources are cluster-scoped, so their uri never includes a namespace</remarks>
     protected virtual string GetResourceUri(string name) => $"{this.Path}/{Uri.EscapeDataString(name)}";
 
+    /// <summary>
+    /// Asks the server to only validate the request, if specified
+    /// </summary>
+    /// <param name="uri">The uri of the request</param>
+    /// <param name="dryRun">A boolean indicating whether the server should only validate the request, without saving anything</param>
+    /// <returns>The uri of the request</returns>
+    protected static string WithDryRun(string uri, bool dryRun) => dryRun ? $"{uri}?dryRun=true" : uri;
+
     /// <inheritdoc/>
-    public virtual async Task<TResource> CreateAsync(TResource resource, CancellationToken cancellationToken = default)
+    public virtual Task<TResource> CreateAsync(TResource resource, CancellationToken cancellationToken = default) => this.CreateAsync(resource, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public virtual async Task<TResource> CreateAsync(TResource resource, bool dryRun, CancellationToken cancellationToken = default)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         var json = this.Serializer.SerializeToText(resource);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, WithDryRun(this.Path, dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<TResource>(json)!;
@@ -108,22 +119,28 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     }
 
     /// <inheritdoc/>
-    public virtual async Task<TResource> UpdateAsync(TResource resource, CancellationToken cancellationToken = default)
+    public virtual Task<TResource> UpdateAsync(TResource resource, CancellationToken cancellationToken = default) => this.UpdateAsync(resource, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public virtual async Task<TResource> UpdateAsync(TResource resource, bool dryRun, CancellationToken cancellationToken = default)
     {
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         var json = this.Serializer.SerializeToText(resource);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, this.Path) { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, WithDryRun(this.Path, dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<TResource>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<TResource> PatchAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual Task<TResource> PatchAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default) => this.PatchAsync(patch, name, @namespace, false, cancellationToken);
+
+    /// <inheritdoc/>
+    public virtual async Task<TResource> PatchAsync(Patch patch, string name, string? @namespace, bool dryRun, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        var uri = this.GetResourceUri(name);
+        var uri = WithDryRun(this.GetResourceUri(name), dryRun);
         var json = this.Serializer.SerializeToText(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, uri) { Content = content }, cancellationToken).ConfigureAwait(false);
