@@ -52,4 +52,17 @@ public record Subscriber
     [DataMember(Order = 5, Name = "ack"), JsonPropertyName("ack"), YamlMember(Alias = "ack")]
     public virtual SubscriberAcknowledgementConfiguration? Ack { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure the delivery of cloud events in batches, if any. Cloud events are delivered one at a time if not set
+    /// </summary>
+    [DataMember(Order = 6, Name = "batch"), JsonPropertyName("batch"), YamlMember(Alias = "batch")]
+    public virtual SubscriberBatchConfiguration? Batch { get; set; }
+
+    /// <summary>
+    /// Gets/sets an object used to configure the delivery of cloud events in parallel, in order per key, if any. Cloud events are delivered one at a time, in the
+    /// order of the stream, if not set
+    /// </summary>
+    [DataMember(Order = 7, Name = "ordering"), JsonPropertyName("ordering"), YamlMember(Alias = "ordering")]
+    public virtual SubscriberOrderingConfiguration? Ordering { get; set; }
+
 }

@@ -150,6 +150,13 @@ public class SubscriptionValidator
                 this.RuleFor(s => s.Spec.Subscriber.Uri).Must(ResourceValidationRules.IsHttpUri).OverridePropertyName("spec.subscriber.uri").WithName("spec.subscriber.uri").WithMessage("'spec.subscriber.uri' must be an absolute HTTP or HTTPS URI");
                 this.RuleFor(s => s.Spec.Subscriber.RateLimit).GreaterThan(0).When(s => s.Spec.Subscriber.RateLimit.HasValue).OverridePropertyName("spec.subscriber.rateLimit").WithName("spec.subscriber.rateLimit");
                 this.RuleFor(s => s.Spec.Subscriber.RetryPolicy!).SetValidator(new HttpClientRetryPolicyValidator()).When(s => s.Spec.Subscriber.RetryPolicy != null).OverridePropertyName("spec.subscriber.retryPolicy").WithName("spec.subscriber.retryPolicy");
+                this.RuleFor(s => s.Spec.Subscriber.Batch!.MaxSize).GreaterThan(0).When(s => s.Spec.Subscriber.Batch != null).OverridePropertyName("spec.subscriber.batch.maxSize").WithName("spec.subscriber.batch.maxSize");
+                this.RuleFor(s => s.Spec.Subscriber.Batch!.Linger).Must(l => l!.ToTimeSpan() >= TimeSpan.Zero).When(s => s.Spec.Subscriber.Batch?.Linger != null).OverridePropertyName("spec.subscriber.batch.linger").WithName("spec.subscriber.batch.linger");
+                this.RuleFor(s => s.Spec.Subscriber.Ordering!.Key).Matches("^[a-z0-9]+$").When(s => s.Spec.Subscriber.Ordering != null).OverridePropertyName("spec.subscriber.ordering.key").WithName("spec.subscriber.ordering.key")
+                    .WithMessage("'spec.subscriber.ordering.key' must be the name of a context attribute, which only contains lower-case letters and digits");
+                this.RuleFor(s => s.Spec.Subscriber.Ordering!.MaxConcurrency).GreaterThan(0).When(s => s.Spec.Subscriber.Ordering?.MaxConcurrency != null).OverridePropertyName("spec.subscriber.ordering.maxConcurrency").WithName("spec.subscriber.ordering.maxConcurrency");
+                this.RuleFor(s => s.Spec.Subscriber).Must(s => s.Batch == null || s.Ordering == null).OverridePropertyName("spec.subscriber").WithName("spec.subscriber")
+                    .WithMessage("'spec.subscriber.batch' and 'spec.subscriber.ordering' cannot be combined");
             });
             this.When(s => s.Spec.Partition != null, () =>
             {

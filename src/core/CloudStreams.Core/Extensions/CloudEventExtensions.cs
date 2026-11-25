@@ -58,4 +58,22 @@ public static class CloudEventExtensions
         return new StringContent(serializer.SerializeToText(e), Encoding.UTF8, CloudEventContentType.Json);
     }
 
+    /// <summary>
+    /// Gets the media type of batches of cloud events, as defined by the CloudEvents HTTP binding
+    /// </summary>
+    public const string BatchContentType = "application/cloudevents-batch+json";
+
+    /// <summary>
+    /// Converts the specified <see cref="CloudEvent"/>s into a new <see cref="HttpContent"/> that describes them as a batch, formatted as <c>application/cloudevents-batch+json</c>
+    /// </summary>
+    /// <param name="events">The <see cref="CloudEvent"/>s to convert</param>
+    /// <param name="serializer">The service used to serialize the <see cref="CloudEvent"/>s</param>
+    /// <returns>A new <see cref="HttpContent"/> that describes the batch</returns>
+    public static HttpContent ToBatchHttpContent(this IEnumerable<CloudEvent> events, IJsonSerializer? serializer = null)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        serializer ??= Neuroglia.Serialization.Json.JsonSerializer.Default;
+        return new StringContent(serializer.SerializeToText(events.ToList()), Encoding.UTF8, BatchContentType);
+    }
+
 }

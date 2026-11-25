@@ -220,6 +220,34 @@ POST /api/resources/v1/subscriptions/{name}/replay?from=2026-11-25T10:00:00Z
 - **Which time is used:** the time at which the gateway recorded the event, which never decreases along the stream, rather than the event's `time` attribute, which its publisher sets.
 - **Reading the stream:** reads accept `time` instead of `offset` too. Reading forwards starts at the first event recorded at or after it, and reading backwards at the last one recorded before it. Records carry their `timestamp`.
 
+#### Batches and parallel delivery
+
+By default, a subscription delivers one event at a time, in the order of its stream, which caps its throughput at one round trip per event. Two opt-in modes raise it. They can't be combined.
+
+```yaml
+spec:
+  subscriber:
+    uri: https://subscriber.example.com
+    batch:                    # delivers events in batches, as application/cloudevents-batch+json
+      maxSize: 100
+      linger: PT0.5S          # how long a partial batch waits to fill once the subscription has caught up. Defaults to none
+    # ordering:               # or delivers events in parallel, in order per key
+    #   key: subject          # the context attribute events are ordered by. Events that don't define it share a key
+    #   maxConcurrency: 8     # how many keys are delivered concurrently
+```
+
+**How delivery works in these modes:**
+- **Reading:** the broker reads what it delivers from the store, a page at a time.
+- **Batches:** a page is one batch. The batch carries the offset of its first event in the `cloudstreams-offset` header, and the subscription's rate limit applies per request.
+- **Ordering by key:** within a page, events that share a key are delivered one at a time, in order, while different keys are delivered concurrently.
+
+**Offsets and failures:**
+- **Committing:** a page's offset is only committed once every event of the page has been delivered, dead-lettered or filtered out. The committed offset never moves past an event that hasn't been delivered.
+- **After a crash or a fault:** the page is redelivered from its start. Delivery remains at-least-once, but events of other keys may be delivered twice.
+- **Failed batches:** a batch that fails for good is delivered again one event at a time, each with the retry and dead-letter policies. The event at fault is then dead-lettered, or faults the subscription, on its own.
+
+**Deferred acknowledgement isn't available in these modes:** `202 Accepted` is a success like any other.
+
 #### Suspension
 
 A subscription can be suspended by setting `spec.suspended` to `true`, for example while its subscriber is under maintenance. While it is suspended:

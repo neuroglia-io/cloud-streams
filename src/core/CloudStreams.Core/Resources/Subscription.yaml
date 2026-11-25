@@ -184,6 +184,31 @@ spec:
                         timeout:
                           type: string
                           description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to the broker setting, or PT5M
+                    batch:
+                      type: object
+                      description: Delivers cloud events in batches, as application/cloudevents-batch+json. Excludes 'ordering', and deferred acknowledgements
+                      properties:
+                        maxSize:
+                          type: integer
+                          minimum: 1
+                          description: The maximum amount of cloud events per batch
+                        linger:
+                          type: string
+                          description: The maximum amount of time, as an ISO 8601 duration, to wait for a batch to fill once the subscription has caught up. Defaults to none
+                      required: [ maxSize ]
+                    ordering:
+                      type: object
+                      description: Delivers cloud events in parallel, in order per key. Excludes 'batch', and deferred acknowledgements
+                      properties:
+                        key:
+                          type: string
+                          pattern: '^[a-z0-9]+$'
+                          description: The context attribute whose value is the key cloud events are ordered by, e.g. subject
+                        maxConcurrency:
+                          type: integer
+                          minimum: 1
+                          description: The maximum amount of keys whose cloud events are delivered concurrently. Defaults to 8
+                      required: [ key ]
                   required:
                     - uri
                 deadLetter:

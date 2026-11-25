@@ -52,13 +52,17 @@ public sealed class TestSubscriber
         {
             if (!this._endpoints.TryGetValue(name, out var endpoint)) return Results.NotFound();
             using var document = await JsonDocument.ParseAsync(context.Request.Body);
-            var delivery = new Delivery(
-                document.RootElement.GetProperty("id").GetString()!,
-                context.Request.Headers["cloudstreams-offset"].ToString(),
-                context.Request.Headers["cloudstreams-ack-token"].ToString(),
-                document.RootElement.Clone());
-            endpoint.Record(delivery);
-            return Results.StatusCode(endpoint.Respond(delivery));
+            var offset = context.Request.Headers["cloudstreams-offset"].ToString();
+            var ackToken = context.Request.Headers["cloudstreams-ack-token"].ToString();
+            // a batch is recorded as one delivery per cloud event, and refused if any of them is (see #212)
+            var batch = document.RootElement.ValueKind == JsonValueKind.Array;
+            var deliveries = batch
+                ? [.. document.RootElement.EnumerateArray().Select(e => new Delivery(e.GetProperty("id").GetString()!, offset, ackToken, e.Clone(), true))]
+                : new[] { new Delivery(document.RootElement.GetProperty("id").GetString()!, offset, ackToken, document.RootElement.Clone()) };
+            var statuses = deliveries.Select(endpoint.Respond).ToList();
+            var status = statuses.FirstOrDefault(s => s is < 200 or >= 300, statuses[^1]);
+            foreach (var delivery in deliveries) endpoint.Record(delivery);
+            return Results.StatusCode(status);
         });
         await this._app.StartAsync();
         var address = this._app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
@@ -91,7 +95,8 @@ public sealed class TestSubscriber
     /// <param name="Offset">The offset of the event in the subscription's stream, if any</param>
     /// <param name="AckToken">The token to acknowledge the event with, if any</param>
     /// <param name="Event">The delivered event</param>
-    public record Delivery(string Id, string Offset, string AckToken, JsonElement Event);
+    /// <param name="Batched">A boolean indicating whether or not the event has been delivered as part of a batch, whose offset is the one of its first event</param>
+    public record Delivery(string Id, string Offset, string AckToken, JsonElement Event, bool Batched = false);
 
     /// <summary>
     /// Represents an endpoint of the subscriber
