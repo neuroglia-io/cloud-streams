@@ -111,6 +111,45 @@ public class ResourceValidationTests
         Assert.True(new GatewayValidator().Validate(new GatewayResource(new ResourceMetadata("gateway"), new GatewaySpec())).IsValid);
     }
 
+    [Fact]
+    public void A_Gateway_With_A_Valid_Ingestion_Policy_Should_Pass()
+    {
+        var gateway = new GatewayResource(new ResourceMetadata("gateway"), new GatewaySpec()
+        {
+            Ingestion = new()
+            {
+                MaxRequestBodySize = 1024,
+                MaxBatchSize = 100,
+                Deduplication = new() { Window = Duration.FromMinutes(10) },
+                RateLimits = [new() { Partition = CloudEventRateLimitPartitioning.Source, Limit = 100, Period = Duration.FromSeconds(1) }]
+            }
+        });
+        Assert.True(new GatewayValidator().Validate(gateway).IsValid);
+    }
+
+    [Fact]
+    public void A_Gateway_With_An_Invalid_Ingestion_Policy_Should_Fail()
+    {
+        // arrange
+        var gateway = new GatewayResource(new ResourceMetadata("gateway"), new GatewaySpec()
+        {
+            Ingestion = new()
+            {
+                MaxRequestBodySize = 0,
+                MaxBatchSize = -1,
+                Deduplication = new() { Window = Duration.Zero },
+                RateLimits = [new() { Partition = "tenant", Limit = 0, Period = Duration.Zero }]
+            }
+        });
+
+        // act
+        var result = new GatewayValidator().Validate(gateway);
+
+        // assert
+        Assert.False(result.IsValid);
+        Assert.Equal(6, result.Errors.Count);
+    }
+
     static AdmissionReviewRequest Request(IResource resource, Operation operation = Operation.Create, string? subResource = null) =>
         new(Guid.NewGuid().ToString(), operation, new ResourceReference(new ResourceDefinitionReference("cloud-streams.io", "v1", "subscriptions"), "orders", null), subResource!, new Patch(PatchType.JsonMergePatch, new { }), resource, resource, new Neuroglia.Security.UserInfo("tests", "tests", []), false);
 

@@ -523,30 +523,23 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// <param name="eventDescriptor">An object that describes the <see cref="CloudEvent"/> to serialize</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The serialized <see cref="IEventDescriptor"/></returns>
-    protected virtual async Task<IEventDescriptor> ParseEventDescriptorAsync(CloudEventDescriptor eventDescriptor, CancellationToken cancellationToken)
+    /// <remarks>
+    /// The type of the event is read from its context attributes, rather than by round-tripping the whole event through JSON (see #188). An event without data,
+    /// such as one whose data is binary and therefore carried by its <c>data_base64</c> attribute, is stored with JSON <c>null</c> data: the event store serializes
+    /// data according to its runtime type, which a null reference does not have
+    /// </remarks>
+    protected virtual Task<IEventDescriptor> ParseEventDescriptorAsync(CloudEventDescriptor eventDescriptor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(eventDescriptor);
-        var e = await this.ParseCloudEventAsync(eventDescriptor, cancellationToken).ConfigureAwait(false);
-        var type = e.Type!;
-        var contextAttributes = this.Serializer.Deserialize<IDictionary<string, object>>(this.Serializer.SerializeToByteArray(eventDescriptor))!;
-        contextAttributes.Remove(CloudEventAttributes.Data);
-        return new EventDescriptor(type, eventDescriptor.Data, eventDescriptor.Metadata.ContextAttributes);
+        if (!eventDescriptor.Metadata.ContextAttributes.TryGetValue(CloudEventAttributes.Type, out var typeAttribute) || typeAttribute?.ToString() is not { Length: > 0 } type)
+            throw new ArgumentException($"The cloud event to append must define the '{CloudEventAttributes.Type}' context attribute", nameof(eventDescriptor));
+        return Task.FromResult<IEventDescriptor>(new EventDescriptor(type, eventDescriptor.Data ?? NullData, eventDescriptor.Metadata.ContextAttributes));
     }
 
     /// <summary>
-    /// Parses the specified <see cref="CloudEvent"/> into a new <see cref="IEventDescriptor"/>
+    /// Gets the data stored for events that have none, which serializes as JSON <c>null</c>
     /// </summary>
-    /// <param name="eventDescriptor">An object that describes the <see cref="CloudEvent"/> to serialize</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>The serialized <see cref="IEventDescriptor"/></returns>
-    protected virtual Task<CloudEvent> ParseCloudEventAsync(CloudEventDescriptor eventDescriptor, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(eventDescriptor);
-        var e = (JsonObject)this.Serializer.SerializeToNode(eventDescriptor.Metadata.ContextAttributes)!;
-        var data = this.Serializer.SerializeToNode(eventDescriptor.Data);
-        e[CloudEventAttributes.Data] = data;
-        return Task.FromResult(this.Serializer.Deserialize<CloudEvent>(this.Serializer.SerializeToByteArray(e))!);
-    }
+    protected static readonly object NullData = System.Text.Json.JsonDocument.Parse("null").RootElement.Clone();
 
     /// <summary>
     /// Deserializes the specified <see cref="IEventRecord"/> into a new <see cref="CloudEventRecord"/>

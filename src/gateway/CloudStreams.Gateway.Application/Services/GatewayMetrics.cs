@@ -55,6 +55,7 @@ public class GatewayMetrics
         this.TotalInvalidEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}invalid_count", "{event}", "The total amount of invalid cloud events");
         this.TotalRejectedEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}rejected_count", "{event}", "The total amount of rejected cloud events");
         this.TotalIgnoredEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}ignored_count", "{event}", "The total amount of cloud events ignored by the split-horizon policy");
+        this.TotalDuplicateEvents = this.Meter.CreateCounter<int>($"{CloudEventMetricsPrefix}duplicate_count", "{event}", "The total amount of cloud events published again within the deduplication window, which have not been stored again");
         this.TotalAppendFailures = this.Meter.CreateCounter<int>($"{MetricsPrefix}append_failures_count", "{failure}", "The total amount of admitted cloud events that could not be appended to the event store");
         this.IngestionDuration = this.Meter.CreateHistogram<double>($"{MetricsPrefix}ingestion_duration", "s", "The duration of the ingestion of cloud events, from their admission to their storage",
             advice: new() { HistogramBucketBoundaries = IngestionDurationBuckets });
@@ -86,6 +87,11 @@ public class GatewayMetrics
     protected Counter<int> TotalIgnoredEvents { get; }
 
     /// <summary>
+    /// Gets the <see cref="Counter{T}"/> used to count the cloud events published again within the deduplication window
+    /// </summary>
+    protected Counter<int> TotalDuplicateEvents { get; }
+
+    /// <summary>
     /// Gets the <see cref="Counter{T}"/> used to count the admitted cloud events that could not be appended to the event store
     /// </summary>
     protected Counter<int> TotalAppendFailures { get; }
@@ -106,6 +112,9 @@ public class GatewayMetrics
 
     /// <inheritdoc/>
     public virtual void IncrementTotalIgnoredEvents(Uri source) => this.TotalIgnoredEvents.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));
+
+    /// <inheritdoc/>
+    public virtual void IncrementTotalDuplicateEvents(Uri source) => this.TotalDuplicateEvents.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));
 
     /// <inheritdoc/>
     public virtual void IncrementTotalAppendFailures(Uri source) => this.TotalAppendFailures.Add(1, new KeyValuePair<string, object?>("source", this.GetSourceLabel(source)));

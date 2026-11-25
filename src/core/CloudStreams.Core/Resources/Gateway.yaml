@@ -301,6 +301,44 @@ spec:
                       required: [ request ]
                   required:
                     - uri
+                ingestion:
+                  type: object
+                  description: Configures how the gateway ingests cloud events
+                  properties:
+                    maxRequestBodySize:
+                      type: integer
+                      minimum: 1
+                      description: The maximum size, in bytes, of an ingestion request. Defaults to the server's limit
+                    maxBatchSize:
+                      type: integer
+                      minimum: 1
+                      description: The maximum amount of cloud events a batch may contain. Unlimited if not set
+                    deduplication:
+                      type: object
+                      description: Deduplicates cloud events by source and id. Cloud events are not deduplicated if not set
+                      properties:
+                        window:
+                          type: string
+                          description: How long, as an ISO 8601 duration, a stored cloud event is remembered, and its duplicates ignored
+                      required: [ window ]
+                    rateLimits:
+                      type: array
+                      description: The limits of the rate at which cloud events may be published, counted in fixed windows shared by all replicas
+                      items:
+                        type: object
+                        properties:
+                          partition:
+                            type: string
+                            enum:
+                              - publisher
+                              - source
+                          limit:
+                            type: integer
+                            minimum: 1
+                          period:
+                            type: string
+                            description: The period, as an ISO 8601 duration, the limit applies to. A long period, such as P1D, makes the limit a quota
+                        required: [ partition, limit, period ]
             status:
               type: object
               properties:

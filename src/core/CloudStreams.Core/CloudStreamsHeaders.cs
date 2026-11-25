@@ -40,8 +40,8 @@ public static class CloudStreamsHeaders
     public const string AckUri = "cloudstreams-ack-uri";
 
     /// <summary>
-    /// Gets the name of the header with which the gateway tells publishers what became of a cloud event it accepted: either <c>stored</c>, or <c>ignored</c> when
-    /// the split-horizon policy dropped it as looping
+    /// Gets the name of the header with which the gateway tells publishers what became of a cloud event it accepted: either <c>stored</c>, <c>ignored</c> when
+    /// the split-horizon policy dropped it as looping, or <c>duplicate</c> when it had already been stored within the deduplication window
     /// </summary>
     public const string Outcome = "cloudstreams-outcome";
 
@@ -60,6 +60,11 @@ public static class CloudStreamsHeaders
         /// Indicates that the cloud event has been ignored, because the gateway's split-horizon policy detected a loop
         /// </summary>
         public const string Ignored = "ignored";
+
+        /// <summary>
+        /// Indicates that the cloud event has already been stored within the gateway's deduplication window, and has not been stored again
+        /// </summary>
+        public const string Duplicate = "duplicate";
 
     }
 

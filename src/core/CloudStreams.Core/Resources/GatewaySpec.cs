@@ -56,4 +56,10 @@ public record GatewaySpec
     [DataMember(Order = 6, Name = "service"), JsonPropertyOrder(6), JsonPropertyName("service"), YamlMember(Order = 6, Alias = "service")]
     public virtual ServiceConfiguration? Service { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure how the gateway ingests cloud events, if any: the size of requests, deduplication and rate limits
+    /// </summary>
+    [DataMember(Order = 7, Name = "ingestion"), JsonPropertyOrder(7), JsonPropertyName("ingestion"), YamlMember(Order = 7, Alias = "ingestion")]
+    public virtual CloudEventIngestionPolicy? Ingestion { get; set; }
+
 }

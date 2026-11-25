@@ -237,6 +237,19 @@ public class GatewayValidator
                     .WithMessage("'spec.splitHorizon.originAttribute' must only contain lower-case letters and digits, as required of extension attribute names");
             });
             this.RuleFor(g => g.Spec.Service!).SetValidator(new ServiceConfigurationValidator()).When(g => g.Spec.Service != null).OverridePropertyName("spec.service").WithName("spec.service");
+            this.When(g => g.Spec.Ingestion != null, () =>
+            {
+                this.RuleFor(g => g.Spec.Ingestion!.MaxRequestBodySize).GreaterThan(0).When(g => g.Spec.Ingestion!.MaxRequestBodySize.HasValue).OverridePropertyName("spec.ingestion.maxRequestBodySize").WithName("spec.ingestion.maxRequestBodySize");
+                this.RuleFor(g => g.Spec.Ingestion!.MaxBatchSize).GreaterThan(0).When(g => g.Spec.Ingestion!.MaxBatchSize.HasValue).OverridePropertyName("spec.ingestion.maxBatchSize").WithName("spec.ingestion.maxBatchSize");
+                this.RuleFor(g => g.Spec.Ingestion!.Deduplication!.Window).Must(w => w != null && w.ToTimeSpan() > TimeSpan.Zero).When(g => g.Spec.Ingestion!.Deduplication != null)
+                    .OverridePropertyName("spec.ingestion.deduplication.window").WithName("spec.ingestion.deduplication.window").WithMessage("'spec.ingestion.deduplication.window' is required, and must be positive");
+                this.RuleForEach(g => g.Spec.Ingestion!.RateLimits).ChildRules(limit =>
+                {
+                    limit.RuleFor(l => l.Partition).Must(p => CloudEventRateLimitPartitioning.AsEnumerable().Contains(p)).OverridePropertyName("partition").WithName("partition").WithMessage($"'partition' must be one of: {string.Join(", ", CloudEventRateLimitPartitioning.AsEnumerable())}");
+                    limit.RuleFor(l => l.Limit).GreaterThan(0).OverridePropertyName("limit").WithName("limit");
+                    limit.RuleFor(l => l.Period).Must(p => p != null && p.ToTimeSpan() > TimeSpan.Zero).OverridePropertyName("period").WithName("period").WithMessage("'period' is required, and must be positive");
+                }).When(g => g.Spec.Ingestion!.RateLimits != null).OverridePropertyName("spec.ingestion.rateLimits").WithName("spec.ingestion.rateLimits");
+            });
         });
     }
 
