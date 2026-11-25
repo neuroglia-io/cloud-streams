@@ -118,6 +118,13 @@ public class CloudStreamsApplicationBuilder
         // a single process at a time monitors the health of each gateway and broker (see #180)
         this.Services.TryAddSingleton<IHealthMonitorLeaseManager, RedisHealthMonitorLeaseManager>();
         this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
+        // the retention policy of the stream is applied at startup, and EventStoreDB enforces it (see #206)
+        var retention = new RetentionOptions();
+        configuration.GetSection(RetentionOptions.ConfigurationSection).Bind(retention);
+        retention.GetPolicy();
+        this.Services.Configure<RetentionOptions>(configuration.GetSection(RetentionOptions.ConfigurationSection));
+        this.Services.AddSingleton<IStreamRetentionStore, EsdbStreamRetentionStore>();
+        this.Services.AddHostedService<StreamRetentionInitializer>();
         this.Services.AddSingleton<CloudEventStore>();
         this.Services.AddSingleton<ICloudEventStore>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());

@@ -1,0 +1,38 @@
+name: Helm chart
+
+on:
+  pull_request:
+    paths:
+      - 'deployments/helm/**'
+      - '.github/workflows/helm.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'deployments/helm/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint and render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+      - name: Lint
+        run: helm lint deployments/helm/cloud-streams --strict --set eventstore.connectionString=esdb://eventstore:2113 --set redis.connectionString=redis:6379
+      - name: Render
+        run: |
+          set -euo pipefail
+          chart=deployments/helm/cloud-streams
+          # the defaults, with connection strings
+          helm template cs "$chart" --set eventstore.connectionString=esdb://eventstore:2113 --set redis.connectionString=redis:6379 > /dev/null
+          # every optional feature at once
+          helm template cs "$chart" --set eventstore.existingSecret=connections --set redis.existingSecret=connections \
+            --set gateway.managementApi.port=8081 --set gateway.ingress.enabled=true --set gateway.managementIngress.enabled=true \
+            --set retention.maxAge=P30D --set retention.maxCount=1000000 --set telemetry.otlpEndpoint=http://otel:4317 > /dev/null
+          # the connection strings are required
+          if helm template cs "$chart" > /dev/null 2>&1; then echo "rendering without connection strings should fail"; exit 1; fi

@@ -38,6 +38,27 @@ jobs:
       - name: Push packages
         run: dotnet nuget push "./src/*/*/bin/Release/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
+  publish-helm-chart:
+    name: Publish Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+      - name: Package and push the chart
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # the chart takes the version of the release, which is also the tag of the images it deploys
+          version="${TAG#v}"
+          if [ -z "$version" ]; then echo "The chart is only published for releases"; exit 1; fi
+          helm package deployments/helm/cloud-streams --version "$version" --app-version "$version" --destination dist
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "${{ env.REGISTRY }}" --username "${{ github.actor }}" --password-stdin
+          helm push "dist/cloud-streams-${version}.tgz" "oci://${{ env.REGISTRY }}/${OWNER,,}/charts"
+
   publish-api-image:
     name: Publish API image
     runs-on: ubuntu-latest

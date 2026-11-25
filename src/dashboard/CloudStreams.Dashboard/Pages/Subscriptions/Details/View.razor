@@ -51,6 +51,13 @@
             }
         </div>
 
+        @if (health?.ExpiredEvents > 0)
+        {
+            <div class="alert alert-warning small" role="status">
+                <i class="bi bi-hourglass-bottom" aria-hidden="true"></i>
+                <strong>@health.ExpiredEvents.Value.ToString("N0") event(s) expired</strong> before this subscription delivered them: the retention policy of the stream removed them, and it will never receive them.
+            </div>
+        }
         @if (fault != null)
         {
             <section class="alert alert-danger" aria-labelledby="fault-title">

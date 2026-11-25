@@ -118,6 +118,31 @@ public class SubscriptionHandlerCatchUpTests
         Assert.Equal(0, context.Http.AttemptCount);
     }
 
+    /// <summary>
+    /// Covers #206: a subscription behind the first event the stream retains receives the retained ones, once each. Catch-up used to count the records it delivered
+    /// instead of following their offsets, and so read the retained records again after a gap
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(100)]
+    public async Task Catching_Up_From_An_Expired_Offset_Should_Deliver_The_Retained_Events_Once(int pageSize)
+    {
+        // arrange - the first three of six events have expired
+        await using var context = await BrokerTestContext.CreateAsync(streamLength: 6,
+            configureSubscription: s => s.Spec.Stream = new() { Offset = StreamPosition.StartOfStream },
+            configureOptions: o => o.CatchUp.PageSize = pageSize,
+            configureEventStore: s => s.TruncateAsync(3),
+            waitForStreamInitialization: false);
+
+        // act
+        await WaitUntilAsync(() => context.Http.AttemptCount >= 3 && !context.Handler.IsOutOfSync, "the three retained events to be delivered", context);
+        await Task.Delay(200);
+
+        // assert
+        Assert.Equal(3, context.Http.AttemptCount);
+        Assert.Equal([4ul, 5ul, 6ul], context.Patches.OffsetsWrittenTo());
+    }
+
     static async Task WaitUntilAsync(Func<bool> condition, string description, BrokerTestContext context, TimeSpan? timeout = null)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(10);

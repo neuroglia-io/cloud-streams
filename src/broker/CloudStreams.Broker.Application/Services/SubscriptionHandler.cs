@@ -1025,8 +1025,10 @@ public class SubscriptionHandler
                     foreach (var record in page)
                     {
                         if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
+                        this.WarnIfExpired(currentOffset, record.Sequence);
                         if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false) || this.AwaitingAcknowledgement) return;
-                        currentOffset++;
+                        // offsets may skip the records that expired before they could be delivered (see #206)
+                        currentOffset = (long)record.Sequence + 1;
                     }
                 }
                 if (streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
@@ -1054,6 +1056,18 @@ public class SubscriptionHandler
             finally { this.InitLock.Release(); }
             streamSynchronizationCompletionSource?.TrySetResult();
         }
+    }
+
+    /// <summary>
+    /// Logs a warning if the specified record does not follow the expected offset, which means that the records in between have expired before they could be delivered
+    /// </summary>
+    /// <param name="expected">The offset of the record expected next</param>
+    /// <param name="actual">The offset of the record read</param>
+    /// <remarks>The retention policy of the stream removes the oldest events: a subscription too far behind never receives them (see #206)</remarks>
+    protected virtual void WarnIfExpired(long expected, ulong actual)
+    {
+        if (expected < 0 || actual <= (ulong)expected) return;
+        this.Logger.LogWarning("Subscription '{subscription}' will never receive the {count} event(s) from offset {from} to {to}, which have expired before it delivered them", this.Subscription.GetQualifiedName(), actual - (ulong)expected, expected, actual - 1);
     }
 
     /// <summary>
@@ -1135,6 +1149,7 @@ public class SubscriptionHandler
                     await Task.Delay(StreamPageReader.UnreadableRecordDelay, streamInitializationToken).ConfigureAwait(false);
                     continue;
                 }
+                this.WarnIfExpired(position, page[0].Sequence);
                 var handled = batch != null
                     ? await this.DeliverBatchAsync(page, streamInitializationToken).ConfigureAwait(false)
                     : await this.DeliverInParallelAsync(page, streamInitializationToken).ConfigureAwait(false);

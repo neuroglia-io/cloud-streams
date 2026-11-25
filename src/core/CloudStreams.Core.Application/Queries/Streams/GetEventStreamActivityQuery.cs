@@ -92,13 +92,18 @@ public class GetEventStreamActivityQueryHandler(ICloudEventStore eventStore)
         var to = DateTimeOffset.UtcNow;
         var from = to - query.Period;
         var activity = new StreamActivity() { From = from, To = to };
-        ulong length;
-        try { length = (await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length ?? 0; }
-        catch (StreamNotFoundException) { length = 0; }
+        ulong length, first;
+        try
+        {
+            var metadata = await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+            (length, first) = (metadata.Length ?? 0, metadata.FirstOffset ?? 0);
+        }
+        catch (StreamNotFoundException) { (length, first) = (0, 0); }
         var step = query.Period / query.Buckets;
         var bounds = new ulong[query.Buckets + 1];
         bounds[query.Buckets] = length;
-        ulong low = 0;
+        // the events before the first one retained have expired, and are not counted (see #206)
+        var low = Math.Min(first, length);
         for (var i = 0; i < query.Buckets; i++)
         {
             bounds[i] = await this.FindOffsetAsync(from + step * i, low, length, cancellationToken).ConfigureAwait(false);

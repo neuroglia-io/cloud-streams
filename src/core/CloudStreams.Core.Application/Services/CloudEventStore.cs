@@ -32,11 +32,22 @@ namespace CloudStreams.Core.Application.Services;
 /// <param name="serializer">The service used to serialize/deserialize data to/from JSON</param>
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="partitionIndex">The index of the partitions cloud events have been published to, if any</param>
-public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null, IPartitionIndex? partitionIndex = null)
+public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null, IPartitionIndex? partitionIndex = null,
+    IStreamRetentionStore? retentionStore = null)
     : IHostedService, ICloudEventStore, IDisposable
 {
 
+    /// <summary>
+    /// Gets the maximum amount of times a read of a partition is resumed after its oldest links expired while it was being read
+    /// </summary>
+    const int MaxExpiredLinkRecoveries = 3;
+
     readonly CancellationTokenSource _cancellationTokenSource = new();
+    /// <summary>
+    /// The offset of the first link of each partition stream known to be readable: the links before it point to events that have expired (see #206).
+    /// It only ever grows, since events expire from the oldest
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, ulong> _firstRetainedLinks = new(StringComparer.Ordinal);
     Task? _projectionSetupTask;
     volatile IReadOnlyCollection<string>? _missingProjections;
 
@@ -158,17 +169,36 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
             var firstEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
             var lastEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
             // a stream that exists but holds no event, e.g. after it has been truncated, is described like a stream that does not exist yet
-            if (firstEvent == null || lastEvent == null) return new();
+            var retention = await this.GetRetentionAsync(cancellationToken).ConfigureAwait(false);
+            if (firstEvent == null || lastEvent == null) return new() { Retention = retention };
             return new()
             {
                 FirstEvent = firstEvent.Timestamp,
                 LastEvent = lastEvent.Timestamp,
-                Length = lastEvent.Offset + 1
+                Length = lastEvent.Offset + 1,
+                FirstOffset = firstEvent.Offset,
+                Retention = retention
             };
         }
-        catch (StreamNotFoundException) 
-        { 
-            return new(); 
+        catch (StreamNotFoundException)
+        {
+            return new() { Retention = await this.GetRetentionAsync(cancellationToken).ConfigureAwait(false) };
+        }
+    }
+
+    /// <summary>
+    /// Gets the retention policy of the cloud event stream, if any
+    /// </summary>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The retention policy of the cloud event stream, or null if it retains every event or if the policy could not be read</returns>
+    protected virtual async Task<StreamRetention?> GetRetentionAsync(CancellationToken cancellationToken)
+    {
+        if (retentionStore == null) return null;
+        try { return await retentionStore.GetAsync(cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            this.Logger.LogWarning(ex, "Failed to read the retention policy of the cloud event stream");
+            return null;
         }
     }
 
@@ -178,16 +208,22 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         try
         {
             var streamName = partition.GetStreamName();
-            var firstEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
-            var lastEvent = (await this.EventStore.ReadAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
-            if (firstEvent == null || lastEvent == null) throw PartitionStreamNotFound(partition.Type, streamName);
+            var notFound = () => PartitionStreamNotFound(partition.Type, streamName);
+            var firstEvent = await this.ReadStreamAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, notFound, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var lastEvent = await this.ReadStreamAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, notFound, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            if (firstEvent == null || lastEvent == null)
+            {
+                // reading a partition stream that does not exist throws: this one exists, but every event it links to has expired (see #206)
+                throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Every event of the partition of type '{EnumHelper.Stringify(partition.Type)}' with id '{partition.Id}' has expired"));
+            }
             return new()
             {
                 Id = partition.Id,
                 Type = partition.Type,
-                FirstEvent = firstEvent.Timestamp,
-                LastEvent = lastEvent.Timestamp,
-                Length = lastEvent.Offset + 1
+                FirstEvent = firstEvent.Timestamp ?? default,
+                LastEvent = lastEvent.Timestamp ?? default,
+                Length = lastEvent.Sequence + 1,
+                FirstOffset = firstEvent.Sequence
             };
         }
         catch (StreamNotFoundException)
@@ -253,18 +289,26 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// </remarks>
     public virtual async Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
     {
-        ulong length;
+        ulong length, first;
         try
         {
-            length = partition == null
-                ? (await this.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length ?? 0
-                : (await this.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false)).Length;
+            if (partition == null)
+            {
+                var metadata = await this.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+                (length, first) = (metadata.Length ?? 0, metadata.FirstOffset ?? 0);
+            }
+            else
+            {
+                var metadata = await this.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false);
+                (length, first) = (metadata.Length, metadata.FirstOffset);
+            }
         }
         catch (Exception ex) when (ex is StreamNotFoundException || (ex is ProblemDetailsException notFound && notFound.Problem.Status == (int)HttpStatusCode.NotFound))
         {
             return null;
         }
-        ulong low = 0, high = length;
+        // the events before the first one retained have expired (see #206)
+        ulong low = first, high = length;
         while (low < high)
         {
             var middle = low + (high - low) / 2;
@@ -292,10 +336,125 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// <remarks>
     /// The underlying store reports a missing stream while the records are being enumerated, not when the read is requested, so the enumeration itself is guarded
     /// </remarks>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadStreamAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected virtual IAsyncEnumerable<CloudEventRecord> ReadStreamAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, CancellationToken cancellationToken = default)
+    {
+        return streamName == Streams.All
+            ? this.ReadRecordsAsync(streamName, readDirection, offset, length, notFound, cancellationToken)
+            : this.ReadLinksAsync(streamName, readDirection, offset, length, notFound, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the records of the specified partition stream, whose events are links to the events of the cloud event stream, skipping the links to events that have expired
+    /// </summary>
+    /// <param name="streamName">The name of the partition stream to read</param>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="offset">The offset starting from which to read records</param>
+    /// <param name="length">The amount of records to read</param>
+    /// <param name="notFound">A function that creates the exception to throw if the stream does not exist. If not set, reading a stream that does not exist yields nothing</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the records read from the stream</returns>
+    /// <remarks>
+    /// The events of the cloud event stream expire according to its retention policy, but the links of partition streams do not, and the underlying event store fails
+    /// to read a link whose event has expired (see #206). Since events expire from the oldest, expired links are always the first ones of a partition stream: a read
+    /// forwards that fails on one is resumed from the first link whose event is retained, and a read backwards that reaches one ends there. Reads that meet no expired
+    /// link cost nothing more
+    /// </remarks>
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadLinksAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var remaining = length ?? ulong.MaxValue;
+        if (remaining == 0) yield break;
+        var next = offset;
+        if (readDirection == StreamReadDirection.Forwards && this._firstRetainedLinks.TryGetValue(streamName, out var known) && (next < 0 || (ulong)next < known)) next = (long)known;
+        for (var recoveries = 0; ; recoveries++)
+        {
+            await using var enumerator = this.ReadRecordsAsync(streamName, readDirection, next, length.HasValue ? remaining : null, notFound, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            var expired = false;
+            while (true)
+            {
+                bool hasNext;
+                try { hasNext = await enumerator.MoveNextAsync().ConfigureAwait(false); }
+                catch (Exception ex) when (IsExpiredLink(ex))
+                {
+                    expired = true;
+                    hasNext = false;
+                }
+                if (!hasNext) break;
+                var record = enumerator.Current;
+                yield return record;
+                if (--remaining == 0) yield break;
+                next = readDirection == StreamReadDirection.Forwards ? (long)record.Sequence + 1 : (long)record.Sequence - 1;
+                if (next < 0) yield break;
+            }
+            // reading backwards ends with the first expired link, since the ones before it have expired too
+            if (!expired || readDirection == StreamReadDirection.Backwards) yield break;
+            if (recoveries >= MaxExpiredLinkRecoveries) throw new InvalidOperationException($"Failed to read the stream '{streamName}': its links kept expiring while it was being read");
+            var first = await this.FindFirstRetainedLinkAsync(streamName, next < 0 ? 0 : (ulong)next, cancellationToken).ConfigureAwait(false);
+            if (!first.HasValue) yield break;
+            next = (long)first.Value;
+        }
+    }
+
+    /// <summary>
+    /// Finds the offset of the first link of the specified partition stream whose event is retained
+    /// </summary>
+    /// <param name="streamName">The name of the partition stream</param>
+    /// <param name="expired">The offset of a link known to have expired</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The offset of the first link whose event is retained, or null if every event of the partition has expired</returns>
+    /// <remarks>A binary search between the expired link and the last one, which takes a few dozen reads at most. Its result is kept, and starts the next reads</remarks>
+    protected virtual async Task<ulong?> FindFirstRetainedLinkAsync(string streamName, ulong expired, CancellationToken cancellationToken)
+    {
+        IEventRecord? last;
+        try { last = await this.EventStore.ReadAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex) when (IsExpiredLink(ex)) { last = null; }
+        catch (StreamNotFoundException) { return null; }
+        if (last == null)
+        {
+            // not remembered: links appended later are retained
+            this.Logger.LogDebug("Every event linked by the stream '{stream}' has expired", streamName);
+            return null;
+        }
+        ulong low = expired + 1, high = last.Offset;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            bool retained;
+            try
+            {
+                await this.EventStore.ReadAsync(streamName, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                retained = true;
+            }
+            catch (Exception ex) when (IsExpiredLink(ex)) { retained = false; }
+            if (retained) high = middle;
+            else low = middle + 1;
+        }
+        this._firstRetainedLinks.AddOrUpdate(streamName, low, (_, current) => Math.Max(current, low));
+        this.Logger.LogDebug("The events linked by the stream '{stream}' before offset {offset} have expired", streamName, low);
+        return low;
+    }
+
+    /// <summary>
+    /// Determines whether the specified exception has been thrown by the underlying event store because it read a link whose event has expired
+    /// </summary>
+    /// <param name="ex">The exception to check</param>
+    /// <returns>A boolean indicating whether the exception has been thrown because of an expired link</returns>
+    /// <remarks>The event store does not report expired links: it fails to deserialize them, which is how they are recognized</remarks>
+    protected static bool IsExpiredLink(Exception ex) => ex is NullReferenceException && ex.StackTrace?.Contains("DeserializeEventRecord", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// Reads the records of the specified stream as they are
+    /// </summary>
+    /// <param name="streamName">The name of the stream to read</param>
+    /// <param name="readDirection">The direction in which to read</param>
+    /// <param name="offset">The offset starting from which to read records</param>
+    /// <param name="length">The amount of records to read</param>
+    /// <param name="notFound">A function that creates the exception to throw if the stream does not exist. If not set, reading a stream that does not exist yields nothing</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the records read from the stream</returns>
+    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadRecordsAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         IAsyncEnumerator<IEventRecord> enumerator;
-        try { enumerator = this.EventStore.ReadAsync(streamName, readDirection, offset, length ?? ulong.MaxValue, cancellationToken).GetAsyncEnumerator(cancellationToken); }
+        try { enumerator = this.EventStore.ReadAsync(streamName, readDirection, offset, length, cancellationToken).GetAsyncEnumerator(cancellationToken); }
         catch (StreamNotFoundException) when (notFound != null) { throw notFound(); }
         catch (StreamNotFoundException) { yield break; }
         await using (enumerator.ConfigureAwait(false))
@@ -330,7 +489,21 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// <inheritdoc/>
     public virtual async Task<IObservable<CloudEventRecord>> ObservePartitionAsync(PartitionReference partition, long offset = -1, CancellationToken cancellationToken = default)
     {
-        return (await this.ObserveStreamAsync(partition.GetStreamName(), offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
+        var streamName = partition.GetStreamName();
+        // observing from an expired link would fail: it starts with the first link whose event is retained (see #206)
+        if (offset != StreamPosition.EndOfStream && this._firstRetainedLinks.TryGetValue(streamName, out var first) && (ulong)Math.Max(offset, 0) < first) offset = (long)first;
+        else if (offset != StreamPosition.EndOfStream)
+        {
+            try { await this.EventStore.ReadAsync(streamName, StreamReadDirection.Forwards, offset, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false); }
+            catch (Exception ex) when (IsExpiredLink(ex))
+            {
+                var retained = await this.FindFirstRetainedLinkAsync(streamName, (ulong)Math.Max(offset, 0), cancellationToken).ConfigureAwait(false);
+                if (retained.HasValue) offset = (long)retained.Value;
+                else offset = StreamPosition.EndOfStream;
+            }
+            catch (StreamNotFoundException) { }
+        }
+        return (await this.ObserveStreamAsync(streamName, offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
     }
 
     /// <summary>

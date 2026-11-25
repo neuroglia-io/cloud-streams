@@ -157,6 +157,27 @@ public class DeliveryComponentTests
     }
 
     [Fact]
+    public async Task The_Page_Reader_Should_Follow_The_Offsets_Of_The_Records_Rather_Than_Count_Them()
+    {
+        // arrange - the records before offset 4 have expired, so reading from 0 starts at 4 (see #206)
+        var reads = new List<long>();
+        var reader = new StreamPageReader((offset, length, _) =>
+        {
+            lock (reads) reads.Add(offset);
+            var start = Math.Max(offset, 4);
+            return Task.FromResult(Enumerable.Range((int)start, (int)Math.Max(0, Math.Min(length, 8 - start))).Select(i => BrokerTestContext.CreateRecord((ulong)i)).ToList());
+        }, 2);
+
+        // act
+        var records = new List<ulong>();
+        await foreach (var page in reader.ReadPagesAsync(0, () => 8)) records.AddRange(page.Select(r => r.Sequence));
+
+        // assert - every retained record is read once
+        Assert.Equal([4ul, 5ul, 6ul, 7ul], records);
+        lock (reads) Assert.Equal([0L, 6L, 8L], reads);
+    }
+
+    [Fact]
     public async Task The_Page_Reader_Should_Wait_For_Records_That_Are_Not_Readable_Yet()
     {
         // arrange - the record has been appended, but is not readable at the first attempt

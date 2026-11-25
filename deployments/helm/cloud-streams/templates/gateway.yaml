@@ -1,0 +1,182 @@
+{{- if .Values.gateway.enabled }}
+{{- $component := dict "root" . "component" "gateway" }}
+{{- $managementPort := .Values.gateway.managementApi.port | toString }}
+{{- $dedicated := and .Values.gateway.managementApi.enabled (ne $managementPort "") }}
+{{- $fullname := printf "%s-gateway" (include "cloud-streams.fullname" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloud-streams.selectorLabels" $component | nindent 8 }}
+        {{- with .Values.gateway.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # the pods restart when the connection strings change
+        checksum/connections: {{ printf "%s|%s" .Values.eventstore.connectionString .Values.redis.connectionString | sha256sum }}
+        {{- with .Values.gateway.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "cloud-streams.serviceAccountName" . }}
+      # the variables Kubernetes would inject for every service of the namespace are not used, and some applications mistake them for their own settings
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: gateway
+          image: {{ include "cloud-streams.image" $component }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.gateway.port }}
+            {{- if $dedicated }}
+            - name: management
+              containerPort: {{ $managementPort }}
+            {{- end }}
+          env:
+            - name: ASPNETCORE_HTTP_PORTS
+              value: {{ if $dedicated }}{{ printf "%v;%s" .Values.gateway.port $managementPort | quote }}{{ else }}{{ .Values.gateway.port | quote }}{{ end }}
+            - name: CLOUDSTREAMS_GATEWAY_NAME
+              value: {{ include "cloud-streams.gatewayName" . | quote }}
+            - name: ManagementApi__Enabled
+              value: {{ .Values.gateway.managementApi.enabled | quote }}
+            {{- if $dedicated }}
+            - name: ManagementApi__Port
+              value: {{ $managementPort | quote }}
+            {{- end }}
+            {{- with .Values.retention.maxAge }}
+            - name: Retention__MaxAge
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if ne (toString .Values.retention.maxCount) "" }}
+            - name: Retention__MaxCount
+              value: {{ .Values.retention.maxCount | toString | quote }}
+            {{- end }}
+            {{- include "cloud-streams.commonEnv" . | nindent 12 }}
+            {{- with .Values.gateway.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.gateway.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "cloud-streams.probes" (dict "root" . "port" "http") | nindent 10 }}
+          {{- with .Values.gateway.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  {{- with .Values.gateway.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.gateway.service.type }}
+  selector:
+    {{- include "cloud-streams.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    {{- if $dedicated }}
+    - name: management
+      port: {{ $managementPort }}
+      targetPort: management
+    {{- end }}
+{{- range $ingress := list (dict "key" "ingress" "suffix" "" "port" "http") (dict "key" "managementIngress" "suffix" "-management" "port" (ternary "management" "http" $dedicated)) }}
+{{- $values := index $.Values.gateway $ingress.key }}
+{{- if $values.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s%s" $fullname $ingress.suffix }}
+  labels:
+    {{- include "cloud-streams.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  {{- with $values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $values.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $values.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $values.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $fullname }}
+                port:
+                  name: {{ $ingress.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.gateway.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  maxUnavailable: {{ .Values.gateway.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+{{- end }}
+{{- end }}

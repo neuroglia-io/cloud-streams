@@ -50,18 +50,21 @@ public class GetSubscriptionsHealthQueryHandler(ILogger<GetSubscriptionsHealthQu
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<IEnumerable<SubscriptionHealth>>> HandleAsync(GetSubscriptionsHealthQuery query, CancellationToken cancellationToken)
     {
-        var lengths = new Dictionary<string, ulong?>();
+        var ranges = new Dictionary<string, (ulong? Length, ulong? FirstOffset)>();
         var results = new List<SubscriptionHealth>();
         await foreach (var subscription in repository.GetAllAsync<Subscription>(query.Namespace, query.LabelSelectors, cancellationToken).ConfigureAwait(false))
         {
             var partition = subscription.Spec.Partition;
             var streamKey = partition == null ? string.Empty : $"{EnumHelper.Stringify(partition.Type)}:{partition.Id}";
-            if (!lengths.TryGetValue(streamKey, out var length))
+            if (!ranges.TryGetValue(streamKey, out var range))
             {
-                length = await this.GetLengthAsync(partition, cancellationToken).ConfigureAwait(false);
-                lengths[streamKey] = length;
+                range = await this.GetRangeAsync(partition, cancellationToken).ConfigureAwait(false);
+                ranges[streamKey] = range;
             }
+            var length = range.Length;
             var ackedOffset = subscription.Spec.Stream == null ? null : subscription.Status?.Stream?.AckedOffset;
+            // the position of a subscription that has acknowledged nothing yet is the offset it starts from
+            var position = ackedOffset ?? (subscription.Spec.Stream?.Offset >= 0 ? (ulong)subscription.Spec.Stream.Offset.Value : null);
             var fault = subscription.Status?.Stream?.Fault;
             var subscriberState = subscription.Status?.Subscriber?.State;
             results.Add(new()
@@ -74,30 +77,35 @@ public class GetSubscriptionsHealthQueryHandler(ILogger<GetSubscriptionsHealthQu
                 PartitionLength = length,
                 Lag = ackedOffset.HasValue && length.HasValue ? (length.Value > ackedOffset.Value ? length.Value - ackedOffset.Value : 0) : null,
                 SubscriberState = subscriberState == null || subscriberState == SubscriberState.Unknown ? null : EnumHelper.Stringify(subscriberState.Value),
-                SubscriberReason = fault != null ? fault.Detail ?? fault.Title : subscription.Status?.Subscriber?.Reason
+                SubscriberReason = fault != null ? fault.Detail ?? fault.Title : subscription.Status?.Subscriber?.Reason,
+                ExpiredEvents = position.HasValue && range.FirstOffset > position.Value ? range.FirstOffset.Value - position.Value : null
             });
         }
         return this.Ok(results);
     }
 
     /// <summary>
-    /// Gets the length of the specified partition or, if none, of the whole cloud event stream
+    /// Gets the length of the specified partition or, if none, of the whole cloud event stream, and the offset of the first event it retains (see #206)
     /// </summary>
-    /// <param name="partition">The partition to get the length of, if any</param>
+    /// <param name="partition">The partition to get the range of, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>The length of the specified partition or stream, or null if it is not available, e.g. because no event has been published to it yet</returns>
-    protected virtual async Task<ulong?> GetLengthAsync(PartitionReference? partition, CancellationToken cancellationToken)
+    /// <returns>The length of the specified partition or stream, and the offset of its first retained event, both null if not available, e.g. because no event has been published to it yet</returns>
+    protected virtual async Task<(ulong? Length, ulong? FirstOffset)> GetRangeAsync(PartitionReference? partition, CancellationToken cancellationToken)
     {
         try
         {
-            return partition == null
-                ? (await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length
-                : (await eventStore.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false)).Length;
+            if (partition == null)
+            {
+                var metadata = await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+                return (metadata.Length, metadata.FirstOffset);
+            }
+            var partitionMetadata = await eventStore.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false);
+            return (partitionMetadata.Length, partitionMetadata.FirstOffset);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogDebug("Failed to get the length of the {stream}: {ex}", partition == null ? "cloud event stream" : $"partition '{partition.Id}'", ex.Message);
-            return null;
+            return (null, null);
         }
     }
 
