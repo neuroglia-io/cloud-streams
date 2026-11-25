@@ -59,6 +59,11 @@ public class ResourceValidationTests
         { "spec.mutation.webhook", s => s.Mutation = new() { Type = CloudEventMutationType.Webhook } },
         { "spec.partition.id", s => s.Partition = new() { Type = CloudEventPartitionType.ByType, Id = "" } },
         { "spec.stream.offset", s => s.Stream = new() { Offset = -2 } },
+        { "spec.deadLetter.uri", s => s.DeadLetter = new() { Uri = new("ftp://dead-letters.example.com") } },
+        { "spec.subscriber.batch.maxSize", s => s.Subscriber.Batch = new() { MaxSize = 0 } },
+        { "spec.subscriber.ordering.key", s => s.Subscriber.Ordering = new() { Key = "Subject" } },
+        { "spec.subscriber.ordering.maxConcurrency", s => s.Subscriber.Ordering = new() { Key = "subject", MaxConcurrency = 0 } },
+        { "spec.subscriber", s => { s.Subscriber.Batch = new() { MaxSize = 10 }; s.Subscriber.Ordering = new() { Key = "subject" }; } },
     };
 
     [Theory]

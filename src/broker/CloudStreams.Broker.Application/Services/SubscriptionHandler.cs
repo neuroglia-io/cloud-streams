@@ -63,6 +63,8 @@ public class SubscriptionHandler
 
     CancellationTokenRegistration _applicationStoppingRegistration;
     long _nextDeliveryTimestamp;
+    // released when live records tell a subscription delivering in batches or in parallel that there is more to read (see #212)
+    readonly SemaphoreSlim _pumpSignal = new(0, 1);
     ulong? _nextOffset;
     // the cloud event last sent to the subscriber, as mutated, which is the one that is dead-lettered if its delivery fails for good (see #207)
     (ulong Offset, CloudEvent Event)? _lastAttempt;
@@ -328,6 +330,12 @@ public class SubscriptionHandler
                     .DistinctUntilChanged()
                     .Skip(1)
                     .Select(suspended => OnSubscriptionSuspensionChangedAsync(suspended).ToObservable()),
+                // delivering in batches or in parallel, rather than one live record at a time, requires observing the stream again (see #212)
+                shared.Select(s => s.Spec.Subscriber.Batch != null || s.Spec.Subscriber.Ordering != null)
+                    .StartWith(this.IsPumped)
+                    .DistinctUntilChanged()
+                    .Skip(1)
+                    .Select(_ => OnDeliveryModeChangedAsync().ToObservable()),
                 shared.Select(s => s.Status?.Subscriber?.PendingAck)
                     .DistinctUntilChanged(pendingAck => pendingAck?.Token)
                     .Select(pendingAck => OnPendingAcknowledgementChangedAsync(pendingAck).ToObservable())
@@ -508,7 +516,8 @@ public class SubscriptionHandler
                     this.CloudEventStream = observedStream;
                     this.SubscriptionHandle = subscriptionHandle;
                     shouldCatchUp = this.Subscription.Status?.ObservedGeneration == null || (offset != StreamPosition.EndOfStream && (ulong)offset < this.StreamOffset);
-                    var pendingAck = this.Subscription.Spec.Stream == null ? null : this.Subscription.Status?.Subscriber?.PendingAck;
+                    // a subscription delivering in batches or in parallel never defers acknowledgements (see #212)
+                    var pendingAck = this.Subscription.Spec.Stream == null || this.IsPumped ? null : this.Subscription.Status?.Subscriber?.PendingAck;
                     if (pendingAck != null)
                     {
                         // the acknowledgement was deferred before the broker (re)started: delivery stays suspended until it is resolved or expires
@@ -524,7 +533,8 @@ public class SubscriptionHandler
             }
             finally { this.InitLock.Release(); }
             subscriptionHandle?.Dispose();
-            if (initializationOutcome == StreamInitializationOutcomes.Initialized && shouldCatchUp) _ = this.CatchUpAsync().ConfigureAwait(false);
+            if (initializationOutcome == StreamInitializationOutcomes.Initialized && this.IsPumped) _ = this.PumpAsync();
+            else if (initializationOutcome == StreamInitializationOutcomes.Initialized && shouldCatchUp) _ = this.CatchUpAsync().ConfigureAwait(false);
             var restoredAck = this.Subscription.Status?.Subscriber?.PendingAck;
             if (initializationOutcome == StreamInitializationOutcomes.Initialized && restoredAck != null && this.AwaitingAcknowledgement && this.PendingAcknowledgementToken == restoredAck.Token) this.ScheduleAcknowledgementTimeout(restoredAck.Token, restoredAck.ExpiresAt);
         }
@@ -659,7 +669,9 @@ public class SubscriptionHandler
         timeoutCancellationTokenSource.CancelAfter(timeout);
         // deferring the acknowledgement only makes sense for a subscription that tracks an offset, since there is otherwise nothing to advance or rewind
         var tracksOffset = this.Subscription.Spec.Stream != null;
-        var ackToken = tracksOffset ? AcknowledgementTokens.Generate() : null;
+        // a subscription delivering in batches or in parallel commits whole pages, and never defers acknowledgements (see #212)
+        var pumped = this.IsPumped;
+        var ackToken = tracksOffset && !pumped ? AcknowledgementTokens.Generate() : null;
         var deferred = false;
         var startedAt = Stopwatch.GetTimestamp();
         var outcome = DeliveryOutcome.Failed;
@@ -681,7 +693,7 @@ public class SubscriptionHandler
             using var requestContent = e.ToHttpContent();
             var status = await this.Client.PostAsync(this.Subscription.Spec.Subscriber.Uri, requestContent, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             // per RFC 9110, '202 Accepted' means that the request has been accepted for processing, but that the processing has not been completed (see #133)
-            deferred = tracksOffset && status == HttpStatusCode.Accepted;
+            deferred = ackToken != null && status == HttpStatusCode.Accepted;
             outcome = deferred ? DeliveryOutcome.Deferred : DeliveryOutcome.Delivered;
         }
         catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)
@@ -702,7 +714,7 @@ public class SubscriptionHandler
             await this.FlushOffsetAsync().ConfigureAwait(false);
             await this.SuspendForAcknowledgementAsync(offset, ackToken!).ConfigureAwait(false);
         }
-        else if (tracksOffset) await this.CommitDeliveredOffsetAsync(offset + 1).ConfigureAwait(false);
+        else if (tracksOffset && !pumped) await this.CommitDeliveredOffsetAsync(offset + 1).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -808,7 +820,7 @@ public class SubscriptionHandler
                 if (deadLetterFailure == null)
                 {
                     // the cloud event has been set aside: delivery carries on with the next one, as if it had been delivered (see #207)
-                    if (this.Subscription.Spec.Stream != null) await this.CommitDeliveredOffsetAsync(offset + 1).ConfigureAwait(false);
+                    if (this.Subscription.Spec.Stream != null && !this.IsPumped) await this.CommitDeliveredOffsetAsync(offset + 1).ConfigureAwait(false);
                     if (catchUpWhenAvailable) await this.CatchUpAsync().ConfigureAwait(false);
                     return true;
                 }
@@ -1031,6 +1043,232 @@ public class SubscriptionHandler
             finally { this.InitLock.Release(); }
             streamSynchronizationCompletionSource?.TrySetResult();
         }
+    }
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the subscription delivers cloud events in batches or in parallel, in which case it reads what it delivers from the
+    /// store, a page at a time, rather than delivering live records as they come (see #212)
+    /// </summary>
+    protected bool IsPumped => this.Subscription.Spec.Subscriber.Batch != null || this.Subscription.Spec.Subscriber.Ordering != null;
+
+    /// <summary>
+    /// Tells the pump that there are more records to read
+    /// </summary>
+    protected void SignalPump()
+    {
+        try { if (this._pumpSignal.CurrentCount == 0) this._pumpSignal.Release(); }
+        catch (SemaphoreFullException) { }
+    }
+
+    /// <summary>
+    /// Delivers the records of the stream a page at a time, in batches or in parallel, and commits the offset that follows each page once all of its records have been
+    /// handled (see #212)
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// <para>
+    /// The pump replaces both live delivery and catch-up: live records only tell it that there is more to read. A page is only committed once each of its records has
+    /// been delivered, dead-lettered or filtered out, so that the committed offset never moves past a record that has not been, whatever the order its records were
+    /// delivered in. A broker that stops in the middle of a page redelivers the whole page: delivery remains at-least-once.
+    /// </para>
+    /// <para>Subscribers cannot defer acknowledgements: <c>202 Accepted</c> is a success like any other</para>
+    /// </remarks>
+    protected virtual async Task PumpAsync()
+    {
+        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.Pump");
+        activity?.SetTag("subscription", this.Subscription.GetQualifiedName());
+        var streamInitializationToken = CancellationToken.None;
+        var streamInitializationSessionId = 0L;
+        TaskCompletionSource? streamSynchronizationCompletionSource = null;
+        await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            if (this.StreamInitializationCancellationTokenSource == null) return;
+            streamInitializationToken = this.StreamInitializationCancellationTokenSource.Token;
+            streamInitializationSessionId = Interlocked.Read(ref this._streamInitializationSessionId);
+            this.StreamSynchronizationTaskCompletionSource ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+            streamSynchronizationCompletionSource = this.StreamSynchronizationTaskCompletionSource;
+        }
+        finally { this.InitLock.Release(); }
+        try
+        {
+            var position = this.Subscription.GetOffset();
+            if (this.CommittedOffset.HasValue && this.CommittedOffsetGeneration == this.Subscription.Metadata.Generation && (long)this.CommittedOffset.Value > position) position = (long)this.CommittedOffset.Value;
+            // as with catch-up, the end of the stream is the position after the last record dealt with, or the stream's current length (see #155)
+            if (position == StreamPosition.EndOfStream) lock (this._syncLock) position = (long)(this._nextOffset ?? this.StreamOffset ?? 0);
+            while (!streamInitializationToken.IsCancellationRequested && this.IsStreamInitializationSessionCurrent(streamInitializationSessionId))
+            {
+                var available = (long)(this.StreamOffset ?? 0) - position;
+                if (available <= 0)
+                {
+                    await this._pumpSignal.WaitAsync(streamInitializationToken).ConfigureAwait(false);
+                    continue;
+                }
+                var batch = this.Subscription.Spec.Subscriber.Batch;
+                var pageSize = batch != null ? Math.Max(1, batch.MaxSize) : this.Options.CatchUp.GetPageSize();
+                var linger = batch?.Linger?.ToTimeSpan() ?? SubscriberBatchConfiguration.DefaultLinger;
+                if (batch != null && linger > TimeSpan.Zero && available < pageSize)
+                {
+                    // a partial batch waits for more records, for at most the linger time
+                    var lingerUntil = DateTimeOffset.UtcNow + linger;
+                    while ((long)(this.StreamOffset ?? 0) - position < pageSize)
+                    {
+                        var remaining = lingerUntil - DateTimeOffset.UtcNow;
+                        if (remaining <= TimeSpan.Zero) break;
+                        await this._pumpSignal.WaitAsync(remaining, streamInitializationToken).ConfigureAwait(false);
+                    }
+                }
+                var page = await this.ReadPageAsync(position, pageSize, streamInitializationToken).ConfigureAwait(false);
+                if (page.Count == 0)
+                {
+                    await Task.Delay(StreamPageReader.UnreadableRecordDelay, streamInitializationToken).ConfigureAwait(false);
+                    continue;
+                }
+                var handled = batch != null
+                    ? await this.DeliverBatchAsync(page, streamInitializationToken).ConfigureAwait(false)
+                    : await this.DeliverInParallelAsync(page, streamInitializationToken).ConfigureAwait(false);
+                if (!handled || streamInitializationToken.IsCancellationRequested || !this.IsStreamInitializationSessionCurrent(streamInitializationSessionId)) return;
+                var last = page[^1].Sequence;
+                if (this.Subscription.Spec.Stream != null) await this.CommitDeliveredOffsetAsync(last + 1).ConfigureAwait(false);
+                this.OnRecordHandled(last);
+                position = (long)last + 1;
+            }
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException || ex is TaskCanceledException || ex is OperationCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+        finally
+        {
+            await this.InitLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                if (this.StreamSynchronizationTaskCompletionSource == streamSynchronizationCompletionSource) this.StreamSynchronizationTaskCompletionSource = null;
+            }
+            finally { this.InitLock.Release(); }
+            streamSynchronizationCompletionSource?.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Delivers the records of the specified page that the subscription selects as a single batch, retrying it as configured by the subscription's retry policy
+    /// </summary>
+    /// <param name="page">The page of records to deliver</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A boolean indicating whether or not every record of the page has been handled, which is to say delivered, dead-lettered or filtered out</returns>
+    /// <remarks>
+    /// A batch whose delivery fails for good is delivered again one cloud event at a time, each with the retry and dead-letter policies, so that the cloud event at
+    /// fault, if any, is dead-lettered, or faults the subscription, on its own
+    /// </remarks>
+    protected virtual async Task<bool> DeliverBatchAsync(IReadOnlyList<CloudEventRecord> page, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var records = new List<CloudEventRecord>(page.Count);
+        foreach (var record in page) if (await this.FiltersAsync(record).ConfigureAwait(false)) records.Add(record);
+        if (records.Count == 0) return true;
+        DeliveryRetrySchedule? schedule = null;
+        while (true)
+        {
+            try
+            {
+                await this.SendBatchAsync(records).ConfigureAwait(false);
+                return true;
+            }
+            catch (HttpRequestException ex)
+            {
+                if (schedule == null) schedule = new(this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy);
+                else schedule.RecordFailure();
+                this.Metrics.IncrementTotalDeliveryFailures(this.Subscription.GetQualifiedName(), this.GetStreamName());
+                await this.SetSubscriberStateAsync(SubscriberState.Unreachable, ex.Message).ConfigureAwait(false);
+                if (!schedule.IsRetryable(ex) || schedule.IsExhausted)
+                {
+                    this.Logger.LogWarning("Failed to deliver the batch of {count} cloud event(s) at offsets '{first}' to '{last}' of subscription '{subscription}': delivering them one at a time. Last failure: {reason}", records.Count, records[0].Sequence, records[^1].Sequence, this.Subscription.GetQualifiedName(), ex.Message);
+                    break;
+                }
+                var consecutiveFailures = schedule.ConsecutiveFailures;
+                var delay = schedule.Next(out var circuitBroken);
+                if (circuitBroken) this.Logger.LogWarning("The circuit of subscription '{subscription}' has been broken after {failures} consecutive delivery failures. Delivery will resume in {delay}", this.Subscription.GetQualifiedName(), consecutiveFailures, delay);
+                if (delay > TimeSpan.Zero) await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        var sequencing = this.Broker.Resource.Spec.Dispatch?.Sequencing;
+        foreach (var record in records)
+        {
+            if (cancellationToken.IsCancellationRequested) return false;
+            if (!await this.DispatchAsync(record.ToCloudEvent(sequencing), record.Sequence, true, false).ConfigureAwait(false) && this.Subscription.Spec.Stream != null) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Performs a single attempt at delivering the specified records as a batch, formatted as <c>application/cloudevents-batch+json</c>
+    /// </summary>
+    /// <param name="records">The records to deliver, which the subscription selects</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <exception cref="HttpRequestException">The delivery attempt failed</exception>
+    /// <remarks>The batch carries the offset of its first cloud event. Cloud events are mutated by every attempt, which a webhook based mutation is bound by the dispatch timeout of</remarks>
+    protected virtual async Task SendBatchAsync(IReadOnlyList<CloudEventRecord> records)
+    {
+        await this.ThrottleAsync().ConfigureAwait(false);
+        var timeout = this.GetDispatchTimeout();
+        using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(this.CancellationTokenSource.Token);
+        timeoutCancellationTokenSource.CancelAfter(timeout);
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = DeliveryOutcome.Failed;
+        var sequencing = this.Broker.Resource.Spec.Dispatch?.Sequencing;
+        try
+        {
+            var events = new List<CloudEvent>(records.Count);
+            foreach (var record in records) events.Add(await this.MutateAsync(record.ToCloudEvent(sequencing), timeoutCancellationTokenSource.Token).ConfigureAwait(false));
+            KeyValuePair<string, string>[] headers =
+            [
+                new(CloudStreamsHeaders.Subscription, this.Subscription.GetName()),
+                new(CloudStreamsHeaders.Offset, records[0].Sequence.ToString(CultureInfo.InvariantCulture))
+            ];
+            using var content = events.ToBatchHttpContent();
+            await this.Client.PostAsync(this.Subscription.Spec.Subscriber.Uri, content, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            outcome = DeliveryOutcome.Delivered;
+        }
+        catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)
+        {
+            var target = this.Subscription.Spec.Mutation?.Type == CloudEventMutationType.Webhook ? "The mutation webhook or the subscriber" : "The subscriber";
+            throw new HttpRequestException($"{target} did not respond within the configured timeout of {timeout}", ex);
+        }
+        finally
+        {
+            if (!this.CancellationTokenSource.IsCancellationRequested) this.Metrics.RecordDeliveryDuration(this.Subscription.GetQualifiedName(), this.GetStreamName(), outcome, Stopwatch.GetElapsedTime(startedAt));
+        }
+        for (var i = 0; i < records.Count; i++) this.Metrics.IncrementTotalPublishedEvents(this.Subscription.GetQualifiedName(), this.GetStreamName());
+        await this.SetSubscriberStateAsync(SubscriberState.Reachable).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Delivers the records of the specified page in parallel: records that share the same key are delivered one at a time, in the order of the stream, while records
+    /// of different keys are delivered concurrently
+    /// </summary>
+    /// <param name="page">The page of records to deliver</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A boolean indicating whether or not every record of the page has been handled, which is to say delivered, dead-lettered or filtered out</returns>
+    protected virtual async Task<bool> DeliverInParallelAsync(IReadOnlyList<CloudEventRecord> page, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var ordering = this.Subscription.Spec.Subscriber.Ordering ?? throw new InvalidOperationException($"The subscription '{this.Subscription.GetQualifiedName()}' does not deliver cloud events in parallel");
+        using var concurrency = new SemaphoreSlim(Math.Max(1, ordering.MaxConcurrency ?? SubscriberOrderingConfiguration.DefaultMaxConcurrency));
+        // grouping preserves the order of the records of each key
+        var keys = page.GroupBy(r => r.Metadata.ContextAttributes.TryGetValue(ordering.Key, out var key) ? key?.ToString() ?? string.Empty : string.Empty);
+        var results = await Task.WhenAll(keys.Select(async records =>
+        {
+            await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                foreach (var record in records)
+                {
+                    if (cancellationToken.IsCancellationRequested) return false;
+                    if (!await this.DispatchAsync(record, true, false).ConfigureAwait(false) && this.Subscription.Spec.Stream != null) return false;
+                }
+                return true;
+            }
+            finally { concurrency.Release(); }
+        })).ConfigureAwait(false);
+        return results.All(handled => handled);
     }
 
     /// <summary>
@@ -1509,6 +1747,23 @@ public class SubscriptionHandler
     }
 
     /// <summary>
+    /// Handles the subscription switching between delivering one live record at a time, and delivering in batches or in parallel
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task OnDeliveryModeChangedAsync()
+    {
+        try
+        {
+            await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
+            await this.FlushOffsetAsync().ConfigureAwait(false);
+            await this.ObserveGenerationAsync().ConfigureAwait(false);
+            await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+    }
+
+    /// <summary>
     /// Handles the suspension of the subscription, or its resumption
     /// </summary>
     /// <param name="suspended">A boolean indicating whether or not the subscription is suspended</param>
@@ -1528,28 +1783,41 @@ public class SubscriptionHandler
                 await this.FlushOffsetAsync().ConfigureAwait(false);
                 await this.CommitReachedPositionAsync().ConfigureAwait(false);
             }
-            var subscription = this.Subscription;
-            var generation = subscription.Metadata.Generation;
-            var offsetUnchanged = subscription.Spec.Stream?.Offset == this.LastRequestedOffset;
-            await this.PatchStatusAsync(resource =>
-            {
-                resource.Status ??= new();
-                resource.Status.Phase = suspended ? SubscriptionStatusPhase.Suspended : SubscriptionStatusPhase.Active;
-                if (offsetUnchanged && resource.Status.ObservedGeneration < generation) resource.Status.ObservedGeneration = generation;
-            }).ConfigureAwait(false);
+            await this.ObserveGenerationAsync(status => status.Phase = suspended ? SubscriptionStatusPhase.Suspended : SubscriptionStatusPhase.Active).ConfigureAwait(false);
             if (suspended) return;
-            // the stream is initialized at once, from the handler's view of the subscription, which the watch has yet to update: without the observed generation, the
-            // acknowledged offset would be ignored, and delivery would restart at the offset requested by the spec
-            if (offsetUnchanged && subscription.Status?.ObservedGeneration < generation && ReferenceEquals(this.Subscription, subscription))
-            {
-                var observed = subscription.Clone()!;
-                observed.Status!.ObservedGeneration = generation;
-                this.Subscription = observed;
-            }
             await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
         catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+    }
+
+    /// <summary>
+    /// Reports the subscription's current generation as observed, unless its offset has changed, so that its acknowledged offset remains the position to resume from
+    /// </summary>
+    /// <param name="update">An action that applies further changes to the status, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// Changing the subscription's spec, e.g. to suspend it or to deliver in batches, changes its generation, which invalidates its acknowledged offset: the stream would
+    /// otherwise restart at the offset requested by the spec. The stream is initialized again at once, from the handler's view of the subscription, which the watch
+    /// has yet to update: the observed generation is therefore set on it too (see #212 and #214)
+    /// </remarks>
+    protected virtual async Task ObserveGenerationAsync(Action<SubscriptionStatus>? update = null)
+    {
+        var subscription = this.Subscription;
+        var generation = subscription.Metadata.Generation;
+        var offsetUnchanged = subscription.Spec.Stream?.Offset == this.LastRequestedOffset;
+        await this.PatchStatusAsync(resource =>
+        {
+            resource.Status ??= new();
+            update?.Invoke(resource.Status);
+            if (offsetUnchanged && resource.Status.ObservedGeneration < generation) resource.Status.ObservedGeneration = generation;
+        }).ConfigureAwait(false);
+        if (offsetUnchanged && subscription.Status?.ObservedGeneration < generation && ReferenceEquals(this.Subscription, subscription))
+        {
+            var observed = subscription.Clone()!;
+            observed.Status!.ObservedGeneration = generation;
+            this.Subscription = observed;
+        }
     }
 
     /// <summary>
@@ -1591,6 +1859,12 @@ public class SubscriptionHandler
                 // the stream offset is the length of the stream, which is to say the offset of the next record to be appended
                 this.StreamOffset = e.Sequence + 1;
                 outOfSync = this.SubscriptionOutOfSync;
+            }
+            // a subscription delivering in batches or in parallel reads what it delivers from the store: live records only tell it there is more to read (see #212)
+            if (this.IsPumped)
+            {
+                this.SignalPump();
+                return;
             }
             // an unreachable subscriber is deliberately not a reason to drop the event: while a delivery is being retried the subscription is out of sync,
             // and a persisted 'unreachable' state (i.e. after a broker restart) would otherwise drop every live event forever

@@ -51,6 +51,23 @@ public sealed class InMemoryCloudEventStore
     public ulong Length { get { lock (this._lock) return (ulong)this._records.Count; } }
 
     /// <summary>
+    /// Seeds the store with a record per specified subject, in order
+    /// </summary>
+    public InMemoryCloudEventStore SeedWithSubjects(params string[] subjects)
+    {
+        lock (this._lock)
+        {
+            foreach (var subject in subjects)
+            {
+                var record = BrokerTestContext.CreateRecord((ulong)this._records.Count);
+                record.Metadata.ContextAttributes[CloudEventAttributes.Subject] = subject;
+                this._records.Add(record);
+            }
+        }
+        return this;
+    }
+
+    /// <summary>
     /// Seeds the store with the specified amount of records, sequenced from zero
     /// </summary>
     public InMemoryCloudEventStore Seed(int count)
