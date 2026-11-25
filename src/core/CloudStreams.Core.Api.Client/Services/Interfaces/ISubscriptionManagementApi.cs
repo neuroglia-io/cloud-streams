@@ -21,7 +21,15 @@ public interface ISubscriptionManagementApi
 {
 
     /// <summary>
-    /// Resumes the specified faulted <see cref="Subscription"/>, by clearing its fault so that the cloud event that caused it is retried
+    /// Suspends the specified <see cref="Subscription"/>: nothing is delivered, and its offset is kept, until it is resumed
+    /// </summary>
+    /// <param name="name">The name of the <see cref="Subscription"/> to suspend</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The suspended <see cref="Subscription"/></returns>
+    Task<Subscription> SuspendAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resumes the specified suspended or faulted <see cref="Subscription"/>. A faulted subscription has its fault cleared, so that the cloud event that caused it is retried
     /// </summary>
     /// <param name="name">The name of the <see cref="Subscription"/> to resume</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>

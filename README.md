@@ -179,6 +179,22 @@ spec:
 
 While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on.
 
+#### Suspension
+
+A subscription can be suspended by setting `spec.suspended` to `true`, for example while its subscriber is under maintenance. While it is suspended:
+- it keeps its broker, and its phase is `suspended`;
+- nothing is delivered;
+- changing its offset takes effect when it is resumed.
+
+The offset of whatever has been delivered is committed when it is suspended. Once `spec.suspended` is set back to `false`, delivery resumes from that offset, and the events published in the meantime are caught up. A subscription that does not track a stream offset misses them.
+
+Operators suspend and resume subscriptions from the dashboard, or with:
+
+```
+POST /api/resources/v1/subscriptions/{name}/suspend
+POST /api/resources/v1/subscriptions/{name}/resume     # also clears the fault of a faulted subscription
+```
+
 #### Broker replicas
 
 Several replicas of a broker can run side by side, for availability. A replica only handles a subscription while it holds a lease on it in Redis, so that every subscription is handled by a single replica, and every event is delivered once. Leases are renewed periodically. When the replica that handles a subscription dies, its lease expires and another replica takes the subscription over. A replica that fails to renew a lease in time stops handling the subscription before the lease can be acquired by another one. When a replica stops gracefully, it releases its leases so that others take over immediately.
@@ -278,7 +294,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 | Role | May |
 |---|---|
 | Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the MCP tools, which are all read-only |
-| Operator | also resume and replay subscriptions, with `POST /api/resources/v1/subscriptions/{name}/resume` and `.../replay` |
+| Operator | also suspend, resume and replay subscriptions, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume` and `.../replay` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
 A user who has none of the configured roles is denied access (`403`). When no role is configured, every signed-in user is an administrator, as before. The dashboard hides the actions the user may not perform. Acknowledgement endpoints remain anonymous, as the token is their authorization.

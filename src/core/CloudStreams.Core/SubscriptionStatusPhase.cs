@@ -31,5 +31,10 @@ public enum SubscriptionStatusPhase
     /// Indicates that the subscription is being monitored by its broker
     /// </summary>
     [EnumMember(Value = "active")]
-    Active = 2
+    Active = 2,
+    /// <summary>
+    /// Indicates that the subscription is handled by its broker, but suspended: nothing is delivered until it is resumed
+    /// </summary>
+    [EnumMember(Value = "suspended")]
+    Suspended = 3
 }

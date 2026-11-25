@@ -76,6 +76,9 @@
                                 case SubscriptionStatusPhase.Inactive:
                                     <span class="badge bg-secondary">inactive</span>
                                     break;
+                                case SubscriptionStatusPhase.Suspended:
+                                    <span class="badge text-dark bg-warning" title="Nothing is delivered until the subscription is resumed">suspended</span>
+                                    break;
                             }
                             @if(resource.Status?.Stream?.Fault != null)
                             {
@@ -139,6 +142,16 @@
                                     @if (CanOperate)
                                     {
                                         <li>
+                                            @if (resource.Spec.Suspended)
+                                            {
+                                                <button class="dropdown-item" title="Resume delivering events to the subscriber of @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', where it stopped" @onclick="async _ => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PlayFill" /> Resume</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="dropdown-item" title="Stop delivering events to the subscriber of @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name' until it is resumed" @onclick="async _ => await OnSuspendSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PauseFill" /> Suspend</button>
+                                            }
+                                        </li>
+                                        <li>
                                             <button class="dropdown-item" title="Replay all events matching @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', which implicitly enables streaming." @onclick="async _ => await OnRestartSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.ArrowClockwise" /> Replay</button>
                                         </li>
                                     }
@@ -198,13 +211,34 @@
     /// <remarks>Only subscriptions that track an offset can be behind: their acknowledged offset is the offset of the next event to deliver (see #196)</remarks>
     static bool IsBehind(Subscription subscription, ulong streamLength) => subscription.Spec.Stream != null && (subscription.Status?.Stream?.AckedOffset ?? 0) < streamLength;
 
-    async Task OnResumeSubscriptionAsync(Subscription subscription)
+    async Task OnSuspendSubscriptionAsync(Subscription subscription)
     {
         if (Dialog == null) return;
         var confirmed = await Dialog.ShowAsync(
+            title: $"Suspend subscription '{subscription.Metadata.Name}'?",
+            message1: "Nothing is delivered to the subscriber until the subscription is resumed.",
+            message2: subscription.Spec.Stream == null ? "The subscription does not track an offset: the events published while it is suspended are not delivered once it is resumed." : "Delivery resumes where it stopped.",
+            confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Suspend", YesButtonColor = ButtonColor.Warning, NoButtonText = "Cancel", IsVerticallyCentered = true });
+        if (!confirmed) return;
+        try
+        {
+            await this.ApiClient.Resources.Subscriptions.SuspendAsync(subscription.GetName());
+            NotifySuccess($"The subscription '{subscription.Metadata.Name}' has been suspended");
+        }
+        catch (Exception ex)
+        {
+            NotifyFailure($"Failed to suspend the subscription '{subscription.Metadata.Name}'", ex);
+        }
+    }
+
+    async Task OnResumeSubscriptionAsync(Subscription subscription)
+    {
+        if (Dialog == null) return;
+        var fault = subscription.Status?.Stream?.Fault;
+        var confirmed = await Dialog.ShowAsync(
             title: $"Resume subscription '{subscription.Metadata.Name}'?",
-            message1: $"The subscription is faulted: {subscription.Status?.Stream?.Fault?.Detail ?? subscription.Status?.Stream?.Fault?.Title}",
-            message2: "Resuming clears the fault and retries the event that caused it. To skip that event instead, edit the subscription's 'spec.stream.offset'.",
+            message1: fault == null ? "The subscription is suspended: delivery resumes where it stopped." : $"The subscription is {(subscription.Spec.Suspended ? "suspended and " : "")}faulted: {fault.Detail ?? fault.Title}",
+            message2: fault == null ? null : "Resuming clears the fault and retries the event that caused it. To skip that event instead, edit the subscription's 'spec.stream.offset'.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true });
         if (!confirmed) return;
         try

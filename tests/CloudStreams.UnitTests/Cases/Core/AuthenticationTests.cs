@@ -464,12 +464,13 @@ public class AuthenticationTests
             }
             Assert.False(anonymous, $"'{route}' should not be anonymous");
             var expected = route.StartsWith("GET ") ? CloudStreamsAuthenticationDefaults.ReadPolicy
-                : route.EndsWith("/resume") || route.EndsWith("/replay") ? CloudStreamsAuthenticationDefaults.OperatePolicy
+                : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") ? CloudStreamsAuthenticationDefaults.OperatePolicy
                 : CloudStreamsAuthenticationDefaults.AdministerPolicy;
             Assert.True(policies.SequenceEqual([expected]), $"'{route}' should require '{expected}', not '{string.Join(", ", policies)}'");
         }
         Assert.Contains(endpoints, e => e.Route == "PATCH api/resources/v1/subscriptions/{name}/status" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.AdministerPolicy]));
         Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/replay");
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/suspend");
     }
 
     [Fact]
@@ -508,7 +509,7 @@ public class TestResourcesController
     public IActionResult Delete(string name) => this.Ok(name);
 
     /// <summary>
-    /// Stands for the endpoints that resume or replay subscriptions
+    /// Stands for the endpoints that suspend, resume or replay subscriptions
     /// </summary>
     [HttpPost("{name}/operate")]
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]

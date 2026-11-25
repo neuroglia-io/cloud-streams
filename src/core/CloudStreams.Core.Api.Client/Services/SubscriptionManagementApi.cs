@@ -28,6 +28,9 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
 {
 
     /// <inheritdoc/>
+    public virtual Task<Subscription> SuspendAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "suspend", cancellationToken);
+
+    /// <inheritdoc/>
     public virtual Task<Subscription> ResumeAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "resume", cancellationToken);
 
     /// <inheritdoc/>
