@@ -43,7 +43,7 @@ public class AtomicRedisDatabase(ILoggerFactory loggerFactory, IConnectionMultip
     /// <summary>
     /// Gets the maximum amount of times an update is attempted when the resource keeps changing concurrently
     /// </summary>
-    public const int MaxUpdateAttempts = 10;
+    public const int MaxUpdateAttempts = 25;
 
     /// <summary>
     /// Gets the type of the problem returned when a JSON patch cannot be applied to the current state of a resource
@@ -131,7 +131,7 @@ public class AtomicRedisDatabase(ILoggerFactory loggerFactory, IConnectionMultip
             // the resource has changed in the meantime: an update that expects a version fails on the next read, any other one is applied again to the new state
             if (attempt >= MaxUpdateAttempts) throw new ProblemDetailsException(new(PatchConflictProblemType, "Conflict", (int)HttpStatusCode.Conflict, $"The resource '{reference}' kept changing concurrently, and could not be updated after {attempt} attempts"));
             // a random, exponentially growing delay keeps writers that lost the same race from colliding again
-            await Task.Delay(Random.Shared.Next(1, Math.Min(100, 2 << attempt)), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Random.Shared.Next(1, Math.Min(200, 2 << Math.Min(attempt, 16))), cancellationToken).ConfigureAwait(false);
         }
     }
 
