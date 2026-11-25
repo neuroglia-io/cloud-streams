@@ -57,4 +57,11 @@ public record SubscriptionSpec
     [DataMember(Order = 5, Name = "subscriber", IsRequired = true), JsonPropertyName("subscriber"), YamlMember(Alias = "subscriber")]
     public virtual Subscriber Subscriber { get; set; } = null!;
 
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not the subscription is suspended. While it is, the broker delivers nothing, and keeps the subscription's offset, so that
+    /// delivery resumes where it stopped once the subscription is no longer suspended
+    /// </summary>
+    [DataMember(Order = 6, Name = "suspended"), JsonPropertyName("suspended"), YamlMember(Alias = "suspended")]
+    public virtual bool Suspended { get; set; }
+
 }

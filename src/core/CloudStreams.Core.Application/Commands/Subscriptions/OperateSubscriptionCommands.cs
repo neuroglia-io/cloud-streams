@@ -19,11 +19,51 @@ using System.Text.Json.Nodes;
 namespace CloudStreams.Core.Application.Commands.Subscriptions;
 
 /// <summary>
-/// Represents the command used to resume a faulted <see cref="Subscription"/>, by clearing its fault so that the cloud event that caused it is retried
+/// Represents the command used to suspend a <see cref="Subscription"/>: the broker stops delivering, and keeps its offset, until it is resumed
+/// </summary>
+/// <param name="name">The name of the <see cref="Subscription"/> to suspend</param>
+/// <remarks>
+/// A dedicated command rather than a patch, so that users allowed to operate subscriptions can suspend them without being allowed to edit them (see #214)
+/// </remarks>
+public class SuspendSubscriptionCommand(string name)
+    : Command<Subscription>
+{
+
+    /// <summary>
+    /// Gets the name of the <see cref="Subscription"/> to suspend
+    /// </summary>
+    public string Name { get; } = string.IsNullOrWhiteSpace(name) ? throw new ArgumentNullException(nameof(name)) : name;
+
+}
+
+/// <summary>
+/// Represents the service used to handle <see cref="SuspendSubscriptionCommand"/>s
+/// </summary>
+/// <param name="resources">The service used to manage <see cref="IResource"/>s</param>
+public class SuspendSubscriptionCommandHandler(IResourceRepository resources)
+    : ICommandHandler<SuspendSubscriptionCommand, Subscription>
+{
+
+    /// <inheritdoc/>
+    public virtual async Task<IOperationResult<Subscription>> HandleAsync(SuspendSubscriptionCommand command, CancellationToken cancellationToken = default)
+    {
+        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        if (subscription == null) return this.NotFound();
+        // suspending a subscription that is already suspended is not an error
+        if (subscription.Spec.Suspended) return this.Ok(subscription);
+        subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(true)))), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+        return this.Ok(subscription);
+    }
+
+}
+
+/// <summary>
+/// Represents the command used to resume a suspended or faulted <see cref="Subscription"/>. A suspended subscription is no longer suspended, and a faulted one has its fault
+/// cleared, so that the cloud event that caused it is retried
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to resume</param>
 /// <remarks>
-/// A dedicated command rather than a status patch, so that users allowed to operate subscriptions can resume them without being allowed to patch their status (see #147)
+/// A dedicated command rather than a patch, so that users allowed to operate subscriptions can resume them without being allowed to edit them or patch their status (see #147)
 /// </remarks>
 public class ResumeSubscriptionCommand(string name)
     : Command<Subscription>
@@ -49,7 +89,8 @@ public class ResumeSubscriptionCommandHandler(IResourceRepository resources)
     {
         var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
-        // resuming a subscription that is not faulted, for example because it has been resumed concurrently, is not an error
+        if (subscription.Spec.Suspended) subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(false)))), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+        // resuming a subscription that is neither suspended nor faulted, for example because it has been resumed concurrently, is not an error
         if (subscription.Status?.Stream?.Fault == null) return this.Ok(subscription);
         try
         {

@@ -302,6 +302,11 @@ public class SubscriptionHandler
                     .DistinctUntilChanged(fault => fault != null)
                     .Skip(1)
                     .Select(fault => OnSubscriptionStreamingFaultAsync(fault).ToObservable()),
+                shared.Select(s => s.Spec.Suspended)
+                    .StartWith(this.Subscription.Spec.Suspended)
+                    .DistinctUntilChanged()
+                    .Skip(1)
+                    .Select(suspended => OnSubscriptionSuspensionChangedAsync(suspended).ToObservable()),
                 shared.Select(s => s.Status?.Subscriber?.PendingAck)
                     .DistinctUntilChanged(pendingAck => pendingAck?.Token)
                     .Select(pendingAck => OnPendingAcknowledgementChangedAsync(pendingAck).ToObservable())
@@ -311,8 +316,46 @@ public class SubscriptionHandler
             .Select(e => e.Resource.Spec.Dispatch?.RetryPolicy)
             .DistinctUntilChanged()
             .Subscribe(policy => this.DefaultRetryPolicy = policy ?? new HttpClientRetryPolicy(), this.CancellationTokenSource.Token);
+        if (this.Subscription.Spec.Suspended)
+        {
+            // the offset may have been changed while the broker was down: the change is applied now, since resuming takes the acknowledged offset as current (see #214)
+            if (this.IsOffsetResetRequested()) await this.ResetOffsetAsync().ConfigureAwait(false);
+            await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Suspended).ConfigureAwait(false);
+            return;
+        }
         await this.SetStatusPhaseAsync(SubscriptionStatusPhase.Active).ConfigureAwait(false);
         _ = this.InitializeCloudEventStreamAsync();
+    }
+
+    /// <summary>
+    /// Determines whether or not the subscription's offset has been changed by a user since the broker last committed it
+    /// </summary>
+    /// <returns>A boolean indicating whether or not the subscription's offset has been changed since the broker last committed it</returns>
+    protected virtual bool IsOffsetResetRequested() => this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration
+        && this.Subscription.Spec.Stream?.Offset != (long?)this.Subscription.Status?.Stream?.AckedOffset;
+
+    /// <summary>
+    /// Discards the subscription's acknowledged offset, and whatever acknowledgement is pending, so that delivery restarts at the offset requested by its spec
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    protected virtual async Task ResetOffsetAsync()
+    {
+        // offsets delivered before are obsolete, and must not overwrite the reset
+        await this._commitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            lock (this._syncLock) this.DiscardUncommittedOffset();
+            await this.CommitOffsetAsync(null).ConfigureAwait(false);
+        }
+        finally { this._commitLock.Release(); }
+        // the offset has been changed by the user, which overrides whatever acknowledgement was pending
+        var pendingAck = this.Subscription.Status?.Subscriber?.PendingAck;
+        if (pendingAck != null)
+        {
+            this.EndAwaitingAcknowledgement(null);
+            try { await this.ClearPendingAcknowledgementAsync(pendingAck.Token, null).ConfigureAwait(false); }
+            catch (ProblemDetailsException) { }
+        }
     }
 
     /// <summary>
@@ -322,7 +365,7 @@ public class SubscriptionHandler
     protected virtual async Task InitializeCloudEventStreamAsync()
     {
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionHandler.InitializeStream");
-        if (this.Subscription.Status?.Stream?.Fault != null) return;
+        if (this.Subscription.Status?.Stream?.Fault != null || this.Subscription.Spec.Suspended) return;
         var initializationAttemptId = Guid.NewGuid().ToString("N");
         var initializationOutcome = StreamInitializationOutcomes.Failed;
         var streamInitializationSessionId = 0L;
@@ -333,26 +376,7 @@ public class SubscriptionHandler
         long offset = StreamPosition.EndOfStream;
         try
         {
-            if (this.Subscription.Metadata.Generation > this.Subscription.Status?.ObservedGeneration
-                && this.Subscription.Spec.Stream?.Offset != (long?)this.Subscription.Status?.Stream?.AckedOffset)
-            {
-                // the offset has been changed by the user: offsets delivered before are obsolete, and must not overwrite the reset
-                await this._commitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
-                try
-                {
-                    lock (this._syncLock) this.DiscardUncommittedOffset();
-                    await this.CommitOffsetAsync(null).ConfigureAwait(false);
-                }
-                finally { this._commitLock.Release(); }
-                // the offset has been changed by the user, which overrides whatever acknowledgement was pending
-                var pendingAck = this.Subscription.Status?.Subscriber?.PendingAck;
-                if (pendingAck != null)
-                {
-                    this.EndAwaitingAcknowledgement(null);
-                    try { await this.ClearPendingAcknowledgementAsync(pendingAck.Token, null).ConfigureAwait(false); }
-                    catch (ProblemDetailsException) { }
-                }
-            }
+            if (this.IsOffsetResetRequested()) await this.ResetOffsetAsync().ConfigureAwait(false);
 
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
             try
@@ -1587,6 +1611,26 @@ public class SubscriptionHandler
     {
         try
         {
+            if (this.Subscription.Spec.Suspended)
+            {
+                await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+                try
+                {
+                    if (this.LastRequestedOffset == offset) return;
+                    this.LastRequestedOffset = offset;
+                }
+                finally { this.InitLock.Release(); }
+                // the change is applied at once, rather than when the stream is initialized again: resuming takes the acknowledged offset as current (see #214).
+                // As for a faulted subscription, changing the offset also clears its fault
+                await this.ResetOffsetAsync().ConfigureAwait(false);
+                if (this.Subscription.Status?.Stream?.Fault != null) await this.PatchStatusAsync(resource =>
+                {
+                    resource.Status ??= new();
+                    resource.Status.Stream ??= new();
+                    resource.Status.Stream.Fault = null;
+                }).ConfigureAwait(false);
+                return;
+            }
             if (this.Subscription.Status?.Stream?.Fault != null)
             {
                 this.LastRequestedOffset = offset;
@@ -1633,6 +1677,74 @@ public class SubscriptionHandler
     }
 
     /// <summary>
+    /// Handles the suspension of the subscription, or its resumption
+    /// </summary>
+    /// <param name="suspended">A boolean indicating whether or not the subscription is suspended</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// A suspended subscription stops streaming, as a faulted one does, but keeps its broker and its lease: the offset of whatever has been delivered is committed, and
+    /// delivery resumes from it. Suspending and resuming change the subscription's spec, and therefore its generation, which invalidates the acknowledged offset: the
+    /// new generation is reported as observed, unless the offset has been changed as well, in which case the change applies as usual (see #214)
+    /// </remarks>
+    protected virtual async Task OnSubscriptionSuspensionChangedAsync(bool suspended)
+    {
+        try
+        {
+            if (suspended)
+            {
+                await this.CancelSynchronizationLoopAsync().ConfigureAwait(false);
+                await this.FlushOffsetAsync().ConfigureAwait(false);
+                await this.CommitReachedPositionAsync().ConfigureAwait(false);
+            }
+            var subscription = this.Subscription;
+            var generation = subscription.Metadata.Generation;
+            var offsetUnchanged = subscription.Spec.Stream?.Offset == this.LastRequestedOffset;
+            await this.PatchStatusAsync(resource =>
+            {
+                resource.Status ??= new();
+                resource.Status.Phase = suspended ? SubscriptionStatusPhase.Suspended : SubscriptionStatusPhase.Active;
+                if (offsetUnchanged && resource.Status.ObservedGeneration < generation) resource.Status.ObservedGeneration = generation;
+            }).ConfigureAwait(false);
+            if (suspended) return;
+            // the stream is initialized at once, from the handler's view of the subscription, which the watch has yet to update: without the observed generation, the
+            // acknowledged offset would be ignored, and delivery would restart at the offset requested by the spec
+            if (offsetUnchanged && subscription.Status?.ObservedGeneration < generation && ReferenceEquals(this.Subscription, subscription))
+            {
+                var observed = subscription.Clone()!;
+                observed.Status!.ObservedGeneration = generation;
+                this.Subscription = observed;
+            }
+            await this.InitializeCloudEventStreamAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
+        catch (Exception ex) { await this.OnSubscriptionErrorAsync(ex).ConfigureAwait(false); }
+    }
+
+    /// <summary>
+    /// Commits the position reached by a subscription that tracks the end of the stream, and has not committed any offset yet
+    /// </summary>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// Such a subscription has no position to resume from other than the end of the stream, and would skip whatever is published while it is suspended (see #214)
+    /// </remarks>
+    protected virtual async Task CommitReachedPositionAsync()
+    {
+        if (this.Subscription.Spec.Stream == null || this.CommittedOffset.HasValue || this._latestSubscription.Status?.Stream?.AckedOffset.HasValue == true) return;
+        // a subscription that starts at an earlier offset resumes from it
+        if (this.Subscription.GetOffset() != StreamPosition.EndOfStream) return;
+        ulong? position;
+        // a delivery being retried has not been handled: the position is unknown, and the subscription resumes at the end of the stream, as before
+        lock (this._syncLock) position = this.AwaitingAcknowledgement ? this.PendingAcknowledgementOffset : this._nextOffset ?? (this.SubscriptionOutOfSync ? null : this.StreamOffset);
+        if (!position.HasValue) return;
+        await this._commitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+        try
+        {
+            if (!this.CommittedOffset.HasValue) await this.CommitOffsetAsync(position.Value).ConfigureAwait(false);
+        }
+        finally { this._commitLock.Release(); }
+    }
+
+    /// <summary>
     /// Handles the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to handle</param>
@@ -1650,7 +1762,7 @@ public class SubscriptionHandler
             }
             // an unreachable subscriber is deliberately not a reason to drop the event: while a delivery is being retried the subscription is out of sync,
             // and a persisted 'unreachable' state (i.e. after a broker restart) would otherwise drop every live event forever
-            if (this.Subscription.Status?.Stream?.Fault != null || outOfSync) return;
+            if (this.Subscription.Status?.Stream?.Fault != null || this.Subscription.Spec.Suspended || outOfSync) return;
             await this.DispatchAsync(e, true, true).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }

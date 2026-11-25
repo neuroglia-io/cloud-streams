@@ -186,6 +186,9 @@ spec:
                           description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to the broker setting, or PT5M
                   required:
                     - uri
+                suspended:
+                  type: boolean
+                  description: Whether or not the subscription is suspended. While it is, nothing is delivered, and its offset is kept, so that delivery resumes where it stopped
               required:
                 - subscriber
             status:
@@ -196,6 +199,7 @@ spec:
                   enum:
                     - inactive
                     - active
+                    - suspended
                 observedGeneration:
                   type: number
                 stream:

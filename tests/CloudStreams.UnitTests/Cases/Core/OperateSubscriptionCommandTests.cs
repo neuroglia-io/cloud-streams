@@ -112,6 +112,90 @@ public class OperateSubscriptionCommandTests
     }
 
     [Fact]
+    public async Task Suspending_Should_Only_Set_The_Suspended_Flag()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(42));
+
+        // act
+        var result = await new SuspendSubscriptionCommandHandler(store.Repository).HandleAsync(new SuspendSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        var operation = Assert.Single(Assert.Single(store.SpecPatches).Operations);
+        Assert.Equal("/spec/suspended", operation.Path.ToString());
+        Assert.True(store.Current.Spec.Suspended);
+        Assert.Equal(42, store.Current.Spec.Stream!.Offset);
+        Assert.Empty(store.StatusPatches);
+    }
+
+    [Fact]
+    public async Task Suspending_A_Suspended_Subscription_Should_Change_Nothing()
+    {
+        // arrange
+        var subscription = CreateSubscription(42);
+        subscription.Spec.Suspended = true;
+        var store = new SubscriptionStore(subscription);
+
+        // act
+        var result = await new SuspendSubscriptionCommandHandler(store.Repository).HandleAsync(new SuspendSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        Assert.Empty(store.SpecPatches);
+    }
+
+    [Fact]
+    public async Task Suspending_A_Missing_Subscription_Should_Return_Not_Found()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(42));
+        store.Repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IResource?>(null));
+
+        // act
+        var result = await new SuspendSubscriptionCommandHandler(store.Repository).HandleAsync(new SuspendSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(404, result.Status);
+    }
+
+    [Fact]
+    public async Task Resuming_A_Suspended_Subscription_Should_Lift_The_Suspension()
+    {
+        // arrange
+        var subscription = CreateSubscription(42);
+        subscription.Spec.Suspended = true;
+        var store = new SubscriptionStore(subscription);
+
+        // act
+        var result = await new ResumeSubscriptionCommandHandler(store.Repository).HandleAsync(new ResumeSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        Assert.False(store.Current.Spec.Suspended);
+        Assert.Single(store.SpecPatches);
+        Assert.Empty(store.StatusPatches);
+    }
+
+    [Fact]
+    public async Task Resuming_A_Suspended_And_Faulted_Subscription_Should_Lift_The_Suspension_And_Clear_The_Fault()
+    {
+        // arrange
+        var subscription = CreateSubscription(0, faulted: true);
+        subscription.Spec.Suspended = true;
+        var store = new SubscriptionStore(subscription);
+
+        // act
+        var result = await new ResumeSubscriptionCommandHandler(store.Repository).HandleAsync(new ResumeSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        Assert.False(store.Current.Spec.Suspended);
+        Assert.Null(store.Current.Status!.Stream!.Fault);
+        Assert.Equal(3ul, store.Current.Status.Stream.AckedOffset);
+    }
+
+    [Fact]
     public async Task Replaying_Should_Move_The_Offset_To_The_Start_Of_The_Stream()
     {
         // arrange

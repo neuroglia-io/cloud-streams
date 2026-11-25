@@ -84,7 +84,24 @@ public class SubscriptionsController(IMediator mediator)
     }
 
     /// <summary>
-    /// Resumes the specified faulted subscription, by clearing its fault so that the cloud event that caused it is retried. To skip that event instead, change the subscription's offset
+    /// Suspends the specified subscription: nothing is delivered, and its offset is kept, until it is resumed
+    /// </summary>
+    /// <param name="name">The name of the subscription to suspend</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is the suspended subscription</returns>
+    /// <remarks>Requires the operator role, which, unlike the admin role, does not allow patching the subscription (see #214)</remarks>
+    [HttpPost("{name}/suspend")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> SuspendSubscription(string name, CancellationToken cancellationToken = default)
+    {
+        return this.Process(await this.Mediator.ExecuteAsync(new SuspendSubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Resumes the specified suspended or faulted subscription. A faulted subscription has its fault cleared, so that the cloud event that caused it is retried: to skip that event
+    /// instead, change the subscription's offset
     /// </summary>
     /// <param name="name">The name of the subscription to resume</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
