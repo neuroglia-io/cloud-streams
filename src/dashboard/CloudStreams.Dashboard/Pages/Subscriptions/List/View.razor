@@ -52,7 +52,7 @@
                         var streamLength = subscriptionLengths.Keys.Contains(resource.GetName()) ? subscriptionLengths[resource.GetName()] : (ulong)0;
                     }
                     <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer @(IsBehind(resource, streamLength) ? "warning-row" : "")">
-                        <td>@resource.Metadata.Name</td>
+                        <td><a href="@($"subscriptions/{Uri.EscapeDataString(resource.GetName())}")" @onclick:stopPropagation="true" title="Open the details page of the subscription">@resource.Metadata.Name</a></td>
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">
                             @switch (resource.Status?.Phase)
@@ -180,6 +180,7 @@
 {
     <Button Outline="true" Color="ButtonColor.Primary" @onclick="async _ => await OnShowResourceEditorAsync()" aria-label="Create a subscription" title="Create a subscription"><Icon Name="IconName.Plus" /></Button>
 }
+<a class="btn btn-outline-secondary ms-1" href="playground" title="Try a filter and a mutation against recent or sample events"><i class="bi bi-funnel" aria-hidden="true"></i> Playground</a>
 
 <Offcanvas @ref="DetailsOffCanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" BodyCssClass="d-flex flex-column" />
 
@@ -250,7 +251,7 @@
         var confirmed = await Dialog.ShowAsync(
             title: $"Resume subscription '{subscription.Metadata.Name}'?",
             message1: fault == null ? "The subscription is suspended: delivery resumes where it stopped." : $"The subscription is {(subscription.Spec.Suspended ? "suspended and " : "")}faulted: {fault.Detail ?? fault.Title}",
-            message2: fault == null ? null : "Resuming clears the fault and retries the event that caused it. To skip that event instead, edit the subscription's 'spec.stream.offset'.",
+            message2: fault == null ? null : "Resuming clears the fault and retries the event that caused it. To skip that event instead, open the subscription and skip it.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true });
         if (!confirmed) return;
         try

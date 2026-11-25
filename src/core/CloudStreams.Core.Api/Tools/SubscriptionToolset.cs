@@ -115,6 +115,20 @@ public class SubscriptionToolset(IMediator mediator, IAuthorizationService autho
     }
 
     /// <summary>
+    /// Skips the cloud event that faulted the specified subscription
+    /// </summary>
+    /// <param name="name">The name of the faulted subscription</param>
+    /// <param name="offset">The offset of the cloud event to skip, which must be the subscription's faulted offset</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The subscription, moved past the skipped cloud event</returns>
+    [McpServerTool(Name = "SkipSubscriptionEvent"), Description("Skips the event that faulted the specified subscription, which is never delivered: delivery resumes with the next event. The offset must be the subscription's 'status.stream.faultedOffset'. Requires the operator role")]
+    public virtual async Task<Subscription> SkipSubscriptionEventAsync([Description("The name of the faulted subscription")] string name, [Description("The offset of the event to skip, as found in the subscription's 'status.stream.faultedOffset'")] ulong offset, CancellationToken cancellationToken = default)
+    {
+        await this.AuthorizeAsync(CloudStreamsAuthenticationDefaults.OperatePolicy).ConfigureAwait(false);
+        return Unwrap(await mediator.ExecuteAsync(new SkipSubscriptionEventCommand(name, offset), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Ensures that the calling user satisfies the specified policy
     /// </summary>
     /// <param name="policy">The name of the policy to satisfy</param>

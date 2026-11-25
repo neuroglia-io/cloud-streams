@@ -37,6 +37,31 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
     public virtual Task<Subscription> ReplayAsync(string name, DateTimeOffset? from = null, CancellationToken cancellationToken = default) => this.PostAsync(name, from.HasValue ? $"replay?from={Uri.EscapeDataString(from.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : "replay", cancellationToken);
 
     /// <inheritdoc/>
+    public virtual Task<Subscription> SkipAsync(string name, ulong offset, CancellationToken cancellationToken = default) => this.PostAsync(name, $"skip?offset={offset}", cancellationToken);
+
+    /// <inheritdoc/>
+    public virtual async Task<IReadOnlyList<SubscriptionHealth>> GetHealthAsync(IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    {
+        var selectors = labelSelectors?.ToList();
+        var uri = selectors?.Count > 0 ? $"{this.Path}/health?labelSelector={Uri.EscapeDataString(string.Join(',', selectors))}" : $"{this.Path}/health";
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<List<SubscriptionHealth>>(json) ?? [];
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<SubscriptionTestResult> TestAsync(SubscriptionTestRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using var content = new StringContent(this.Serializer.SerializeToText(request), System.Text.Encoding.UTF8, "application/json");
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.Path}/test") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<SubscriptionTestResult>(json)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<IReadOnlyList<DeadLetter>> GetDeadLettersAsync(string name, long? offset = null, ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));

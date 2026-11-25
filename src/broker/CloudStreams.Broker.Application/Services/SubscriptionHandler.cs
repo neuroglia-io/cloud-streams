@@ -507,7 +507,7 @@ public class SubscriptionHandler
             // subscription before the flag is set would be delivered both live and by the catch-up
             if (offset != StreamPosition.EndOfStream && (ulong)offset < (this.StreamOffset ?? 0)) lock (this._syncLock) this.SubscriptionOutOfSync = true;
             // every record is observed, so that the length of the stream is accurate: records are filtered once, when dispatched (see #162)
-            var subscriptionHandle = observedStream.ToAsyncEnumerable().ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: this.OnSubscriptionErrorAsync, null);
+            var subscriptionHandle = observedStream.ToAsyncEnumerable().ToObservable().SubscribeAsync(this.OnCloudEventAsync, onErrorAsync: ex => this.OnSubscriptionErrorAsync(ex), null);
             var shouldCatchUp = false;
             await this.InitLock.WaitAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
             try
@@ -841,7 +841,7 @@ public class SubscriptionHandler
                 this.Logger.LogWarning("Dropped the cloud event at offset '{offset}' of subscription '{subscription}', which does not track a stream offset: {reason}", offset, this.Subscription.GetQualifiedName(), failure.Message);
                 this.SubscriptionOutOfSync = false;
             }
-            else await this.OnSubscriptionErrorAsync(failure).ConfigureAwait(false);
+            else await this.OnSubscriptionErrorAsync(failure, offset).ConfigureAwait(false);
             return false;
         }
     }
@@ -1441,7 +1441,7 @@ public class SubscriptionHandler
                 await this.CatchUpAsync(null).ConfigureAwait(false);
                 return;
             }
-            if (neverAcknowledged) await this.OnSubscriptionErrorAsync(new TimeoutException(reason)).ConfigureAwait(false);
+            if (neverAcknowledged) await this.OnSubscriptionErrorAsync(new TimeoutException(reason), offset).ConfigureAwait(false);
             else await this.CatchUpAsync((long)offset).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or TaskCanceledException || (ex is RpcException rpcException && rpcException.StatusCode == StatusCode.Cancelled)) { }
@@ -1709,6 +1709,7 @@ public class SubscriptionHandler
                     resource.Status ??= new();
                     resource.Status.Stream ??= new();
                     resource.Status.Stream.Fault = null;
+                    resource.Status.Stream.FaultedOffset = null;
                 }).ConfigureAwait(false);
                 return;
             }
@@ -1720,6 +1721,7 @@ public class SubscriptionHandler
                     resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
                     resource.Status.Stream ??= new();
                     resource.Status.Stream.Fault = null;
+                    resource.Status.Stream.FaultedOffset = null;
                 }).ConfigureAwait(false);
                 return;
             }
@@ -1890,12 +1892,13 @@ public class SubscriptionHandler
     /// Handles the specified unhandled <see cref="Exception"/>s that has been thrown during the streaming of filtered <see cref="CloudEvent"/>s
     /// </summary>
     /// <param name="ex">The unhandled <see cref="Exception"/> to handle</param>
+    /// <param name="offset">The offset of the cloud event that could not be delivered, if the fault is caused by one, which is recorded so that it can be skipped (see #224)</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     /// <remarks>
     /// Recording the fault is retried with backoff, and abandoned when the subscription no longer exists. This method never throws, since most of its callers are
     /// fire-and-forget tasks or reactive callbacks, where an exception would go unobserved (see #159)
     /// </remarks>
-    protected virtual async Task OnSubscriptionErrorAsync(Exception ex)
+    protected virtual async Task OnSubscriptionErrorAsync(Exception ex, ulong? offset = null)
     {
         if (this._disposed) return;
         // a canceled stream is the consequence of stopping it, for example to fault the subscription, not a fault of its own: recording it would replace the actual fault
@@ -1922,7 +1925,9 @@ public class SubscriptionHandler
                     resource.Status ??= new() { ObservedGeneration = this.Subscription.Metadata.Generation };
                     resource.Status.Stream ??= new();
                     // the first fault is the one that explains why the subscription stopped: the errors it causes in turn must not replace it. Resuming clears it
-                    resource.Status.Stream.Fault ??= fault;
+                    if (resource.Status.Stream.Fault != null) return;
+                    resource.Status.Stream.Fault = fault;
+                    resource.Status.Stream.FaultedOffset = offset;
                 }).ConfigureAwait(false);
                 return;
             }

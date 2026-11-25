@@ -73,12 +73,88 @@ public class OperateSubscriptionCommandTests
 
     }
 
-    static Subscription CreateSubscription(long? offset, bool faulted = false) => new()
+    static Subscription CreateSubscription(long? offset, bool faulted = false, ulong? faultedOffset = null) => new()
     {
         Metadata = new() { Name = "orders", Generation = 1 },
         Spec = new() { Subscriber = new() { Uri = new("http://localhost:8888/events") }, Stream = offset.HasValue ? new() { Offset = offset } : null },
-        Status = new() { Stream = faulted ? new() { AckedOffset = 3, Fault = new(new("https://cloud-streams.io/problems/test"), "Boom", 500) } : null }
+        Status = new() { Stream = faulted ? new() { AckedOffset = 3, Fault = new(new("https://cloud-streams.io/problems/test"), "Boom", 500), FaultedOffset = faultedOffset } : null }
     };
+
+    [Fact]
+    public async Task Resuming_Should_Clear_The_Faulted_Offset_With_The_Fault()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(0, faulted: true, faultedOffset: 5));
+
+        // act
+        var result = await new ResumeSubscriptionCommandHandler(store.Repository).HandleAsync(new ResumeSubscriptionCommand("orders"));
+
+        // assert
+        Assert.Equal(200, result.Status);
+        Assert.Equal(["/status/stream/fault", "/status/stream/faultedOffset"], Assert.Single(store.StatusPatches).Operations.Select(o => o.Path.ToString()));
+        Assert.Null(store.Current.Status!.Stream!.Fault);
+        Assert.Null(store.Current.Status.Stream.FaultedOffset);
+    }
+
+    [Fact]
+    public async Task Skipping_Should_Move_The_Offset_Past_The_Faulted_Event()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(0, faulted: true, faultedOffset: 5));
+
+        // act
+        var result = await new SkipSubscriptionEventCommandHandler(store.Repository).HandleAsync(new SkipSubscriptionEventCommand("orders", 5));
+
+        // assert - the broker clears the fault when the offset changes
+        Assert.Equal(200, result.Status);
+        Assert.Equal([6L], store.Offsets);
+        Assert.Empty(store.StatusPatches);
+    }
+
+    [Fact]
+    public async Task Skipping_To_The_Current_Offset_Should_Change_It_Twice()
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(6, faulted: true, faultedOffset: 5));
+
+        // act
+        var result = await new SkipSubscriptionEventCommandHandler(store.Repository).HandleAsync(new SkipSubscriptionEventCommand("orders", 5));
+
+        // assert - the broker only reacts to changes of the offset
+        Assert.Equal(200, result.Status);
+        Assert.Equal([StreamPosition.EndOfStream, 6L], store.Offsets);
+    }
+
+    [Theory]
+    [InlineData(false, null, 5ul)]
+    [InlineData(true, null, 5ul)]
+    [InlineData(true, 7ul, 5ul)]
+    public async Task Skipping_Should_Be_Refused_Unless_The_Event_Faulted_The_Subscription(bool faulted, ulong? faultedOffset, ulong offset)
+    {
+        // arrange
+        var store = new SubscriptionStore(CreateSubscription(0, faulted, faultedOffset));
+
+        // act
+        var result = await new SkipSubscriptionEventCommandHandler(store.Repository).HandleAsync(new SkipSubscriptionEventCommand("orders", offset));
+
+        // assert
+        Assert.Equal(409, result.Status);
+        Assert.Empty(store.SpecPatches);
+    }
+
+    [Fact]
+    public async Task Skipping_For_A_Missing_Subscription_Should_Return_Not_Found()
+    {
+        // arrange
+        var repository = Substitute.For<IResourceRepository>();
+        repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IResource?>(null));
+
+        // act
+        var result = await new SkipSubscriptionEventCommandHandler(repository).HandleAsync(new SkipSubscriptionEventCommand("missing", 5));
+
+        // assert
+        Assert.Equal(404, result.Status);
+    }
 
     [Fact]
     public async Task Resuming_Should_Clear_The_Fault_Only()

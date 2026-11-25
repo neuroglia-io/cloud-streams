@@ -1,0 +1,194 @@
+@namespace CloudStreams.Dashboard.Pages.Partitions
+@page "/partitions"
+@inject ICloudStreamsCoreApiClient Api
+@inject NavigationManager Navigation
+
+@* Lists the partitions of each type, with search and paging, their size and last activity, and links to their events (see #226) *@
+
+<ApplicationTitle>Partitions</ApplicationTitle>
+
+<div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+    <div role="tablist" aria-label="Partition types" class="nav nav-pills small">
+        @foreach (var type in Types)
+        {
+            <button type="button" role="tab" class="nav-link @(type == partitionType ? "active" : "")" aria-selected="@(type == partitionType ? "true" : "false")" @onclick="() => SelectTypeAsync(type)">@TypeTitle(type)</button>
+        }
+    </div>
+    <form class="ms-auto d-flex gap-2" role="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+        <label for="partition-prefix" class="visually-hidden">Partition id starts with</label>
+        <input id="partition-prefix" type="search" class="form-control form-control-sm" placeholder="Id starts with..." @bind="prefix" />
+        <button type="submit" class="btn btn-sm btn-outline-primary">Search</button>
+    </form>
+</div>
+
+<div aria-live="polite">
+    @if (error != null)
+    {
+        <div class="alert alert-danger small" role="alert">@error</div>
+    }
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <caption class="visually-hidden">@TypeTitle(partitionType) partitions, page @(pageTokens.Count + 1). Select a partition to see its events.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Id</th>
+                <th scope="col" class="text-end">Events</th>
+                <th scope="col">First event</th>
+                <th scope="col">Last activity</th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (loading)
+            {
+                <tr><td colspan="5"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>
+            }
+            else if (page == null || page.Items.Count == 0)
+            {
+                <tr><td colspan="5" class="text-secondary">@(string.IsNullOrEmpty(prefix) ? "There is no partition of this type yet." : $"No partition id starts with '{prefix}'.")</td></tr>
+            }
+            else
+            {
+                @foreach (var partition in page.Items)
+                {
+                    var projected = partition.FirstEvent != default;
+                    <tr>
+                        <td class="text-break"><a href="@EventsUri(partition)">@partition.Id</a></td>
+                        <td class="text-end">@(projected ? partition.Length.ToString("N0") : "")</td>
+                        <td class="text-nowrap">@(projected ? partition.FirstEvent.LocalDateTime.ToString("g") : "")</td>
+                        <td class="text-nowrap">
+                            @if (projected)
+                            {
+                                <span title="@partition.LastEvent.LocalDateTime.ToString("G")">@Ago(partition.LastEvent)</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">not projected yet</span>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="@EventsUri(partition)" aria-label="@($"Events of the partition '{partition.Id}'")"><i class="bi bi-list-ul" aria-hidden="true"></i> Events</a>
+                            @if (partitionType is CloudEventPartitionType.BySource or CloudEventPartitionType.ByType)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary ms-1" href="@LiveUri(partition)" aria-label="@($"Watch the events of the partition '{partition.Id}' live")"><i class="bi bi-broadcast" aria-hidden="true"></i> Live</a>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<nav aria-label="Pages of partitions" class="d-flex gap-2 align-items-center">
+    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(pageTokens.Count == 0 || loading)" @onclick="PreviousAsync"><i class="bi bi-chevron-left" aria-hidden="true"></i> Previous</button>
+    <span class="small text-secondary">Page @(pageTokens.Count + 1)</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@(page?.ContinuationToken == null || loading)" @onclick="NextAsync">Next <i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+</nav>
+
+@code {
+
+    static readonly CloudEventPartitionType[] Types = [CloudEventPartitionType.BySource, CloudEventPartitionType.ByType, CloudEventPartitionType.BySubject, CloudEventPartitionType.ByCorrelationId, CloudEventPartitionType.ByCausationId];
+
+    const int PageSize = 25;
+
+    CloudEventPartitionType partitionType = CloudEventPartitionType.BySource;
+    string? prefix;
+    PartitionMetadataCollection? page;
+    string? currentToken;
+    /// <summary>
+    /// The tokens of the pages before the current one, used to go back, since continuation tokens only go forwards
+    /// </summary>
+    readonly Stack<string?> pageTokens = new();
+    bool loading;
+    string? error;
+
+    /// <summary>
+    /// Gets/sets the type of the partitions to list, from the query string
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeQuery { get; set; }
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        if (Enum.TryParse<CloudEventPartitionType>(TypeQuery, true, out var type) && Types.Contains(type)) partitionType = type;
+        await LoadAsync(null);
+    }
+
+    async Task SelectTypeAsync(CloudEventPartitionType type)
+    {
+        partitionType = type;
+        pageTokens.Clear();
+        Navigation.NavigateTo($"partitions?type={type}", replace: true);
+        await LoadAsync(null);
+    }
+
+    async Task SearchAsync()
+    {
+        pageTokens.Clear();
+        await LoadAsync(null);
+    }
+
+    async Task NextAsync()
+    {
+        if (page?.ContinuationToken == null) return;
+        pageTokens.Push(currentToken);
+        await LoadAsync(page.ContinuationToken);
+    }
+
+    async Task PreviousAsync()
+    {
+        if (pageTokens.Count == 0) return;
+        await LoadAsync(pageTokens.Pop());
+    }
+
+    async Task LoadAsync(string? token)
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            page = await Api.CloudEvents.Partitions.ListPartitionMetadataByTypeAsync(partitionType, string.IsNullOrWhiteSpace(prefix) ? null : prefix.Trim(), PageSize, token);
+            currentToken = token;
+        }
+        catch (Exception ex)
+        {
+            page = null;
+            error = $"Failed to list the partitions: {(ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message)}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    string EventsUri(PartitionMetadata partition) => $"events?partitionType={partitionType}&partitionId={Uri.EscapeDataString(partition.Id)}";
+
+    string LiveUri(PartitionMetadata partition) => partitionType == CloudEventPartitionType.BySource ? $"events/live?source={Uri.EscapeDataString(partition.Id)}" : $"events/live?type={Uri.EscapeDataString(partition.Id)}";
+
+    static string TypeTitle(CloudEventPartitionType type) => type switch
+    {
+        CloudEventPartitionType.BySource => "Sources",
+        CloudEventPartitionType.ByType => "Types",
+        CloudEventPartitionType.BySubject => "Subjects",
+        CloudEventPartitionType.ByCorrelationId => "Correlations",
+        CloudEventPartitionType.ByCausationId => "Causations",
+        _ => type.ToString()
+    };
+
+    /// <summary>
+    /// Describes how long ago the specified time is, in the largest unit that fits
+    /// </summary>
+    internal static string Ago(DateTimeOffset time)
+    {
+        var elapsed = DateTimeOffset.Now - time;
+        if (elapsed < TimeSpan.FromMinutes(1)) return "just now";
+        if (elapsed < TimeSpan.FromHours(1)) return $"{(int)elapsed.TotalMinutes} min ago";
+        if (elapsed < TimeSpan.FromDays(1)) return $"{(int)elapsed.TotalHours} h ago";
+        if (elapsed < TimeSpan.FromDays(60)) return $"{(int)elapsed.TotalDays} days ago";
+        return time.LocalDateTime.ToString("d");
+    }
+
+}

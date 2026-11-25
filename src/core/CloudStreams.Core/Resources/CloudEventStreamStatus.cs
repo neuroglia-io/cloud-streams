@@ -32,4 +32,10 @@ public record CloudEventStreamStatus
     [DataMember(Order = 2, Name = "fault"), JsonPropertyName("fault"), YamlMember(Alias = "fault")]
     public virtual ProblemDetails? Fault { get; set; }
 
+    /// <summary>
+    /// Gets/sets the offset of the cloud event whose delivery caused the <see cref="Fault"/>, if it is known. Setting the subscription's offset to the next one skips it (see #224)
+    /// </summary>
+    [DataMember(Order = 3, Name = "faultedOffset"), JsonPropertyName("faultedOffset"), YamlMember(Alias = "faultedOffset")]
+    public virtual ulong? FaultedOffset { get; set; }
+
 }

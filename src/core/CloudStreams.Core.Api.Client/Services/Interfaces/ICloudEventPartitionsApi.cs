@@ -41,4 +41,15 @@ public interface ICloudEventPartitionsApi
     /// <returns>A new <see cref="PartitionIdCollection"/> containing the requested page of partition ids</returns>
     Task<PartitionIdCollection> ListPartitionsByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists, page by page, the partitions of the specified type with their metadata, sorted like their ids
+    /// </summary>
+    /// <param name="type">The type of the partitions to list</param>
+    /// <param name="prefix">The prefix, matched case-insensitively, the ids of the partitions to list must start with, if any</param>
+    /// <param name="maxResults">The maximum amount of partitions to return, between 1 and 100. Defaults to 25</param>
+    /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="PartitionMetadataCollection"/> containing the requested page of partitions</returns>
+    Task<PartitionMetadataCollection> ListPartitionMetadataByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default);
+
 }

@@ -46,6 +46,31 @@ public interface ISubscriptionManagementApi
     Task<Subscription> ReplayAsync(string name, DateTimeOffset? from = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Skips the cloud event that faulted the specified <see cref="Subscription"/>: delivery resumes with the cloud event that follows it
+    /// </summary>
+    /// <param name="name">The name of the <see cref="Subscription"/> to skip the faulted cloud event of</param>
+    /// <param name="offset">The offset of the cloud event to skip, which must be the subscription's <see cref="CloudEventStreamStatus.FaultedOffset"/></param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The <see cref="Subscription"/>, moved past the skipped cloud event</returns>
+    Task<Subscription> SkipAsync(string name, ulong offset, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Describes the health of the <see cref="Subscription"/>s, including their lag
+    /// </summary>
+    /// <param name="labelSelectors">The label selectors the subscriptions to describe must match, if any</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The health of each matching <see cref="Subscription"/></returns>
+    Task<IReadOnlyList<SubscriptionHealth>> GetHealthAsync(IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs a filter and a mutation against sample cloud events, or against the most recent cloud events of the stream or of a partition, without delivering anything
+    /// </summary>
+    /// <param name="request">An object that describes the test to run</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>An object that describes, for each cloud event, whether it matched and what the subscriber would receive</returns>
+    Task<SubscriptionTestResult> TestAsync(SubscriptionTestRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the cloud events the specified <see cref="Subscription"/> failed to deliver, and has stored in its dead-letter stream, most recent first
     /// </summary>
     /// <param name="name">The name of the <see cref="Subscription"/> to get the dead letters of</param>

@@ -36,4 +36,14 @@ public interface ICloudEventStreamApi
     /// <returns>A new <see cref="StreamMetadata"/> used to describe the gateway's <see cref="CloudEvent"/> stream</returns>
     Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Describes the recent activity of the gateway's <see cref="CloudEvent"/> stream
+    /// </summary>
+    /// <param name="period">The period, ending now, to describe. Defaults to 24 hours</param>
+    /// <param name="buckets">The amount of consecutive slices to split the period into. Defaults to 24</param>
+    /// <param name="sampleSize">The amount of most recent cloud events to compute the most active sources and types from. Defaults to 500</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="StreamActivity"/> that describes the recent activity of the stream</returns>
+    Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, CancellationToken cancellationToken = default);
+
 }

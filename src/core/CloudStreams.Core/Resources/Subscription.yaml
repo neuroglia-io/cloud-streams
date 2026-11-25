@@ -263,6 +263,8 @@ spec:
                         - type
                         - title
                         - status
+                    faultedOffset:
+                      type: number
                 subscriber:
                   type: object
                   properties:
