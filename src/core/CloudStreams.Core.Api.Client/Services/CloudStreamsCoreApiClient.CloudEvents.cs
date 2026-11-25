@@ -57,6 +57,39 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
+    public virtual async Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var query = new List<string>();
+        void Add(string name, object? value) { if (value != null && value.ToString() is { Length: > 0 } text) query.Add($"{name}={Uri.EscapeDataString(text)}"); }
+        Add("partitionType", options.PartitionType.HasValue ? EnumHelper.Stringify(options.PartitionType.Value) : null);
+        Add("partitionId", options.PartitionId);
+        Add("offset", options.Offset);
+        Add("from", options.From?.ToString("O", CultureInfo.InvariantCulture));
+        Add("to", options.To?.ToString("O", CultureInfo.InvariantCulture));
+        Add("id", options.Id);
+        Add("expression", options.Expression);
+        Add("maxResults", options.MaxResults);
+        Add("maxScanned", options.MaxScanned);
+        foreach (var (name, pattern) in options.Attributes ?? []) Add($"attributes[{Uri.EscapeDataString(name)}]", pattern);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventsApiPath}search{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}"), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<CloudEventSearchResult>(json)!;
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<CloudEventPublication> PublishAsync(CloudEvent e, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        using var content = new StringContent(this.Serializer.SerializeToText(e), System.Text.Encoding.UTF8, "application/json");
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{CloudEventsApiPath}publish") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<CloudEventPublication>(json)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
     {
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, CloudEventStreamApiPath), cancellationToken).ConfigureAwait(false);

@@ -39,3 +39,30 @@ export async function visitUrls(urls) {
     }
     wHandle.close();
 }
+/**
+ * Copies the specified text to the clipboard
+ * @param {string} text The text to copy
+ * @returns
+ */
+export async function copyToClipboard(text) {
+    await navigator.clipboard.writeText(text);
+}
+
+/**
+ * Downloads the specified content as a file
+ * @param {string} fileName The name of the file to download
+ * @param {string} contentType The media type of the file
+ * @param {string} base64 The content of the file, encoded in base64
+ * @returns
+ */
+export function downloadFile(fileName, contentType, base64) {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: contentType || 'application/octet-stream' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+}

@@ -51,6 +51,30 @@ public class CommonJsInterop(IJSRuntime jsRuntime)
         await module.InvokeVoidAsync("visitUrls", urls);
     }
 
+    /// <summary>
+    /// Copies the specified text to the clipboard
+    /// </summary>
+    /// <param name="text">The text to copy</param>
+    /// <returns>A <see cref="ValueTask"/></returns>
+    public async ValueTask CopyToClipboardAsync(string text)
+    {
+        var module = await moduleTask.Value;
+        await module.InvokeVoidAsync("copyToClipboard", text);
+    }
+
+    /// <summary>
+    /// Downloads the specified content as a file
+    /// </summary>
+    /// <param name="fileName">The name of the file to download</param>
+    /// <param name="contentType">The media type of the file</param>
+    /// <param name="content">The content of the file</param>
+    /// <returns>A <see cref="ValueTask"/></returns>
+    public async ValueTask DownloadFileAsync(string fileName, string contentType, byte[] content)
+    {
+        var module = await moduleTask.Value;
+        await module.InvokeVoidAsync("downloadFile", fileName, contentType, Convert.ToBase64String(content));
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using CloudStreams.Broker.Application.Services.Delivery;
+using CloudStreams.Core.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Neuroglia.Data.Expressions.JQ;
 using Neuroglia.Data.Expressions.Services;

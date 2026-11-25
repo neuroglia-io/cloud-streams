@@ -31,4 +31,20 @@ public interface ICloudEventsApi
     /// </summary>
     ICloudEventStreamApi Stream { get; }
 
+    /// <summary>
+    /// Searches the cloud event stream, or a partition
+    /// </summary>
+    /// <param name="options">The options of the search</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>The records found, and the offset to continue the search from</returns>
+    Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Publishes the specified cloud event, as the calling user, through the gateway's admission pipeline
+    /// </summary>
+    /// <param name="e">The cloud event to publish</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>An object that describes what became of the cloud event</returns>
+    Task<CloudEventPublication> PublishAsync(CloudEvent e, CancellationToken cancellationToken = default);
+
 }

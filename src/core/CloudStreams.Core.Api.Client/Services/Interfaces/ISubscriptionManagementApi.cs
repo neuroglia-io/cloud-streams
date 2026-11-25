@@ -64,4 +64,13 @@ public interface ISubscriptionManagementApi
     /// <returns>An object that describes the redelivery</returns>
     Task<DeadLetterRedelivery> RedeliverDeadLetterAsync(string name, ulong offset, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Delivers the specified recorded cloud event to the subscriber of the specified <see cref="Subscription"/> again, once
+    /// </summary>
+    /// <param name="name">The name of the <see cref="Subscription"/> to redeliver the cloud event to</param>
+    /// <param name="request">An object that describes the cloud event to redeliver</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>An object that describes the redelivery</returns>
+    Task<CloudEventRedelivery> RedeliverAsync(string name, CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default);
+
 }

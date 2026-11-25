@@ -1,0 +1,192 @@
+@namespace CloudStreams.Dashboard.Pages.CloudEvents.Live
+@page "/events/live"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Neuroglia.Serialization
+@implements IAsyncDisposable
+@inject NavigationManager Navigation
+@inject IJsonSerializer Serializer
+
+<ApplicationTitle>Live events</ApplicationTitle>
+
+<form class="row g-2 align-items-end mb-3" @onsubmit="ApplyFilterAsync" @onsubmit:preventDefault>
+    <div class="col-md-4">
+        <label class="form-label small" for="live-source">Source</label>
+        <input id="live-source" class="form-control form-control-sm" placeholder="Any source" @bind="source" />
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small" for="live-type">Type</label>
+        <input id="live-type" class="form-control form-control-sm" placeholder="Any type" @bind="type" />
+    </div>
+    <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary"><Icon Name="IconName.Funnel" /> Filter</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="TogglePause">
+            @if (paused)
+            {
+                <Icon Name="IconName.PlayFill" /> <span>Resume</span>
+            }
+            else
+            {
+                <Icon Name="IconName.PauseFill" /> <span>Pause</span>
+            }
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Clear"><Icon Name="IconName.Trash" /> Clear</button>
+    </div>
+</form>
+
+<div class="d-flex justify-content-between small text-secondary mb-2" role="status">
+    <span>
+        @switch (connection?.State)
+        {
+            case HubConnectionState.Connected:
+                <span class="badge text-bg-success me-2">Live</span>
+                break;
+            case HubConnectionState.Connecting or HubConnectionState.Reconnecting:
+                <span class="badge text-bg-warning me-2">Connecting…</span>
+                break;
+            default:
+                <span class="badge text-bg-danger me-2">Disconnected</span>
+                break;
+        }
+        @(appliedFilter)
+    </span>
+    <span>
+        @events.Count of the last @MaxEvents events@(paused && missed > 0 ? $", {missed} received while paused" : string.Empty)
+    </span>
+</div>
+@if (error != null)
+{
+    <Callout Type="CalloutType.Danger">@error</Callout>
+}
+
+<div class="table-container">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th class="sticky-header">Received</th>
+                <th class="sticky-header">Id</th>
+                <th class="sticky-header">Source</th>
+                <th class="sticky-header">Type</th>
+                <th class="sticky-header">Subject</th>
+                <th class="sticky-header">Content Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (events.Count == 0)
+            {
+                <tr><td colspan="6" class="text-secondary">Waiting for cloud events…</td></tr>
+            }
+            @foreach (var (received, e) in events)
+            {
+                <tr class="cursor-pointer" @onclick="() => ShowDetailsAsync(e)">
+                    <td>@received.LocalDateTime.ToString("HH:mm:ss.fff")</td>
+                    <td>@e.Id</td>
+                    <td>@e.Source</td>
+                    <td>@e.Type</td>
+                    <td>@e.Subject</td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(e.DataContentType))
+                        {
+                            <span class="badge rounded-pill text-bg-primary bg-primary-subtle">@e.DataContentType</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<Offcanvas @ref="offcanvas" Size="OffcanvasSize.Large" UseStaticBackdrop="false" />
+
+@code {
+
+    /// <summary>
+    /// Gets the maximum amount of cloud events the page keeps, the oldest being dropped first
+    /// </summary>
+    public const int MaxEvents = 500;
+
+    CloudEventHubConnection? connection;
+    readonly LinkedList<(DateTimeOffset Received, CloudEvent Event)> events = new();
+    string? source;
+    string? type;
+    string appliedFilter = "All cloud events";
+    bool paused;
+    int missed;
+    string? error;
+    Offcanvas? offcanvas;
+
+    /// <summary>
+    /// Gets/sets the source to filter cloud events by initially, if any
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "source")] public string? SourceQuery { get; set; }
+
+    /// <summary>
+    /// Gets/sets the type to filter cloud events by initially, if any
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeQuery { get; set; }
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        this.source = this.SourceQuery;
+        this.type = this.TypeQuery;
+        this.connection = new CloudEventHubConnection(this.Navigation.BaseUri, this.Serializer);
+        this.connection.Received += this.OnReceived;
+        this.connection.StateChanged += () => this.InvokeAsync(this.StateHasChanged);
+        try
+        {
+            await this.connection.StartAsync();
+            await this.ApplyFilterAsync();
+        }
+        catch (Exception ex) { this.error = $"Failed to connect to the gateway: {ex.Message}"; }
+    }
+
+    void OnReceived(CloudEvent e)
+    {
+        if (this.paused)
+        {
+            this.missed++;
+            this.InvokeAsync(this.StateHasChanged);
+            return;
+        }
+        this.events.AddFirst((DateTimeOffset.Now, e));
+        while (this.events.Count > MaxEvents) this.events.RemoveLast();
+        this.InvokeAsync(this.StateHasChanged);
+    }
+
+    async Task ApplyFilterAsync()
+    {
+        if (this.connection == null) return;
+        this.error = null;
+        try
+        {
+            await this.connection.SubscribeAsync(this.source, this.type);
+            this.events.Clear();
+            this.missed = 0;
+            this.appliedFilter = (string.IsNullOrWhiteSpace(this.source), string.IsNullOrWhiteSpace(this.type)) switch
+            {
+                (true, true) => "All cloud events",
+                (false, true) => $"Source: {this.source}",
+                (true, false) => $"Type: {this.type}",
+                _ => $"Source: {this.source}, type: {this.type}"
+            };
+        }
+        catch (Exception ex) { this.error = $"Failed to apply the filter: {ex.Message}"; }
+    }
+
+    void TogglePause()
+    {
+        this.paused = !this.paused;
+        if (!this.paused) this.missed = 0;
+    }
+
+    void Clear() => this.events.Clear();
+
+    Task ShowDetailsAsync(CloudEvent e) => this.offcanvas?.ShowAsync<CloudEventDetails>(title: "Cloud Event Details", parameters: new Dictionary<string, object>() { ["ReadOnly"] = true, ["CloudEvent"] = e }) ?? Task.CompletedTask;
+
+    /// <inheritdoc/>
+    public async ValueTask DisposeAsync()
+    {
+        if (this.connection != null) await this.connection.DisposeAsync();
+    }
+
+}

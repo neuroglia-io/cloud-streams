@@ -107,6 +107,7 @@
 @code {
 
     List<CloudEvent> events = new();
+    StreamReadOptions? readOptions;
     Offcanvas? offcanvas;
     ReadOptionsForm? readOptionForm;
     AutoRefreshForm? autoRefreshForm;
@@ -123,6 +124,7 @@
         )
         .Throttle(TimeSpan.FromMilliseconds(300))
         .SubscribeAsync(async(_) => await this.RefreshList(), null!, null!, CancellationTokenSource.Token);
+        this.Store.ReadOptions.Subscribe(options => this.readOptions = options, CancellationTokenSource.Token);
         //Store.Loading.Subscribe(_ => OnStateChanged(), CancellationTokenSource.Token);
     }
 
@@ -158,6 +160,12 @@
         var parameters = new Dictionary<string, object>();
         parameters.Add("ReadOnly", true);
         parameters.Add("CloudEvent", cloudEvent);
+        // the sequence of a cloud event read from a partition is its offset in that partition, which is what redelivering it requires (see #222)
+        if (cloudEvent.TryGetSequence(out var offset))
+        {
+            parameters.Add("Offset", (ulong?)offset);
+            if (this.readOptions?.Partition != null) parameters.Add("Partition", this.readOptions.Partition);
+        }
         return this.offcanvas.ShowAsync<CloudEventDetails>(title: "Cloud Event Details", parameters: parameters);
     }
 

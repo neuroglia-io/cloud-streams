@@ -564,6 +564,18 @@ The broker patches a subscription's status against the latest version it knows o
 
 Partition ids are kept in an index in Redis, updated as events are ingested, so that listing and searching them never loads them all. Earlier versions listed them with EventStoreDB projections, whose state grows with every partition until it reaches EventStoreDB's maximum projection state size. On upgrade, the index is backfilled once from those projections, which are no longer used afterwards: the `cloud_events_partition_*` projections can then be stopped and deleted from EventStoreDB.
 
+### Working with events
+
+The dashboard's *Events* menu offers, besides the list and the timeline:
+
+- **Live**: the cloud events the gateway ingests, as they arrive, optionally filtered by source and/or type. The gateway's hub (`api/ws/events`) filters them: a client calls `Subscribe(source, type)`, with either left empty to match any, and only receives the matching events. Up to 500 events are kept on the page, and pausing it counts what it misses. `/events/live?source=…&type=…` opens it filtered.
+- **Search**: `GET /api/core/v1/cloud-events/search` reads the stream, or a partition (`partitionType` and `partitionId`), forwards from its start, from `from`, or from `offset`, and returns the records that match every criterion: `id`, `attributes[name]=regex` (for example `attributes[type]=order`), and `expression`, a jq condition on the record (for example `.data.total > 100`). Nothing is indexed: a search stops once it has found `maxResults` matches (20 by default, 100 at most), has read `maxScanned` records (10,000 at most), or has reached `to` or the end, and returns `nextOffset` to continue from, and the amount of records it `scanned`.
+- **Publish**: `POST /api/core/v1/cloud-events/publish` publishes a cloud event as the calling user, through the gateway's admission pipeline (validation, deduplication, rate limits and schema), and returns its `outcome` (`stored`, `duplicate` or `ignored`). It requires the operator role, and returns `501` on the standalone API, which has no gateway. The page starts from a blank event or from the latest event of a source and type.
+
+The details of an event show its data as indented JSON, as text, or, for binary data (`data_base64`), as a hexadecimal preview, and can copy the event or its data, and download the data as a file of its media type.
+
+`POST /api/resources/v1/subscriptions/{name}/redeliver`, with `{ "offset": 42 }` (an offset in the stream) or `{ "partition": { "type": "by-source", "id": "…" }, "offset": 3 }`, delivers a recorded event to the subscriber of a subscription once more, mutated as the subscription mutates events, without going through its filter or moving its offset. It requires the operator role, returns the subscriber's status, or `502` if the subscriber refused it, and is offered by the details of an event in the list and in search results.
+
 ### Monitoring
 
 Gateways, brokers and the API expose two health endpoints, suited to liveness and readiness probes:

@@ -1,0 +1,159 @@
+@namespace CloudStreams.Dashboard.Pages.CloudEvents.Publishing
+@page "/events/publish"
+@using Neuroglia.Serialization
+@inject ICloudStreamsCoreApiClient ApiClient
+@inject IMonacoEditorHelper MonacoEditorHelper
+@inject IJsonSerializer Serializer
+@inject UserAccess UserAccess
+
+<ApplicationTitle>Publish an event</ApplicationTitle>
+
+@if (canOperate == false)
+{
+    <Callout Type="CalloutType.Warning">Publishing cloud events requires the operator role.</Callout>
+}
+else
+{
+    <p class="text-secondary small">
+        Publishes a cloud event through the gateway, as you: it is validated, deduplicated, rate limited and checked against its registered schema like any other, which makes it a way to test subscriptions end to end.
+    </p>
+    <div class="row g-2 align-items-end mb-2">
+        <div class="col-md-8">
+            <label class="form-label small" for="publish-template">Start from</label>
+            <select id="publish-template" class="form-select form-select-sm" @onchange="OnTemplateSelectedAsync">
+                <option value="">A blank cloud event</option>
+                @for (var i = 0; i < templates.Count; i++)
+                {
+                    <option value="@i">The latest @templates[i].Type from @templates[i].Source</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4 d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Give the cloud event a new id and the current time" @onclick="RenewAsync"><Icon Name="IconName.ArrowClockwise" /> New id and time</button>
+            <button type="button" class="btn btn-sm btn-primary" disabled="@publishing" @onclick="PublishAsync"><Icon Name="IconName.Send" /> Publish</button>
+        </div>
+    </div>
+    <div class="publish-editor border mb-2" style="height: 60vh">
+        <StandaloneCodeEditor @ref="editor" ConstructionOptions="MonacoEditorHelper.GetStandaloneEditorConstructionOptions(initialValue, false, PreferredLanguage.JSON)" />
+    </div>
+    @if (result != null && succeeded)
+    {
+        <Callout Type="CalloutType.Success">@result</Callout>
+    }
+    else if (result != null)
+    {
+        <Callout Type="CalloutType.Danger">@result</Callout>
+    }
+}
+
+@code {
+
+    const int TemplateCount = 20;
+
+    bool? canOperate;
+    string initialValue = string.Empty;
+    StandaloneCodeEditor? editor;
+    List<CloudEvent> templates = [];
+    bool publishing;
+    string? result;
+    bool succeeded;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        this.canOperate = await this.UserAccess.CanOperateAsync();
+        if (this.canOperate != true) return;
+        this.initialValue = this.Serialize(Blank());
+        try
+        {
+            // the latest event of each source and type is offered as a template
+            var latest = await this.ApiClient.CloudEvents.Stream.ReadStreamAsync(new StreamReadOptions(StreamReadDirection.Backwards, length: 200));
+            await foreach (var e in latest)
+            {
+                if (e == null || this.templates.Any(t => t.Source == e.Source && t.Type == e.Type)) continue;
+                this.templates.Add(e);
+                if (this.templates.Count >= TemplateCount) break;
+            }
+        }
+        catch (Exception ex) { this.result = $"Failed to read the latest cloud events: {ex.Message}"; }
+    }
+
+    static CloudEvent Blank() => new()
+    {
+        SpecVersion = "1.0",
+        Id = Guid.NewGuid().ToString(),
+        Time = DateTimeOffset.Now,
+        Source = new Uri("https://example.com/my-source"),
+        Type = "com.example.something.happened",
+        DataContentType = "application/json",
+        Data = new Dictionary<string, object>()
+    };
+
+    string Serialize(CloudEvent e) => System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(this.Serializer.SerializeToText(e)), new System.Text.Json.JsonSerializerOptions() { WriteIndented = true });
+
+    async Task OnTemplateSelectedAsync(ChangeEventArgs args)
+    {
+        if (this.editor == null) return;
+        CloudEvent template;
+        if (int.TryParse(args.Value?.ToString(), out var index) && index >= 0 && index < this.templates.Count)
+        {
+            var e = this.templates[index];
+            // the template is a copy, with a new id and time, and without the attributes the gateway added
+            template = this.Serializer.Deserialize<CloudEvent>(this.Serializer.SerializeToText(e))!;
+            template.ExtensionAttributes?.Remove(CloudEventExtensionAttributes.Sequence);
+            template.Id = Guid.NewGuid().ToString();
+            template.Time = DateTimeOffset.Now;
+        }
+        else template = Blank();
+        await this.editor.SetValue(this.Serialize(template));
+        this.result = null;
+    }
+
+    async Task RenewAsync()
+    {
+        if (this.editor == null) return;
+        try
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(await this.editor.GetValue())!.AsObject();
+            node["id"] = Guid.NewGuid().ToString();
+            node["time"] = DateTimeOffset.Now.ToString("O");
+            await this.editor.SetValue(node.ToJsonString(new System.Text.Json.JsonSerializerOptions() { WriteIndented = true }));
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or NullReferenceException)
+        {
+            this.succeeded = false;
+            this.result = $"The cloud event is not a valid JSON object: {ex.Message}";
+        }
+    }
+
+    async Task PublishAsync()
+    {
+        if (this.editor == null) return;
+        this.publishing = true;
+        this.result = null;
+        try
+        {
+            CloudEvent? e;
+            try { e = this.Serializer.Deserialize<CloudEvent>(await this.editor.GetValue()); }
+            catch (Exception ex) { throw new FormatException($"The cloud event is not valid JSON: {ex.Message}", ex); }
+            if (e == null) throw new FormatException("The cloud event is empty");
+            var publication = await this.ApiClient.CloudEvents.PublishAsync(e);
+            this.succeeded = true;
+            this.result = publication.Outcome switch
+            {
+                CloudStreamsHeaders.Outcomes.Duplicate => $"The cloud event '{e.Id}' is a duplicate: it was accepted, but not stored again.",
+                CloudStreamsHeaders.Outcomes.Ignored => $"The cloud event '{e.Id}' was accepted, but ignored by the gateway's admission policy.",
+                _ => $"The cloud event '{e.Id}' has been published."
+            };
+        }
+        catch (Exception ex)
+        {
+            this.succeeded = false;
+            this.result = ex is Neuroglia.ProblemDetailsException problem
+                ? string.Join(" ", new[] { problem.Problem.Detail ?? problem.Problem.Title }.Concat(problem.Problem.Errors?.SelectMany(e => e.Value.Select(m => $"{e.Key}: {m}")) ?? []))
+                : ex.Message;
+        }
+        finally { this.publishing = false; }
+    }
+
+}
