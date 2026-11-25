@@ -113,6 +113,24 @@
     AutoRefreshForm? autoRefreshForm;
     Virtualize<CloudEvent>? virtualize;
 
+    /// <summary>
+    /// Gets/sets the type of the partition to read, from the query string, which is how other pages link to the events of a partition (see #226)
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "partitionType")] public string? PartitionTypeQuery { get; set; }
+
+    /// <summary>
+    /// Gets/sets the id of the partition to read, from the query string
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "partitionId")] public string? PartitionIdQuery { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnAfterRender(bool firstRender)
+    {
+        base.OnAfterRender(firstRender);
+        if (firstRender && this.readOptionForm != null && !string.IsNullOrWhiteSpace(this.PartitionIdQuery) && Enum.TryParse<CloudEventPartitionType>(this.PartitionTypeQuery, true, out var type))
+            this.readOptionForm.SetPartition(type, this.PartitionIdQuery);
+    }
+
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {

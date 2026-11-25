@@ -43,6 +43,25 @@ public class CloudEventPartitionsController(IMediator mediator)
     }
 
     /// <summary>
+    /// Lists, page by page, the cloud event partitions of the specified type with their metadata (length, first and last event), sorted like their ids
+    /// </summary>
+    /// <param name="type">The type of the partitions to list</param>
+    /// <param name="prefix">The prefix, matched case-insensitively, the ids of the partitions to list must start with, if any</param>
+    /// <param name="maxResults">The maximum amount of partitions to return, between 1 and 100. Defaults to 25</param>
+    /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/></returns>
+    /// <remarks>See #226</remarks>
+    [HttpGet("{type}/metadata")]
+    [ProducesResponseType(typeof(PartitionMetadataCollection), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
+    public virtual async Task<IActionResult> ListPartitionMetadataByType(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.ExecuteAsync(new ListEventPartitionsQuery(type, prefix, maxResults, continuationToken), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Gets the specified cloud event partition's metadata
     /// </summary>
     /// <param name="type">The type of the partition to get the metadata of</param>

@@ -47,6 +47,33 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
+    public virtual async Task<PartitionMetadataCollection> ListPartitionMetadataByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(prefix)) query.Add($"prefix={Uri.EscapeDataString(prefix)}");
+        if (maxResults.HasValue) query.Add($"maxResults={maxResults.Value}");
+        if (!string.IsNullOrWhiteSpace(continuationToken)) query.Add($"continuationToken={Uri.EscapeDataString(continuationToken)}");
+        var uri = $"{CloudEventPartitionsApiPath}{type}/metadata{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}";
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<PartitionMetadataCollection>(json)!;
+    }
+
+    /// <inheritdoc/>
+    public virtual async Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, CancellationToken cancellationToken = default)
+    {
+        var query = new List<string>();
+        if (period.HasValue) query.Add($"period={Uri.EscapeDataString(System.Xml.XmlConvert.ToString(period.Value))}");
+        if (buckets.HasValue) query.Add($"buckets={buckets.Value}");
+        if (sampleSize.HasValue) query.Add($"sampleSize={sampleSize.Value}");
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventStreamApiPath}activity{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}"), cancellationToken).ConfigureAwait(false);
+        using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return this.Serializer.Deserialize<StreamActivity>(json)!;
+    }
+
+    /// <inheritdoc/>
     public virtual async Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));

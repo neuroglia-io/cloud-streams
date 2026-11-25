@@ -463,8 +463,8 @@ public class AuthenticationTests
                 continue;
             }
             Assert.False(anonymous, $"'{route}' should not be anonymous");
-            var expected = route.StartsWith("GET ") || route.EndsWith("/compatibility") ? CloudStreamsAuthenticationDefaults.ReadPolicy
-                : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") || route.EndsWith("/redeliver") || route.EndsWith("/publish") ? CloudStreamsAuthenticationDefaults.OperatePolicy
+            var expected = route.StartsWith("GET ") || route.EndsWith("/compatibility") || route == "POST api/resources/v1/subscriptions/test" ? CloudStreamsAuthenticationDefaults.ReadPolicy
+                : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") || route.EndsWith("/skip") || route.EndsWith("/redeliver") || route.EndsWith("/publish") ? CloudStreamsAuthenticationDefaults.OperatePolicy
                 : CloudStreamsAuthenticationDefaults.AdministerPolicy;
             Assert.True(policies.SequenceEqual([expected]), $"'{route}' should require '{expected}', not '{string.Join(", ", policies)}'");
         }
@@ -474,6 +474,10 @@ public class AuthenticationTests
         Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/redeliver" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
         Assert.Contains(endpoints, e => e.Route == "POST api/core/v1/cloud-events/publish" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
         Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/search" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.ReadPolicy]));
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/skip" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/test" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.ReadPolicy]));
+        Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/stream/activity");
+        Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/partitions/{type}/metadata");
     }
 
     [Fact]

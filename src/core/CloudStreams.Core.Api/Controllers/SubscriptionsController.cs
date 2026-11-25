@@ -118,6 +118,40 @@ public class SubscriptionsController(IMediator mediator)
     }
 
     /// <summary>
+    /// Skips the cloud event that faulted the specified subscription: delivery resumes with the cloud event that follows it
+    /// </summary>
+    /// <param name="name">The name of the subscription to skip the faulted cloud event of</param>
+    /// <param name="offset">The offset of the cloud event to skip, which must be the one that faulted the subscription, as described by its <c>status.stream.faultedOffset</c></param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is the subscription, or <c>409 Conflict</c> if it is not faulted by the specified cloud event</returns>
+    /// <remarks>Requires the operator role (see #224)</remarks>
+    [HttpPost("{name}/skip")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> SkipSubscriptionEvent(string name, [FromQuery] ulong offset, CancellationToken cancellationToken = default)
+    {
+        return this.Process(await this.Mediator.ExecuteAsync(new SkipSubscriptionEventCommand(name, offset), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Runs a filter and a mutation against sample cloud events, or against the most recent cloud events of the stream or of a partition, without delivering anything
+    /// </summary>
+    /// <param name="request">An object that describes the test to run</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body describes, for each cloud event, whether it matched and what the subscriber would receive</returns>
+    /// <remarks>Only requires the reader role, since nothing is changed nor sent: mutation webhooks are not called (see #224)</remarks>
+    [HttpPost("test")]
+    [Authorize(Policy = CloudStreamsAuthenticationDefaults.ReadPolicy)]
+    [ProducesResponseType(typeof(SubscriptionTestResult), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> TestSubscription([FromBody] SubscriptionTestRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
+        return this.Process(await this.Mediator.ExecuteAsync(new TestSubscriptionQuery(request), cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
     /// Replays the specified subscription, by delivering every cloud event matching it again, from the beginning of the stream or from the specified time
     /// </summary>
     /// <param name="name">The name of the subscription to replay</param>

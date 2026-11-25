@@ -1,0 +1,225 @@
+@namespace CloudStreams.Dashboard.Components
+@using CloudStreams.Core.Resources
+@using Neuroglia.Serialization
+@inject ICloudStreamsCoreApiClient Api
+@inject IJsonSerializer JsonSerializer
+@inject IYamlSerializer YamlSerializer
+
+@* Runs a filter and a mutation against recent or sample cloud events, without saving nor delivering anything (see #224) *@
+
+<section class="subscription-tester" aria-labelledby="@(Id)-title">
+    <h2 id="@(Id)-title" class="h6">Playground</h2>
+    <p class="small text-secondary">Try a filter and a mutation against recent or sample events. Nothing is saved, and nothing is delivered.</p>
+    <form class="row g-2" @onsubmit="RunAsync" @onsubmit:preventDefault>
+        <div class="col-md-6">
+            <label for="@(Id)-filter" class="form-label small mb-1">Filter (YAML or JSON)</label>
+            <textarea id="@(Id)-filter" class="form-control font-monospace small" rows="6" spellcheck="false" placeholder="@FilterPlaceholder" @bind="filter"></textarea>
+        </div>
+        <div class="col-md-6">
+            <label for="@(Id)-mutation" class="form-label small mb-1">Mutation (YAML or JSON)</label>
+            <textarea id="@(Id)-mutation" class="form-control font-monospace small" rows="6" spellcheck="false" placeholder="@MutationPlaceholder" @bind="mutation"></textarea>
+        </div>
+        <fieldset class="col-12">
+            <legend class="form-label small mb-1">Events to test</legend>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="@(Id)-source" id="@(Id)-recent" checked="@(!useSamples)" @onchange="() => useSamples = false" />
+                <label class="form-check-label small" for="@(Id)-recent">The most recent events</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="@(Id)-source" id="@(Id)-samples" checked="@useSamples" @onchange="() => useSamples = true" />
+                <label class="form-check-label small" for="@(Id)-samples">Sample events</label>
+            </div>
+        </fieldset>
+        @if (useSamples)
+        {
+            <div class="col-12">
+                <label for="@(Id)-sample-events" class="form-label small mb-1">Sample events: a JSON object or array, or YAML documents separated by <code>---</code></label>
+                <textarea id="@(Id)-sample-events" class="form-control font-monospace small" rows="6" spellcheck="false" @bind="samples"></textarea>
+            </div>
+        }
+        else
+        {
+            <div class="col-auto">
+                <label for="@(Id)-length" class="form-label small mb-1">How many</label>
+                <input id="@(Id)-length" type="number" class="form-control form-control-sm" min="1" max="@SubscriptionTestRequest.MaxLength" @bind="length" />
+            </div>
+            <div class="col-auto">
+                <label for="@(Id)-partition-type" class="form-label small mb-1">From partition</label>
+                <select id="@(Id)-partition-type" class="form-select form-select-sm" @bind="partitionType">
+                    <option value="">the whole stream</option>
+                    @foreach (var type in Enum.GetValues<CloudEventPartitionType>())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+            @if (!string.IsNullOrEmpty(partitionType))
+            {
+                <div class="col">
+                    <label for="@(Id)-partition-id" class="form-label small mb-1">Partition id</label>
+                    <input id="@(Id)-partition-id" type="text" class="form-control form-control-sm" @bind="partitionId" />
+                </div>
+            }
+        }
+        <div class="col-12">
+            <button type="submit" class="btn btn-sm btn-primary" disabled="@running">
+                @if (running)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                }
+                Run
+            </button>
+        </div>
+    </form>
+    <div aria-live="polite">
+        @if (error != null)
+        {
+            <div class="alert alert-danger small mt-2 mb-0" role="alert">@error</div>
+        }
+        @if (result != null)
+        {
+            <p class="small mt-2 mb-1">
+                <strong>@result.Items.Count(i => i.Matched)</strong> of @result.Items.Count events matched@(result.Items.Any(i => i.Error != null) ? $", {result.Items.Count(i => i.Error != null)} failed" : "").
+            </p>
+            @if (result.Notice != null)
+            {
+                <p class="small text-warning-emphasis mb-1"><i class="bi bi-info-circle" aria-hidden="true"></i> @result.Notice</p>
+            }
+            <div class="table-responsive">
+                <table class="table table-sm small">
+                    <caption class="visually-hidden">The outcome of the test for each event</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Offset</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Source</th>
+                            <th scope="col">Outcome</th>
+                            <th scope="col">Delivered as</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in result.Items)
+                        {
+                            <tr>
+                                <td>@(item.Offset?.ToString() ?? "sample")</td>
+                                <td class="text-break">@item.Event.Type</td>
+                                <td class="text-break">@item.Event.Source</td>
+                                <td>
+                                    @if (item.Error != null)
+                                    {
+                                        <span class="badge text-bg-danger"><i class="bi bi-x-octagon" aria-hidden="true"></i> failed</span>
+                                        <div class="text-danger-emphasis">@item.Error</div>
+                                    }
+                                    else if (item.Matched)
+                                    {
+                                        <span class="badge text-bg-success"><i class="bi bi-check-circle" aria-hidden="true"></i> matched</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-secondary"><i class="bi bi-dash-circle" aria-hidden="true"></i> filtered out</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.Matched && item.Error == null)
+                                    {
+                                        <details>
+                                            <summary>@(item.Mutated == null ? "unchanged" : "mutated")</summary>
+                                            <pre class="mb-0 small">@ResourceDocuments.ToJson(JsonSerializer.SerializeToNode(item.Mutated ?? item.Event)!)</pre>
+                                        </details>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+
+    string? filter;
+    string? mutation;
+    string? samples;
+    int length = SubscriptionTestRequest.DefaultLength;
+    bool useSamples;
+    bool running;
+    string? error;
+    SubscriptionTestResult? result;
+    SubscriptionSpec? lastSpec;
+    string? partitionType;
+    string? partitionId;
+
+    /// <summary>
+    /// Gets/sets the prefix of the ids of the component's elements
+    /// </summary>
+    [Parameter] public string Id { get; set; } = "subscription-tester";
+
+    /// <summary>
+    /// Gets/sets the spec of the subscription to prefill the filter and the mutation from, if any
+    /// </summary>
+    [Parameter] public SubscriptionSpec? Spec { get; set; }
+
+    /// <summary>
+    /// Gets/sets the partition to read the recent cloud events from, if any
+    /// </summary>
+    [Parameter] public PartitionReference? Partition { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (Partition != null && partitionType == null && partitionId == null)
+        {
+            partitionType = Partition.Type.ToString();
+            partitionId = Partition.Id;
+        }
+        // prefilled once per spec: a refreshed subscription must not overwrite what is being tried
+        if (Spec == null || ReferenceEquals(Spec, lastSpec) || lastSpec != null) return;
+        lastSpec = Spec;
+        filter = SubscriptionPlayground.ToYaml(Spec.Filter, JsonSerializer, YamlSerializer);
+        mutation = SubscriptionPlayground.ToYaml(Spec.Mutation, JsonSerializer, YamlSerializer);
+    }
+
+    async Task RunAsync()
+    {
+        error = null;
+        result = null;
+        SubscriptionTestRequest request;
+        try
+        {
+            PartitionReference? partition = null;
+            if (Enum.TryParse<CloudEventPartitionType>(partitionType, out var type))
+            {
+                if (string.IsNullOrWhiteSpace(partitionId)) throw new FormatException("Enter the id of the partition to read the events from");
+                partition = new(type, partitionId.Trim());
+            }
+            request = SubscriptionPlayground.BuildRequest(partition, filter, mutation, useSamples ? samples : null, length, JsonSerializer, YamlSerializer);
+            if (useSamples && request.Events == null) throw new FormatException("Paste the sample events to test");
+        }
+        catch (FormatException ex)
+        {
+            error = ex.Message;
+            return;
+        }
+        running = true;
+        try
+        {
+            result = await Api.Resources.Subscriptions.TestAsync(request);
+        }
+        catch (ProblemDetailsException ex)
+        {
+            error = ex.Problem.Detail ?? ex.Problem.Title;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            running = false;
+        }
+    }
+
+}

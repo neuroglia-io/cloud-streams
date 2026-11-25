@@ -1,0 +1,165 @@
+@namespace CloudStreams.Dashboard.Components
+@using System.Globalization
+
+@* A single series over time, as bars (amounts per slice) or as a line (a measure sampled over time). One series, so one hue and no legend: the title names it.
+   Hovering a slice shows its value in the readout; the same values are available as a table, for keyboards and screen readers (see #224, #225) *@
+
+<figure class="time-series-chart mb-0">
+    <figcaption class="d-flex justify-content-between align-items-baseline gap-2 mb-1">
+        <span class="small fw-semibold">@Title</span>
+        <span class="small text-secondary text-truncate" aria-hidden="true">@Readout</span>
+    </figcaption>
+    @if (Points == null || Points.Count == 0)
+    {
+        <p class="small text-secondary mb-0" style="height: @(Height)px">@EmptyMessage</p>
+    }
+    else
+    {
+        <svg viewBox="0 0 @Width @Height" preserveAspectRatio="none" style="width: 100%; height: @(Height)px; display: block" role="img" aria-label="@AriaSummary" @onmouseleave="() => hovered = null">
+            @* recessive grid: the baseline and the top of the scale *@
+            <line x1="@F(PlotLeft)" y1="@F(PlotTop)" x2="@F(Width)" y2="@F(PlotTop)" stroke="var(--bs-border-color)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke" />
+            <line x1="@F(PlotLeft)" y1="@F(PlotBottom)" x2="@F(Width)" y2="@F(PlotBottom)" stroke="var(--bs-border-color)" stroke-width="1" vector-effect="non-scaling-stroke" />
+            @if (Kind == TimeSeriesChartKind.Bars)
+            {
+                @for (var i = 0; i < Points.Count; i++)
+                {
+                    var height = Scale(Points[i].Value);
+                    if (height <= 0) continue;
+                    <path d="@BarPath(i, height)" fill="var(--bs-primary)" opacity="@(hovered == null || hovered == i ? "1" : "0.55")" />
+                }
+            }
+            else
+            {
+                <polyline points="@LinePoints" fill="none" stroke="var(--bs-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                @if (hovered.HasValue)
+                {
+                    <line x1="@F(X(hovered.Value))" y1="@F(PlotTop)" x2="@F(X(hovered.Value))" y2="@F(PlotBottom)" stroke="var(--bs-secondary-color)" stroke-width="1" vector-effect="non-scaling-stroke" />
+                }
+            }
+            @* hit targets: a full-height column per point, wider than the mark *@
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var index = i;
+                <rect x="@F(PlotLeft + Band * i)" y="0" width="@F(Band)" height="@F(PlotBottom)" fill="transparent" @onmouseenter="() => hovered = index">
+                    <title>@Describe(Points[index])</title>
+                </rect>
+            }
+        </svg>
+        <div class="d-flex justify-content-between small text-secondary" aria-hidden="true">
+            <span>@Points[0].Label</span>
+            <span>max @FormatValue(Max)</span>
+            <span>@Points[^1].Label</span>
+        </div>
+        <details class="small mt-1">
+            <summary class="text-secondary">Show as a table</summary>
+            <table class="table table-sm mb-0">
+                <caption class="visually-hidden">@Title</caption>
+                <thead><tr><th scope="col">@XTitle</th><th scope="col" class="text-end">@YTitle</th></tr></thead>
+                <tbody>
+                    @foreach (var point in Points)
+                    {
+                        <tr><td>@point.Label</td><td class="text-end">@FormatValue(point.Value)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </details>
+    }
+</figure>
+
+@code {
+
+    const double Width = 600;
+    const double PlotLeft = 0;
+    const double PlotTop = 6;
+    const double Gap = 2;
+    const double Radius = 4;
+
+    int? hovered;
+
+    /// <summary>
+    /// Gets/sets the title of the chart, which names its only series
+    /// </summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the points of the series, oldest first
+    /// </summary>
+    [Parameter] public IReadOnlyList<ChartPoint>? Points { get; set; }
+
+    /// <summary>
+    /// Gets/sets how the series is drawn
+    /// </summary>
+    [Parameter] public TimeSeriesChartKind Kind { get; set; } = TimeSeriesChartKind.Bars;
+
+    /// <summary>
+    /// Gets/sets the height of the plot, in pixels
+    /// </summary>
+    [Parameter] public int Height { get; set; } = 140;
+
+    /// <summary>
+    /// Gets/sets the title of the column of the table view that holds the labels
+    /// </summary>
+    [Parameter] public string XTitle { get; set; } = "Time";
+
+    /// <summary>
+    /// Gets/sets the title of the column of the table view that holds the values
+    /// </summary>
+    [Parameter] public string YTitle { get; set; } = "Value";
+
+    /// <summary>
+    /// Gets/sets the message shown when there is no point yet
+    /// </summary>
+    [Parameter] public string EmptyMessage { get; set; } = "No data yet";
+
+    /// <summary>
+    /// Gets/sets the function used to format values, if any
+    /// </summary>
+    [Parameter] public Func<double, string>? Format { get; set; }
+
+    double PlotBottom => this.Height - 1;
+
+    double Band => (Width - PlotLeft) / Math.Max(1, this.Points?.Count ?? 1);
+
+    double Max => NiceCeiling(this.Points?.Count > 0 ? this.Points.Max(p => p.Value) : 0);
+
+    string Readout => this.hovered is int index && this.Points != null && index < this.Points.Count ? this.Describe(this.Points[index]) : this.Points?.Count > 0 ? $"latest: {this.FormatValue(this.Points[^1].Value)}" : string.Empty;
+
+    string AriaSummary => this.Points?.Count > 0 ? $"{this.Title}: {this.Points.Count} points from {this.Points[0].Label} to {this.Points[^1].Label}, ranging from {this.FormatValue(this.Points.Min(p => p.Value))} to {this.FormatValue(this.Points.Max(p => p.Value))}. The values are also available as a table" : this.Title;
+
+    string LinePoints => this.Points == null ? string.Empty : string.Join(' ', this.Points.Select((p, i) => $"{F(this.X(i))},{F(this.PlotBottom - this.Scale(p.Value))}"));
+
+    double X(int index) => PlotLeft + this.Band * index + this.Band / 2;
+
+    double Scale(double value) => this.Max <= 0 ? 0 : Math.Max(0, value) / this.Max * (this.PlotBottom - PlotTop);
+
+    /// <summary>
+    /// Draws a bar anchored to the baseline, with rounded corners at its data end only
+    /// </summary>
+    string BarPath(int index, double height)
+    {
+        var x = PlotLeft + this.Band * index + Gap / 2;
+        var width = Math.Max(1, this.Band - Gap);
+        var radius = Math.Min(Radius, Math.Min(width / 2, height));
+        var bottom = this.PlotBottom;
+        var top = bottom - height;
+        return $"M{F(x)},{F(bottom)} V{F(top + radius)} Q{F(x)},{F(top)} {F(x + radius)},{F(top)} H{F(x + width - radius)} Q{F(x + width)},{F(top)} {F(x + width)},{F(top + radius)} V{F(bottom)} Z";
+    }
+
+    string Describe(ChartPoint point) => point.Detail ?? $"{point.Label}: {this.FormatValue(point.Value)}";
+
+    string FormatValue(double value) => this.Format?.Invoke(value) ?? value.ToString("N0", CultureInfo.CurrentCulture);
+
+    static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Rounds the specified value up to 1, 2 or 5 times a power of ten, so that the top of the scale is a round number
+    /// </summary>
+    static double NiceCeiling(double value)
+    {
+        if (value <= 0) return 0;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(value)));
+        foreach (var step in new[] { 1d, 2d, 5d, 10d }) if (value <= step * magnitude) return step * magnitude;
+        return 10 * magnitude;
+    }
+
+}

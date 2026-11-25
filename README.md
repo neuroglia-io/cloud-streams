@@ -177,7 +177,7 @@ spec:
         breakDuration: PT30S      # ...for this long
 ```
 
-While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume. Setting `spec.stream.offset` to the failed event's offset retries it, and setting it to the next offset skips it. Subscriptions that do not track a stream offset drop the event instead, and carry on, unless they have a dead-letter policy.
+While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume, and the offset of the failed event is recorded in `status.stream.faultedOffset`. Resuming the subscription retries the event. `POST /api/resources/v1/subscriptions/{name}/skip?offset={faultedOffset}` skips it: it requires the operator role, and returns `409` if the subscription isn't faulted by that event. Setting `spec.stream.offset` to the failed event's offset, or to the next one, does the same. Subscriptions that do not track a stream offset drop the event instead, and carry on, unless they have a dead-letter policy.
 
 #### Dead letters
 
@@ -262,6 +262,7 @@ Operators suspend and resume subscriptions from the dashboard, or with:
 ```
 POST /api/resources/v1/subscriptions/{name}/suspend
 POST /api/resources/v1/subscriptions/{name}/resume     # also clears the fault of a faulted subscription
+POST /api/resources/v1/subscriptions/{name}/skip?offset=42   # skips the event that faulted it
 ```
 
 #### Broker replicas
@@ -363,7 +364,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 | Role | May |
 |---|---|
 | Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the read-only MCP tools |
-| Operator | also suspend, resume and replay subscriptions, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay` and `.../dead-letters/{offset}/redeliver` |
+| Operator | also suspend, resume and replay subscriptions, skip the event that faulted them, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay`, `.../skip` and `.../dead-letters/{offset}/redeliver` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
 A user who has none of the configured roles is denied access (`403`). When no role is configured, every signed-in user is an administrator, as before. The dashboard hides the actions the user may not perform. Acknowledgement endpoints remain anonymous, as the token is their authorization.
@@ -587,6 +588,21 @@ The details of an event show its data as indented JSON, as text, or, for binary 
   - Export downloads the selected resources as one YAML file, holding only what users own: name, labels, annotations and spec.
   - Import, for administrators, reads such a file, or JSON. Each resource is created, or updated if it exists, and the dashboard reports what became of each one.
 - **Theme.** The dashboard follows the system's light or dark theme. The navigation bar can force either, and the browser remembers the choice.
+- **Overview.** The home page shows:
+  - the events recorded per hour over the last 24 hours;
+  - subscriptions by status and subscriber state, and those needing attention;
+  - the health of gateways, brokers, and the dependencies of the gateway serving the dashboard (Redis, EventStoreDB, the projections and admission control);
+  - the most active sources and types among the latest events.
+
+  It refreshes every 30 seconds. The activity comes from `GET /api/core/v1/cloud-events/stream/activity?period=PT24H&buckets=24&sampleSize=500`, which counts the events of each slice of the period with a binary search on the stream's timestamps, so it costs a few dozen reads per slice whatever the stream's size.
+- **Subscription details.** Selecting a subscription's name opens its page (`/subscriptions/{name}`):
+  - its state, lag and pending acknowledgement;
+  - its fault, if any, with the event that caused it, and buttons to retry or skip that event;
+  - its lag and acknowledgement rate, charted from samples taken every 5 seconds while the page is open, since no history is kept;
+  - its dead letters, which are its failure history, each of which can be redelivered;
+  - a playground.
+- **Playground.** On a subscription's page, or at `/playground` before creating one, a filter and a mutation can be tried against the latest events of the stream or of a partition, or against pasted sample events. It shows which events match and what the subscriber would receive. Nothing is saved or delivered, and mutation webhooks are not called. It uses `POST /api/resources/v1/subscriptions/test`, which only requires the reader role. Filter expressions apply to the record, as when the broker filters (for example `${ .metadata.contextAttributes.type == "order.placed" }`), and mutation expressions to the cloud event.
+- **Partitions.** *Events > Partitions* lists the partitions of each type, searchable by prefix, page by page, with their size, first event and last activity, and links to their events. It uses `GET /api/core/v1/cloud-events/partitions/{type}/metadata`, which returns up to 100 partitions per page (25 by default). `/events?partitionType=BySource&partitionId=…` opens the event list on a partition.
 
 ### Monitoring
 
@@ -623,6 +639,7 @@ The gateway and the API serve a [Model Context Protocol](https://modelcontextpro
 | `ListDeadLetters` | lists the events a subscription failed to deliver | reader |
 | `SuspendSubscription`, `ResumeSubscription` | suspends or resumes a subscription | operator |
 | `ReplaySubscription` | replays a subscription, from the start of the stream or from a point in time | operator |
+| `SkipSubscriptionEvent` | skips the event that faulted a subscription | operator |
 | `PublishEvent` | publishes an event, e.g. to test a subscription, through the gateway's admission pipeline. Gateways only | operator |
 
 #### CloudEvents Subscriptions API

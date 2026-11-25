@@ -1,79 +1,343 @@
 ﻿@namespace CloudStreams.Dashboard.Pages.Overview
 @page "/"
-@using System.Reactive.Linq
-@using CloudStreams.Dashboard.StateManagement
-@inject ICloudStreamsCoreApiClient CloudStreamsApi
+@using CloudStreams.Core.Resources
+@using System.Globalization
+@implements IDisposable
+@inject ICloudStreamsCoreApiClient Api
+@inject HttpClient Http
+
+@* The health of the whole system at a glance: throughput, subscriptions, brokers and gateways, the most active sources and types, and the gateway's own checks (see #225) *@
 
 <ApplicationTitle>Overview</ApplicationTitle>
 
-<h5>Events</h5>
-<div class="row">
-    <div class="col-6">
-        <div class="card">
-            <div class="card-header"><h6>Stream</h6></div>
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3">
+        <section class="card h-100" aria-labelledby="tile-events">
             <div class="card-body">
-                <table class="table table-striped mb-3">
-                    <tbody>
-                        <tr>
-                            <td>Created at</td>
-                            <td>@stream?.FirstEvent?.LocalDateTime.ToString("R")</td>
-                        </tr>
-                        <tr>
-                            <td>Last modified</td>
-                            <td>@stream?.LastEvent?.LocalDateTime.ToString("R")</td>
-                        </tr>
-                            <tr>
-                            <td>Length</td>
-                            <td>@stream?.Length</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <h2 id="tile-events" class="h6 text-secondary mb-1">Events recorded</h2>
+                <p class="fs-3 mb-0">@(stream?.Length?.ToString("N0") ?? "–")</p>
+                <p class="small text-secondary mb-0">@(stream?.LastEvent is DateTimeOffset last ? $"last {Pages.Partitions.View.Ago(last)}" : "none yet")</p>
             </div>
-        </div>
+        </section>
     </div>
-    <div class="col-6">
-       <div class="card">
-            <div class="card-header"><h6>Partitions</h6></div>
+    <div class="col-6 col-lg-3">
+        <section class="card h-100" aria-labelledby="tile-throughput">
             <div class="card-body">
-                <b>Source</b>
-                <table class="table table-striped mb-3">
-                    <tbody>
-                        <tr>
-                            <td>Partitions</td>
-                            <td>
-                                <select class="form-control">
-                                    @if(sourcePartitions != null)
-                                    {
-                                        @foreach(var partition in this.sourcePartitions.Items)
-                                        {
-                                            <option>@partition</option>
-                                        }
-                                        @if (this.sourcePartitions.ContinuationToken != null)
-                                        {
-                                            <option disabled>more partitions: use the events page to search them</option>
-                                        }
-                                    }
-                                </select>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <h2 id="tile-throughput" class="h6 text-secondary mb-1">Last 24 hours</h2>
+                <p class="fs-3 mb-0">@(activity == null ? "–" : Total(activity).ToString("N0"))</p>
+                <p class="small text-secondary mb-0">@(activity?.Buckets.Count > 0 ? $"{activity.Buckets[^1].Count:N0} in the last hour" : "")</p>
             </div>
-        </div>
+        </section>
+    </div>
+    <div class="col-6 col-lg-3">
+        <section class="card h-100" aria-labelledby="tile-subscriptions">
+            <div class="card-body">
+                <h2 id="tile-subscriptions" class="h6 text-secondary mb-1">Subscriptions</h2>
+                <p class="fs-3 mb-0">@(subscriptions?.Count.ToString("N0") ?? "–")</p>
+                <p class="small mb-0">
+                    @if (subscriptions != null)
+                    {
+                        var failed = subscriptions.Count(s => s.Phase == SubscriptionHealth.FailedPhase);
+                        @if (failed > 0)
+                        {
+                            <a class="link-danger" href="subscriptions"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> @failed faulted</a>
+                        }
+                        else
+                        {
+                            <span class="text-secondary">none faulted</span>
+                        }
+                    }
+                </p>
+            </div>
+        </section>
+    </div>
+    <div class="col-6 col-lg-3">
+        <section class="card h-100" aria-labelledby="tile-lag">
+            <div class="card-body">
+                <h2 id="tile-lag" class="h6 text-secondary mb-1">Events to deliver</h2>
+                <p class="fs-3 mb-0">@(subscriptions == null ? "–" : subscriptions.Sum(s => (decimal)(s.Lag ?? 0)).ToString("N0"))</p>
+                <p class="small text-secondary mb-0">@(subscriptions == null ? "" : $"{subscriptions.Count(s => s.Lag > 0)} subscription(s) behind")</p>
+            </div>
+        </section>
     </div>
 </div>
 
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <section class="card h-100" aria-labelledby="throughput-title">
+            <div class="card-header"><h2 id="throughput-title" class="h6 mb-0">Throughput</h2></div>
+            <div class="card-body">
+                @if (activityError != null)
+                {
+                    <p class="small text-danger-emphasis mb-0">@activityError</p>
+                }
+                else
+                {
+                    <TimeSeriesChart Title="Events recorded per hour, last 24 hours" Kind="TimeSeriesChartKind.Bars" YTitle="Events" XTitle="Hour" Height="160" EmptyMessage="Loading..."
+                                     Points="@activity?.Buckets.Select(b => new ChartPoint(b.From.LocalDateTime.ToString("t"), b.Count, $"{b.From.LocalDateTime:t} – {b.To.LocalDateTime:t}: {b.Count:N0} events")).ToList()" />
+                }
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        <section class="card h-100" aria-labelledby="subscriptions-title">
+            <div class="card-header"><h2 id="subscriptions-title" class="h6 mb-0">Subscriptions</h2></div>
+            <div class="card-body small">
+                @if (subscriptions == null)
+                {
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                }
+                else if (subscriptions.Count == 0)
+                {
+                    <p class="text-secondary mb-0">There is no subscription yet.</p>
+                }
+                else
+                {
+                    <h3 class="h6 small text-secondary">By status</h3>
+                    <ul class="list-unstyled mb-3">
+                        @foreach (var group in subscriptions.GroupBy(s => s.Phase).OrderBy(g => PhaseOrder(g.Key)))
+                        {
+                            <li class="d-flex justify-content-between"><span>@PhaseLabel(group.Key)</span><span>@group.Count()</span></li>
+                        }
+                    </ul>
+                    <h3 class="h6 small text-secondary">By subscriber state</h3>
+                    <ul class="list-unstyled mb-3">
+                        @foreach (var group in subscriptions.GroupBy(s => s.SubscriberState ?? "unknown").OrderBy(g => g.Key == "unreachable" ? 0 : g.Key == "unknown" ? 1 : 2))
+                        {
+                            <li class="d-flex justify-content-between"><span>@SubscriberLabel(group.Key)</span><span>@group.Count()</span></li>
+                        }
+                    </ul>
+                    var attention = subscriptions.Where(s => s.Phase == SubscriptionHealth.FailedPhase || s.SubscriberState == "unreachable" || s.Lag > 0).OrderBy(s => s.Phase == SubscriptionHealth.FailedPhase ? 0 : s.SubscriberState == "unreachable" ? 1 : 2).ThenByDescending(s => s.Lag).Take(5).ToList();
+                    @if (attention.Count > 0)
+                    {
+                        <h3 class="h6 small text-secondary">Needing attention</h3>
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var subscription in attention)
+                            {
+                                <li class="d-flex justify-content-between gap-2">
+                                    <a class="text-truncate" href="@($"subscriptions/{Uri.EscapeDataString(subscription.Name)}")">@subscription.Name</a>
+                                    <span class="text-nowrap">@(subscription.Phase == SubscriptionHealth.FailedPhase ? "faulted" : subscription.SubscriberState == "unreachable" ? "unreachable" : $"behind by {subscription.Lag:N0}")</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
+        </section>
+    </div>
+</div>
 
-@code{
+<div class="row g-3 mb-3">
+    <div class="col-lg-4">
+        <section class="card h-100" aria-labelledby="components-title">
+            <div class="card-header"><h2 id="components-title" class="h6 mb-0">Components</h2></div>
+            <div class="card-body small">
+                <h3 class="h6 small text-secondary">This gateway's dependencies</h3>
+                @if (platform == null)
+                {
+                    <div class="spinner-border spinner-border-sm text-primary mb-3" role="status"><span class="visually-hidden">Loading...</span></div>
+                }
+                else if (platform.Checks.Count == 0)
+                {
+                    <p class="mb-3"><HealthBadge Status="@platform.Status" /> <span class="text-secondary">sign in to see the details</span></p>
+                }
+                else
+                {
+                    <ul class="list-unstyled mb-3">
+                        @foreach (var check in platform.Checks)
+                        {
+                            <li class="d-flex justify-content-between gap-2"><span>@CheckLabel(check.Name)</span><HealthBadge Status="@check.Status" Detail="@check.Description" /></li>
+                        }
+                    </ul>
+                }
+                <h3 class="h6 small text-secondary">Gateways</h3>
+                @ResourceHealthList(gateways, "gateways")
+                <h3 class="h6 small text-secondary mt-3">Brokers</h3>
+                @ResourceHealthList(brokers, "brokers")
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        @TopList("sources-title", "Most active sources", activity?.Sources, CloudEventPartitionType.BySource)
+    </div>
+    <div class="col-lg-4">
+        @TopList("types-title", "Most frequent types", activity?.Types, CloudEventPartitionType.ByType)
+    </div>
+</div>
 
+@code {
+
+    static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
+
+    readonly CancellationTokenSource cancellation = new();
     StreamMetadata? stream;
-    PartitionIdCollection? sourcePartitions;
+    StreamActivity? activity;
+    string? activityError;
+    IReadOnlyList<SubscriptionHealth>? subscriptions;
+    IReadOnlyList<(string Name, string? Status)>? gateways;
+    IReadOnlyList<(string Name, string? Status)>? brokers;
+    PlatformHealth? platform;
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        await base.OnInitializedAsync();
-        this.stream = await this.CloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync().ConfigureAwait(false);
-        this.sourcePartitions = await this.CloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.BySource, maxResults: PartitionIdCollection.MaxResultsLimit).ConfigureAwait(false);
+        await RefreshAsync();
+        _ = RefreshLoopAsync(cancellation.Token);
     }
 
-}
+    async Task RefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(RefreshInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await RefreshAsync();
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    /// <summary>
+    /// Loads every section at once: a section that fails to load is left as it was, and does not prevent the others from loading
+    /// </summary>
+    async Task RefreshAsync()
+    {
+        await Task.WhenAll(
+            Try(async () => stream = await Api.CloudEvents.Stream.GetStreamMetadataAsync()),
+            Try(async () => { activity = await Api.CloudEvents.Stream.GetStreamActivityAsync(TimeSpan.FromHours(24), 24); activityError = null; }, ex => activityError = $"Failed to describe the activity of the stream: {ex.Message}"),
+            Try(async () => subscriptions = await Api.Resources.Subscriptions.GetHealthAsync()),
+            Try(async () => gateways = [.. (await (await Api.Resources.Gateways.ListAsync()).ToListAsync()).Select(g => (g.GetName(), g.Status?.HealthStatus)).OrderBy(g => HealthBadge.Order(g.Item2))]),
+            Try(async () => brokers = [.. (await (await Api.Resources.Brokers.ListAsync()).ToListAsync()).Select(b => (b.GetName(), b.Status?.HealthStatus)).OrderBy(b => HealthBadge.Order(b.Item2))]),
+            Try(async () =>
+            {
+                // the readiness endpoint answers 503 when unhealthy, with the same body
+                using var response = await Http.GetAsync(PlatformHealth.Path);
+                platform = PlatformHealth.Parse(await response.Content.ReadAsStringAsync());
+            }));
+    }
+
+    static async Task Try(Func<Task> load, Action<Exception>? onError = null)
+    {
+        try { await load(); }
+        catch (Exception ex) { onError?.Invoke(ex); }
+    }
+
+    static ulong Total(StreamActivity activity) => activity.Buckets.Aggregate(0UL, (total, bucket) => total + bucket.Count);
+
+    static int PhaseOrder(string phase) => phase switch { SubscriptionHealth.FailedPhase => 0, "suspended" => 1, "inactive" => 2, _ => 3 };
+
+    static RenderFragment PhaseLabel(string phase) => __builder =>
+    {
+        switch (phase)
+        {
+            case SubscriptionHealth.FailedPhase:
+                <span class="text-danger-emphasis"><i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>faulted</span>
+                break;
+            case "suspended":
+                <span class="text-warning-emphasis"><i class="bi bi-pause-circle me-1" aria-hidden="true"></i>suspended</span>
+                break;
+            case "active":
+                <span><i class="bi bi-check-circle me-1 text-success" aria-hidden="true"></i>active</span>
+                break;
+            default:
+                <span class="text-secondary"><i class="bi bi-dash-circle me-1" aria-hidden="true"></i>@phase</span>
+                break;
+        }
+    };
+
+    static RenderFragment SubscriberLabel(string state) => __builder =>
+    {
+        switch (state)
+        {
+            case "unreachable":
+                <span class="text-danger-emphasis"><i class="bi bi-x-octagon me-1" aria-hidden="true"></i>unreachable</span>
+                break;
+            case "reachable":
+                <span><i class="bi bi-check-circle me-1 text-success" aria-hidden="true"></i>reachable</span>
+                break;
+            default:
+                <span class="text-secondary"><i class="bi bi-question-circle me-1" aria-hidden="true"></i>@state</span>
+                break;
+        }
+    };
+
+    static string CheckLabel(string name) => name switch
+    {
+        "redis" => "Redis",
+        "eventstore" => "EventStoreDB",
+        "projections" => "Partition projections",
+        "admission" => "Admission control",
+        _ => name
+    };
+
+    static RenderFragment ResourceHealthList(IReadOnlyList<(string Name, string? Status)>? resources, string listUri) => __builder =>
+    {
+        if (resources == null)
+        {
+            <div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+        }
+        else if (resources.Count == 0)
+        {
+            <p class="text-secondary mb-0">None</p>
+        }
+        else
+        {
+            <ul class="list-unstyled mb-0">
+                @foreach (var (name, status) in resources)
+                {
+                    <li class="d-flex justify-content-between gap-2"><a class="text-truncate" href="@listUri">@name</a><HealthBadge Status="@status" /></li>
+                }
+            </ul>
+        }
+    };
+
+    /// <summary>
+    /// Lists the most frequent values of the sample, each with a bar proportional to its count, and a link to the events of its partition
+    /// </summary>
+    RenderFragment TopList(string id, string title, IReadOnlyList<StreamActivityCount>? counts, CloudEventPartitionType partitionType) => __builder =>
+    {
+        <section class="card h-100" aria-labelledby="@id">
+            <div class="card-header d-flex justify-content-between align-items-baseline">
+                <h2 id="@id" class="h6 mb-0">@title</h2>
+                <a class="small" href="@($"partitions?type={partitionType}")">All</a>
+            </div>
+            <div class="card-body small">
+                @if (counts == null)
+                {
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                }
+                else if (counts.Count == 0)
+                {
+                    <p class="text-secondary mb-0">No event has been recorded yet.</p>
+                }
+                else
+                {
+                    var max = counts.Max(c => c.Count);
+                    <p class="text-secondary">Among the @activity!.SampleSize.ToString("N0") most recent events.</p>
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var count in counts)
+                        {
+                            <li class="mb-2">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <a class="text-truncate" href="@($"events?partitionType={partitionType}&partitionId={Uri.EscapeDataString(count.Value)}")" title="@count.Value">@count.Value</a>
+                                    <span>@count.Count.ToString("N0")</span>
+                                </div>
+                                <div class="rounded-end" style="height: 4px; width: @((100.0 * count.Count / max).ToString("0.#", CultureInfo.InvariantCulture))%; background: var(--bs-primary)" aria-hidden="true"></div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+    };
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+
+}

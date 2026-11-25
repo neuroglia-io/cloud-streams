@@ -160,6 +160,67 @@ public sealed class SubscriptionRecoveryTests(CloudStreamsFixture fixture, ITest
         Assert.Equal((int)HttpStatusCode.NotFound, missing.Problem.Status);
     }
 
+    [Fact]
+    public async Task The_Event_That_Faulted_A_Subscription_Should_Be_Skippable()
+    {
+        // arrange - without a dead-letter policy, the poison event faults the subscription
+        var endpoint = fixture.Subscriber.Register(Name(), d => d.Id == "poison" ? 400 : 200);
+        await SubscribeAsync(Name(), Source(), endpoint, spec => spec.Subscriber.RetryPolicy = new() { MaxAttempts = 0, BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(0)) });
+        await PublishAsync(Source(), "event-0", "poison", "event-2");
+        var faulted = await WaitForSubscriptionAsync(Name(), s => s.Status?.Stream?.Fault != null);
+        Assert.Equal(1ul, faulted.Status!.Stream!.FaultedOffset);
+
+        // act
+        var stale = await Assert.ThrowsAsync<ProblemDetailsException>(() => fixture.Api.Resources.Subscriptions.SkipAsync(Name(), 0));
+        await fixture.Api.Resources.Subscriptions.SkipAsync(Name(), 1);
+
+        // assert - delivery resumes after the poison event, which is not delivered again
+        Assert.Equal((int)HttpStatusCode.Conflict, stale.Problem.Status);
+        var deliveries = await endpoint.WaitForAsync(3);
+        Assert.Equal(["event-0", "poison", "event-2"], deliveries.Select(d => d.Id));
+        var skipped = await WaitForSubscriptionAsync(Name(), s => s.Status?.Stream?.Fault == null && s.Status.Stream.AckedOffset == 3);
+        Assert.Null(skipped.Status!.Stream!.FaultedOffset);
+    }
+
+    [Fact]
+    public async Task Recorded_Events_Should_Be_Described_By_Activity_Partitions_And_Tests()
+    {
+        // arrange
+        await PublishAsync(Source(), "event-0", "event-1", "event-2");
+
+        // act
+        var activity = await fixture.Api.CloudEvents.Stream.GetStreamActivityAsync(TimeSpan.FromHours(1), 6, 1000);
+        var partitions = await fixture.Api.CloudEvents.Partitions.ListPartitionMetadataByTypeAsync(CloudEventPartitionType.BySource, Source().OriginalString);
+        var test = await fixture.Api.Resources.Subscriptions.TestAsync(new()
+        {
+            Partition = new(CloudEventPartitionType.BySource, Source().OriginalString),
+            Filter = new() { Type = CloudEventFilterType.Expression, Expression = "${ .data.id != \"event-1\" }" },
+            Mutation = new() { Type = CloudEventMutationType.Expression, Expression = "${ . + { subject: \"tested\" } }" }
+        });
+
+        // assert
+        Assert.True(activity.Buckets[^1].Count >= 3);
+        Assert.Contains(activity.Sources, s => s.Value == Source().OriginalString && s.Count == 3);
+        var partition = Assert.Single(partitions.Items);
+        Assert.Equal(3ul, partition.Length);
+        Assert.True(partition.LastEvent > DateTimeOffset.UtcNow.AddMinutes(-5));
+        Assert.Equal([2ul, 1ul, 0ul], test.Items.Select(i => i.Offset!.Value));
+        Assert.Equal([true, false, true], test.Items.Select(i => i.Matched));
+        Assert.All(test.Items.Where(i => i.Matched), i => Assert.Equal("tested", i.Mutated!.Subject));
+    }
+
+    async Task<Subscription> WaitForSubscriptionAsync(string name, Func<Subscription, bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            var subscription = await fixture.Api.Resources.Subscriptions.GetAsync(name);
+            if (condition(subscription)) return subscription;
+            if (DateTime.UtcNow > deadline) throw new TimeoutException($"The subscription '{name}' did not reach the expected state in time");
+            await Task.Delay(250);
+        }
+    }
+
     async Task<IReadOnlyList<DeadLetter>> WaitForDeadLettersAsync(string name, int count)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
