@@ -80,6 +80,7 @@ public sealed class SubscriptionRecoveryTests(CloudStreamsFixture fixture, ITest
         var between = DateTimeOffset.UtcNow;
         await Task.Delay(1500);
         await PublishAsync(source, "after-0", "after-1", "after-2");
+        await fixture.WaitForPartitionAsync(CloudEventPartitionType.BySource, source.OriginalString, 6);
         return between;
     }
 

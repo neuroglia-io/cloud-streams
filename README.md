@@ -13,6 +13,7 @@
 	+ [Getting started](#getting-started)
 	+ [Delivery and retries](#delivery-and-retries)
 	+ [Authentication](#authentication)
+	+ [Transports](#transports)
 	+ [Retention](#retention)
 	+ [Monitoring](#monitoring)
 	+ [API Reference](#api-reference)
@@ -34,6 +35,7 @@ As event-driven architectures have become more popular, so too have the challeng
 - **Filtering**: Cloud Streams provides powerful filtering capabilities, allowing users to filter cloud events based on declarative rules. This ensures that only relevant data is captured and processed, reducing processing time and improving overall system performance.
 - **Persistence**: Cloud Streams ensures that all consumed cloud events are persisted, guaranteeing that data is not lost and will eventually be delivered to the appropriate consumers. This feature is especially useful for mission-critical applications where data loss is not acceptable.
 - **Routing**: Cloud Streams provides flexible routing capabilities, allowing users to route cloud events based on declarative rules. This ensures that data is sent to the correct consumers, reducing data processing errors and improving system efficiency.
+- **Transports**: Cloud Streams delivers cloud events over HTTP, to Kafka topics, NATS subjects, AMQP exchanges and other Cloud Streams instances, and consumes them over HTTP and from Kafka topics, NATS subjects and AMQP queues.
 - **Mutations**: Cloud Streams offers the capability to modify incoming events prior to sending them to subscribers, which allows for backward compatibility and the ability to remove or transform sensitive data.
 - **Fault Tolerance**: Cloud Streams provides fault tolerance by implementing atomic, configurable retry policies that enable brokers to resend missed events to a consumer that was previously unavailable or that responded with a non-success status code. This ensures that all missed events are eventually received by the consumer in the order they were originally posted. The retry policy enables potential errors to be fixed at the consumer level, without the risk of losing data.
 - **Playback**: Cloud Streams provides playback capabilities, allowing users to play back previously captured cloud events. This can be useful for debugging, testing, or catastrophic recovery purposes. With this feature, users can recover from system failures or data corruption by replaying previously captured events.
@@ -174,7 +176,7 @@ The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhos
 
 ### Delivery and retries
 
-The broker delivers each event with a `POST` to `spec.subscriber.uri`. Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
+The broker delivers each event with a `POST` to `spec.subscriber.uri`, or over the transport its scheme selects (see [Transports](#transports)). Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
 
 A delivery fails when the subscriber cannot be reached, responds with a non-success status code, or does not respond within the dispatch timeout. A subscription's mutation is applied by every delivery attempt: a mutation webhook shares the attempt's timeout, and its failures are retried like the subscriber's. Failed deliveries are retried according to `spec.subscriber.retryPolicy`. If the subscription has none, the broker's `spec.dispatch.retryPolicy` applies:
 
@@ -490,6 +492,88 @@ spec:
 
 Duplicates are counted by the `cloud_streams_gateway_events_duplicate_count` metric. Rate-limited events are counted as rejected, with the `rate_limit` reason.
 
+### Transports
+
+Besides HTTP, subscribers and dead-letter services can be Kafka topics, NATS subjects, AMQP exchanges or other Cloud Streams gateways. Gateways can also consume events from Kafka topics, NATS subjects and AMQP queues. The scheme of an address selects its transport:
+
+| Transport | Address | Delivers | Consumes |
+|---|---|---|---|
+| HTTP | `https://orders.example.com/events` | yes | through `POST /api/events/pub` |
+| Kafka | `kafka://kafka:9092/orders` | to a topic | from a topic |
+| NATS | `nats://nats:4222/orders.placed?jetstream=true` | to a subject | from a subject, wildcards allowed |
+| AMQP 0-9-1 (RabbitMQ) | `amqp://rabbitmq/?exchange=orders`, `amqps://` over TLS | to an exchange | from a queue: `amqp://rabbitmq/?queue=orders` |
+| Cloud Streams | `cloudstreams://gateway.example.com` | to another gateway | - |
+
+```yaml
+# a subscription that delivers to a Kafka topic
+spec:
+  subscriber:
+    uri: kafka://kafka:9092/orders?credentials=orders
+---
+# a gateway that also consumes a NATS subject and a RabbitMQ queue
+spec:
+  ingestion:
+    channels:
+      - name: payments
+        uri: nats://nats:4222/payments.>?jetstream=true
+      - name: legacy-orders
+        uri: amqp://rabbitmq/?queue=orders&credentials=rabbit
+```
+
+**Parameters,** in the query string of an address:
+- **Every transport:** `credentials` names the credentials to connect with.
+- **Kafka:**
+  - `servers` lists more bootstrap servers, comma-separated.
+  - `tls=true` enables TLS. With credentials, SASL is enabled too, with the `mechanism` `plain` (default), `scram-sha-256` or `scram-sha-512`.
+  - For consumption: `group` sets the consumer group (the gateway's name by default), and `offset=latest` skips the events published before the group's first consumption.
+- **NATS:**
+  - `jetstream=true` waits for JetStream to store each delivered event. Consumption then goes through a durable consumer of the stream that captures the subject, which must exist.
+  - `tls=true` enables TLS, and `queue` sets the queue group, the gateway's name by default.
+- **AMQP:**
+  - The path is the virtual host.
+  - `exchange` names the exchange to deliver to, which may be empty for the default exchange. `routingKey` sets the routing key, the event's type by default.
+  - `queue` names the queue to consume.
+- **Cloud Streams:** the path is that of the other gateway, if it is served under one, and `tls=false` connects over HTTP.
+
+**Credentials** never appear in resources, which anyone allowed to read them could see. An address with credentials in it, such as `amqp://user:password@rabbitmq`, is refused. Instead, `credentials=orders` names credentials that the broker (to deliver) or the gateway (to consume) reads from its configuration, under `CloudStreams:Transports:Credentials:orders`:
+- `Username` and `Password`: SASL with Kafka, and user name and password with NATS and AMQP.
+- `Token`: the token of NATS, or a bearer token for another gateway.
+- `ApiKey`: the API key of another gateway, sent in the `X-Api-Key` header, or in the header that `ApiKeyHeader` names.
+- `CredentialsFile`: a NATS credentials file.
+
+Names are made of letters, digits and underscores, so that environment variables can set them, e.g. from a Kubernetes secret with the Helm chart:
+
+```yaml
+broker:
+  env:
+    - name: CLOUDSTREAMS__TRANSPORTS__CREDENTIALS__ORDERS__USERNAME
+      value: cloud-streams
+    - name: CLOUDSTREAMS__TRANSPORTS__CREDENTIALS__ORDERS__PASSWORD
+      valueFrom: { secretKeyRef: { name: kafka-credentials, key: password } }
+```
+
+**Delivery:**
+- **Encoding:** events are sent in the structured content mode of each transport's CloudEvents binding, as `application/cloudevents+json`, with the `cloudstreams-subscription` and `cloudstreams-offset` headers. Kafka messages are keyed by the event's `partitionkey`, or else its subject, so that events with the same key stay in order.
+- **Confirmation:** a delivery succeeds once the transport has confirmed it.
+  - Kafka producers wait for every in-sync replica, and are idempotent.
+  - AMQP uses publisher confirms, and publishes persistent, mandatory messages, so that an event no queue receives fails rather than vanishing.
+  - NATS with JetStream waits for JetStream's acknowledgement. Core NATS confirms nothing, and loses events no one listens to.
+- **Failures:** a transport that cannot be reached, or that refuses an event, fails the delivery like an unreachable HTTP subscriber. Retry policies, circuit breakers and dead letters therefore apply unchanged.
+- **Batches:** batches are sent as one message per event, except to another gateway, which receives them as `application/cloudevents-batch+json`.
+- **Not supported:** deferred acknowledgements (`202 Accepted`) are HTTP only.
+
+**Bridging gateways:** `cloudstreams://` delivers to another gateway's `POST /api/events/pub`, authenticated with the API key or the token of its credentials.
+- **Loops:** the other gateway's split-horizon policy recognizes events that come back, so two instances can forward events to each other.
+- **Refused events in a batch:** if the other gateway refuses one event of a batch, the whole batch is delivered again. Enable deduplication on the other gateway, so that the events it already stored are not stored twice.
+
+**Consumption:** a gateway reconciles the channels it consumes with its resource every few seconds.
+- **Admission:** consumed events go through admission like published ones. The channel's name is their publisher, as `channel:{name}`, which `publisher` rate limits apply to.
+- **Decoding:** messages may carry an event in either content mode, or a batch. Attribute headers use each binding's prefix: `ce_` with Kafka, `cloudEvents:` or `cloudEvents_` with AMQP, `ce-` with NATS.
+- **Acknowledgement:** a message is acknowledged once its events have been stored, ignored or refused. A refused event is logged.
+- **Retries:** a message whose event could not be stored for now is consumed again, with a growing delay, so that no event is lost. That happens when the event is rate limited, or when the event store is unavailable. Kafka retries the message in place, which keeps its partition in order. JetStream and AMQP redeliver it.
+- **Shared consumption:** replicas of a gateway share a channel, as a Kafka consumer group, a NATS queue group or a durable JetStream consumer, or competing AMQP consumers.
+- **Failed consumption:** a channel whose consumption fails, e.g. because its server is unreachable, is consumed again after a delay that grows up to a minute.
+
 ### Admission
 
 Until a gateway has loaded its configuration, it answers `503 Service Unavailable` (with `Retry-After`), rather than admitting events its policies were not applied to.
@@ -563,7 +647,7 @@ Events whose data is invalid are refused with `400 Bad Request`, which names the
 Subscriptions, brokers and gateways are validated when they are created, replaced or patched, and rejected with `400 Bad Request` if their spec could only fail at runtime. The response names each invalid field, e.g. *"'spec.subscriber.rateLimit' must be greater than '0'"*. The checks cover:
 
 - **Regular expressions** that don't compile: attribute filters (unless they are runtime expressions), authorization rules, and gateway event patterns.
-- **URIs:** subscriber, webhook, acknowledgement callback and service URIs must be absolute HTTP(S) URIs.
+- **URIs:** webhook, acknowledgement callback and service URIs must be absolute HTTP(S) URIs. Subscriber and dead-letter URIs may also be the address of another transport, without credentials in it (see [Transports](#transports)), and so must gateway channels.
 - **Retry policies:** a backoff is required, an exponential backoff needs a positive exponent, `maxAttempts` must be positive or `-1`, and `statusCodes` must be HTTP status codes.
 - **Required fields:** a filter's expression, a mutation's expression or webhook, a partition's id, an attribute sequencing strategy's attribute name, a payload rule's maximum size, and the bounds of time-based rules (with `from` not after `to`).
 - **Numbers:** positive rate limits and split-horizon chain lengths, and stream offsets of at least `-1`.

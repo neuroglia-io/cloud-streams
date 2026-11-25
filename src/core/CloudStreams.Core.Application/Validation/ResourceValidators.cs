@@ -147,7 +147,7 @@ public class SubscriptionValidator
             this.RuleFor(s => s.Spec.Subscriber).NotNull().OverridePropertyName("spec.subscriber").WithName("spec.subscriber");
             this.When(s => s.Spec.Subscriber != null, () =>
             {
-                this.RuleFor(s => s.Spec.Subscriber.Uri).Must(ResourceValidationRules.IsHttpUri).OverridePropertyName("spec.subscriber.uri").WithName("spec.subscriber.uri").WithMessage("'spec.subscriber.uri' must be an absolute HTTP or HTTPS URI");
+                this.RuleFor(s => s.Spec.Subscriber.Uri).Custom((uri, context) => { if (!TransportAddress.IsValidSink(uri, out var error)) context.AddFailure("spec.subscriber.uri", $"'spec.subscriber.uri' is not a valid address: {error}"); });
                 this.RuleFor(s => s.Spec.Subscriber.RateLimit).GreaterThan(0).When(s => s.Spec.Subscriber.RateLimit.HasValue).OverridePropertyName("spec.subscriber.rateLimit").WithName("spec.subscriber.rateLimit");
                 this.RuleFor(s => s.Spec.Subscriber.RetryPolicy!).SetValidator(new HttpClientRetryPolicyValidator()).When(s => s.Spec.Subscriber.RetryPolicy != null).OverridePropertyName("spec.subscriber.retryPolicy").WithName("spec.subscriber.retryPolicy");
                 this.RuleFor(s => s.Spec.Subscriber.Batch!.MaxSize).GreaterThan(0).When(s => s.Spec.Subscriber.Batch != null).OverridePropertyName("spec.subscriber.batch.maxSize").WithName("spec.subscriber.batch.maxSize");
@@ -180,8 +180,7 @@ public class SubscriptionValidator
                     .OverridePropertyName("spec.mutation.webhook.serviceUri").WithName("spec.mutation.webhook.serviceUri").WithMessage("'spec.mutation.webhook.serviceUri' must be an absolute HTTP or HTTPS URI");
             });
             this.RuleFor(s => s.Spec.Stream!.Offset).GreaterThanOrEqualTo(StreamPosition.EndOfStream).When(s => s.Spec.Stream?.Offset != null).OverridePropertyName("spec.stream.offset").WithName("spec.stream.offset");
-            this.RuleFor(s => s.Spec.DeadLetter!.Uri).Must(ResourceValidationRules.IsHttpUri).When(s => s.Spec.DeadLetter?.Uri != null)
-                .OverridePropertyName("spec.deadLetter.uri").WithName("spec.deadLetter.uri").WithMessage("'spec.deadLetter.uri' must be an absolute HTTP or HTTPS URI");
+            this.RuleFor(s => s.Spec.DeadLetter!.Uri).Custom((uri, context) => { if (!TransportAddress.IsValidSink(uri, out var error)) context.AddFailure("spec.deadLetter.uri", $"'spec.deadLetter.uri' is not a valid address: {error}"); }).When(s => s.Spec.DeadLetter?.Uri != null);
         });
     }
 
@@ -260,6 +259,13 @@ public class GatewayValidator
                     limit.RuleFor(l => l.Limit).GreaterThan(0).OverridePropertyName("limit").WithName("limit");
                     limit.RuleFor(l => l.Period).Must(p => p != null && p.ToTimeSpan() > TimeSpan.Zero).OverridePropertyName("period").WithName("period").WithMessage("'period' is required, and must be positive");
                 }).When(g => g.Spec.Ingestion!.RateLimits != null).OverridePropertyName("spec.ingestion.rateLimits").WithName("spec.ingestion.rateLimits");
+                this.RuleForEach(g => g.Spec.Ingestion!.Channels).ChildRules(channel =>
+                {
+                    channel.RuleFor(c => c.Name).Matches("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$").OverridePropertyName("name").WithName("name").WithMessage("'name' must be made of lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters");
+                    channel.RuleFor(c => c.Uri).Custom((uri, context) => { if (!TransportAddress.TryParse(uri, true, out _, out var error)) context.AddFailure("uri", $"'uri' is not a valid channel: {error}"); });
+                }).When(g => g.Spec.Ingestion!.Channels != null).OverridePropertyName("spec.ingestion.channels").WithName("spec.ingestion.channels");
+                this.RuleFor(g => g.Spec.Ingestion!.Channels).Must(c => c!.Select(c => c.Name).Distinct().Count() == c!.Count).When(g => g.Spec.Ingestion!.Channels != null)
+                    .OverridePropertyName("spec.ingestion.channels").WithName("spec.ingestion.channels").WithMessage("The names of 'spec.ingestion.channels' must be unique");
             });
         });
     }

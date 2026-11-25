@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core;
+using CloudStreams.Core.Resources;
 using CloudStreams.Core.Api.Client.Services;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -21,6 +23,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Testcontainers.Kafka;
+using Testcontainers.RabbitMq;
 using Testcontainers.Redis;
 using Xunit;
 
@@ -39,6 +43,16 @@ public sealed class CloudStreamsFixture
 
     const string EventStoreImage = "eventstore/eventstore:24.10.6";
     const string RedisImage = "redis:7.4-alpine";
+    const string KafkaImage = "confluentinc/cp-kafka:7.9.2";
+    const string RabbitMqImage = "rabbitmq:4.1-alpine";
+    const string NatsImage = "nats:2.11-alpine";
+
+    /// <summary>
+    /// Gets the name of the credentials of RabbitMQ, which the gateway and the broker are configured with
+    /// </summary>
+    public const string RabbitMqCredentials = "rabbit";
+    const string RabbitMqUser = "cloud-streams";
+    const string RabbitMqPassword = "e2e-secret";
 
     readonly RedisContainer _redis = new RedisBuilder().WithImage(RedisImage).Build();
     readonly IContainer _eventStore = new ContainerBuilder()
@@ -48,6 +62,15 @@ public sealed class CloudStreamsFixture
         .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
         .WithPortBinding(2113, true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(2113).ForPath("/health/live").ForStatusCode(HttpStatusCode.NoContent)))
+        .Build();
+    // the transports other than HTTP that cloud events are delivered over and consumed from (see #218)
+    readonly KafkaContainer _kafka = new KafkaBuilder().WithImage(KafkaImage).Build();
+    readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder().WithImage(RabbitMqImage).WithUsername(RabbitMqUser).WithPassword(RabbitMqPassword).Build();
+    readonly IContainer _nats = new ContainerBuilder()
+        .WithImage(NatsImage)
+        .WithCommand("--jetstream")
+        .WithPortBinding(4222, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Server is ready"))
         .Build();
     readonly List<ApplicationProcess> _processes = [];
 
@@ -71,17 +94,43 @@ public sealed class CloudStreamsFixture
     /// </summary>
     public TestSubscriber Subscriber { get; } = new();
 
+    /// <summary>
+    /// Gets the address of Kafka's bootstrap server, as <c>host:port</c>
+    /// </summary>
+    public string KafkaServer { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets the address of the NATS server, as <c>host:port</c>
+    /// </summary>
+    public string NatsServer { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets the address of the RabbitMQ server, as <c>host:port</c>
+    /// </summary>
+    public string RabbitMqServer { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets the connection string of RabbitMQ, with its credentials, which the tests use to declare and to consume queues
+    /// </summary>
+    public string RabbitMqConnectionString => this._rabbitMq.GetConnectionString();
+
     /// <inheritdoc/>
     public async Task InitializeAsync()
     {
         // a container that never becomes ready fails the run, rather than hanging it
         using var startup = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        await Task.WhenAll(this._redis.StartAsync(startup.Token), this._eventStore.StartAsync(startup.Token), this.Subscriber.StartAsync());
+        await Task.WhenAll(this._redis.StartAsync(startup.Token), this._eventStore.StartAsync(startup.Token), this._kafka.StartAsync(startup.Token), this._rabbitMq.StartAsync(startup.Token), this._nats.StartAsync(startup.Token), this.Subscriber.StartAsync());
+        var bootstrapAddress = this._kafka.GetBootstrapAddress();
+        this.KafkaServer = new Uri(bootstrapAddress.Contains("://") ? bootstrapAddress : $"kafka://{bootstrapAddress}").Authority;
+        this.NatsServer = $"{this._nats.Hostname}:{this._nats.GetMappedPublicPort(4222)}";
+        this.RabbitMqServer = $"{this._rabbitMq.Hostname}:{this._rabbitMq.GetMappedPublicPort(5672)}";
         var environment = new Dictionary<string, string>()
         {
             ["ASPNETCORE_ENVIRONMENT"] = "Development",
             ["ConnectionStrings__eventstore"] = $"esdb://{this._eventStore.Hostname}:{this._eventStore.GetMappedPublicPort(2113)}?tls=false",
-            ["ConnectionStrings__redis"] = this._redis.GetConnectionString()
+            ["ConnectionStrings__redis"] = this._redis.GetConnectionString(),
+            [$"CloudStreams__Transports__Credentials__{RabbitMqCredentials}__Username"] = RabbitMqUser,
+            [$"CloudStreams__Transports__Credentials__{RabbitMqCredentials}__Password"] = RabbitMqPassword
         };
         // both ports are reserved at once: a port released before the process that is to listen on it has started could otherwise be handed out again, and the
         // broker could take the gateway's port, answering its health checks while the gateway fails to start
@@ -105,7 +154,33 @@ public sealed class CloudStreamsFixture
         foreach (var process in this._processes) process.Dispose();
         this.Gateway?.Dispose();
         await this.Subscriber.DisposeAsync();
-        await Task.WhenAll(this._redis.DisposeAsync().AsTask(), this._eventStore.DisposeAsync().AsTask());
+        await Task.WhenAll(this._redis.DisposeAsync().AsTask(), this._eventStore.DisposeAsync().AsTask(), this._kafka.DisposeAsync().AsTask(), this._rabbitMq.DisposeAsync().AsTask(), this._nats.DisposeAsync().AsTask());
+    }
+
+    /// <summary>
+    /// Waits until the specified partition holds at least the specified amount of cloud events
+    /// </summary>
+    /// <param name="type">The type of the partition</param>
+    /// <param name="id">The id of the partition</param>
+    /// <param name="count">The amount of cloud events to wait for</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>
+    /// Partitions are filled by an EventStoreDB projection, which lags behind the ingestion of cloud events, the more so as the machine is busy: a test that reads a
+    /// partition, or that resolves a position in it, right after publishing must wait for the projection to catch up
+    /// </remarks>
+    public async Task WaitForPartitionAsync(CloudEventPartitionType type, string id, int count)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (true)
+        {
+            try
+            {
+                var events = await (await this.Api.CloudEvents.Stream.ReadStreamAsync(new(new PartitionReference(type, id)), timeout.Token)).CountAsync(timeout.Token);
+                if (events >= count) return;
+            }
+            catch (Neuroglia.ProblemDetailsException ex) when (ex.Problem.Status == 404) { }
+            await Task.Delay(100, timeout.Token);
+        }
     }
 
     /// <summary>

@@ -168,6 +168,29 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.RateLimits ??= []).Add(new() { Limit = 100, Partition = CloudEventRateLimitPartitioning.Publisher, Period = Duration.FromSeconds(1) })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a rate limit</button>
                 </div>
             </FormField>
+            <FormField Id="@FieldId("channels")" Label="Also consume events from" Error="@ErrorOf("channels")">
+                <ChildContent>
+                    <div id="@FieldId("channels")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("channels"))">
+                        @for (var i = 0; i < (Model.Spec.Ingestion?.Channels?.Count ?? 0); i++)
+                        {
+                            var index = i;
+                            var channel = Model.Spec.Ingestion!.Channels![index];
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="text" class="form-control" style="max-width: 12rem" placeholder="name" aria-label="@($"Name of channel {index + 1}")" @bind="channel.Name" />
+                                <input type="text" inputmode="url" spellcheck="false" class="form-control font-monospace" placeholder="kafka://kafka:9092/orders" aria-label="@($"Address of channel {index + 1}")"
+                                       value="@channel.Uri?.OriginalString" @onchange="e => channel.Uri = Uri.TryCreate(e.Value?.ToString()?.Trim(), UriKind.Absolute, out var uri) ? uri : null!" />
+                                <button type="button" class="btn btn-outline-secondary" aria-label="@($"Remove channel {index + 1}")" @onclick="() => Model.Spec.Ingestion!.Channels!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                            </div>
+                        }
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.Channels ??= []).Add(new() { Name = string.Empty, Uri = null! })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a channel</button>
+                    </div>
+                </ChildContent>
+                <HelpContent>
+                    Kafka topics (<code>kafka://kafka:9092/orders</code>), NATS subjects (<code>nats://nats:4222/orders.&gt;?jetstream=true</code>) or AMQP queues
+                    (<code>amqp://rabbitmq/?queue=orders</code>). Their events are admitted like published ones, the channel's name being their publisher, and replicas share
+                    their consumption. Credentials are named with <code>credentials=</code>, and configured on the gateway.
+                </HelpContent>
+            </FormField>
             break;
         case 3:
             <p class="small text-secondary">How the gateway handles the events of a source and a type: the first configuration whose patterns match applies. Patterns are regular expressions.</p>
@@ -349,6 +372,7 @@
         ["spec.ingestion.maxBatchSize"] = ("max-batch", 2),
         ["spec.ingestion.deduplication"] = ("deduplication", 2),
         ["spec.ingestion.rateLimits"] = ("rate-limits", 2),
+        ["spec.ingestion.channels"] = ("channels", 2),
         ["spec.events"] = ("events", 3),
         ["spec.splitHorizon.originAttribute"] = ("origin-attribute", 4),
         ["spec.splitHorizon.maxChainLength"] = ("max-chain", 4)
@@ -413,6 +437,17 @@
                 if (Model.Spec.Ingestion?.MaxBatchSize is <= 0) errors["max-batch"] = "Enter a positive size, or leave empty";
                 if (Model.Spec.Ingestion?.Deduplication?.Window.ToTimeSpan() <= TimeSpan.Zero) errors["deduplication"] = "Enter a positive duration, or leave empty";
                 if (Model.Spec.Ingestion?.RateLimits?.Any(l => l.Limit < 1 || l.Period.ToTimeSpan() <= TimeSpan.Zero) == true) errors["rate-limits"] = "Every rate limit needs a positive number of events and a positive period";
+                for (var i = 0; i < (Model.Spec.Ingestion?.Channels?.Count ?? 0); i++)
+                {
+                    var channel = Model.Spec.Ingestion!.Channels![i];
+                    string? channelError = null;
+                    if (!ResourceNames.IsValid(channel.Name)) channelError = "name it with lower-case letters, digits and dashes";
+                    else if (Model.Spec.Ingestion.Channels.Take(i).Any(c => c.Name == channel.Name)) channelError = $"the name '{channel.Name}' is already taken";
+                    else if (!TransportAddress.TryParse(channel.Uri, true, out _, out var addressError)) channelError = channel.Uri == null ? "enter its address" : addressError;
+                    if (channelError == null) continue;
+                    errors["channels"] = $"Channel {i + 1}: {channelError}";
+                    break;
+                }
                 break;
             case 3:
                 var invalid = Model.Spec.Events?.Select((c, i) => (c, i)).FirstOrDefault(e => string.IsNullOrWhiteSpace(e.c.Source) || string.IsNullOrWhiteSpace(e.c.Type) || !IsValidPattern(e.c.Source) || !IsValidPattern(e.c.Type));
@@ -433,7 +468,8 @@
         if (spec.Ingestion != null)
         {
             if (spec.Ingestion.RateLimits?.Count == 0) spec.Ingestion.RateLimits = null;
-            if (spec.Ingestion.MaxRequestBodySize == null && spec.Ingestion.MaxBatchSize == null && spec.Ingestion.Deduplication == null && spec.Ingestion.RateLimits == null) spec.Ingestion = null;
+            if (spec.Ingestion.Channels?.Count == 0) spec.Ingestion.Channels = null;
+            if (spec.Ingestion.MaxRequestBodySize == null && spec.Ingestion.MaxBatchSize == null && spec.Ingestion.Deduplication == null && spec.Ingestion.RateLimits == null && spec.Ingestion.Channels == null) spec.Ingestion = null;
         }
         if (spec.Validation?.DataSchema is { Required: false, AutoGenerate: false }) spec.Validation.DataSchema = null;
         if (spec.Validation is { SkipValidation: false, DataSchema: null } && spec.Validation.ValidationStrategy == CloudEventValidationStrategy.Fail) spec.Validation = null;
@@ -456,6 +492,10 @@
             @foreach (var limit in spec.Ingestion?.RateLimits ?? [])
             {
                 <li>At most @limit.Limit events per @limit.Partition every @limit.Period.</li>
+            }
+            @foreach (var channel in spec.Ingestion?.Channels ?? [])
+            {
+                <li>Events are also consumed from <code>@channel.Uri</code>, as '@channel.Name'.</li>
             }
             @if (spec.Events?.Count > 0)
             {

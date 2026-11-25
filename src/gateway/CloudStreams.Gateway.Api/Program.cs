@@ -64,6 +64,8 @@ builder.Services.AddSingleton<IGatewayAdmissionTester>(provider => provider.GetR
 builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
 builder.Services.AddSingleton<ICloudEventAuthorizationManager, CloudEventAuthorizationManager>();
 builder.Services.AddHostedService<CloudEventHubDispatcher>();
+builder.Services.AddCloudStreamsTransports(builder.Configuration);
+builder.Services.AddHostedService<IngestionChannelService>();
 builder.Services.AddSingleton<IJsonSchemaGenerator, JsonSchemaGenerator>();
 builder.Services.Configure<JsonSchemaRegistryOptions>(builder.Configuration.GetSection(JsonSchemaRegistryOptions.ConfigurationSectionName));
 builder.Services.AddSingleton<IJsonSchemaRegistry, MemoryJsonSchemaRegistry>();

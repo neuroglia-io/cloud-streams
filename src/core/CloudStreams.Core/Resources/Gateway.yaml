@@ -351,6 +351,20 @@ spec:
                             type: string
                             description: The period, as an ISO 8601 duration, the limit applies to. A long period, such as P1D, makes the limit a quota
                         required: [ partition, limit, period ]
+                    channels:
+                      type: array
+                      description: The Kafka topics, NATS subjects or AMQP queues the gateway consumes cloud events from, in addition to its HTTP endpoint
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            description: The name of the channel, which identifies it as the publisher of the cloud events it carries
+                          uri:
+                            type: string
+                            format: uri
+                            description: The address of the channel, e.g. kafka://kafka:9092/orders, nats://nats:4222/orders.> or amqp://rabbitmq/?queue=orders
+                        required: [ name, uri ]
             status:
               type: object
               properties:
