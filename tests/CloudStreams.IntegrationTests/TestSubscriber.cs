@@ -31,6 +31,23 @@ public sealed class TestSubscriber
 {
 
     readonly ConcurrentDictionary<string, Endpoint> _endpoints = new();
+    readonly List<Dictionary<string, string>> _tokenRequests = [];
+
+    /// <summary>
+    /// Gets the token the subscriber's OAuth2 token endpoint, <c>/oauth2/token</c>, issues
+    /// </summary>
+    public const string IssuedToken = "e2e-access-token";
+
+    /// <summary>
+    /// Gets the forms of the requests the subscriber's OAuth2 token endpoint has received
+    /// </summary>
+    public IReadOnlyList<IReadOnlyDictionary<string, string>> TokenRequests
+    {
+        get
+        {
+            lock (this._tokenRequests) return [.. this._tokenRequests];
+        }
+    }
     WebApplication? _app;
 
     /// <summary>
@@ -54,15 +71,23 @@ public sealed class TestSubscriber
             using var document = await JsonDocument.ParseAsync(context.Request.Body);
             var offset = context.Request.Headers["cloudstreams-offset"].ToString();
             var ackToken = context.Request.Headers["cloudstreams-ack-token"].ToString();
+            var authorization = context.Request.Headers.Authorization.ToString();
             // a batch is recorded as one delivery per cloud event, and refused if any of them is (see #212)
             var batch = document.RootElement.ValueKind == JsonValueKind.Array;
             var deliveries = batch
-                ? [.. document.RootElement.EnumerateArray().Select(e => new Delivery(e.GetProperty("id").GetString()!, offset, ackToken, e.Clone(), true))]
-                : new[] { new Delivery(document.RootElement.GetProperty("id").GetString()!, offset, ackToken, document.RootElement.Clone()) };
+                ? [.. document.RootElement.EnumerateArray().Select(e => new Delivery(e.GetProperty("id").GetString()!, offset, ackToken, e.Clone(), true, authorization))]
+                : new[] { new Delivery(document.RootElement.GetProperty("id").GetString()!, offset, ackToken, document.RootElement.Clone(), false, authorization) };
             var statuses = deliveries.Select(endpoint.Respond).ToList();
             var status = statuses.FirstOrDefault(s => s is < 200 or >= 300, statuses[^1]);
             foreach (var delivery in deliveries) endpoint.Record(delivery);
             return Results.StatusCode(status);
+        });
+        // an OAuth2 token endpoint, which issues the same token to any client, and records the requests it receives (see #218)
+        this._app.MapPost("/oauth2/token", async (HttpContext context) =>
+        {
+            var form = await context.Request.ReadFormAsync();
+            lock (this._tokenRequests) this._tokenRequests.Add(form.ToDictionary(f => f.Key, f => f.Value.ToString()));
+            return Results.Json(new { access_token = IssuedToken, token_type = "Bearer", expires_in = 3600 });
         });
         await this._app.StartAsync();
         var address = this._app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First();
@@ -96,7 +121,8 @@ public sealed class TestSubscriber
     /// <param name="AckToken">The token to acknowledge the event with, if any</param>
     /// <param name="Event">The delivered event</param>
     /// <param name="Batched">A boolean indicating whether or not the event has been delivered as part of a batch, whose offset is the one of its first event</param>
-    public record Delivery(string Id, string Offset, string AckToken, JsonElement Event, bool Batched = false);
+    /// <param name="Authorization">The value of the Authorization header of the delivery, if any</param>
+    public record Delivery(string Id, string Offset, string AckToken, JsonElement Event, bool Batched = false, string? Authorization = null);
 
     /// <summary>
     /// Represents an endpoint of the subscriber

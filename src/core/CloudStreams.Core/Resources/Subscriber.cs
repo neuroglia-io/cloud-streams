@@ -21,11 +21,18 @@ public record Subscriber
 {
 
     /// <summary>
-    /// Gets/sets the address of the dispatch consumed cloud events to
+    /// Gets/sets the endpoint to deliver cloud events to, if they are not delivered to a <see cref="Sink"/>: an address, or an object with an address and how to
+    /// authenticate to it. Exactly one of the two must be set (see #218)
     /// </summary>
-    [Required, JsonRequired]
-    [DataMember(Order = 1, Name = "uri", IsRequired = true), JsonPropertyName("uri"), YamlMember(Alias = "uri")]
-    public virtual Uri Uri { get; set; } = null!;
+    [DataMember(Order = 1, Name = "endpoint"), JsonPropertyName("endpoint"), YamlMember(Alias = "endpoint")]
+    public virtual Endpoint? Endpoint { get; set; }
+
+    /// <summary>
+    /// Gets/sets the name of the <see cref="Resources.Sink"/> to deliver cloud events to, if they are not delivered to an <see cref="Endpoint"/>. Exactly one of
+    /// the two must be set (see #218)
+    /// </summary>
+    [DataMember(Order = 8, Name = "sink"), JsonPropertyName("sink"), YamlMember(Alias = "sink")]
+    public virtual string? Sink { get; set; }
 
     /// <summary>
     /// Gets/sets the maximum amount of events, if any, that can be dispatched per second to the subscriber

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports;
 using CloudStreams.Core.Api.Services;
 using CloudStreams.Core.Application.Services;
 
@@ -30,6 +31,8 @@ public static class ICloudStreamsApiBuilderExtensions
     public static ICloudStreamsApplicationBuilder UseCoreApi(this ICloudStreamsApplicationBuilder builder)
     {
         builder.Services.AddSignalR();
+        // redeliveries go through the transports, to endpoints and sinks, authenticated as configured (see #218)
+        builder.Services.AddCloudStreamsTransports(builder.Configuration);
         builder.Services.AddSingleton<ResourceWatchEventHubController>();
         builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ResourceWatchEventHubController>());
         builder.Services.AddHostedService<GatewayResourceController>();

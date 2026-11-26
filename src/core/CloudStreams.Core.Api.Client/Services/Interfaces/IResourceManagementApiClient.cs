@@ -30,6 +30,16 @@ public interface IResourceManagementApiClient
     public IResourceManagementApi<Broker> Brokers { get; }
 
     /// <summary>
+    /// Gets the API used to manage <see cref="Sink"/>s, the endpoints subscriptions deliver to by name (see #218)
+    /// </summary>
+    public IResourceManagementApi<Sink> Sinks { get; }
+
+    /// <summary>
+    /// Gets the API used to manage <see cref="Feed"/>s, the endpoints gateways consume from by name (see #218)
+    /// </summary>
+    public IResourceManagementApi<Feed> Feeds { get; }
+
+    /// <summary>
     /// Gets the API used to manage <see cref="Subscription"/>s
     /// </summary>
     public ISubscriptionManagementApi Subscriptions { get; }

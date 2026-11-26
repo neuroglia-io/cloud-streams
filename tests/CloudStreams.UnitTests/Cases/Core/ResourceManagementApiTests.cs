@@ -47,7 +47,7 @@ public class ResourceManagementApiTests
     public async Task Resource_Uris_Should_Never_Include_A_Namespace_And_Should_Escape_Names()
     {
         // arrange
-        var (api, http) = Create(Neuroglia.Serialization.Json.JsonSerializer.Default.SerializeToText(new Subscription() { Metadata = new() { Name = "test" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") } } }));
+        var (api, http) = Create(Neuroglia.Serialization.Json.JsonSerializer.Default.SerializeToText(new Subscription() { Metadata = new() { Name = "test" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } } }));
 
         // act
         await api.GetAsync("a b", "ignored-namespace");

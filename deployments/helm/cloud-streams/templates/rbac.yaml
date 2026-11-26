@@ -1,0 +1,33 @@
+{{- if .Values.secrets.kubernetes.rbac }}
+# lets the broker and the gateway read the secrets of the release's namespace, which the 'kubernetes' secret provider reads. They only read the secrets labelled
+# 'cloud-streams.io/secret=true', which a role cannot enforce: list the secrets in 'secrets.kubernetes.resourceNames' to restrict the role itself
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "cloud-streams.fullname" . }}-secrets
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get ]
+    {{- with .Values.secrets.kubernetes.resourceNames }}
+    resourceNames:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "cloud-streams.fullname" . }}-secrets
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "cloud-streams.fullname" . }}-secrets
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cloud-streams.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

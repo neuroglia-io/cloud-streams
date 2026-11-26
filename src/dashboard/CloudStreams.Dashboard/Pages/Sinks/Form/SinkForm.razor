@@ -1,0 +1,77 @@
+@namespace CloudStreams.Dashboard.Pages.Sinks.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@inherits ResourceFormBase<Sink>
+
+@* A form to create and edit sinks: endpoints, with the means to authenticate to them, that subscriptions deliver to by name (see #218) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name subscriptions refer to the sink by, e.g. orders-kafka. It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("endpoint")" Label="Endpoint" Required="true">
+                <ChildContent>
+                    <EndpointInput Id="@FieldId("endpoint")" Label="Sink" Value="Model.Spec.Endpoint" ValueChanged="e => Model.Spec.Endpoint = e!" UriError="@ErrorOf("endpoint")" />
+                </ChildContent>
+                <HelpContent>
+                    Where events are delivered: an HTTP or HTTPS address, a Kafka topic (<code>kafka://kafka:9092/orders</code>), a NATS subject (<code>nats://nats:4222/orders?jetstream=true</code>),
+                    an AMQP exchange (<code>amqp://rabbitmq/?exchange=orders</code>) or another Cloud Streams gateway (<code>cloudstreams://gateway.example.com</code>). Whoever edits the
+                    subscriptions that deliver to the sink can neither read its credentials nor send them elsewhere.
+                </HelpContent>
+            </FormField>
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Sink"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.endpoint"] = ("endpoint", 0)
+    };
+
+    /// <inheritdoc/>
+    protected override Sink CreateDefault() => new(new() { Name = string.Empty }, new() { Endpoint = null! });
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        if (IsNew)
+        {
+            if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+            else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+        }
+        if (EndpointInput.Validate(Model.Spec.Endpoint, false) is { } error) errors["endpoint"] = error;
+    }
+
+    /// <inheritdoc/>
+    protected override void Normalize(Sink resource)
+    {
+        if (resource.Metadata.Labels?.Count == 0) resource.Metadata.Labels = null;
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        <p class="mb-0">
+            Subscriptions that deliver to <strong>@Model.GetName()</strong> deliver to <code>@Model.Spec.Endpoint</code>@(Model.Spec.Endpoint?.Authentication?.Scheme is { } scheme ? $", authenticated with {scheme}" : ", without authentication")@(Model.Spec.Endpoint?.Authentication?.Policy?.Use is { } secret ? $", whose secret values are read from '{secret}'" : "").
+        </p>
+    };
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+}

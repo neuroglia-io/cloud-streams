@@ -41,7 +41,7 @@ public class CloudEventSubscriptionsTests
 
     static async Task<bool> SelectsAsync(CloudEventSubscription subscription, CloudEventRecord record)
     {
-        var resource = new Subscription() { Metadata = new() { Name = "test" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") }, Filter = CloudEventSubscriptionFilter.Compile(subscription) } };
+        var resource = new Subscription() { Metadata = new() { Name = "test" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") }, Filter = CloudEventSubscriptionFilter.Compile(subscription) } };
         return await Pipeline.FiltersAsync(resource, record);
     }
 
@@ -143,7 +143,7 @@ public class CloudEventSubscriptionsTests
             Spec = new()
             {
                 Partition = new(CloudEventPartitionType.BySource, "https://orders.example.com"),
-                Subscriber = new() { Uri = new("https://subscriber.example.com/events") },
+                Subscriber = new() { Endpoint = new Uri("https://subscriber.example.com/events") },
                 Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string?>() { ["type"] = "^order\\.placed\\z", ["subject"] = "^eu/", ["region"] = "(eu|us)" } },
                 Stream = new() { Offset = 0 }
             }

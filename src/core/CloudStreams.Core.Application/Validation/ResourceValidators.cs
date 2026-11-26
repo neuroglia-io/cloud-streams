@@ -61,6 +61,14 @@ public static class ResourceValidationRules
     /// <returns>A boolean indicating whether or not the specified URI is an absolute HTTP or HTTPS URI</returns>
     public static bool IsHttpUri(Uri? uri) => uri != null && uri.IsAbsoluteUri && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
+    /// <summary>
+    /// Determines whether the specified value is a valid resource name: lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to
+    /// 63 characters
+    /// </summary>
+    /// <param name="name">The name to check</param>
+    /// <returns>A boolean indicating whether or not the specified value is a valid resource name</returns>
+    public static bool IsResourceName(string? name) => name != null && Regex.IsMatch(name, "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$");
+
 }
 
 /// <summary>
@@ -147,7 +155,11 @@ public class SubscriptionValidator
             this.RuleFor(s => s.Spec.Subscriber).NotNull().OverridePropertyName("spec.subscriber").WithName("spec.subscriber");
             this.When(s => s.Spec.Subscriber != null, () =>
             {
-                this.RuleFor(s => s.Spec.Subscriber.Uri).Custom((uri, context) => { if (!TransportAddress.IsValidSink(uri, out var error)) context.AddFailure("spec.subscriber.uri", $"'spec.subscriber.uri' is not a valid address: {error}"); });
+                this.RuleFor(s => s.Spec.Subscriber).Must(s => (s.Endpoint == null) != string.IsNullOrWhiteSpace(s.Sink)).OverridePropertyName("spec.subscriber").WithName("spec.subscriber")
+                    .WithMessage("Exactly one of 'spec.subscriber.endpoint' and 'spec.subscriber.sink' must be set");
+                this.RuleFor(s => s.Spec.Subscriber.Endpoint).Custom((endpoint, context) => { foreach (var (path, error) in EndpointValidator.Validate(endpoint, false, "spec.subscriber.endpoint")) context.AddFailure(path, error); }).When(s => s.Spec.Subscriber.Endpoint != null);
+                this.RuleFor(s => s.Spec.Subscriber.Sink).Must(ResourceValidationRules.IsResourceName).When(s => s.Spec.Subscriber.Sink != null).OverridePropertyName("spec.subscriber.sink").WithName("spec.subscriber.sink")
+                    .WithMessage("'spec.subscriber.sink' must be the name of a sink");
                 this.RuleFor(s => s.Spec.Subscriber.RateLimit).GreaterThan(0).When(s => s.Spec.Subscriber.RateLimit.HasValue).OverridePropertyName("spec.subscriber.rateLimit").WithName("spec.subscriber.rateLimit");
                 this.RuleFor(s => s.Spec.Subscriber.RetryPolicy!).SetValidator(new HttpClientRetryPolicyValidator()).When(s => s.Spec.Subscriber.RetryPolicy != null).OverridePropertyName("spec.subscriber.retryPolicy").WithName("spec.subscriber.retryPolicy");
                 this.RuleFor(s => s.Spec.Subscriber.Batch!.MaxSize).GreaterThan(0).When(s => s.Spec.Subscriber.Batch != null).OverridePropertyName("spec.subscriber.batch.maxSize").WithName("spec.subscriber.batch.maxSize");
@@ -180,7 +192,11 @@ public class SubscriptionValidator
                     .OverridePropertyName("spec.mutation.webhook.serviceUri").WithName("spec.mutation.webhook.serviceUri").WithMessage("'spec.mutation.webhook.serviceUri' must be an absolute HTTP or HTTPS URI");
             });
             this.RuleFor(s => s.Spec.Stream!.Offset).GreaterThanOrEqualTo(StreamPosition.EndOfStream).When(s => s.Spec.Stream?.Offset != null).OverridePropertyName("spec.stream.offset").WithName("spec.stream.offset");
-            this.RuleFor(s => s.Spec.DeadLetter!.Uri).Custom((uri, context) => { if (!TransportAddress.IsValidSink(uri, out var error)) context.AddFailure("spec.deadLetter.uri", $"'spec.deadLetter.uri' is not a valid address: {error}"); }).When(s => s.Spec.DeadLetter?.Uri != null);
+            this.RuleFor(s => s.Spec.DeadLetter!.Endpoint).Custom((endpoint, context) => { foreach (var (path, error) in EndpointValidator.Validate(endpoint, false, "spec.deadLetter.endpoint")) context.AddFailure(path, error); }).When(s => s.Spec.DeadLetter?.Endpoint != null);
+            this.RuleFor(s => s.Spec.DeadLetter!.Sink).Must(ResourceValidationRules.IsResourceName).When(s => s.Spec.DeadLetter?.Sink != null).OverridePropertyName("spec.deadLetter.sink").WithName("spec.deadLetter.sink")
+                .WithMessage("'spec.deadLetter.sink' must be the name of a sink");
+            this.RuleFor(s => s.Spec.DeadLetter).Must(d => d!.Endpoint == null || d.Sink == null).When(s => s.Spec.DeadLetter != null).OverridePropertyName("spec.deadLetter").WithName("spec.deadLetter")
+                .WithMessage("'spec.deadLetter.endpoint' and 'spec.deadLetter.sink' cannot be combined");
         });
     }
 
@@ -259,13 +275,26 @@ public class GatewayValidator
                     limit.RuleFor(l => l.Limit).GreaterThan(0).OverridePropertyName("limit").WithName("limit");
                     limit.RuleFor(l => l.Period).Must(p => p != null && p.ToTimeSpan() > TimeSpan.Zero).OverridePropertyName("period").WithName("period").WithMessage("'period' is required, and must be positive");
                 }).When(g => g.Spec.Ingestion!.RateLimits != null).OverridePropertyName("spec.ingestion.rateLimits").WithName("spec.ingestion.rateLimits");
-                this.RuleForEach(g => g.Spec.Ingestion!.Channels).ChildRules(channel =>
+                this.RuleFor(g => g.Spec.Ingestion!.Feeds).Custom((feeds, context) =>
                 {
-                    channel.RuleFor(c => c.Name).Matches("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$").OverridePropertyName("name").WithName("name").WithMessage("'name' must be made of lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters");
-                    channel.RuleFor(c => c.Uri).Custom((uri, context) => { if (!TransportAddress.TryParse(uri, true, out _, out var error)) context.AddFailure("uri", $"'uri' is not a valid channel: {error}"); });
-                }).When(g => g.Spec.Ingestion!.Channels != null).OverridePropertyName("spec.ingestion.channels").WithName("spec.ingestion.channels");
-                this.RuleFor(g => g.Spec.Ingestion!.Channels).Must(c => c!.Select(c => c.Name).Distinct().Count() == c!.Count).When(g => g.Spec.Ingestion!.Channels != null)
-                    .OverridePropertyName("spec.ingestion.channels").WithName("spec.ingestion.channels").WithMessage("The names of 'spec.ingestion.channels' must be unique");
+                    for (var i = 0; i < feeds!.Count; i++)
+                    {
+                        var feed = feeds[i];
+                        var path = $"spec.ingestion.feeds[{i}]";
+                        if (feed == null) context.AddFailure(path, $"'{path}' must be the name of a feed, or a feed with a name and an endpoint");
+                        else if (feed.Feed != null)
+                        {
+                            if (!ResourceValidationRules.IsResourceName(feed.Feed)) context.AddFailure(path, $"'{feed.Feed}' is not the name of a feed");
+                        }
+                        else
+                        {
+                            if (!ResourceValidationRules.IsResourceName(feed.Name)) context.AddFailure($"{path}.name", $"'{path}.name' must be made of lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters");
+                            foreach (var (errorPath, error) in EndpointValidator.Validate(feed.Endpoint, true, $"{path}.endpoint")) context.AddFailure(errorPath, error);
+                        }
+                    }
+                    var duplicate = feeds.Where(f => f?.EffectiveName != null).GroupBy(f => f.EffectiveName).FirstOrDefault(g => g.Count() > 1);
+                    if (duplicate != null) context.AddFailure("spec.ingestion.feeds", $"'spec.ingestion.feeds' lists the feed '{duplicate.Key}' more than once: the names of feeds identify them as publishers, and must be unique");
+                }).When(g => g.Spec.Ingestion!.Feeds != null);
             });
         });
     }
@@ -289,6 +318,42 @@ public class CloudEventAuthorizationRuleValidator
         this.RuleFor(r => r.MaxSize).Must(m => m is > 0).When(r => r.Type == CloudEventAuthorizationRuleType.Payload).OverridePropertyName("maxSize").WithName("maxSize").WithMessage("'maxSize' is required, and must be positive, by payload rules");
         this.RuleFor(r => r).Must(r => r.From == null || r.To == null || r.From <= r.To).When(r => r.Type == CloudEventAuthorizationRuleType.Temporary).OverridePropertyName("to").WithName("to").WithMessage("'to' must not precede 'from'");
         this.RuleFor(r => r).Must(r => r.From != null || r.To != null).When(r => r.Type is CloudEventAuthorizationRuleType.Temporary or CloudEventAuthorizationRuleType.TimeOfDay).OverridePropertyName("from").WithName("from").WithMessage("'from', 'to' or both are required by time-based rules");
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="Sink"/>s (see #218)
+/// </summary>
+public class SinkValidator
+    : AbstractValidator<Sink>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="SinkValidator"/>
+    /// </summary>
+    public SinkValidator()
+    {
+        this.RuleFor(s => s.Spec).NotNull();
+        this.RuleFor(s => s.Spec.Endpoint).Custom((endpoint, context) => { foreach (var (path, error) in EndpointValidator.Validate(endpoint, false, "spec.endpoint")) context.AddFailure(path, error); }).When(s => s.Spec != null);
+    }
+
+}
+
+/// <summary>
+/// Represents the service used to validate <see cref="Feed"/>s (see #218)
+/// </summary>
+public class FeedValidator
+    : AbstractValidator<Feed>
+{
+
+    /// <summary>
+    /// Initializes a new <see cref="FeedValidator"/>
+    /// </summary>
+    public FeedValidator()
+    {
+        this.RuleFor(s => s.Spec).NotNull();
+        this.RuleFor(s => s.Spec.Endpoint).Custom((endpoint, context) => { foreach (var (path, error) in EndpointValidator.Validate(endpoint, true, "spec.endpoint")) context.AddFailure(path, error); }).When(s => s.Spec != null);
     }
 
 }

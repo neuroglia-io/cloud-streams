@@ -45,7 +45,7 @@ public class CoreApiClientContractTests
     static Subscription Sample(string name = "orders") => new()
     {
         Metadata = new() { Name = name },
-        Spec = new() { Subscriber = new() { Uri = new("https://subscriber.example.com/events") } }
+        Spec = new() { Subscriber = new() { Endpoint = new Uri("https://subscriber.example.com/events") } }
     };
 
     public async Task InitializeAsync()
@@ -151,7 +151,7 @@ public class CoreApiClientContractTests
         // assert
         var command = this.Single<CreateResourceCommand<Subscription>>();
         Assert.Equal("created", command.Resource.GetName());
-        Assert.Equal(new Uri("https://subscriber.example.com/events"), command.Resource.Spec.Subscriber.Uri);
+        Assert.Equal(new Uri("https://subscriber.example.com/events"), command.Resource.Spec.Subscriber.Endpoint!.Uri);
         Assert.False(command.DryRun);
     }
 

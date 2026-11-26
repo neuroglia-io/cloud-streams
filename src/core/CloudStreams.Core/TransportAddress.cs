@@ -61,14 +61,29 @@ public static class TransportSchemes
     /// </summary>
     public static IReadOnlyList<string> Sources { get; } = [Kafka, Nats, Amqp, Amqps];
 
+    /// <summary>
+    /// Gets the authentication schemes the transport of the specified scheme supports. See <see cref="Resources.AuthenticationScheme"/>
+    /// </summary>
+    /// <param name="scheme">The scheme of the address</param>
+    /// <returns>The authentication schemes the transport supports</returns>
+    public static IReadOnlyList<string> GetAuthenticationSchemes(string? scheme) => scheme switch
+    {
+        Http or Https => [Resources.AuthenticationScheme.Basic, Resources.AuthenticationScheme.Bearer, Resources.AuthenticationScheme.ApiKey, Resources.AuthenticationScheme.OAuth2, Resources.AuthenticationScheme.Oidc],
+        CloudStreams => [Resources.AuthenticationScheme.ApiKey, Resources.AuthenticationScheme.Bearer, Resources.AuthenticationScheme.OAuth2, Resources.AuthenticationScheme.Oidc],
+        Kafka => [Resources.AuthenticationScheme.Basic, Resources.AuthenticationScheme.Bearer, Resources.AuthenticationScheme.OAuth2, Resources.AuthenticationScheme.Oidc],
+        Nats => [Resources.AuthenticationScheme.Basic, Resources.AuthenticationScheme.Bearer],
+        Amqp or Amqps => [Resources.AuthenticationScheme.Basic, Resources.AuthenticationScheme.Bearer, Resources.AuthenticationScheme.OAuth2, Resources.AuthenticationScheme.Oidc],
+        _ => []
+    };
+
 }
 
 /// <summary>
 /// Represents the parsed address of a non-HTTP transport, which is a URI whose scheme selects the transport (see #218)
 /// </summary>
 /// <remarks>
-/// <para>Addresses never carry credentials, since resources can be read by anyone allowed to read them: the <c>credentials</c> query parameter names credentials that
-/// the broker or the gateway reads from its configuration, under <c>CloudStreams:Transports:Credentials:{name}</c>.</para>
+/// <para>Addresses never carry credentials, since resources can be read by anyone allowed to read them: endpoints configure how to authenticate separately, and sinks and feeds hold endpoints together with the credentials
+/// used to connect to it, which the broker or the gateway reads when it connects.</para>
 /// <para>Supported parameters:</para>
 /// <list type="bullet">
 /// <item><description><c>kafka://{server}[:{port}]/{topic}</c>, port 9092 by default. <c>servers</c> lists additional bootstrap servers, comma-separated. <c>tls=true</c> enables TLS,
@@ -86,15 +101,9 @@ public static class TransportSchemes
 public sealed record TransportAddress
 {
 
-    /// <summary>
-    /// Gets the name of the query parameter that names the credentials to use
-    /// </summary>
-    public const string CredentialsParameter = "credentials";
-
     static readonly Regex KafkaTopicPattern = new("^[a-zA-Z0-9._-]{1,249}$", RegexOptions.Compiled);
     static readonly Regex NatsSubjectPattern = new(@"^[^\s.*>]+(\.[^\s.*>]+)*$", RegexOptions.Compiled);
     static readonly Regex NatsSubscriptionPattern = new(@"^([^\s.*>]+|\*)(\.([^\s.*>]+|\*))*(\.>)?$|^>$", RegexOptions.Compiled);
-    static readonly Regex CredentialsNamePattern = new("^[a-zA-Z0-9_]{1,63}$", RegexOptions.Compiled);
 
     TransportAddress(Uri uri, string scheme, IReadOnlyDictionary<string, string> parameters)
     {
@@ -127,11 +136,6 @@ public sealed record TransportAddress
     /// Gets the path of the address, without its leading slash: a Kafka topic, a NATS subject, an AMQP virtual host or the path of a gateway
     /// </summary>
     public string Path => Uri.UnescapeDataString(this.Uri.AbsolutePath.TrimStart('/'));
-
-    /// <summary>
-    /// Gets the name of the credentials to use, if any
-    /// </summary>
-    public string? Credentials => this.GetParameter(CredentialsParameter);
 
     /// <summary>
     /// Gets a boolean indicating whether the transport is secured with TLS
@@ -191,7 +195,7 @@ public sealed record TransportAddress
         }
         if (!string.IsNullOrEmpty(uri.UserInfo))
         {
-            error = $"The address must not contain credentials, which anyone allowed to read the resource could see: name the credentials configured on the {(consume ? "gateway" : "broker")} with the '{CredentialsParameter}' query parameter instead";
+            error = $"The address must not contain credentials, which anyone allowed to read the resource could see: configure how to authenticate in the endpoint instead, or use a sink or a feed";
             return false;
         }
         if (string.IsNullOrWhiteSpace(uri.Host))
@@ -207,11 +211,6 @@ public sealed record TransportAddress
             parameters[name] = separator < 0 ? string.Empty : Uri.UnescapeDataString(pair[(separator + 1)..].Replace('+', ' '));
         }
         var parsed = new TransportAddress(uri, uri.Scheme, parameters);
-        if (parsed.Credentials is { } credentials && !CredentialsNamePattern.IsMatch(credentials))
-        {
-            error = $"The name of the credentials '{credentials}' must be made of letters, digits and underscores, up to 63 characters, so that environment variables can name them";
-            return false;
-        }
         error = uri.Scheme switch
         {
             TransportSchemes.Kafka when !KafkaTopicPattern.IsMatch(parsed.Path) => $"The path must be the name of a Kafka topic, made of letters, digits, dots, dashes and underscores, not '{parsed.Path}'",

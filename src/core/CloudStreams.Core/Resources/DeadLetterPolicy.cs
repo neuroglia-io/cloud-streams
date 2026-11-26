@@ -25,10 +25,22 @@ public record DeadLetterPolicy
 {
 
     /// <summary>
-    /// Gets/sets the uri of the service to send dead-lettered cloud events to, as structured cloud events, if any. If not set, dead-lettered cloud events are stored
-    /// in the subscription's dead-letter stream, which the API browses and redelivers
+    /// Gets/sets the endpoint to send dead-lettered cloud events to, as structured cloud events, if any. If neither it nor a <see cref="Sink"/> is set, dead-lettered
+    /// cloud events are stored in the subscription's dead-letter stream, which the API browses and redelivers
     /// </summary>
-    [DataMember(Order = 1, Name = "uri"), JsonPropertyOrder(1), JsonPropertyName("uri"), YamlMember(Order = 1, Alias = "uri")]
-    public virtual Uri? Uri { get; set; }
+    [DataMember(Order = 1, Name = "endpoint"), JsonPropertyOrder(1), JsonPropertyName("endpoint"), YamlMember(Order = 1, Alias = "endpoint")]
+    public virtual Endpoint? Endpoint { get; set; }
+
+    /// <summary>
+    /// Gets/sets the name of the <see cref="Resources.Sink"/> to send dead-lettered cloud events to, if any. It cannot be combined with an <see cref="Endpoint"/>
+    /// </summary>
+    [DataMember(Order = 2, Name = "sink"), JsonPropertyOrder(2), JsonPropertyName("sink"), YamlMember(Order = 2, Alias = "sink")]
+    public virtual string? Sink { get; set; }
+
+    /// <summary>
+    /// Gets a boolean indicating whether dead-lettered cloud events are sent elsewhere, rather than stored in the subscription's dead-letter stream
+    /// </summary>
+    [IgnoreDataMember, JsonIgnore, YamlIgnore]
+    public virtual bool IsForwarded => this.Endpoint != null || !string.IsNullOrWhiteSpace(this.Sink);
 
 }

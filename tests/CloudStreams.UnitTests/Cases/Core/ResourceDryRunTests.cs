@@ -29,7 +29,7 @@ public class ResourceDryRunTests
     static Subscription Subscription(string uri = "https://orders.example.com/events") => new()
     {
         Metadata = new() { Name = "orders" },
-        Spec = new() { Subscriber = new() { Uri = new(uri) } }
+        Spec = new() { Subscriber = new() { Endpoint = new Uri(uri) } }
     };
 
     static ResourceDryRun DryRun() => new([new CloudStreamsResourceValidator(Neuroglia.Serialization.Json.JsonSerializer.Default, [new JsonPatchHandler()])]);
@@ -68,7 +68,7 @@ public class ResourceDryRunTests
         // assert
         Assert.Equal(400, result.Status);
         var errors = Assert.Single(result.Errors!).Errors!.ToDictionary(e => e.Key, e => e.Value);
-        Assert.Contains("spec.subscriber.uri", errors.Keys);
+        Assert.Contains("spec.subscriber.endpoint", errors.Keys);
         Assert.Contains("spec.subscriber.rateLimit", errors.Keys);
     }
 

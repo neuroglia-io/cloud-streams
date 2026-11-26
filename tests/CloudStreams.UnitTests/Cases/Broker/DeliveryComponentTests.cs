@@ -196,7 +196,7 @@ public class DeliveryComponentTests
     public async Task The_Status_Reporter_Should_Reapply_A_Change_To_A_Status_That_Changed_Concurrently()
     {
         // arrange - another writer patched the status in the meantime: the first patch conflicts
-        var subscription = new Subscription() { Metadata = new() { Name = "orders", ResourceVersion = "1" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") } }, Status = new() { Phase = SubscriptionStatusPhase.Active } };
+        var subscription = new Subscription() { Metadata = new() { Name = "orders", ResourceVersion = "1" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } }, Status = new() { Phase = SubscriptionStatusPhase.Active } };
         var current = subscription.Clone()!;
         current.Metadata.ResourceVersion = "2";
         current.Status!.Stream = new() { AckedOffset = 7 };
@@ -224,7 +224,7 @@ public class DeliveryComponentTests
     public async Task The_Status_Reporter_Should_Not_Report_The_Same_Subscriber_State_Twice()
     {
         // arrange
-        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") } }, Status = new() };
+        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } }, Status = new() };
         var repository = Substitute.For<IResourceRepository>();
         repository.PatchSubResourceAsync(Arg.Any<Patch>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IResource>(subscription));
@@ -244,7 +244,7 @@ public class DeliveryComponentTests
     {
         // arrange
         var pipeline = new SubscriptionEventPipeline(Substitute.For<IExpressionEvaluator>(), [], new HttpClient(), Neuroglia.Serialization.Json.JsonSerializer.Default);
-        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") }, Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string?>() { ["type"] = "^com\\.cloud-streams\\.test" } } } };
+        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") }, Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string?>() { ["type"] = "^com\\.cloud-streams\\.test" } } } };
 
         // act and assert
         Assert.True(await pipeline.FiltersAsync(subscription, BrokerTestContext.CreateRecord(1)));
@@ -255,7 +255,7 @@ public class DeliveryComponentTests
     public async Task The_Pipeline_Should_Copy_Cloud_Events_The_Subscription_Does_Not_Mutate()
     {
         var pipeline = new SubscriptionEventPipeline(Substitute.For<IExpressionEvaluator>(), [], new HttpClient(), Neuroglia.Serialization.Json.JsonSerializer.Default);
-        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") } } };
+        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } } };
         var e = new CloudEvent() { Id = "1", SpecVersion = "1.0", Source = new("https://a.example.com"), Type = "a" };
         var mutated = await pipeline.MutateAsync(subscription, e);
         Assert.NotSame(e, mutated);

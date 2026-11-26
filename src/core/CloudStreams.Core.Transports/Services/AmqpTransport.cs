@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Neuroglia.Eventing.CloudEvents;
@@ -26,14 +27,13 @@ namespace CloudStreams.Core.Transports.Services;
 /// Delivers cloud events to AMQP 0-9-1 exchanges, such as RabbitMQ's, and consumes cloud events from their queues, following the CloudEvents AMQP protocol binding (see #218)
 /// </summary>
 /// <param name="logger">The service used to perform logging</param>
-/// <param name="options">The service used to access the current <see cref="TransportOptions"/></param>
 /// <param name="serializer">The service used to serialize cloud events</param>
 /// <remarks>
 /// Cloud events are published as persistent messages, with publisher confirms, and as mandatory, so that a cloud event no queue is bound to receive is not delivered,
 /// rather than silently dropped. Consumers acknowledge a message once its cloud event has been handled, and requeue it otherwise
 /// </remarks>
-public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IOptionsMonitor<TransportOptions> options, IJsonSerializer serializer)
-    : ICloudEventSink, ICloudEventChannelConsumer, IAsyncDisposable
+public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IJsonSerializer serializer)
+    : ICloudEventSink, ICloudEventFeedConsumer, IAsyncDisposable
 {
 
     const ushort Prefetch = 16;
@@ -44,13 +44,21 @@ public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IOptionsMonitor
     public IReadOnlyList<string> Schemes { get; } = [TransportSchemes.Amqp, TransportSchemes.Amqps];
 
     /// <inheritdoc/>
-    public async Task SendAsync(TransportAddress address, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
+    public async Task SendAsync(TransportAddress address, TransportCredentials? credentials, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(headers);
-        var connection = await this.GetConnectionAsync(address, cancellationToken).ConfigureAwait(false);
-        await using var channel = await connection.CreateChannelAsync(new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken).ConfigureAwait(false);
+        var (key, connection) = await this.GetConnectionAsync(address, credentials, cancellationToken).ConfigureAwait(false);
+        IChannel channel;
+        try { channel = await connection.CreateChannelAsync(new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true), cancellationToken).ConfigureAwait(false); }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // the connection is dropped, so that the next delivery connects anew, e.g. with a renewed token
+            await this.EvictAsync(key).ConfigureAwait(false);
+            throw;
+        }
+        await using var _ = channel;
         var exchange = address.Parameters.TryGetValue("exchange", out var name) ? name : string.Empty;
         foreach (var e in events)
         {
@@ -75,13 +83,13 @@ public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IOptionsMonitor
     }
 
     /// <inheritdoc/>
-    public async Task ConsumeAsync(TransportAddress address, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
+    public async Task ConsumeAsync(TransportAddress address, TransportCredentials? credentials, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(handler);
         var queue = address.GetParameter("queue")!;
         // consumers have a connection of their own, so that their flow control does not slow down publishing
-        await using var connection = await this.CreateFactory(address).CreateConnectionAsync($"cloud-streams-{group}", cancellationToken).ConfigureAwait(false);
+        await using var connection = await (await CreateFactoryAsync(address, credentials, cancellationToken).ConfigureAwait(false)).CreateConnectionAsync($"cloud-streams-{group}", cancellationToken).ConfigureAwait(false);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         await channel.BasicQosAsync(0, Prefetch, false, cancellationToken).ConfigureAwait(false);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -128,9 +136,8 @@ public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IOptionsMonitor
         return new(delivery.BasicProperties.ContentType, headers, delivery.Body.ToArray(), $"the message {delivery.DeliveryTag} of queue '{queue}'");
     }
 
-    ConnectionFactory CreateFactory(TransportAddress address)
+    static async Task<ConnectionFactory> CreateFactoryAsync(TransportAddress address, TransportCredentials? credentials, CancellationToken cancellationToken)
     {
-        var credentials = options.CurrentValue.GetCredentials(address);
         var separator = address.Server.LastIndexOf(':');
         var factory = new ConnectionFactory()
         {
@@ -140,21 +147,43 @@ public sealed class AmqpTransport(ILogger<AmqpTransport> logger, IOptionsMonitor
             AutomaticRecoveryEnabled = true,
             Ssl = new SslOption() { Enabled = address.Tls, ServerName = address.Uri.Host }
         };
-        if (credentials?.Username != null) factory.UserName = credentials.Username;
-        if (credentials?.Password != null) factory.Password = credentials.Password;
+        if (credentials?.IsToken == true)
+        {
+            // with RabbitMQ's OAuth2 plugin, the token is the password, and the user name is ignored
+            factory.UserName = string.Empty;
+            factory.Password = (await credentials.GetTokenAsync(cancellationToken).ConfigureAwait(false)).Value;
+        }
+        else if (credentials?.Username != null)
+        {
+            factory.UserName = credentials.Username;
+            factory.Password = credentials.Password ?? string.Empty;
+        }
         return factory;
     }
 
-    async Task<IConnection> GetConnectionAsync(TransportAddress address, CancellationToken cancellationToken)
+    async Task<(string Key, IConnection Connection)> GetConnectionAsync(TransportAddress address, TransportCredentials? credentials, CancellationToken cancellationToken)
     {
-        var key = $"{address.Server}|{address.Path}|{address.Tls}|{address.Credentials}";
-        var connection = this._connections.GetOrAdd(key, _ => new(() => this.CreateFactory(address).CreateConnectionAsync("cloud-streams", CancellationToken.None)));
-        try { return await connection.Value.WaitAsync(cancellationToken).ConfigureAwait(false); }
+        var key = $"{address.Server}|{address.Path}|{address.Tls}|{credentials?.Fingerprint}";
+        var connection = this._connections.GetOrAdd(key, _ => new(async () => await (await CreateFactoryAsync(address, credentials, CancellationToken.None).ConfigureAwait(false)).CreateConnectionAsync("cloud-streams", CancellationToken.None).ConfigureAwait(false)));
+        try
+        {
+            var opened = await connection.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+            if (opened.IsOpen) return (key, opened);
+            await this.EvictAsync(key).ConfigureAwait(false);
+            return await this.GetConnectionAsync(address, credentials, cancellationToken).ConfigureAwait(false);
+        }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             this._connections.TryRemove(key, out _);
             throw;
         }
+    }
+
+    async Task EvictAsync(string key)
+    {
+        if (!this._connections.TryRemove(key, out var connection) || !connection.IsValueCreated || !connection.Value.IsCompletedSuccessfully) return;
+        try { await connection.Value.Result.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception ex) { logger.LogDebug(ex, "Failed to close an AMQP connection"); }
     }
 
     /// <inheritdoc/>

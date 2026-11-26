@@ -19,3 +19,4 @@ global using Neuroglia.Data.Infrastructure.ResourceOriented.Services;
 global using Neuroglia.Eventing.CloudEvents;
 global using Neuroglia.Mediation;
 global using System.Net;
+global using CloudStreams.Core.Transports.Services;

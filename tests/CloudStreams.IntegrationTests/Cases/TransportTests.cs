@@ -52,20 +52,20 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
     public async Task DisposeAsync()
     {
         // every test that consumes a channel removes it, but a failed one may not have
-        await this.SetChannelAsync(null);
+        await this.SetFeedAsync(null);
         output.WriteLine(fixture.GetLogs(this._logs));
     }
 
     static string Id([CallerMemberName] string test = "") => $"{test.ToLowerInvariant().Replace('_', '-')[..Math.Min(test.Length, 40)].TrimEnd('-')}-{Guid.NewGuid():N}"[..56];
 
-    async Task<Subscription> SubscribeAsync(string type, Uri subscriber, CloudEventMutation? mutation = null) => await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription()
+    async Task<Subscription> SubscribeAsync(string type, Endpoint? endpoint, CloudEventMutation? mutation = null, string? sink = null) => await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription()
     {
         Metadata = new() { Name = $"transport-{Guid.NewGuid():N}"[..40] },
         Spec = new()
         {
             Partition = new() { Type = CloudEventPartitionType.ByType, Id = type },
             Stream = new() { Offset = 0 },
-            Subscriber = new() { Uri = subscriber, RetryPolicy = new() { BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(1)), MaxAttempts = 20 } },
+            Subscriber = new() { Endpoint = endpoint, Sink = sink, RetryPolicy = new() { BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(1)), MaxAttempts = 20 } },
             Mutation = mutation
         }
     });
@@ -79,12 +79,12 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
         }
     }
 
-    async Task SetChannelAsync(CloudEventIngestionChannel? channel)
+    async Task SetFeedAsync(FeedReference? feed)
     {
         var gateway = await fixture.Api.Resources.Gateways.GetAsync(GatewayName);
-        if (channel == null && gateway.Spec.Ingestion?.Channels == null) return;
+        if (feed == null && gateway.Spec.Ingestion?.Feeds == null) return;
         gateway.Spec.Ingestion ??= new();
-        gateway.Spec.Ingestion.Channels = channel == null ? null : [channel];
+        gateway.Spec.Ingestion.Feeds = feed == null ? null : [feed];
         await fixture.Api.Resources.Gateways.UpdateAsync(gateway);
     }
 
@@ -118,7 +118,7 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
     {
         // arrange
         var id = Id();
-        var subscription = await this.SubscribeAsync(id, new($"kafka://{fixture.KafkaServer}/{id}"));
+        var subscription = await this.SubscribeAsync(id, new Uri($"kafka://{fixture.KafkaServer}/{id}"));
         using var consumer = new ConsumerBuilder<string?, byte[]>(new Confluent.Kafka.ConsumerConfig() { BootstrapServers = fixture.KafkaServer, GroupId = id, AutoOffsetReset = AutoOffsetReset.Earliest }).Build();
         consumer.Subscribe(id);
 
@@ -146,7 +146,7 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
     {
         // arrange
         var id = Id();
-        await this.SetChannelAsync(new() { Name = "kafka-e2e", Uri = new($"kafka://{fixture.KafkaServer}/{id}") });
+        await this.SetFeedAsync(new FeedReference() { Name = "kafka-e2e", Endpoint = new Uri($"kafka://{fixture.KafkaServer}/{id}") });
         using var producer = new ProducerBuilder<string?, byte[]>(new ProducerConfig() { BootstrapServers = fixture.KafkaServer }).Build();
 
         // act
@@ -179,8 +179,8 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
         await using var nats = new NatsConnection(NatsOpts.Default with { Url = $"nats://{fixture.NatsServer}" });
         var jetStream = new NatsJSContext(nats);
         var stream = await jetStream.CreateStreamAsync(new StreamConfig(subject, [$"{subject}.>"]));
-        var subscription = await this.SubscribeAsync(id, new($"nats://{fixture.NatsServer}/{subject}.out?jetstream=true"));
-        await this.SetChannelAsync(new() { Name = "nats-e2e", Uri = new($"nats://{fixture.NatsServer}/{subject}.in?jetstream=true") });
+        var subscription = await this.SubscribeAsync(id, new Uri($"nats://{fixture.NatsServer}/{subject}.out?jetstream=true"));
+        await this.SetFeedAsync(new FeedReference() { Name = "nats-e2e", Endpoint = new Uri($"nats://{fixture.NatsServer}/{subject}.in?jetstream=true") });
 
         // act - delivered to a subject of the stream
         await this.PublishAsync(id, "1", "2");
@@ -209,7 +209,7 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
     }
 
     [Fact]
-    public async Task Cloud_Events_Should_Be_Delivered_To_And_Consumed_From_RabbitMQ_With_Configured_Credentials()
+    public async Task Cloud_Events_Should_Be_Delivered_To_And_Consumed_From_RabbitMQ_With_Credentials_Read_From_A_Secret()
     {
         // arrange
         var id = Id();
@@ -220,8 +220,11 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
         await channel.QueueDeclareAsync($"{id}-out", false, false, true);
         await channel.QueueBindAsync($"{id}-out", id, string.Empty);
         await channel.QueueDeclareAsync($"{id}-in", false, false, true);
-        var subscription = await this.SubscribeAsync(id, new($"amqp://{fixture.RabbitMqServer}/?exchange={id}&credentials={CloudStreamsFixture.RabbitMqCredentials}"));
-        await this.SetChannelAsync(new() { Name = "amqp-e2e", Uri = new($"amqp://{fixture.RabbitMqServer}/?queue={id}-in&credentials={CloudStreamsFixture.RabbitMqCredentials}") });
+        var authentication = new AuthenticationPolicy() { Basic = new() { Use = new(CloudStreamsFixture.RabbitMqSecret) } };
+        var subscription = await this.SubscribeAsync(id, new Endpoint(new Uri($"amqp://{fixture.RabbitMqServer}/?exchange={id}"), authentication));
+        // the queue is consumed through a feed resource, which holds its endpoint and credentials
+        await fixture.Api.Resources.Feeds.CreateAsync(new Feed(new(id), new() { Endpoint = new(new Uri($"amqp://{fixture.RabbitMqServer}/?queue={id}-in"), authentication) }));
+        await this.SetFeedAsync(id);
 
         // act - delivered to an exchange
         await this.PublishAsync(id, "1", "2");
@@ -265,7 +268,7 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
         // would otherwise recognize as a loop
         var id = Id();
         var bridgedType = $"{id}-bridged";
-        await this.SubscribeAsync(id, new($"cloudstreams://{fixture.GatewayUri.Authority}?tls=false"), new() { Type = CloudEventMutationType.Expression, Expression = $"${{ . + {{ type: \"{bridgedType}\" }} | del(.{SplitHorizonPolicy.DefaultAttributeName}) }}" });
+        await this.SubscribeAsync(id, new Uri($"cloudstreams://{fixture.GatewayUri.Authority}?tls=false"), new() { Type = CloudEventMutationType.Expression, Expression = $"${{ . + {{ type: \"{bridgedType}\" }} | del(.{SplitHorizonPolicy.DefaultAttributeName}) }}" });
 
         // act
         await this.PublishAsync(id, "1", "2");
@@ -273,6 +276,88 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
 
         // assert
         Assert.Equal(["1", "2"], bridged.Select(e => e.Id));
+    }
+
+
+    [Fact]
+    public async Task Cloud_Events_Should_Be_Delivered_To_A_Sink_With_Basic_Credentials_Read_From_A_Secret()
+    {
+        // arrange - the sink holds the endpoint and its credentials, which the subscription only refers to by name
+        var id = Id();
+        var endpoint = fixture.Subscriber.Register(id);
+        await fixture.Api.Resources.Sinks.CreateAsync(new Sink(new(id), new() { Endpoint = new(endpoint.Uri, new() { Basic = new() { Use = new(CloudStreamsFixture.RabbitMqSecret) } }) }));
+        await this.SubscribeAsync(id, null, sink: id);
+
+        // act
+        await this.PublishAsync(id, "1", "2");
+        var deliveries = await endpoint.WaitForAsync(2, Timeout);
+
+        // assert
+        Assert.Equal(["1", "2"], deliveries.Select(d => d.Id));
+        Assert.All(deliveries, d => Assert.Equal($"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes("cloud-streams:e2e-secret"))}", d.Authorization));
+    }
+
+    [Fact]
+    public async Task Cloud_Events_Should_Be_Delivered_With_An_OAuth2_Token_Obtained_With_The_Client_Credentials()
+    {
+        // arrange - the test subscriber is also the authorization server
+        var id = Id();
+        var endpoint = fixture.Subscriber.Register(id);
+        var authentication = new AuthenticationPolicy() { OAuth2 = new() { Authority = fixture.Subscriber.BaseUri, Client = new() { Id = id, Secret = "client-secret" }, Scopes = ["events"] } };
+        await this.SubscribeAsync(id, new Endpoint(endpoint.Uri, authentication));
+
+        // act
+        await this.PublishAsync(id, "1");
+        var delivery = Assert.Single(await endpoint.WaitForAsync(1, Timeout));
+
+        // assert
+        Assert.Equal($"Bearer {TestSubscriber.IssuedToken}", delivery.Authorization);
+        var request = Assert.Single(fixture.Subscriber.TokenRequests, r => r.GetValueOrDefault("client_id") == id);
+        Assert.Equal("client_credentials", request["grant_type"]);
+        Assert.Equal("client-secret", request["client_secret"]);
+        Assert.Equal("events", request["scope"]);
+    }
+
+    [Fact]
+    public async Task Credentials_Should_Be_Read_From_Vault()
+    {
+        // arrange - the secret is written to Vault's KV engine, which the broker reads it from, explicitly
+        var id = Id();
+        var endpoint = fixture.Subscriber.Register(id);
+        using var vault = new HttpClient() { BaseAddress = fixture.VaultUri };
+        vault.DefaultRequestHeaders.Add("X-Vault-Token", CloudStreamsFixture.VaultToken);
+        using var written = await vault.PostAsync($"v1/secret/data/{id}", new StringContent("""{ "data": { "username": "vault-user", "password": "vault-secret" } }""", Encoding.UTF8, "application/json"));
+        Assert.True(written.IsSuccessStatusCode, await written.Content.ReadAsStringAsync());
+        await this.SubscribeAsync(id, new Endpoint(endpoint.Uri, new() { Basic = new() { Use = new(SecretProviders.Vault, id) } }));
+
+        // act
+        await this.PublishAsync(id, "1");
+        var delivery = Assert.Single(await endpoint.WaitForAsync(1, Timeout));
+
+        // assert
+        Assert.Equal($"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes("vault-user:vault-secret"))}", delivery.Authorization);
+    }
+
+
+    [Fact]
+    public async Task A_Cloud_Event_Should_Be_Redelivered_To_The_Sink_Of_Its_Subscription_With_Its_Credentials()
+    {
+        // arrange - redeliveries are made by the API, which must resolve the sink and its secret as the broker does
+        var id = Id();
+        var endpoint = fixture.Subscriber.Register(id);
+        await fixture.Api.Resources.Sinks.CreateAsync(new Sink(new(id), new() { Endpoint = new(endpoint.Uri, new() { Bearer = new() { Token = "redelivery-token" } }) }));
+        var subscription = await this.SubscribeAsync(id, null, sink: id);
+        await this.PublishAsync(id, "1");
+        // the subscription reads the partition of the type, whose offset the delivery carries
+        var offset = ulong.Parse(Assert.Single(await endpoint.WaitForAsync(1, Timeout)).Offset, System.Globalization.CultureInfo.InvariantCulture);
+
+        // act
+        var redelivery = await fixture.Api.Resources.Subscriptions.RedeliverAsync(subscription.GetName(), new() { Partition = new(CloudEventPartitionType.ByType, id), Offset = offset });
+        var deliveries = await endpoint.WaitForAsync(2, Timeout);
+
+        // assert
+        Assert.Equal("1", redelivery.Id);
+        Assert.All(deliveries, d => Assert.Equal("Bearer redelivery-token", d.Authorization));
     }
 
 }

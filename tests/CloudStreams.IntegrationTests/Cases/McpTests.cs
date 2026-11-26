@@ -74,7 +74,7 @@ public sealed class McpTests(CloudStreamsFixture fixture, ITestOutputHelper outp
         await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription()
         {
             Metadata = new() { Name = Name() },
-            Spec = new() { Partition = new(CloudEventPartitionType.BySource, Source().OriginalString), Subscriber = new() { Uri = endpoint.Uri }, Stream = new() { Offset = 0 } }
+            Spec = new() { Partition = new(CloudEventPartitionType.BySource, Source().OriginalString), Subscriber = new() { Endpoint = endpoint.Uri }, Stream = new() { Offset = 0 } }
         });
         await using var client = await ConnectAsync();
         var cloudEvent = new Dictionary<string, object?>() { ["specversion"] = "1.0", ["id"] = "mcp-0", ["source"] = Source().OriginalString, ["type"] = "io.cloud-streams.e2e.v1", ["data"] = new { by = "an agent" } };

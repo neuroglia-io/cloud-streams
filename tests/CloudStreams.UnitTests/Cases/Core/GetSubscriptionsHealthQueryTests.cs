@@ -28,7 +28,7 @@ public class GetSubscriptionsHealthQueryTests
         var subscription = new Subscription()
         {
             Metadata = new() { Name = name, Generation = 1 },
-            Spec = new() { Subscriber = new() { Uri = new("http://localhost:8888/events") }, Stream = new() { Offset = 0 } },
+            Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost:8888/events") }, Stream = new() { Offset = 0 } },
             Status = new() { ObservedGeneration = 1, Phase = SubscriptionStatusPhase.Active, Stream = new(), Subscriber = new() }
         };
         configure?.Invoke(subscription);

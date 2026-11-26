@@ -42,7 +42,7 @@ public class AcknowledgeSubscriptionEventCommandTests
     static Subscription CreateSubscription(DateTimeOffset? expiresAt = null) => new()
     {
         Metadata = new() { Name = "test-subscription", Generation = 1 },
-        Spec = new() { Subscriber = new() { Uri = new("http://localhost:8888/events") }, Stream = new() },
+        Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost:8888/events") }, Stream = new() },
         Status = new()
         {
             ObservedGeneration = 1,

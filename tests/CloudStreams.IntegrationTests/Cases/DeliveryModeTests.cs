@@ -63,7 +63,7 @@ public sealed class DeliveryModeTests(CloudStreamsFixture fixture, ITestOutputHe
 
     async Task<Subscription> SubscribeAsync(string name, Uri source, TestSubscriber.Endpoint endpoint, Action<SubscriptionSpec>? configure = null)
     {
-        var spec = new SubscriptionSpec() { Partition = new(CloudEventPartitionType.BySource, source.OriginalString), Subscriber = new() { Uri = endpoint.Uri }, Stream = new() { Offset = 0 } };
+        var spec = new SubscriptionSpec() { Partition = new(CloudEventPartitionType.BySource, source.OriginalString), Subscriber = new() { Endpoint = endpoint.Uri }, Stream = new() { Offset = 0 } };
         configure?.Invoke(spec);
         return await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription() { Metadata = new() { Name = name }, Spec = spec });
     }

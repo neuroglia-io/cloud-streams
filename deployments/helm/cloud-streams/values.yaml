@@ -38,6 +38,31 @@ telemetry:
   # the OTLP endpoint traces, metrics and logs are exported to, if any, e.g. 'http://otel-collector:4317'
   otlpEndpoint: ""
 
+# where the broker and the gateway read the secrets of authenticated endpoints from, e.g. those of sinks and feeds (see the README's 'Transports' section)
+secrets:
+  # the providers secrets are read from, in the order a secret named without a provider is looked for: env, file, kubernetes and vault
+  providers: [ env, file ]
+  # Kubernetes secrets mounted as files, which the 'file' provider reads: each key of a secret is the file /var/run/secrets/cloud-streams/<name>/<key>
+  # e.g. [ { name: orders-kafka, secretName: kafka-credentials } ]
+  files: []
+  kubernetes:
+    # creates a role that lets the service account get the secrets of the release's namespace, which the 'kubernetes' provider reads. Only secrets labelled
+    # 'cloud-streams.io/secret=true' are read: the role cannot restrict secrets by label, so restrict it further with resourceNames if needed
+    rbac: false
+    resourceNames: []
+  vault:
+    # the address of Vault, which the 'vault' provider reads secrets from, e.g. 'https://vault.vault.svc:8200'
+    address: ""
+    mount: secret
+    kvVersion: 2
+    prefix: ""
+    # token (from existingSecret), kubernetes (with the pod's service account) or approle (role id and secret id from existingSecret)
+    authentication:
+      method: kubernetes
+      role: cloud-streams
+      # a secret holding the 'token', or the 'roleId' and 'secretId'
+      existingSecret: ""
+
 serviceAccount:
   create: true
   name: ""

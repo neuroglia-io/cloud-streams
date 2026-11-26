@@ -43,12 +43,12 @@ public class RedeliverDeadLetterCommand(string name, ulong offset)
 /// </summary>
 /// <param name="resources">The service used to manage resources</param>
 /// <param name="deadLetters">The service used to store dead letters</param>
-/// <param name="httpClientFactory">The service used to create the <see cref="HttpClient"/> that redelivers dead letters</param>
+/// <param name="delivery">The service used to deliver dead letters to the subscriber's endpoint or sink, over any transport (see #218)</param>
 /// <remarks>
 /// The dead letter is delivered as it was to be delivered the first time, mutated if the subscription mutates cloud events, but without an acknowledgement token: it is
 /// delivered once, and its redelivery neither moves the subscription's offset nor removes the dead letter
 /// </remarks>
-public class RedeliverDeadLetterCommandHandler(IResourceRepository resources, IDeadLetterStore deadLetters, IHttpClientFactory httpClientFactory)
+public class RedeliverDeadLetterCommandHandler(IResourceRepository resources, IDeadLetterStore deadLetters, CloudEventDeliveryClient delivery)
     : ICommandHandler<RedeliverDeadLetterCommand, DeadLetterRedelivery>
 {
 
@@ -73,28 +73,19 @@ public class RedeliverDeadLetterCommandHandler(IResourceRepository resources, ID
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
         HttpStatusCode status;
-        string? content;
         try
         {
-            using var client = httpClientFactory.CreateClient();
-            using var requestContent = deadLetter.Event.ToHttpContent();
-            using var request = new HttpRequestMessage(HttpMethod.Post, subscription.Spec.Subscriber.Uri) { Content = requestContent };
-            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Subscription, subscription.GetName());
-            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Offset, deadLetter.EventOffset.ToString(CultureInfo.InvariantCulture));
-            using var response = await client.SendAsync(request, timeout.Token).ConfigureAwait(false);
-            status = response.StatusCode;
-            content = response.IsSuccessStatusCode ? null : await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            KeyValuePair<string, string>[] headers = [new(CloudStreamsHeaders.Subscription, subscription.GetName()), new(CloudStreamsHeaders.Offset, deadLetter.EventOffset.ToString(CultureInfo.InvariantCulture))];
+            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber), deadLetter.Event, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode.HasValue)
+        {
+            return new OperationResult<DeadLetterRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, $"The redelivery of the dead letter at offset '{command.Offset}' failed: {ex.Message}")]);
         }
         catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             var reason = ex is OperationCanceledException ? $"the subscriber did not respond within {Timeout}" : ex.Message;
             return new OperationResult<DeadLetterRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, $"Failed to redeliver the dead letter at offset '{command.Offset}': {reason}")]);
-        }
-        if ((int)status is < 200 or >= 300)
-        {
-            var detail = $"The subscriber responded to the redelivery of the dead letter at offset '{command.Offset}' with a non-success status code '{(int)status}'";
-            if (!string.IsNullOrWhiteSpace(content)) detail = $"{detail}: {content}";
-            return new OperationResult<DeadLetterRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, detail)]);
         }
         return this.Ok(new DeadLetterRedelivery() { Offset = command.Offset, Status = (int)status });
     }

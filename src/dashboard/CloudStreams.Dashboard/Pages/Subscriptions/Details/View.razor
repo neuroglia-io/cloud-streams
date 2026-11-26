@@ -97,7 +97,7 @@
                     <div class="card-body">
                         <dl class="row small mb-0">
                             <dt class="col-5">Subscriber</dt>
-                            <dd class="col-7 text-break"><a href="@subscription.Spec.Subscriber.Uri" target="_blank" rel="noopener">@subscription.Spec.Subscriber.Uri</a></dd>
+                            <dd class="col-7 text-break"><DeliveryTargetDisplay Endpoint="subscription.Spec.Subscriber.Endpoint" Sink="@subscription.Spec.Subscriber.Sink" /></dd>
                             <dt class="col-5">Subscriber state</dt>
                             <dd class="col-7">
                                 @SubscriberBadge(subscription.Status?.Subscriber?.State ?? SubscriberState.Unknown)
@@ -146,7 +146,7 @@
                             <dt class="col-5">Last acknowledged</dt>
                             <dd class="col-7">@(subscription.Status?.Subscriber?.LastAcknowledgedAt?.LocalDateTime.ToString("G") ?? "never")</dd>
                             <dt class="col-5">Dead letters</dt>
-                            <dd class="col-7">@(subscription.Spec.DeadLetter == null ? "no: failed deliveries fault the subscription" : subscription.Spec.DeadLetter.Uri == null ? "stored" : $"sent to {subscription.Spec.DeadLetter.Uri}")</dd>
+                            <dd class="col-7">@(subscription.Spec.DeadLetter == null ? "no: failed deliveries fault the subscription" : !subscription.Spec.DeadLetter.IsForwarded ? "stored" : $"sent to {DeliveryTargetDisplay.Describe(subscription.Spec.DeadLetter.Endpoint, subscription.Spec.DeadLetter.Sink)}")</dd>
                         </dl>
                     </div>
                 </section>
@@ -208,9 +208,9 @@
                 {
                     <p class="text-secondary mb-0">The subscription has no dead-letter policy, so it keeps no history of failures: an event that cannot be delivered faults it instead, as shown above.</p>
                 }
-                else if (subscription.Spec.DeadLetter.Uri != null)
+                else if (subscription.Spec.DeadLetter.IsForwarded)
                 {
-                    <p class="text-secondary mb-0">Events that cannot be delivered are sent to <span class="text-break">@subscription.Spec.DeadLetter.Uri</span>, which keeps their history.</p>
+                    <p class="text-secondary mb-0">Events that cannot be delivered are sent to <span class="text-break"><DeliveryTargetDisplay Endpoint="subscription.Spec.DeadLetter.Endpoint" Sink="@subscription.Spec.DeadLetter.Sink" /></span>, which keeps their history.</p>
                 }
                 else if (deadLetters == null)
                 {
@@ -353,12 +353,12 @@
         try { health = (await Api.Resources.Subscriptions.GetHealthAsync()).FirstOrDefault(h => h.Name == name); }
         catch (Exception) { health = null; }
         history.Add(new(DateTimeOffset.Now, health?.Lag, subscription.Spec.Stream == null ? null : subscription.Status?.Stream?.AckedOffset));
-        if (includeDeadLetters || (deadLetters == null && subscription.Spec.DeadLetter?.Uri == null)) await LoadDeadLettersAsync();
+        if (includeDeadLetters || (deadLetters == null && subscription.Spec.DeadLetter?.IsForwarded != true)) await LoadDeadLettersAsync();
     }
 
     async Task LoadDeadLettersAsync()
     {
-        if (subscription?.Spec.DeadLetter == null || subscription.Spec.DeadLetter.Uri != null) return;
+        if (subscription?.Spec.DeadLetter == null || subscription.Spec.DeadLetter.IsForwarded) return;
         try { deadLetters = await Api.Resources.Subscriptions.GetDeadLettersAsync(Name, length: DeadLetterPageSize); }
         catch (Exception) { deadLetters = []; }
     }

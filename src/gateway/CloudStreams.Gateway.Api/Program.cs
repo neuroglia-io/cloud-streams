@@ -65,7 +65,7 @@ builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredSe
 builder.Services.AddSingleton<ICloudEventAuthorizationManager, CloudEventAuthorizationManager>();
 builder.Services.AddHostedService<CloudEventHubDispatcher>();
 builder.Services.AddCloudStreamsTransports(builder.Configuration);
-builder.Services.AddHostedService<IngestionChannelService>();
+builder.Services.AddHostedService<IngestionFeedService>();
 builder.Services.AddSingleton<IJsonSchemaGenerator, JsonSchemaGenerator>();
 builder.Services.Configure<JsonSchemaRegistryOptions>(builder.Configuration.GetSection(JsonSchemaRegistryOptions.ConfigurationSectionName));
 builder.Services.AddSingleton<IJsonSchemaRegistry, MemoryJsonSchemaRegistry>();

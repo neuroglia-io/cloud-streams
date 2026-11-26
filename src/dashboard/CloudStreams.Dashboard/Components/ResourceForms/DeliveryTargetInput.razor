@@ -1,0 +1,117 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core.Resources
+
+@* Where cloud events are delivered: an endpoint of the resource's own, or a sink, which holds an endpoint and its credentials out of the resource (see #218) *@
+
+<div id="@Id" role="group" aria-describedby="@FormField.DescribedBy(Id)">
+    <div class="btn-group btn-group-sm mb-2" role="radiogroup" aria-label="@($"How to choose the {Label.ToLowerInvariant()}")">
+        <input id="@(Id)-endpoint-option" type="radio" class="btn-check" name="@(Id)-mode" checked="@(!useSink)" @onchange="() => SetModeAsync(false)" />
+        <label class="btn btn-outline-secondary" for="@(Id)-endpoint-option">An endpoint</label>
+        <input id="@(Id)-sink-option" type="radio" class="btn-check" name="@(Id)-mode" checked="@useSink" @onchange="() => SetModeAsync(true)" />
+        <label class="btn btn-outline-secondary" for="@(Id)-sink-option">A sink</label>
+    </div>
+    @if (useSink)
+    {
+        <select id="@(Id)-sink" class="form-select form-select-sm @(Error != null ? "is-invalid" : "")" value="@(Sink ?? "")" @onchange="e => SetSinkAsync(e.Value?.ToString())" aria-label="@($"{Label} sink")" aria-describedby="@(Id)-error">
+            <option value="">pick a sink</option>
+            @foreach (var sink in Sinks)
+            {
+                <option value="@sink.GetName()">@sink.GetName() · @sink.Spec.Endpoint</option>
+            }
+            @if (Sink != null && Sinks.All(s => s.GetName() != Sink))
+            {
+                <option value="@Sink">@Sink (does not exist)</option>
+            }
+        </select>
+        <div id="@(Id)-error" class="invalid-feedback small @(Error != null ? "d-block" : "")">@Error</div>
+        <div class="small text-secondary mt-1">A sink holds an endpoint and its credentials, which administrators manage on the Sinks page.</div>
+    }
+    else
+    {
+        <EndpointInput Id="@(Id + "-endpoint")" Label="@Label" Value="Endpoint" ValueChanged="SetEndpointAsync" UriError="@Error" Placeholder="@Placeholder" />
+    }
+</div>
+
+@code {
+
+    bool useSink;
+    Endpoint? keptEndpoint;
+    string? keptSink;
+
+    /// <summary>
+    /// Gets/sets the id of the group of inputs
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets a label that describes the target, used by screen readers
+    /// </summary>
+    [Parameter] public string Label { get; set; } = "Subscriber";
+
+    /// <summary>
+    /// Gets/sets the endpoint, if the target is one
+    /// </summary>
+    [Parameter] public Endpoint? Endpoint { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the endpoint changes
+    /// </summary>
+    [Parameter] public EventCallback<Endpoint?> EndpointChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets the name of the sink, if the target is one
+    /// </summary>
+    [Parameter] public string? Sink { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the sink changes
+    /// </summary>
+    [Parameter] public EventCallback<string?> SinkChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets the sinks to pick from
+    /// </summary>
+    [Parameter] public IReadOnlyList<Sink> Sinks { get; set; } = [];
+
+    /// <summary>
+    /// Gets/sets the placeholder of the endpoint's address
+    /// </summary>
+    [Parameter] public string Placeholder { get; set; } = "https://orders.example.com/events";
+
+    /// <summary>
+    /// Gets/sets the error of the target, if any
+    /// </summary>
+    [Parameter] public string? Error { get; set; }
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (this.Sink != null) this.useSink = true;
+        else if (this.Endpoint != null) this.useSink = false;
+    }
+
+    async Task SetModeAsync(bool sink)
+    {
+        if (sink == this.useSink) return;
+        this.useSink = sink;
+        // switching back and forth keeps what was entered in either mode
+        if (sink)
+        {
+            this.keptEndpoint = this.Endpoint;
+            await this.EndpointChanged.InvokeAsync(null);
+            await this.SinkChanged.InvokeAsync(this.keptSink);
+        }
+        else
+        {
+            this.keptSink = this.Sink;
+            await this.SinkChanged.InvokeAsync(null);
+            await this.EndpointChanged.InvokeAsync(this.keptEndpoint);
+        }
+    }
+
+    Task SetSinkAsync(string? sink) => this.SinkChanged.InvokeAsync(string.IsNullOrEmpty(sink) ? null : sink);
+
+    Task SetEndpointAsync(Endpoint? endpoint) => this.EndpointChanged.InvokeAsync(endpoint);
+
+}

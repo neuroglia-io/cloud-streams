@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using Microsoft.Extensions.Options;
+using CloudStreams.Core.Transports.Authentication;
 using Neuroglia.Eventing.CloudEvents;
 using Neuroglia.Serialization;
 using System.Net;
@@ -20,10 +20,9 @@ using System.Net.Http.Headers;
 namespace CloudStreams.Core.Transports.Services;
 
 /// <summary>
-/// Delivers cloud events to the ingestion endpoint of another Cloud Streams gateway, authenticated with the API key or the token of the configured credentials (see #218)
+/// Delivers cloud events to the ingestion endpoint of another Cloud Streams gateway, authenticated with the credentials of its endpoint (see #218)
 /// </summary>
 /// <param name="httpClientFactory">The service used to create <see cref="HttpClient"/>s</param>
-/// <param name="options">The service used to access the current <see cref="TransportOptions"/></param>
 /// <param name="serializer">The service used to serialize cloud events</param>
 /// <remarks>
 /// <para>Batches are published as <c>application/cloudevents-batch+json</c>, in a single request. The other gateway stores the cloud events of a batch independently:
@@ -32,7 +31,7 @@ namespace CloudStreams.Core.Transports.Services;
 /// <para>The other gateway's split-horizon policy, if any, recognizes the cloud events that come back to it, so that two instances can forward cloud events to each
 /// other without looping.</para>
 /// </remarks>
-public sealed class CloudStreamsBridge(IHttpClientFactory httpClientFactory, IOptionsMonitor<TransportOptions> options, IJsonSerializer serializer)
+public sealed class CloudStreamsBridge(IHttpClientFactory httpClientFactory, IJsonSerializer serializer)
     : ICloudEventSink
 {
 
@@ -40,8 +39,6 @@ public sealed class CloudStreamsBridge(IHttpClientFactory httpClientFactory, IOp
     /// Gets the name of the <see cref="HttpClient"/> the bridge uses
     /// </summary>
     public const string HttpClientName = "cloud-streams-bridge";
-
-    const string DefaultApiKeyHeader = "X-Api-Key";
 
     /// <inheritdoc/>
     public IReadOnlyList<string> Schemes { get; } = [TransportSchemes.CloudStreams];
@@ -59,21 +56,19 @@ public sealed class CloudStreamsBridge(IHttpClientFactory httpClientFactory, IOp
     }
 
     /// <inheritdoc/>
-    public async Task SendAsync(TransportAddress address, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
+    public async Task SendAsync(TransportAddress address, TransportCredentials? credentials, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(headers);
         if (events.Count == 0) return;
-        var credentials = options.CurrentValue.GetCredentials(address);
         var endpoint = GetEndpoint(address);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = events.Count == 1 ? events[0].ToHttpContent(serializer) : events.ToBatchHttpContent(serializer)
         };
         foreach (var (name, value) in headers) request.Headers.TryAddWithoutValidation(name, value);
-        if (credentials?.ApiKey != null) request.Headers.TryAddWithoutValidation(credentials.ApiKeyHeader ?? DefaultApiKeyHeader, credentials.ApiKey);
-        else if (credentials?.Token != null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.Token);
+        if (credentials != null) await credentials.AuthenticateAsync(request, cancellationToken).ConfigureAwait(false);
         using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)

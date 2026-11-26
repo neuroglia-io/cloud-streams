@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports.Authentication;
 using Neuroglia.Eventing.CloudEvents;
 
 namespace CloudStreams.Core.Transports.Services;
@@ -35,14 +36,14 @@ public interface ICloudEventSink
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which bounds how long to wait for the confirmation</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     /// <remarks>Throws a <see cref="HttpRequestException"/>, with a status code, if the transport refused the cloud events, or any other exception if it could not be reached</remarks>
-    Task SendAsync(TransportAddress address, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default);
+    Task SendAsync(TransportAddress address, TransportCredentials? credentials, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default);
 
 }
 
 /// <summary>
-/// Defines the fundamentals of a transport that gateways consume cloud events from (see #218)
+/// Defines the fundamentals of a transport that gateways consume cloud events from, i.e. feeds (see #218)
 /// </summary>
-public interface ICloudEventChannelConsumer
+public interface ICloudEventFeedConsumer
 {
 
     /// <summary>
@@ -54,11 +55,11 @@ public interface ICloudEventChannelConsumer
     /// Consumes the messages of the specified channel until cancelled
     /// </summary>
     /// <param name="address">The address of the channel to consume</param>
-    /// <param name="group">The name of the group of consumers that share the consumption of the channel, i.e. the name of the gateway</param>
+    /// <param name="group">The name of the group of consumers that share the consumption of the feed, i.e. the name of the gateway</param>
     /// <param name="name">A name that uniquely identifies the consumer within its group, e.g. to name a durable NATS JetStream consumer</param>
     /// <param name="handler">A function that handles each message, and returns whether it should be acknowledged. A message that is not is consumed again, later</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> that stops the consumption</param>
     /// <returns>A new awaitable <see cref="Task"/>, which completes when the consumption stops, or fails if the channel cannot be consumed</returns>
-    Task ConsumeAsync(TransportAddress address, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken);
+    Task ConsumeAsync(TransportAddress address, TransportCredentials? credentials, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken);
 
 }

@@ -55,7 +55,7 @@ public sealed class ResourceManagementComponentStoreTests
     static Subscription Subscription(string name, IDictionary<string, string>? labels = null) => new()
     {
         Metadata = new() { Name = name, Labels = labels == null ? null : new Dictionary<string, string>(labels) },
-        Spec = new() { Subscriber = new() { Uri = new($"https://{name}.example.com/events") } }
+        Spec = new() { Subscriber = new() { Endpoint = new Uri($"https://{name}.example.com/events") } }
     };
 
     static string Json(object value) => Neuroglia.Serialization.Json.JsonSerializer.Default.SerializeToText(value);
@@ -272,7 +272,7 @@ public sealed class ResourceManagementComponentStoreTests
                 tier: core
             spec:
               subscriber:
-                uri: https://changed.example.com/events
+                endpoint: https://changed.example.com/events
                 rateLimit: 5
             ---
             kind: Subscription
@@ -280,14 +280,14 @@ public sealed class ResourceManagementComponentStoreTests
               name: created
             spec:
               subscriber:
-                uri: https://created.example.com/events
+                endpoint: https://created.example.com/events
             ---
             kind: Subscription
             metadata:
               name: unchanged
             spec:
               subscriber:
-                uri: https://unchanged.example.com/events
+                endpoint: https://unchanged.example.com/events
             ---
             kind: Gateway
             metadata:

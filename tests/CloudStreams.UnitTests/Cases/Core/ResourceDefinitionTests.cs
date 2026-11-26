@@ -38,7 +38,7 @@ public class ResourceDefinitionTests
             Stream = new() { Offset = 0 },
             Subscriber = new()
             {
-                Uri = new("https://subscriber.cloud-streams.io/events"),
+                Endpoint = new Uri("https://subscriber.cloud-streams.io/events"),
                 RateLimit = 10,
                 Timeout = Duration.FromSeconds(30),
                 Ack = new() { Timeout = Duration.FromMinutes(5) },

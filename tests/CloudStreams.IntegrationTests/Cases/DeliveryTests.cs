@@ -70,7 +70,7 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
         var spec = new SubscriptionSpec()
         {
             Partition = new(CloudEventPartitionType.BySource, source.OriginalString),
-            Subscriber = new() { Uri = endpoint.Uri },
+            Subscriber = new() { Endpoint = endpoint.Uri },
             Stream = new() { Offset = 0 }
         };
         configure?.Invoke(spec);
@@ -202,7 +202,7 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
 
         // act: resume from the failed event, which the subscriber now accepts
         var resumed = fixture.Subscriber.Register(Name() + "-resumed");
-        await fixture.Api.Resources.Subscriptions.PatchAsync(new Patch(PatchType.JsonMergePatch, new { spec = new { subscriber = new { uri = resumed.Uri }, stream = new { offset = 1 } } }), Name());
+        await fixture.Api.Resources.Subscriptions.PatchAsync(new Patch(PatchType.JsonMergePatch, new { spec = new { subscriber = new { endpoint = resumed.Uri }, stream = new { offset = 1 } } }), Name());
 
         // assert
         Assert.Equal(["event-1", "event-2"], Ids(await resumed.WaitForAsync(2)));

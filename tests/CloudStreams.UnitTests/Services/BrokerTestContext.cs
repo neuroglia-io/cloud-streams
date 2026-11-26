@@ -132,7 +132,7 @@ public sealed class BrokerTestContext
             Metadata = new() { Name = "test-subscription", Generation = 1 },
             Spec = new()
             {
-                Subscriber = new() { Uri = new("http://localhost:8888/events") },
+                Subscriber = new() { Endpoint = new Uri("http://localhost:8888/events") },
                 Stream = new() { Offset = StreamPosition.EndOfStream }
             },
             Status = new() { ObservedGeneration = 1, Phase = SubscriptionStatusPhase.Active, Stream = new(), Subscriber = new() }
