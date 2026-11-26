@@ -23,10 +23,16 @@ namespace CloudStreams.Core.Application.Queries.Subscriptions;
 /// <summary>
 /// Represents the query used to run a subscription's filter and mutation against sample or recorded cloud events, without delivering anything (see #224)
 /// </summary>
+/// <param name="namespace">The namespace of the subscription to test</param>
 /// <param name="request">The object that describes the test to run</param>
-public class TestSubscriptionQuery(SubscriptionTestRequest request)
+public class TestSubscriptionQuery(SubscriptionTestRequest request, string? @namespace = null)
     : Query<SubscriptionTestResult>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the object that describes the test to run
@@ -86,7 +92,7 @@ public class TestSubscriptionQueryHandler(ICloudEventStore eventStore, IExpressi
         using var client = new HttpClient();
         var pipeline = new SubscriptionEventPipeline(expressionEvaluator, validators, client, serializer);
         var result = new SubscriptionTestResult() { Notice = webhook ? WebhookNotice : null };
-        await foreach (var (record, recorded) in this.GetRecordsAsync(request, length, timeout.Token).ConfigureAwait(false))
+        await foreach (var (record, recorded) in this.GetRecordsAsync(query.Namespace, request, length, timeout.Token).ConfigureAwait(false))
         {
             var item = new SubscriptionTestResultItem() { Offset = recorded ? record.Sequence : null, Event = record.ToCloudEvent() };
             try
@@ -106,11 +112,12 @@ public class TestSubscriptionQueryHandler(ICloudEventStore eventStore, IExpressi
     /// <summary>
     /// Gets the records to test: the sample cloud events, if any, otherwise the most recent cloud events of the partition or of the stream
     /// </summary>
+    /// <param name="namespace">The namespace of the subscription to test</param>
     /// <param name="request">The object that describes the test to run</param>
     /// <param name="length">The amount of recorded cloud events to read</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The records to test, and whether they have been read from the store</returns>
-    protected virtual async IAsyncEnumerable<(CloudEventRecord Record, bool Recorded)> GetRecordsAsync(SubscriptionTestRequest request, int length, [EnumeratorCancellation] CancellationToken cancellationToken)
+    protected virtual async IAsyncEnumerable<(CloudEventRecord Record, bool Recorded)> GetRecordsAsync(string @namespace, SubscriptionTestRequest request, int length, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (request.Events != null)
         {
@@ -122,8 +129,8 @@ public class TestSubscriptionQueryHandler(ICloudEventStore eventStore, IExpressi
             yield break;
         }
         var records = request.Partition == null
-            ? eventStore.ReadAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)length, cancellationToken)
-            : eventStore.ReadPartitionAsync(request.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)length, cancellationToken);
+            ? eventStore.ReadAsync(@namespace, StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)length, cancellationToken)
+            : eventStore.ReadPartitionAsync(@namespace, request.Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)length, cancellationToken);
         await foreach (var record in records.ConfigureAwait(false)) yield return (record, true);
     }
 

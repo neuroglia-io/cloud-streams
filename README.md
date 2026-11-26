@@ -12,6 +12,7 @@
 	+ [Fundamentals](#fundamentals)
 	+ [Getting started](#getting-started)
 	+ [Delivery and retries](#delivery-and-retries)
+	+ [Namespaces](#namespaces)
 	+ [Authentication](#authentication)
 	+ [Transports](#transports)
 	+ [Retention](#retention)
@@ -113,11 +114,12 @@ helm install cloud-streams oci://ghcr.io/neuroglia-io/charts/cloud-streams --ver
 ```
 
 - **Defaults:** 2 replicas of each, non-root containers listening on 8080, pod disruption budgets, and probes on `/healthz/live` and `/healthz`.
+- **Namespaces:** by default, one gateway and one broker serve the `default` namespace. `gateways` and `brokers` list instead the gateways and brokers to deploy, each with its `name` and `namespace`, and any setting of `gateway` or `broker` to override, e.g. `gateways: [ { name: orders, namespace: tenant-a, replicaCount: 3 } ]` (see [Namespaces](#namespaces)). Each gets its own deployment, service and pod disruption budget, named `<release>-cloud-streams-gateway-<namespace>-<name>`.
 - **Connection strings:** they are kept in a secret. Pass `eventstore.existingSecret` and `redis.existingSecret` to use secrets of your own instead.
 - **Management API:** `gateway.managementApi.port` serves the management API and the dashboard on a port of their own. `gateway.ingress` then exposes only the public endpoints, and `gateway.managementIngress` exposes the management port, e.g. on an internal ingress class.
 - **Retention:** `retention.maxAge` and `retention.maxCount` set the policy described under [Retention](#retention).
 - **Other settings**, such as authentication, are environment variables, set with `gateway.env` and `broker.env`, e.g. `{ name: Authentication__Dashboard__Enabled, value: "true" }`.
-- **Secrets** of authenticated endpoints are read by the providers `secrets.providers` lists (see [Transports](#transports)). `secrets.files` mounts Kubernetes secrets for the `file` provider. `secrets.kubernetes.rbac` lets the `kubernetes` provider read the release namespace's secrets. `secrets.vault` configures the `vault` provider. Pods only mount their service account token when a provider needs it.
+- **Secrets** of authenticated endpoints are read by the providers `secrets.providers` lists (see [Transports](#transports)). `secrets.files` mounts Kubernetes secrets for the `file` provider. `secrets.kubernetes.rbac` lets the `kubernetes` provider read the release namespace's secrets. `secrets.vault` configures the `vault` provider. `secrets.sharedWith` lists the namespaces that may read shared secrets. Pods only mount their service account token when a provider needs it.
 
 See [values.yaml](deployments/helm/cloud-streams/values.yaml) for every setting.
 
@@ -145,7 +147,7 @@ You can start consuming cloud events by creating a new subscription, which can b
 
 ```shell
 curl -X 'POST' \
-  'http://localhost:8080/api/resources/v1/subscriptions?dryRun=false' \
+  'http://localhost:8080/api/resources/v1/namespaces/default/subscriptions?dryRun=false' \
   -H 'accept: text/plain' \
   -H 'Content-Type: text/json' \
   -d '{
@@ -200,7 +202,7 @@ spec:
         breakDuration: PT30S      # ...for this long
 ```
 
-While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume, and the offset of the failed event is recorded in `status.stream.faultedOffset`. Resuming the subscription retries the event. `POST /api/resources/v1/subscriptions/{name}/skip?offset={faultedOffset}` skips it: it requires the operator role, and returns `409` if the subscription isn't faulted by that event. Setting `spec.stream.offset` to the failed event's offset, or to the next one, does the same. Subscriptions that do not track a stream offset drop the event instead, and carry on, unless they have a dead-letter policy.
+While a delivery is being retried, the subscriber is reported `unreachable` in `status.subscriber`, and every failed attempt increments the `cloud_streams_broker_delivery_failures_count` metric. The event is never skipped. If the retry policy is exhausted, or the subscriber responds with a status code the policy does not retry, the subscription is faulted (`status.stream.fault`) with a message explaining how to resume, and the offset of the failed event is recorded in `status.stream.faultedOffset`. Resuming the subscription retries the event. `POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/skip?offset={faultedOffset}` skips it: it requires the operator role, and returns `409` if the subscription isn't faulted by that event. Setting `spec.stream.offset` to the failed event's offset, or to the next one, does the same. Subscriptions that do not track a stream offset drop the event instead, and carry on, unless they have a dead-letter policy.
 
 #### Dead letters
 
@@ -225,18 +227,18 @@ spec:
 Dead letters are browsed and redelivered with:
 
 ```
-GET  /api/resources/v1/subscriptions/{name}/dead-letters?offset=&length=&direction=   # most recent first by default
-POST /api/resources/v1/subscriptions/{name}/dead-letters/{offset}/redeliver           # requires the operator role
+GET  /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/dead-letters?offset=&length=&direction=   # most recent first by default
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/dead-letters/{offset}/redeliver           # requires the operator role
 ```
 
 A redelivery delivers the dead letter to the subscriber once, without an acknowledgement token, over its transport and authenticated as its endpoint or sink configures. It answers `502 Bad Gateway` with the subscriber's response if the subscriber refuses it again. The dead-letter stream is a log: redelivering a dead letter doesn't remove it.
 
 #### Replay
 
-Operators replay a subscription with `POST /api/resources/v1/subscriptions/{name}/replay`. The subscription delivers every matching event again, from the start of the stream, or from a point in time:
+Operators replay a subscription with `POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/replay`. The subscription delivers every matching event again, from the start of the stream, or from a point in time:
 
 ```
-POST /api/resources/v1/subscriptions/{name}/replay?from=2026-11-25T10:00:00Z
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/replay?from=2026-11-25T10:00:00Z
 ```
 
 - **What the time resolves to:** the first event recorded at or after it, in the stream or partition the subscription consumes. If there's none, it resolves to the next event to be published.
@@ -283,9 +285,9 @@ The offset of whatever has been delivered is committed when it is suspended. Onc
 Operators suspend and resume subscriptions from the dashboard, or with:
 
 ```
-POST /api/resources/v1/subscriptions/{name}/suspend
-POST /api/resources/v1/subscriptions/{name}/resume     # also clears the fault of a faulted subscription
-POST /api/resources/v1/subscriptions/{name}/skip?offset=42   # skips the event that faulted it
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/suspend
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/resume     # also clears the fault of a faulted subscription
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/skip?offset=42   # skips the event that faulted it
 ```
 
 #### Broker replicas
@@ -333,8 +335,8 @@ A subscriber whose processing takes a while doesn't have to hold the connection 
 To resolve a deferred acknowledgement, the subscriber calls the gateway:
 
 ```
-POST /api/resources/v1/subscriptions/{name}/ack    { "token": "..." }                  # the event is processed: delivery resumes after it
-POST /api/resources/v1/subscriptions/{name}/nack   { "token": "...", "reason": "..." } # the event is redelivered
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/ack    { "token": "..." }                  # the event is processed: delivery resumes after it
+POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/nack   { "token": "...", "reason": "..." } # the event is redelivered
 ```
 
 Both return `204` on success, and `409` if the token doesn't match a pending acknowledgement (unknown subscription or token, already used, or expired), so as not to reveal which subscriptions exist. A subscriber may call back as soon as it has responded: a token that the broker has yet to record as pending is given a few seconds to become so before being refused. Only a hash of the token is stored in the subscription's status. The token is the only authorization required, so these endpoints are anonymous even when the dashboard requires users to sign in.
@@ -344,6 +346,83 @@ An event that isn't resolved within `spec.subscriber.ack.timeout` (broker defaul
 The gateway's own ingestion endpoint (`POST /api/events/pub`) now responds `204 No Content`, since events are persisted by the time it responds. This keeps a subscription that bridges two Cloud Streams instances from suspending on every event. The `cloudstreams-outcome` response header tells whether the event has been `stored`, or `ignored` because the gateway's split-horizon policy detected a loop (`loopAction: ignore`). Ignored events are counted by the `cloud_streams_gateway_events_ignored_count` metric, rather than as rejected.
 
 Published events are validated against the [CloudEvents specification](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md): in particular, the names of extension attributes must only contain lower-case letters and digits. Invalid events are rejected with `400 Bad Request`.
+
+### Namespaces
+
+Namespaces isolate tenants, teams or environments from each other on a single Cloud Streams cluster, like Kubernetes namespaces do:
+
+- **Namespaced resources:** subscriptions, sinks, feeds, gateways and brokers belong to a namespace. Their API is at `/api/resources/v1/namespaces/{namespace}/{plural}`, e.g. `/api/resources/v1/namespaces/tenant-a/subscriptions/orders`. `/api/resources/v1/{plural}` lists, gets and watches those of every namespace the user may read.
+- **Cluster resources:** schemas, which every namespace shares, and namespaces themselves, at `/api/resources/v1/namespaces`. Their names must be DNS labels: at most 63 lowercase letters, digits and dashes. A namespace can only be deleted once it holds no resource, and `default` never.
+- **The `default` namespace** is created at startup. Resources created without a namespace belong to it.
+
+**One gateway, one namespace.** A gateway process serves a single gateway resource, named by `CLOUDSTREAMS_GATEWAY_NAME` (`default` by default) in the namespace `CLOUDSTREAMS_GATEWAY_NAMESPACE` (`default` by default). It creates that resource, and its namespace, if they do not exist. The events it ingests, from `POST /api/events/pub` or from its feeds, belong to its namespace, which it records in their `$namespace` metadata. That attribute is never delivered to subscribers. Its feeds and their secrets are those of its namespace.
+
+**One broker, one namespace.** A broker process serves a single broker resource, named by `CLOUDSTREAMS_BROKER_NAME` in the namespace `CLOUDSTREAMS_BROKER_NAMESPACE`. It only delivers the subscriptions of that namespace, and only the events of that namespace. Like a gateway, it creates its resource and its namespace if they do not exist. Deploy a broker per namespace that has subscriptions: with the Helm chart, list them under `brokers` (see [Kubernetes](#kubernetes)).
+
+**Events** are stored in a single stream. Each namespace has its own view of it and its own partitions:
+
+| Stream | Events |
+|---|---|
+| `cloud-events` | every event, of every namespace |
+| `$by-namespace-{namespace}` | the events of a namespace, which a subscription without partition consumes |
+| `$by-source-{namespace}/{source}`, `$by-type-…`, `$by-subject-…`, `$by-correlation-…`, `$by-causation-…` | the events of a partition of a namespace |
+
+The stream and partition endpoints, and the MCP tools, take a `namespace` query parameter. Without it, they read the whole stream, which requires access to the whole cluster, and partitions of the `default` namespace.
+
+**Roles.** The roles of `Authentication:Dashboard:Roles` (see [Roles](#roles)) grant access to every namespace. `Namespaced` grants a level of access within one namespace, with roles matching a template whose `{namespace}` and `{level}` placeholders are replaced with a namespace and `reader`, `operator` or `admin`:
+
+```yaml
+Authentication:
+  Dashboard:
+    Roles:
+      Readers: [ cloud-streams-reader ]          # every namespace
+      Admins: [ cloud-streams-admin ]
+      Namespaced: 'cloud-streams:{namespace}:{level}'   # e.g. 'cloud-streams:tenant-a:operator'
+```
+
+A user granted access to some namespaces only sees those: lists, watches, health and the namespace selector of the dashboard are filtered. Reading the whole stream and managing schemas and namespaces require the corresponding cluster role. `GET /api/auth/user` describes the level granted in each namespace.
+
+**Publishers.** When ingestion is authenticated (see [Publishers](#publishers)), a publisher may publish to a gateway if:
+
+- its token lists the gateway's namespace in the claim named by `Authentication:Ingestion:NamespaceClaimType`, as an array or a space-separated string. Without that setting, tokens may publish to any namespace. With it, a token without the claim may publish to none;
+- or its API key is listed under `Authentication:Ingestion:Publishers` with the gateway's namespace among its `Namespaces`, or with no `Namespaces`. Keys listed under `ApiKeys` may publish to any namespace;
+- or it is one of the gateway's own publishers, which `spec.ingestion.publishers` declares. Each is identified either by an API key, read from the secrets of the gateway's namespace, or by the `subject` and `claims` of its token, and may be bound to `sources`:
+
+```yaml
+spec:
+  ingestion:
+    publishers:
+      - name: orders
+        apiKey: { use: orders-publisher, header: X-Api-Key }  # or { key: ... }, which is not recommended
+        sources: [ 'https://orders.example.com/*' ]
+      - name: billing
+        subject: billing-service
+        claims: { azp: billing }
+```
+
+A refused publisher gets `401 Unauthorized` or `403 Forbidden`, with problem type `https://cloud-streams.io/problems/unauthorized-publisher` or `.../forbidden-publisher`. Publishing from the dashboard or the MCP tools requires the operator role in the gateway's namespace.
+
+**Secrets.** Each namespace reads its own secrets first, then the shared secrets, if they are shared with it (see [Transports](#transports)):
+
+| Provider | Secrets of a namespace | Shared secrets |
+|---|---|---|
+| `env` | `CLOUDSTREAMS_SECRETS__NAMESPACES__{NAMESPACE}__{NAME}__{KEY}`, dashes replaced with underscores | `CLOUDSTREAMS_SECRETS__{NAME}__{KEY}` |
+| `file` | `{directory}/namespaces/{namespace}/{name}/{key}` | `{directory}/{name}/{key}` |
+| `kubernetes` | secrets labelled `cloud-streams.io/namespace={namespace}` | secrets without that label |
+| `vault` | `{prefix}/namespaces/{namespace}/{path}` | `{prefix}/{path}` |
+
+Shared secrets are only readable by the namespaces `CloudStreams:Secrets:SharedWith` lists, `[ default ]` by default, or by every namespace with `[ "*" ]`. Secret paths may not contain `.` or `..` segments, nor anything but letters, digits, `-`, `_` and `.`, so that a namespace cannot read the secrets of another one.
+
+**Upgrading** from a version without namespaces is automatic, but changes a few things:
+
+- Every existing resource is moved to the `default` namespace at startup, and the resource definitions are updated.
+- New projections index events by namespace (`cloud_events_by_namespace` and `cloud_events_by_namespaced_*`), and partitions by type and correlation id no longer rely on EventStoreDB's `$by_event_type` and `$by_correlation_id` system projections. The `cloud_events_by_source`, `cloud_events_by_subject` and `cloud_events_by_causation_id` projections are no longer used, and can be stopped and deleted from EventStoreDB.
+- Events published before the upgrade have no `$namespace` metadata, and belong to the `default` namespace. They are only indexed by the new projections once these reach them, which may take a while on a large stream.
+- A subscription without partition now consumes `$by-namespace-{namespace}` rather than the whole stream, and partition streams are renamed: offsets recorded in `status.stream.ackedOffset` refer to the old streams. Replay subscriptions that track an offset, or recreate them with the offset to start from.
+- Dead letter streams are named after the namespace and name of their subscription.
+- Secrets stored with the existing layouts become shared secrets, readable by the `default` namespace only, unless `SharedWith` says otherwise.
+- The `stream` label of the subscription lag metric is now the name of the stream consumed, e.g. `$by-namespace-default`, instead of `All`.
+- The resource API, the acknowledgement endpoints and the URIs the broker advertises in the `cloudstreams-ack-uri` header now include the namespace. The CloudEvents Subscriptions API is also served at `/api/cloudevents/v1/namespaces/{namespace}/subscriptions`.
 
 ### Authentication
 
@@ -387,7 +466,7 @@ Roles are read from the claim named by `Oidc:RoleClaimType`, and each one includ
 | Role | May |
 |---|---|
 | Reader | get, list and watch resources, read the stream and partitions, export subscriptions and use the read-only MCP tools |
-| Operator | also suspend, resume and replay subscriptions, skip the event that faulted them, and redeliver their dead letters, with `POST /api/resources/v1/subscriptions/{name}/suspend`, `.../resume`, `.../replay`, `.../skip` and `.../dead-letters/{offset}/redeliver` |
+| Operator | also suspend, resume and replay subscriptions, skip the event that faulted them, and redeliver their dead letters, with `POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/suspend`, `.../resume`, `.../replay`, `.../skip` and `.../dead-letters/{offset}/redeliver` |
 | Admin | also create, replace, patch and delete resources, and patch their status |
 
 A user who has none of the configured roles is denied access (`403`). When no role is configured, every signed-in user is an administrator, as before. The dashboard hides the actions the user may not perform. Acknowledgement endpoints remain anonymous, as the token is their authorization.
@@ -733,7 +812,7 @@ Status updates are never validated, so a broker can still record the state of a 
 
 A dry-run creation used to save the resource anyway.
 
-`POST api/resources/v1/gateways/{name}/test` evaluates a cloud event against a gateway spec that need not be saved, `{ "spec": { ... }, "event": { ... } }`, without storing or counting the event; rate limits and deduplication do not apply. It responds with the `outcome` (`accepted`, `ignored`, `rejected` or `invalid`), the `status` publishers would get, the `reason`, and for an accepted event the attributes it would be stored with and the metadata extracted from it. It requires the Administer policy, and the standalone API, which ingests no events, responds `501 Not Implemented`.
+`POST api/resources/v1/namespaces/{namespace}/gateways/{name}/test` evaluates a cloud event against a gateway spec that need not be saved, `{ "spec": { ... }, "event": { ... } }`, without storing or counting the event; rate limits and deduplication do not apply. It responds with the `outcome` (`accepted`, `ignored`, `rejected` or `invalid`), the `status` publishers would get, the `reason`, and for an accepted event the attributes it would be stored with and the metadata extracted from it. It requires the Administer policy, and the standalone API, which ingests no events, responds `501 Not Implemented`.
 
 ### Concurrent updates
 
@@ -747,7 +826,7 @@ The broker patches a subscription's status against the latest version it knows o
 
 ### Partitions
 
-`GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`.
+`GET /api/core/v1/cloud-events/partitions/{type}` lists the ids of the partitions of a type (`by-source`, `by-type`, `by-subject`, `by-correlation-id`, `by-causation-id`), sorted case-insensitively, page by page (`maxResults`, up to 1000, and `continuationToken`), optionally filtered by a case-insensitive `prefix`. Partitions belong to a namespace: `namespace` selects it, `default` if omitted.
 
 Partition ids are kept in an index in Redis, updated as events are ingested, so that listing and searching them never loads them all. Earlier versions listed them with EventStoreDB projections, whose state grows with every partition until it reaches EventStoreDB's maximum projection state size. On upgrade, the index is backfilled once from those projections, which are no longer used afterwards: the `cloud_events_partition_*` projections can then be stopped and deleted from EventStoreDB.
 
@@ -782,7 +861,7 @@ The dashboard's *Events* menu offers, besides the list and the timeline:
 
 The details of an event show its data as indented JSON, as text, or, for binary data (`data_base64`), as a hexadecimal preview, and can copy the event or its data, and download the data as a file of its media type.
 
-`POST /api/resources/v1/subscriptions/{name}/redeliver`, with `{ "offset": 42 }` (an offset in the stream) or `{ "partition": { "type": "by-source", "id": "…" }, "offset": 3 }`, delivers a recorded event to the subscriber of a subscription once more, mutated as the subscription mutates events, without going through its filter or moving its offset. It requires the operator role, returns the subscriber's status, or `502` if the subscriber refused it, and is offered by the details of an event in the list and in search results.
+`POST /api/resources/v1/namespaces/{namespace}/subscriptions/{name}/redeliver`, with `{ "offset": 42 }` (an offset in the stream) or `{ "partition": { "type": "by-source", "id": "…" }, "offset": 3 }`, delivers a recorded event to the subscriber of a subscription once more, mutated as the subscription mutates events, without going through its filter or moving its offset. It requires the operator role, returns the subscriber's status, or `502` if the subscriber refused it, and is offered by the details of an event in the list and in search results.
 
 ### Dashboard
 
@@ -832,7 +911,7 @@ When the dashboard requires users to sign in, anonymous callers of `/healthz` on
 
 Gateways and brokers whose `spec.service.healthChecks` is set are probed at the configured interval, and their `status.healthStatus` updated. Every gateway replica, and the standalone API, monitors every gateway and broker, but only the process that holds the resource's lease in Redis probes it. The others take over when that process stops, or within twice the interval plus 10 seconds if it dies.
 
-`GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
+`GET /api/resources/v1/subscriptions/health` (optionally filtered with `labelSelector`) returns a root-level JSON array describing the health of each subscription, including its lag. It covers the namespaces the user may read; `GET /api/resources/v1/namespaces/{namespace}/subscriptions/health` covers one. It is designed to be consumed directly by monitoring tools such as Grafana. Official Grafana dashboards are available in [deployments/grafana](deployments/grafana).
 
 Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `Warning` by default. Set `Logging__LogLevel__System.Net.Http.HttpClient.OtlpTraceExporter` (or `OtlpMetricExporter`/`OtlpLogExporter`) to restore them.
 

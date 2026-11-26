@@ -46,11 +46,11 @@ public static partial class ManagementApiExtensions
     /// <param name="path">The path to check</param>
     /// <returns>A boolean indicating whether or not the specified path is public</returns>
     public static bool IsPublic(PathString path) =>
-        path.Equals("/api/events/pub", StringComparison.OrdinalIgnoreCase)
+        path.StartsWithSegments("/api/events/pub", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/healthz", StringComparison.OrdinalIgnoreCase)
         || AcknowledgementPath().IsMatch(path.Value ?? string.Empty);
 
-    [GeneratedRegex("^/api/resources/v1/subscriptions/[^/]+/(ack|nack)$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex("^/api/resources/v1/namespaces/[^/]+/subscriptions/[^/]+/(ack|nack)$", RegexOptions.IgnoreCase)]
     private static partial Regex AcknowledgementPath();
 
 }

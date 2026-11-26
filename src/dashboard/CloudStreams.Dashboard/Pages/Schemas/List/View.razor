@@ -61,7 +61,7 @@
                             </div>
                         </td>
                         <td class="text-center align-middle">
-                            <input type="checkbox" aria-label="@($"Select the schema '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
+                            <input type="checkbox" aria-label="@($"Select the schema '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetQualifiedName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetQualifiedName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
                         </td>
                     </tr>
                 </Virtualize>

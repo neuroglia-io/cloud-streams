@@ -5,6 +5,7 @@
 @implements IAsyncDisposable
 @inject NavigationManager Navigation
 @inject IJsonSerializer Serializer
+@inject NamespaceContext NamespaceContext
 
 <ApplicationTitle>Live events</ApplicationTitle>
 
@@ -105,6 +106,7 @@
     public const int MaxEvents = 500;
 
     CloudEventHubConnection? connection;
+    IDisposable? namespaceSubscription;
     readonly LinkedList<(DateTimeOffset Received, CloudEvent Event)> events = new();
     string? source;
     string? type;
@@ -136,6 +138,8 @@
         {
             await this.connection.StartAsync();
             await this.ApplyFilterAsync();
+            // the cloud events streamed are those of the namespace selected in the layout
+            this.namespaceSubscription = this.NamespaceContext.Selected.Skip(1).Subscribe(_ => this.InvokeAsync(this.ApplyFilterAsync));
         }
         catch (Exception ex) { this.error = $"Failed to connect to the gateway: {ex.Message}"; }
     }
@@ -159,7 +163,7 @@
         this.error = null;
         try
         {
-            await this.connection.SubscribeAsync(this.source, this.type);
+            await this.connection.SubscribeAsync(this.source, this.type, this.NamespaceContext.Current);
             this.events.Clear();
             this.missed = 0;
             this.appliedFilter = (string.IsNullOrWhiteSpace(this.source), string.IsNullOrWhiteSpace(this.type)) switch
@@ -186,6 +190,7 @@
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
+        this.namespaceSubscription?.Dispose();
         if (this.connection != null) await this.connection.DisposeAsync();
     }
 

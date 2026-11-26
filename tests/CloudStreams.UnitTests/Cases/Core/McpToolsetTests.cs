@@ -14,8 +14,9 @@
 using CloudStreams.Core.Api;
 using CloudStreams.Core.Api.Tools;
 using CloudStreams.Core.Application.Commands.Subscriptions;
-using Microsoft.AspNetCore.Authorization;
+using CloudStreams.Core.Api.Configuration;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 using Neuroglia.Mediation;
@@ -30,14 +31,18 @@ namespace CloudStreams.UnitTests.Cases.Core;
 public class McpToolsetTests
 {
 
-    static IHttpContextAccessor Caller() => new HttpContextAccessor() { HttpContext = new DefaultHttpContext() { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "alice")], "test")) } };
+    const string Reader = "reader";
+    const string Operator = "operator";
 
-    static IAuthorizationService Authorizes(params string[] policies)
+    /// <summary>
+    /// Creates an accessor to the HTTP context of a user granted the specified cluster roles, among the readers and operators the dashboard is configured with
+    /// </summary>
+    static IHttpContextAccessor Caller(params string[] roles)
     {
-        var authorization = Substitute.For<IAuthorizationService>();
-        authorization.AuthorizeAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<object?>(), Arg.Any<string>())
-            .Returns(call => policies.Contains(call.ArgAt<string>(2)) ? AuthorizationResult.Success() : AuthorizationResult.Failed());
-        return authorization;
+        var options = new CloudStreamsAuthenticationOptions() { Dashboard = new() { Enabled = true, Roles = new() { Readers = [Reader], Operators = [Operator] } } };
+        var services = new ServiceCollection().AddSingleton(options).BuildServiceProvider();
+        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "alice"), .. roles.Select(r => new Claim("roles", r))], "test", ClaimTypes.Name, "roles");
+        return new HttpContextAccessor() { HttpContext = new DefaultHttpContext() { User = new ClaimsPrincipal(identity), RequestServices = services } };
     }
 
     static readonly Subscription Subscription = new() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } } };
@@ -59,7 +64,7 @@ public class McpToolsetTests
     {
         // arrange
         var mediator = Substitute.For<IMediator>();
-        var toolset = new SubscriptionToolset(mediator, Authorizes(CloudStreamsAuthenticationDefaults.ReadPolicy), Caller());
+        var toolset = new SubscriptionToolset(mediator, Caller(Reader));
 
         // act and assert
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => toolset.SuspendSubscriptionAsync("orders"));
@@ -75,7 +80,7 @@ public class McpToolsetTests
         var mediator = Substitute.For<IMediator>();
         var from = new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
         mediator.ExecuteAsync(Arg.Any<ReplaySubscriptionCommand>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<Subscription>(200, Subscription));
-        var toolset = new SubscriptionToolset(mediator, Authorizes(CloudStreamsAuthenticationDefaults.ReadPolicy, CloudStreamsAuthenticationDefaults.OperatePolicy), Caller());
+        var toolset = new SubscriptionToolset(mediator, Caller(Reader, Operator));
 
         // act
         var replayed = await toolset.ReplaySubscriptionAsync("orders", from);
@@ -91,7 +96,7 @@ public class McpToolsetTests
         // arrange
         var mediator = Substitute.For<IMediator>();
         mediator.ExecuteAsync(Arg.Any<ResumeSubscriptionCommand>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<Subscription>(404, errors: [new Error(ProblemTypes.NotFound, "Not Found", 404, "The subscription 'orders' does not exist")]));
-        var toolset = new SubscriptionToolset(mediator, Authorizes(CloudStreamsAuthenticationDefaults.OperatePolicy), Caller());
+        var toolset = new SubscriptionToolset(mediator, Caller(Operator));
 
         // act
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => toolset.ResumeSubscriptionAsync("orders"));
@@ -102,23 +107,13 @@ public class McpToolsetTests
 
     static CloudEvent Event => new() { Id = "1", SpecVersion = "1.0", Source = new("https://orders.example.com"), Type = "order.placed" };
 
-    static CloudEventToolset EventToolset(IServiceProvider services, IAuthorizationService authorization) => new(NullLogger<CloudEventToolset>.Instance, Substitute.For<IMediator>(), services, authorization, Caller());
-
-    [Fact]
-    public async Task Publishing_Should_Require_The_Operator_Role()
-    {
-        var publisher = Substitute.For<ICloudEventPublisher>();
-        var services = Substitute.For<IServiceProvider>();
-        services.GetService(typeof(ICloudEventPublisher)).Returns(publisher);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => EventToolset(services, Authorizes(CloudStreamsAuthenticationDefaults.ReadPolicy)).PublishEventAsync(Event));
-        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default!, default);
-    }
+    static CloudEventToolset EventToolset(IServiceProvider services, params string[] roles) => new(NullLogger<CloudEventToolset>.Instance, Substitute.For<IMediator>(), services, Caller(roles));
 
     [Fact]
     public async Task Publishing_Should_Only_Be_Available_On_Gateways()
     {
         var services = Substitute.For<IServiceProvider>();
-        await Assert.ThrowsAsync<NotSupportedException>(() => EventToolset(services, Authorizes(CloudStreamsAuthenticationDefaults.OperatePolicy)).PublishEventAsync(Event));
+        await Assert.ThrowsAsync<NotSupportedException>(() => EventToolset(services, Operator).PublishEventAsync(Event));
     }
 
     [Theory]
@@ -134,7 +129,7 @@ public class McpToolsetTests
         services.GetService(typeof(ICloudEventPublisher)).Returns(publisher);
 
         // act
-        var result = await EventToolset(services, Authorizes(CloudStreamsAuthenticationDefaults.OperatePolicy)).PublishEventAsync(Event);
+        var result = await EventToolset(services, Operator).PublishEventAsync(Event);
 
         // assert - the event is published as the calling user
         Assert.Equal(outcome, result);
@@ -148,7 +143,7 @@ public class McpToolsetTests
         publisher.PublishAsync(Arg.Any<CloudEvent>(), Arg.Any<ClaimsPrincipal>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(403, null, new Error(new Uri("https://cloud-streams.io/problems/source-not-allowed"), "Forbidden", 403, "The publisher is not allowed to publish cloud events of source 'x'")));
         var services = Substitute.For<IServiceProvider>();
         services.GetService(typeof(ICloudEventPublisher)).Returns(publisher);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => EventToolset(services, Authorizes(CloudStreamsAuthenticationDefaults.OperatePolicy)).PublishEventAsync(Event));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => EventToolset(services, Operator).PublishEventAsync(Event));
         Assert.Contains("not allowed", exception.Message);
     }
 

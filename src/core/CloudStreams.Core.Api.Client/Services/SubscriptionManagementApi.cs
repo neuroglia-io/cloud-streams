@@ -28,22 +28,22 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
 {
 
     /// <inheritdoc/>
-    public virtual Task<Subscription> SuspendAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "suspend", cancellationToken);
+    public virtual Task<Subscription> SuspendAsync(string name, string? @namespace = null, CancellationToken cancellationToken = default) => this.PostAsync(name, "suspend", @namespace, cancellationToken);
 
     /// <inheritdoc/>
-    public virtual Task<Subscription> ResumeAsync(string name, CancellationToken cancellationToken = default) => this.PostAsync(name, "resume", cancellationToken);
+    public virtual Task<Subscription> ResumeAsync(string name, string? @namespace = null, CancellationToken cancellationToken = default) => this.PostAsync(name, "resume", @namespace, cancellationToken);
 
     /// <inheritdoc/>
-    public virtual Task<Subscription> ReplayAsync(string name, DateTimeOffset? from = null, CancellationToken cancellationToken = default) => this.PostAsync(name, from.HasValue ? $"replay?from={Uri.EscapeDataString(from.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : "replay", cancellationToken);
+    public virtual Task<Subscription> ReplayAsync(string name, DateTimeOffset? from = null, string? @namespace = null, CancellationToken cancellationToken = default) => this.PostAsync(name, from.HasValue ? $"replay?from={Uri.EscapeDataString(from.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture))}" : "replay", @namespace, cancellationToken);
 
     /// <inheritdoc/>
-    public virtual Task<Subscription> SkipAsync(string name, ulong offset, CancellationToken cancellationToken = default) => this.PostAsync(name, $"skip?offset={offset}", cancellationToken);
+    public virtual Task<Subscription> SkipAsync(string name, ulong offset, string? @namespace = null, CancellationToken cancellationToken = default) => this.PostAsync(name, $"skip?offset={offset}", @namespace, cancellationToken);
 
     /// <inheritdoc/>
-    public virtual async Task<IReadOnlyList<SubscriptionHealth>> GetHealthAsync(IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IReadOnlyList<SubscriptionHealth>> GetHealthAsync(IEnumerable<LabelSelector>? labelSelectors = null, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         var selectors = labelSelectors?.ToList();
-        var uri = selectors?.Count > 0 ? $"{this.Path}/health?labelSelector={Uri.EscapeDataString(string.Join(',', selectors))}" : $"{this.Path}/health";
+        var uri = selectors?.Count > 0 ? $"{this.GetCollectionUri(@namespace)}/health?labelSelector={Uri.EscapeDataString(string.Join(',', selectors))}" : $"{this.GetCollectionUri(@namespace)}/health";
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -51,44 +51,44 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
     }
 
     /// <inheritdoc/>
-    public virtual async Task<SubscriptionTestResult> TestAsync(SubscriptionTestRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<SubscriptionTestResult> TestAsync(SubscriptionTestRequest request, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         using var content = new StringContent(this.Serializer.SerializeToText(request), System.Text.Encoding.UTF8, "application/json");
-        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.Path}/test") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetCollectionUri(ResolveNamespace(@namespace))}/test") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<SubscriptionTestResult>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IReadOnlyList<DeadLetter>> GetDeadLettersAsync(string name, long? offset = null, ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
+    public virtual async Task<IReadOnlyList<DeadLetter>> GetDeadLettersAsync(string name, long? offset = null, ulong length = StreamReadOptions.MaxLength, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         var query = $"length={length}" + (offset.HasValue ? $"&offset={offset.Value}" : string.Empty);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{this.GetResourceUri(name)}/dead-letters?{query}"), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{this.GetResourceUri(name, @namespace)}/dead-letters?{query}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<List<DeadLetter>>(json) ?? [];
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventRedelivery> RedeliverAsync(string name, CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventRedelivery> RedeliverAsync(string name, CloudEventRedeliveryRequest request, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         ArgumentNullException.ThrowIfNull(request);
         using var content = new StringContent(this.Serializer.SerializeToText(request), System.Text.Encoding.UTF8, "application/json");
-        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/redeliver") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name, @namespace)}/redeliver") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<CloudEventRedelivery>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<DeadLetterRedelivery> RedeliverDeadLetterAsync(string name, ulong offset, CancellationToken cancellationToken = default)
+    public virtual async Task<DeadLetterRedelivery> RedeliverDeadLetterAsync(string name, ulong offset, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/dead-letters/{offset}/redeliver"), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name, @namespace)}/dead-letters/{offset}/redeliver"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<DeadLetterRedelivery>(json)!;
@@ -99,12 +99,13 @@ public class SubscriptionManagementApi(ILogger<ResourceManagementApi<Subscriptio
     /// </summary>
     /// <param name="name">The name of the <see cref="Subscription"/> to operate</param>
     /// <param name="operation">The name of the operation to perform</param>
+    /// <param name="namespace">The namespace the subscription belongs to, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The operated <see cref="Subscription"/></returns>
-    protected virtual async Task<Subscription> PostAsync(string name, string operation, CancellationToken cancellationToken)
+    protected virtual async Task<Subscription> PostAsync(string name, string operation, string? @namespace, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/{operation}"), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name, @namespace)}/{operation}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<Subscription>(json)!;

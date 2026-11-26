@@ -23,18 +23,19 @@ namespace CloudStreams.Core.Transports.Services;
 /// </summary>
 /// <param name="Endpoint">The endpoint to deliver to, if any</param>
 /// <param name="Sink">The name of the sink to deliver to, if any</param>
-public sealed record DeliveryTarget(Endpoint? Endpoint, string? Sink)
+/// <param name="Namespace">The namespace of the resource that delivers, in which its sink and the secrets of its endpoint are looked for</param>
+public sealed record DeliveryTarget(Endpoint? Endpoint, string? Sink, string? Namespace = null)
 {
 
     /// <summary>
     /// Gets the target of the specified subscriber
     /// </summary>
-    public static DeliveryTarget Of(Subscriber subscriber) => new(subscriber.Endpoint, subscriber.Sink);
+    public static DeliveryTarget Of(Subscriber subscriber, string? @namespace) => new(subscriber.Endpoint, subscriber.Sink, @namespace);
 
     /// <summary>
     /// Gets the target of the specified dead-letter policy
     /// </summary>
-    public static DeliveryTarget Of(DeadLetterPolicy deadLetter) => new(deadLetter.Endpoint, deadLetter.Sink);
+    public static DeliveryTarget Of(DeadLetterPolicy deadLetter, string? @namespace) => new(deadLetter.Endpoint, deadLetter.Sink, @namespace);
 
     /// <inheritdoc/>
     public override string ToString() => this.Sink != null ? $"sink '{this.Sink}'" : $"'{this.Endpoint}'";
@@ -113,10 +114,10 @@ public class CloudEventDeliveryClient(HttpClient httpClient, IEnumerable<ICloudE
         {
             endpoint = target.Endpoint ?? (target.Sink == null ? throw new InvalidOperationException($"{description} has neither an endpoint nor a sink")
                 : endpoints == null ? throw new InvalidOperationException($"The sink '{target.Sink}' cannot be resolved here")
-                : await endpoints.GetSinkEndpointAsync(target.Sink, cancellationToken).ConfigureAwait(false));
+                : await endpoints.GetSinkEndpointAsync(target.Sink, target.Namespace, cancellationToken).ConfigureAwait(false));
             resolvedCredentials = endpoint.Authentication == null ? null
                 : credentials == null ? throw new InvalidOperationException("Authenticated endpoints cannot be delivered to here")
-                : await credentials.ResolveAsync(endpoint.Authentication, cancellationToken).ConfigureAwait(false);
+                : await credentials.ResolveAsync(endpoint.Authentication, target.Namespace, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

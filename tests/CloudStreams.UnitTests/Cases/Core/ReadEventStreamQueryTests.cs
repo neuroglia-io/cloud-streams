@@ -32,10 +32,10 @@ public class ReadEventStreamQueryTests
         var recorded = new List<(PartitionReference?, StreamReadDirection, long, ulong?)>();
         calls = recorded;
         var store = Substitute.For<ICloudEventStore>();
-        store.ReadAsync(Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>())
-            .Returns(call => { recorded.Add((null, call.ArgAt<StreamReadDirection>(0), call.ArgAt<long>(1), call.ArgAt<ulong?>(2))); return new[] { Record(0), Record(1) }.ToAsyncEnumerable(); });
-        store.ReadPartitionAsync(Arg.Any<PartitionReference>(), Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>())
-            .Returns(call => { recorded.Add((call.ArgAt<PartitionReference>(0), call.ArgAt<StreamReadDirection>(1), call.ArgAt<long>(2), call.ArgAt<ulong?>(3))); return new[] { Record(3) }.ToAsyncEnumerable(); });
+        store.ReadAsync(Arg.Any<string?>(), Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>())
+            .Returns(call => { recorded.Add((null, call.ArgAt<StreamReadDirection>(1), call.ArgAt<long>(2), call.ArgAt<ulong?>(3))); return new[] { Record(0), Record(1) }.ToAsyncEnumerable(); });
+        store.ReadPartitionAsync(Arg.Any<string?>(), Arg.Any<PartitionReference>(), Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>())
+            .Returns(call => { recorded.Add((call.ArgAt<PartitionReference>(1), call.ArgAt<StreamReadDirection>(2), call.ArgAt<long>(3), call.ArgAt<ulong?>(4))); return new[] { Record(3) }.ToAsyncEnumerable(); });
         return store;
     }
 

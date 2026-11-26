@@ -18,11 +18,15 @@ namespace CloudStreams.Core.Application.Queries.Streams;
 /// <summary>
 /// Represents the <see cref="IQuery{TResult}"/> used to get the metadata of the application's cloud event stream
 /// </summary>
-public class GetEventStreamMetadataQuery
+/// <param name="namespace">The namespace to describe the stream of, or null to describe the whole stream</param>
+public class GetEventStreamMetadataQuery(string? @namespace = null)
     : Query<StreamMetadata>
 {
 
-
+    /// <summary>
+    /// Gets the namespace to describe the stream of, or null to describe the whole stream
+    /// </summary>
+    public virtual string? Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? null : @namespace;
 
 }
 
@@ -36,7 +40,7 @@ public class GetEventPartitionMetadataQueryHandler(ICloudEventStore eventStore)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<StreamMetadata>> HandleAsync(GetEventStreamMetadataQuery query, CancellationToken cancellationToken)
     {
-        return this.Ok(await eventStore.GetStreamMetadataAsync(cancellationToken));
+        return this.Ok(await eventStore.GetStreamMetadataAsync(query.Namespace, cancellationToken));
     }
 
 }

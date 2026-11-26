@@ -207,7 +207,7 @@ public sealed class ResourceManagementComponentStoreTests
         await this._store.DeleteSelectedResourcesAsync();
 
         // assert
-        Assert.Equal(["/api/resources/v1/subscriptions/a", "/api/resources/v1/subscriptions/c"], this._requests.Select(r => r.RequestUri!.AbsolutePath));
+        Assert.Equal(["/api/resources/v1/namespaces/default/subscriptions/a", "/api/resources/v1/namespaces/default/subscriptions/c"], this._requests.Select(r => r.RequestUri!.AbsolutePath));
         Assert.Equal(["b"], this._store.State.Resources!.Select(r => r.GetName()));
         Assert.Empty(this._store.State.SelectedResourceNames);
     }
@@ -317,7 +317,7 @@ public sealed class ResourceManagementComponentStoreTests
     }
 
     sealed class TestStore(ICloudStreamsCoreApiClient client, ResourceWatchEventHubClient hub)
-        : ResourceManagementComponentStore<ResourceManagementComponentState<Subscription>, Subscription>(NullLogger<ResourceManagementComponentStore<ResourceManagementComponentState<Subscription>, Subscription>>.Instance, client, hub)
+        : ResourceManagementComponentStore<ResourceManagementComponentState<Subscription>, Subscription>(NullLogger<ResourceManagementComponentStore<ResourceManagementComponentState<Subscription>, Subscription>>.Instance, client, hub, new NamespaceContext(client, NullLogger<NamespaceContext>.Instance))
     {
 
         public ResourceManagementComponentState<Subscription> State => this.Get();

@@ -26,6 +26,10 @@
         <thead>
             <tr>
                 <SortableHeader Column="@ResourceSortColumns.Name" Title="Name" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" />
+                @if (ShowNamespace)
+                {
+                    <th class="sticky-header">Namespace</th>
+                }
                 <SortableHeader Column="@ResourceSortColumns.Created" Title="Created At" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <SortableHeader Column="phase" Title="Status" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Subscriber</th>
@@ -52,7 +56,11 @@
                         var streamLength = subscriptionLengths.Keys.Contains(resource.GetName()) ? subscriptionLengths[resource.GetName()] : (ulong)0;
                     }
                     <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer @(IsBehind(resource, streamLength) ? "warning-row" : "")">
-                        <td><a href="@($"subscriptions/{Uri.EscapeDataString(resource.GetName())}")" @onclick:stopPropagation="true" title="Open the details page of the subscription">@resource.Metadata.Name</a></td>
+                        <td><a href="@($"subscriptions/{Uri.EscapeDataString(resource.GetNamespace() ?? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName)}/{Uri.EscapeDataString(resource.GetName())}")" @onclick:stopPropagation="true" title="Open the details page of the subscription">@resource.Metadata.Name</a></td>
+                        @if (ShowNamespace)
+                        {
+                            <td>@resource.GetNamespace()</td>
+                        }
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">
                             @switch (resource.Status?.Phase)
@@ -167,7 +175,7 @@
                             </div>
                         </td>
                         <td class="text-center align-middle">
-                            <input type="checkbox" aria-label="@($"Select the subscription '{resource.Metadata.Name}'")" @onkeydown:stopPropagation="true" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
+                            <input type="checkbox" aria-label="@($"Select the subscription '{resource.Metadata.Name}'")" @onkeydown:stopPropagation="true" checked="@SelectedResourceNames.Contains(resource.GetQualifiedName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetQualifiedName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" />
                         </td>
                     </tr>
                 </Virtualize>
@@ -240,7 +248,7 @@
         if (!confirmed) return;
         try
         {
-            await this.ApiClient.Resources.Subscriptions.SuspendAsync(subscription.GetName());
+            await this.ApiClient.Resources.Subscriptions.SuspendAsync(subscription.GetName(), subscription.GetNamespace());
             NotifySuccess($"The subscription '{subscription.Metadata.Name}' has been suspended");
         }
         catch (Exception ex)
@@ -262,7 +270,7 @@
         try
         {
             // a dedicated endpoint rather than a status patch, which only administrators may send (see #147)
-            await this.ApiClient.Resources.Subscriptions.ResumeAsync(subscription.GetName());
+            await this.ApiClient.Resources.Subscriptions.ResumeAsync(subscription.GetName(), subscription.GetNamespace());
             NotifySuccess($"The subscription '{subscription.Metadata.Name}' has been resumed");
         }
         catch (Exception ex)
@@ -284,7 +292,7 @@
         if (!confirmed) return;
         try
         {
-            await this.ApiClient.Resources.Subscriptions.ReplayAsync(subscription.GetName());
+            await this.ApiClient.Resources.Subscriptions.ReplayAsync(subscription.GetName(), @namespace: subscription.GetNamespace());
             NotifySuccess($"The subscription '{subscription.Metadata.Name}' is being replayed");
         }
         catch (Exception ex)

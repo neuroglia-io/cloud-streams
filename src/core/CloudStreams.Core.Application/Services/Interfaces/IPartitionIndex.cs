@@ -26,21 +26,23 @@ public interface IPartitionIndex
     /// <summary>
     /// Adds the specified partitions to the index
     /// </summary>
+    /// <param name="namespace">The namespace the partitions belong to</param>
     /// <param name="partitions">The partitions to add</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    Task AddAsync(IEnumerable<PartitionReference> partitions, CancellationToken cancellationToken = default);
+    Task AddAsync(string @namespace, IEnumerable<PartitionReference> partitions, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists the ids of the partitions of the specified type
     /// </summary>
+    /// <param name="namespace">The namespace the partitions to list belong to</param>
     /// <param name="partitionType">The type of the partitions to list</param>
     /// <param name="prefix">The prefix, compared case-insensitively, of the ids to list, if any</param>
     /// <param name="after">The id after which to start listing, if any</param>
     /// <param name="maxResults">The maximum number of ids to list</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The sorted ids of the partitions of the specified type</returns>
-    Task<IReadOnlyList<string>> ListAsync(CloudEventPartitionType partitionType, string? prefix, string? after, int maxResults, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> ListAsync(string @namespace, CloudEventPartitionType partitionType, string? prefix, string? after, int maxResults, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines whether the index of the specified type of partitions has been initialized, which is to say backfilled from the projections of earlier versions

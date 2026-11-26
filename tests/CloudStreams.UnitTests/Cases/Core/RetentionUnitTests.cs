@@ -25,7 +25,7 @@ namespace CloudStreams.UnitTests.Cases.Core;
 public class RetentionUnitTests
 {
 
-    const string PartitionStream = "$by-source-https://retention.cloud-streams.io";
+    const string PartitionStream = "$by-source-default/https://retention.cloud-streams.io";
 
     static readonly PartitionReference Partition = new(CloudEventPartitionType.BySource, "https://retention.cloud-streams.io");
 
@@ -88,9 +88,9 @@ public class RetentionUnitTests
         var store = links.CreateStore();
 
         // act
-        var first = await store.ReadPartitionAsync(Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync();
+        var first = await store.ReadPartitionAsync(null, Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync();
         links.Reads.Clear();
-        var second = await store.ReadPartitionAsync(Partition, StreamReadDirection.Forwards, 2, 2).Select(r => r.Sequence).ToListAsync();
+        var second = await store.ReadPartitionAsync(null, Partition, StreamReadDirection.Forwards, 2, 2).Select(r => r.Sequence).ToListAsync();
 
         // assert - the first retained link is found once, and starts the next reads
         Assert.Equal([6ul, 7ul, 8ul, 9ul], first);
@@ -105,8 +105,8 @@ public class RetentionUnitTests
         var store = new ExpiringLinks(6).CreateStore();
 
         // act
-        var records = await store.ReadPartitionAsync(Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream).Select(r => r.Sequence).ToListAsync();
-        var expired = await store.ReadPartitionAsync(Partition, StreamReadDirection.Backwards, 3).ToListAsync();
+        var records = await store.ReadPartitionAsync(null, Partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream).Select(r => r.Sequence).ToListAsync();
+        var expired = await store.ReadPartitionAsync(null, Partition, StreamReadDirection.Backwards, 3).ToListAsync();
 
         // assert
         Assert.Equal([9ul, 8ul, 7ul, 6ul], records);
@@ -117,7 +117,7 @@ public class RetentionUnitTests
     public async Task The_Metadata_Of_A_Partition_Should_Start_With_Its_First_Retained_Event()
     {
         // act
-        var metadata = await new ExpiringLinks(6).CreateStore().GetPartitionMetadataAsync(Partition);
+        var metadata = await new ExpiringLinks(6).CreateStore().GetPartitionMetadataAsync(null, Partition);
 
         // assert
         Assert.Equal(10ul, metadata.Length);
@@ -131,8 +131,8 @@ public class RetentionUnitTests
         var store = new ExpiringLinks(10).CreateStore();
 
         // act
-        var records = await store.ReadPartitionAsync(Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync();
-        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => store.GetPartitionMetadataAsync(Partition));
+        var records = await store.ReadPartitionAsync(null, Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync();
+        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => store.GetPartitionMetadataAsync(null, Partition));
 
         // assert
         Assert.Empty(records);
@@ -149,7 +149,7 @@ public class RetentionUnitTests
         var store = new CloudEventStore(eventStore, Substitute.For<IProjectionManager>(), Neuroglia.Serialization.Json.JsonSerializer.Default);
 
         // act & assert
-        await Assert.ThrowsAsync<NullReferenceException>(() => store.ReadPartitionAsync(Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync().AsTask());
+        await Assert.ThrowsAsync<NullReferenceException>(() => store.ReadPartitionAsync(null, Partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync().AsTask());
 
         static async IAsyncEnumerable<IEventRecord> Fails()
         {

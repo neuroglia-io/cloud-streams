@@ -88,14 +88,14 @@ public static class TransportSchemes
 /// <list type="bullet">
 /// <item><description><c>kafka://{server}[:{port}]/{topic}</c>, port 9092 by default. <c>servers</c> lists additional bootstrap servers, comma-separated. <c>tls=true</c> enables TLS,
 /// and credentials enable SASL, with the <c>mechanism</c> <c>plain</c> (default), <c>scram-sha-256</c> or <c>scram-sha-512</c>. <c>group</c> sets the consumer group of a gateway,
-/// its name by default.</description></item>
+/// named after the gateway and its namespace by default.</description></item>
 /// <item><description><c>nats://{server}[:{port}]/{subject}</c>, port 4222 by default. <c>jetstream=true</c> waits for JetStream to acknowledge published events, and
-/// consumes with a durable consumer of the stream the subject belongs to. <c>tls=true</c> enables TLS. <c>queue</c> sets the queue group of a gateway, its name by
+/// consumes with a durable consumer of the stream the subject belongs to. <c>tls=true</c> enables TLS. <c>queue</c> sets the queue group of a gateway, named after the gateway and its namespace by
 /// default.</description></item>
 /// <item><description><c>amqp[s]://{host}[:{port}]/[{virtual host}]</c>, port 5672 (5671 over TLS) by default. To deliver, <c>exchange</c> names the exchange, the default one
 /// if empty, and <c>routingKey</c> the routing key, the event's type by default. To consume, <c>queue</c> names the queue.</description></item>
 /// <item><description><c>cloudstreams://{host}[:{port}][/{path}]</c>, delivers to the gateway served at <c>https://{host}:{port}/{path}</c>, or over HTTP with
-/// <c>tls=false</c>. Credentials provide its API key.</description></item>
+/// <c>tls=false</c>. The cloud events belong to the namespace of that gateway (see #215). Credentials provide its API key.</description></item>
 /// </list>
 /// </remarks>
 public sealed record TransportAddress

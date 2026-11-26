@@ -44,18 +44,17 @@ public class ResourceManagementApiTests
     }
 
     [Fact]
-    public async Task Resource_Uris_Should_Never_Include_A_Namespace_And_Should_Escape_Names()
+    public async Task Resource_Uris_Should_Include_The_Namespace_Of_Namespaced_Resources_And_Should_Escape_Names()
     {
         // arrange
         var (api, http) = Create(Neuroglia.Serialization.Json.JsonSerializer.Default.SerializeToText(new Subscription() { Metadata = new() { Name = "test" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } } }));
 
         // act
-        await api.GetAsync("a b", "ignored-namespace");
+        await api.GetAsync("a b", "tenant a");
+        await api.GetAsync("c");
 
-        // assert
-        var uri = Assert.Single(http.Attempts).RequestUri!;
-        Assert.EndsWith("/subscriptions/a%20b", uri.AbsoluteUri);
-        Assert.DoesNotContain("ignored-namespace", uri.AbsoluteUri);
+        // assert - resources requested without a namespace are those of the default namespace
+        Assert.Equal(["/api/resources/v1/namespaces/tenant%20a/subscriptions/a%20b", "/api/resources/v1/namespaces/default/subscriptions/c"], http.Attempts.Select(a => a.RequestUri!.AbsolutePath));
     }
 
 }

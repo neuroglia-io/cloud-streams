@@ -15,6 +15,7 @@
                 <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name broker replicas are started with (CLOUDSTREAMS_BROKER_NAME). It cannot change later." Error="@ErrorOf("name")">
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
+                <NamespaceInput Id="@FieldId("namespace")" Value="@Model.Metadata.Namespace" ValueChanged="@(value => Model.Metadata.Namespace = value)" />
             }
             <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
                 <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
@@ -130,7 +131,7 @@
     {
         await base.OnInitializedAsync();
         saved = Resource;
-        try { subscriptions = await (await Api.Resources.Subscriptions.ListAsync()).ToListAsync(); }
+        try { subscriptions = await (await Api.Resources.Subscriptions.ListAsync(this.GetNamespace())).ToListAsync(); }
         catch (Exception) { subscriptions = []; }
     }
 

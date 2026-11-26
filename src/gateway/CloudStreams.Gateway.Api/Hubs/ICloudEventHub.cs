@@ -26,7 +26,8 @@ public interface ICloudEventHub
     /// </summary>
     /// <param name="source">The source of the cloud events to stream, if any. If not set, the cloud events of any source are streamed</param>
     /// <param name="type">The type of the cloud events to stream, if any. If not set, the cloud events of any type are streamed</param>
+    /// <param name="namespace">The namespace of the cloud events to stream, if any. If not set, the cloud events of every namespace are streamed, which requires access to the whole cluster</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    Task Subscribe(string? source, string? type);
+    Task Subscribe(string? source, string? type, string? @namespace = null);
 
 }

@@ -4,6 +4,7 @@
 @using System.Globalization
 @using System.Text.RegularExpressions
 @inherits ResourceFormBase<Gateway>
+@inject NamespaceContext NamespaceContext
 
 @* A form to create and edit gateways, whose spec decides what is admitted into the stream, with a test of an example event against the edited spec (see #262) *@
 
@@ -16,6 +17,7 @@
                 <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name gateway replicas are started with (CLOUDSTREAMS_GATEWAY_NAME). It cannot change later." Error="@ErrorOf("name")">
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
+                <NamespaceInput Id="@FieldId("namespace")" Value="@Model.Metadata.Namespace" ValueChanged="@(value => Model.Metadata.Namespace = value)" />
             }
             <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
                 <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
@@ -422,7 +424,7 @@
         })!);
         try { schemas = await (await Api.Resources.Schemas.ListAsync()).ToListAsync(); }
         catch (Exception) { schemas = []; }
-        try { feeds = await (await Api.Resources.Feeds.ListAsync()).ToListAsync(); }
+        try { feeds = await (await Api.Resources.Feeds.ListAsync(this.GetNamespace())).ToListAsync(); }
         catch (Exception) { feeds = []; }
     }
 
@@ -591,7 +593,7 @@
         {
             var gateway = Prepare();
             var name = string.IsNullOrWhiteSpace(gateway.Metadata.Name) ? "new-gateway" : gateway.GetName();
-            testResult = await Api.Resources.Gateways.TestAdmissionAsync(name, new() { Spec = gateway.Spec, Event = e });
+            testResult = await Api.Resources.Gateways.TestAdmissionAsync(name, new() { Spec = gateway.Spec, Event = e }, this.GetNamespace());
         }
         catch (ProblemDetailsException ex)
         {

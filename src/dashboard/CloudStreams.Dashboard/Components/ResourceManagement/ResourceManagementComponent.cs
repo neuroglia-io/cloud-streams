@@ -71,6 +71,27 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     protected UserAccess UserAccess { get; set; } = null!;
 
     /// <summary>
+    /// Gets the service that holds the namespace the dashboard shows the resources of (see #215)
+    /// </summary>
+    [Inject]
+    protected NamespaceContext NamespaceContext { get; set; } = null!;
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the managed resources belong to namespaces
+    /// </summary>
+    protected static bool IsNamespaced { get; } = CloudStreamsDefaults.Resources.Definitions.AsEnumerable().Any(d => d.Spec.Names.Kind == new TResource().Definition.Kind && d.Spec.Scope == ResourceScope.Namespaced);
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the namespace of each resource is shown, which it is when the resources of every namespace are
+    /// </summary>
+    protected bool ShowNamespace { get; private set; }
+
+    /// <summary>
+    /// Gets/sets the namespace of the active resource, if any
+    /// </summary>
+    [Parameter] public string? Namespace { get; set; }
+
+    /// <summary>
     /// Gets a boolean indicating whether the current user may resume and replay subscriptions
     /// </summary>
     protected bool CanOperate { get; private set; }
@@ -176,8 +197,13 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        CanOperate = await UserAccess.CanOperateAsync();
-        CanAdminister = await UserAccess.CanAdministerAsync();
+        await this.UpdateAccessAsync(this.NamespaceContext.Current);
+        // the resources, and what the user may do with them, follow the namespace selected in the layout
+        this.NamespaceContext.Selected.SubscribeAsync(async @namespace =>
+        {
+            await this.UpdateAccessAsync(@namespace);
+            this.OnStateChanged(_ => this.ShowNamespace = IsNamespaced && @namespace == null);
+        }, cancellationToken: CancellationTokenSource.Token);
         ConfigureSortKeys(Store.SortKeys);
         Store.Sort.Subscribe(sort => OnStateChanged(_ =>
         {
@@ -233,11 +259,25 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// <inheritdoc/>
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(Name) && Name != activeResourceName)
+        var activeKey = string.IsNullOrEmpty(Name) ? null : string.IsNullOrEmpty(Namespace) ? Name : $"{Namespace}/{Name}";
+        if (activeKey != null && activeKey != activeResourceName)
         {
-            Store.SetActiveResourceName(Name);
+            Store.SetActiveResourceName(activeKey);
         }
         await base.OnParametersSetAsync();
+    }
+
+    /// <summary>
+    /// Updates what the user may do, in the specified namespace, or in any namespace if none is specified
+    /// </summary>
+    /// <param name="namespace">The selected namespace, if any</param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>The server enforces the user's access regardless: the dashboard only offers what it should accept</remarks>
+    protected virtual async Task UpdateAccessAsync(string? @namespace)
+    {
+        var scope = IsNamespaced ? @namespace : null;
+        this.CanOperate = scope == null && IsNamespaced ? await this.UserAccess.CanOperateAnyAsync() : await this.UserAccess.CanOperateAsync(scope);
+        this.CanAdminister = scope == null && IsNamespaced ? await this.UserAccess.CanAdministerAnyAsync() : await this.UserAccess.CanAdministerAsync(scope);
     }
 
     /// <summary>
@@ -290,7 +330,7 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// <summary>
     /// Exports the selected resources
     /// </summary>
-    protected Task OnExportSelectedResourcesAsync() => OnExportAsync((Resources ?? []).Where(r => SelectedResourceNames.Contains(r.GetName())));
+    protected Task OnExportSelectedResourcesAsync() => OnExportAsync((Resources ?? []).Where(r => SelectedResourceNames.Contains(r.GetQualifiedName())));
 
     /// <summary>
     /// Imports the resources described by the specified file, a YAML stream or JSON, creating them or updating those that exist
@@ -406,13 +446,14 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
     /// </summary>
     /// <param name="resource">The <see cref="Resource"/> to show the details for</param>
     /// <remarks>The details are read-only: administrators edit the resource from them (see #227)</remarks>
-    protected virtual Task OnShowResourceDetailsAsync(TResource resource)
+    protected virtual async Task OnShowResourceDetailsAsync(TResource resource)
     {
-        if (DetailsOffCanvas == null) return Task.CompletedTask;
+        if (DetailsOffCanvas == null) return;
+        var canEdit = await UserAccess.CanAdministerAsync(resource.GetNamespace());
         var parameters = new Dictionary<string, object>
         {
             { nameof(ResourceDetails<TResource>.Resource), resource },
-            { nameof(ResourceDetails<TResource>.CanEdit), CanAdminister },
+            { nameof(ResourceDetails<TResource>.CanEdit), canEdit },
             { nameof(ResourceDetails<TResource>.OnEdit), EventCallback.Factory.Create<TResource?>(this, async r =>
                 {
                     await DetailsOffCanvas.HideAsync();
@@ -420,7 +461,8 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
                 }) },
             { nameof(ResourceDetails<TResource>.OnExport), EventCallback.Factory.Create<TResource?>(this, r => r == null ? Task.CompletedTask : OnExportAsync([r])) }
         };
-        return DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: $"{typeof(TResource).Name} '{resource.GetName()}'", parameters: parameters);
+        var title = string.IsNullOrWhiteSpace(resource.GetNamespace()) ? $"{typeof(TResource).Name} '{resource.GetName()}'" : $"{typeof(TResource).Name} '{resource.GetName()}' of the namespace '{resource.GetNamespace()}'";
+        await DetailsOffCanvas.ShowAsync<ResourceDetails<TResource>>(title: title, parameters: parameters);
     }
 
     /// <summary>

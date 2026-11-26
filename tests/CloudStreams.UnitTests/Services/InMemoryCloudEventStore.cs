@@ -92,26 +92,26 @@ public sealed class InMemoryCloudEventStore
     }
 
     /// <inheritdoc/>
-    public Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public Task<StreamMetadata> GetStreamMetadataAsync(string? @namespace, CancellationToken cancellationToken = default)
     {
         lock (this._lock) return Task.FromResult(new StreamMetadata() { Length = this.Length, FirstOffset = this._records.Count == 0 ? null : this._records[0].Sequence });
     }
 
     /// <inheritdoc/>
-    public Task<PartitionMetadata> GetPartitionMetadataAsync(PartitionReference partition, CancellationToken cancellationToken = default) =>
+    public Task<PartitionMetadata> GetPartitionMetadataAsync(string? @namespace, PartitionReference partition, CancellationToken cancellationToken = default) =>
         Task.FromResult(new PartitionMetadata() { Type = partition.Type, Id = partition.Id, Length = this.Length });
 
     /// <inheritdoc/>
-    public IAsyncEnumerable<CloudEventRecord> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default) => this.Read(readDirection, offset, length);
+    public IAsyncEnumerable<CloudEventRecord> ReadAsync(string? @namespace, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default) => this.Read(readDirection, offset, length);
 
     /// <inheritdoc/>
-    public IAsyncEnumerable<CloudEventRecord> ReadPartitionAsync(PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default) => this.Read(readDirection, offset, length);
+    public IAsyncEnumerable<CloudEventRecord> ReadPartitionAsync(string? @namespace, PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default) => this.Read(readDirection, offset, length);
 
     /// <inheritdoc/>
-    public Task<IObservable<CloudEventRecord>> ObserveAsync(long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default) => Task.FromResult<IObservable<CloudEventRecord>>(this.ObserveReturnsNull ? null! : this._live);
+    public Task<IObservable<CloudEventRecord>> ObserveAsync(string? @namespace, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default) => Task.FromResult<IObservable<CloudEventRecord>>(this.ObserveReturnsNull ? null! : this._live);
 
     /// <inheritdoc/>
-    public Task<IObservable<CloudEventRecord>> ObservePartitionAsync(PartitionReference partition, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default) => Task.FromResult<IObservable<CloudEventRecord>>(this.ObserveReturnsNull ? null! : this._live);
+    public Task<IObservable<CloudEventRecord>> ObservePartitionAsync(string? @namespace, PartitionReference partition, long offset = StreamPosition.EndOfStream, CancellationToken cancellationToken = default) => Task.FromResult<IObservable<CloudEventRecord>>(this.ObserveReturnsNull ? null! : this._live);
 
     /// <inheritdoc/>
     public Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default) => Task.FromResult(this.Publish());
@@ -125,7 +125,7 @@ public sealed class InMemoryCloudEventStore
     public List<string> PartitionIds { get; set; } = [];
 
     /// <inheritdoc/>
-    public Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
+    public Task<ulong?> FindOffsetAsync(string? @namespace, DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
     {
         lock (this._lock) return Task.FromResult(this._records.FirstOrDefault(r => r.Timestamp >= time)?.Sequence);
     }

@@ -17,8 +17,8 @@ namespace CloudStreams.Core.Api.Controllers;
 /// Represents the <see cref="ApiController"/> used to manage <see cref="Feed"/>s (see #218)
 /// </summary>
 /// <inheritdoc/>
-[Route("api/resources/v1/feeds")]
+[Route("api/resources/v1/namespaces/{namespace}/feeds")]
 public class FeedsController(IMediator mediator)
-    : ClusterResourceApiController<Feed>(mediator)
+    : NamespacedResourceApiController<Feed>(mediator)
 {
 }

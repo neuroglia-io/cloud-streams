@@ -20,21 +20,15 @@ public static class PartitionReferenceExtensions
 {
 
     /// <summary>
-    /// Gets the EventStore stream name for the specified partition
+    /// Gets the name of the stream of the specified partition, in the specified namespace
     /// </summary>
-    /// <param name="partition">A reference of the partition to get the EventStore stream name for</param>
-    /// <returns>The EventStore stream name for the specified <see cref="PartitionReference"/></returns>
-    public static string GetStreamName(this PartitionReference partition)
+    /// <param name="partition">The partition to get the stream of</param>
+    /// <param name="namespace">The namespace the partition belongs to. Defaults to the default namespace</param>
+    /// <returns>The name of the partition's stream</returns>
+    public static string GetStreamName(this PartitionReference partition, string? @namespace)
     {
-        return partition.Type switch
-        {
-            CloudEventPartitionType.BySource => Streams.ByCloudEventSource(new(partition.Id)),
-            CloudEventPartitionType.BySubject => Streams.ByCloudEventSubject(partition.Id),
-            CloudEventPartitionType.ByType => Streams.ByCloudEventType(partition.Id),
-            CloudEventPartitionType.ByCorrelationId => Streams.ByCorrelationId(partition.Id),
-            CloudEventPartitionType.ByCausationId => Streams.ByCausationId(partition.Id),
-            _ => throw new NotSupportedException($"The specified partition type '{partition.Type}' is not supported")
-        };
+        ArgumentNullException.ThrowIfNull(partition);
+        return StreamNameHelper.ByPartition(partition.Type, string.IsNullOrWhiteSpace(@namespace) ? Namespace.DefaultNamespaceName : @namespace, partition.Id);
     }
 
 }

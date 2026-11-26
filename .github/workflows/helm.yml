@@ -34,5 +34,13 @@ jobs:
           helm template cs "$chart" --set eventstore.existingSecret=connections --set redis.existingSecret=connections \
             --set gateway.managementApi.port=8081 --set gateway.ingress.enabled=true --set gateway.managementIngress.enabled=true \
             --set retention.maxAge=P30D --set retention.maxCount=1000000 --set telemetry.otlpEndpoint=http://otel:4317 > /dev/null
+          # gateways and brokers of several namespaces, which get their own objects and selectors
+          connections="--set eventstore.connectionString=esdb://eventstore:2113 --set redis.connectionString=redis:6379"
+          instances="--set gateways[0].name=orders,gateways[0].namespace=tenant-a,gateways[1].name=billing,gateways[1].namespace=tenant-b --set brokers[0].name=orders,brokers[0].namespace=tenant-a --set secrets.sharedWith[0]=tenant-a"
+          rendered=$(helm template cs "$chart" $connections $instances)
+          test "$(grep -c '^kind: Deployment' <<< "$rendered")" -eq 3
+          grep -q 'cloud-streams.io/gateway: "tenant-b.billing"' <<< "$rendered"
+          # a gateway may only be listed once
+          if helm template cs "$chart" $connections --set gateways[0].name=orders,gateways[1].name=orders > /dev/null 2>&1; then echo "listing a gateway twice should fail"; exit 1; fi
           # the connection strings are required
           if helm template cs "$chart" > /dev/null 2>&1; then echo "rendering without connection strings should fail"; exit 1; fi

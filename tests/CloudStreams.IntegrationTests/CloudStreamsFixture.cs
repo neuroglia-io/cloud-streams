@@ -199,7 +199,7 @@ public sealed class CloudStreamsFixture
         {
             try
             {
-                var events = await (await this.Api.CloudEvents.Stream.ReadStreamAsync(new(new PartitionReference(type, id)), timeout.Token)).CountAsync(timeout.Token);
+                var events = await (await this.Api.CloudEvents.Stream.ReadStreamAsync(new(new PartitionReference(type, id)), null, timeout.Token)).CountAsync(timeout.Token);
                 if (events >= count) return;
             }
             catch (Neuroglia.ProblemDetailsException ex) when (ex.Problem.Status == 404) { }

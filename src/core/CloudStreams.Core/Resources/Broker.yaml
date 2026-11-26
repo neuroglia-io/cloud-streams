@@ -3,7 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   name: brokers.cloud-streams.io
 spec:
-  scope: Cluster
+  scope: Namespaced
   group: cloud-streams.io
   names:
     plural: brokers

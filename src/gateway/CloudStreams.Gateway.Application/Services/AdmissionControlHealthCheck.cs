@@ -18,13 +18,13 @@ namespace CloudStreams.Gateway.Application.Services;
 /// <summary>
 /// Represents the health check that tells whether the gateway has loaded its configuration, and can therefore admit cloud events (see #201)
 /// </summary>
-/// <param name="admissionControl">The service used to control the admission of cloud events</param>
-public class AdmissionControlHealthCheck(CloudEventAdmissionControl admissionControl)
+/// <param name="configuration">The service that holds the gateway's configuration</param>
+public class AdmissionControlHealthCheck(IGatewayConfiguration configuration)
     : IHealthCheck
 {
 
     /// <inheritdoc/>
-    public Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default) => Task.FromResult(admissionControl.IsReady
+    public Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default) => Task.FromResult(configuration.IsReady
         ? Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy()
         : Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy("The gateway's configuration has not been loaded yet: cloud events are refused"));
 

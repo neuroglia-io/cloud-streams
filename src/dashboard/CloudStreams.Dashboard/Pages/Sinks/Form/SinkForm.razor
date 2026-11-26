@@ -14,6 +14,7 @@
                 <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name subscriptions refer to the sink by, e.g. orders-kafka. It cannot change later." Error="@ErrorOf("name")">
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
+                <NamespaceInput Id="@FieldId("namespace")" Value="@Model.Metadata.Namespace" ValueChanged="@(value => Model.Metadata.Namespace = value)" />
             }
             <FormField Id="@FieldId("endpoint")" Label="Endpoint" Required="true">
                 <ChildContent>

@@ -22,8 +22,9 @@ namespace CloudStreams.Dashboard.Pages.Subscriptions.List;
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
 /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
-public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
-    : ResourceManagementComponentStore<SubscriptionListState, Subscription>(logger, resourceManagementApi, resourceEventHub)
+/// <param name="namespaceContext">The service that holds the namespace the dashboard shows the resources of</param>
+public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub, NamespaceContext namespaceContext)
+    : ResourceManagementComponentStore<SubscriptionListState, Subscription>(logger, resourceManagementApi, resourceEventHub, namespaceContext)
 {
 
     /// <summary>
@@ -103,7 +104,7 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
         ulong globalStreamLength = 0;
         try
         {
-            StreamMetadata metadata = await ResourceManagementApi.CloudEvents.Stream.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+            StreamMetadata metadata = await ResourceManagementApi.CloudEvents.Stream.GetStreamMetadataAsync(this.NamespaceContext.Current, cancellationToken).ConfigureAwait(false);
             globalStreamLength = metadata?.Length ?? 0;
         }
         catch (Exception ex)
@@ -116,7 +117,7 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
             var (partitionType, partitionId) = kvp.Value;
             try
             {
-                var metadata = await ResourceManagementApi.CloudEvents.Partitions.GetPartitionMetadataAsync(partitionType, partitionId!, cancellationToken).ConfigureAwait(false);
+                var metadata = await ResourceManagementApi.CloudEvents.Partitions.GetPartitionMetadataAsync(partitionType, partitionId!, this.NamespaceContext.Current, cancellationToken).ConfigureAwait(false);
                 return (kvp.Key, Length: metadata?.Length ?? 0);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

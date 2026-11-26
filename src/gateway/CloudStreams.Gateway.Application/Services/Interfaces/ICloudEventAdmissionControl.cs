@@ -21,18 +21,15 @@ namespace CloudStreams.Gateway.Application.Services;
 public interface ICloudEventAdmissionControl
 {
 
-    /// <summary>
-    /// Gets the current configuration of the gateway, if it has been loaded
-    /// </summary>
-    Core.Resources.Gateway? Gateway { get; }
 
     /// <summary>
     /// Evaluates the admission of the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to evaluate for admission</param>
+    /// <param name="gateway">The gateway the cloud event is published to, whose policies apply, and whose namespace the cloud event belongs to</param>
     /// <param name="allowedSources">The patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="OperationResult{TContent}"/> that describes the result of the evaluation</returns>
-    Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default);
+    Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, Core.Resources.Gateway gateway, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default);
 
 }

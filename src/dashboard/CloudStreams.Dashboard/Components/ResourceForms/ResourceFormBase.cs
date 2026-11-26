@@ -177,6 +177,22 @@ public abstract class ResourceFormBase<TResource>
     [Inject] protected CommonJsInterop JsInterop { get; set; } = null!;
 
     /// <summary>
+    /// Gets the service that holds the namespace the dashboard shows the resources of, which new resources are created in by default (see #215)
+    /// </summary>
+    [Inject] protected NamespaceContext NamespaceContext { get; set; } = null!;
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the edited resources belong to namespaces
+    /// </summary>
+    protected static bool IsNamespaced { get; } = CloudStreamsDefaults.Resources.Definitions.AsEnumerable().Any(d => d.Spec.Names.Kind == new TResource().Definition.Kind && d.Spec.Scope == ResourceScope.Namespaced);
+
+    /// <summary>
+    /// Gets the namespace of the edited resource, if it is namespaced
+    /// </summary>
+    /// <returns>The namespace of the edited resource</returns>
+    protected string? GetNamespace() => IsNamespaced ? this.Model?.GetNamespace() ?? this.NamespaceContext.ForNewResources : null;
+
+    /// <summary>
     /// Gets/sets the resource to edit, if any. Without one, the form creates a resource
     /// </summary>
     [Parameter] public TResource? Resource { get; set; }
@@ -295,6 +311,7 @@ public abstract class ResourceFormBase<TResource>
         this._initialized = true;
         this._original = this.Resource;
         this.Model = this.Resource == null ? this.CreateDefault() : ResourceFormDocuments.Clone(this.Resource, this.JsonSerializer);
+        if (IsNamespaced && string.IsNullOrWhiteSpace(this.Model.GetNamespace())) this.Model.Metadata.Namespace = this.NamespaceContext.ForNewResources;
         this.OnModelReplaced();
     }
 
@@ -395,7 +412,7 @@ public abstract class ResourceFormBase<TResource>
             {
                 this.Diff = ResourceFormDocuments.Diff(this._original, resource, this.JsonSerializer, this.YamlSerializer);
                 var patch = ResourceFormDocuments.GetPatch(this._original, resource, this.JsonSerializer);
-                if (patch != null) await this.Api.Manage<TResource>().PatchAsync(patch, resource.GetName(), null, true);
+                if (patch != null) await this.Api.Manage<TResource>().PatchAsync(patch, resource.GetName(), resource.GetNamespace(), true);
             }
             this.CurrentStep = this.Steps.Count - 1;
         }
@@ -423,7 +440,7 @@ public abstract class ResourceFormBase<TResource>
             else
             {
                 var patch = ResourceFormDocuments.GetPatch(this._original, resource, this.JsonSerializer);
-                saved = patch == null ? this._original : await this.Api.Manage<TResource>().PatchAsync(patch, resource.GetName());
+                saved = patch == null ? this._original : await this.Api.Manage<TResource>().PatchAsync(patch, resource.GetName(), resource.GetNamespace());
             }
             await this.OnSaved.InvokeAsync(saved);
         }

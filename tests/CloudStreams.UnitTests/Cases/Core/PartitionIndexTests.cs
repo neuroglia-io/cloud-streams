@@ -71,7 +71,7 @@ public class PartitionIndexTests
         var eventStore = Substitute.For<IEventStore>();
         eventStore.AppendAsync(Arg.Any<string>(), Arg.Any<IEnumerable<IEventDescriptor>>(), Arg.Any<long?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(42ul));
         var index = Substitute.For<IPartitionIndex>();
-        if (indexFailure != null) index.AddAsync(Arg.Any<IEnumerable<PartitionReference>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(indexFailure));
+        if (indexFailure != null) index.AddAsync(Arg.Any<string>(), Arg.Any<IEnumerable<PartitionReference>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(indexFailure));
         return (new CloudEventStore(eventStore, Substitute.For<IProjectionManager>(), Neuroglia.Serialization.Json.JsonSerializer.Default, partitionIndex: index), index);
     }
 
@@ -91,7 +91,7 @@ public class PartitionIndexTests
         await store.AppendAsync(Descriptor());
 
         // assert
-        await index.Received(1).AddAsync(Arg.Is<IEnumerable<PartitionReference>>(p => p.Count() == 2), Arg.Any<CancellationToken>());
+        await index.Received(1).AddAsync(Namespace.DefaultNamespaceName, Arg.Is<IEnumerable<PartitionReference>>(p => p.Count() == 2), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class PartitionIndexTests
     {
         // arrange
         var index = Substitute.For<IPartitionIndex>();
-        index.ListAsync(CloudEventPartitionType.BySource, "ord", "orders-1", 3, Arg.Any<CancellationToken>()).Returns(["orders-2", "orders-3", "orders-4"]);
+        index.ListAsync(Namespace.DefaultNamespaceName, CloudEventPartitionType.BySource, "ord", "orders-1", 3, Arg.Any<CancellationToken>()).Returns(["orders-2", "orders-3", "orders-4"]);
         var handler = new ListEventPartitionIdsQueryHandler(Substitute.For<ICloudEventStore>(), index);
         var token = System.Buffers.Text.Base64Url.EncodeToString(System.Text.Encoding.UTF8.GetBytes("orders-1"));
 

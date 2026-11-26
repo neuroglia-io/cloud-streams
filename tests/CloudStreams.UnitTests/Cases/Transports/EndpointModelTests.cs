@@ -139,7 +139,9 @@ public class EndpointModelTests
         { "https://orders.example.com", new() { Basic = new(), Bearer = new() }, "exactly one" },
         { "https://orders.example.com", new() { OAuth2 = new() { Client = new() { Id = "id", Secret = "secret" } } }, "authority" },
         { "https://orders.example.com", new() { Oidc = new() { Authority = new("https://login.example.com"), Client = new() { Id = "id" } } }, "client.secret" },
-        { "https://orders.example.com", new() { Basic = new() { Use = new("unknown", "orders") } }, "is not a secret provider" }
+        { "https://orders.example.com", new() { Basic = new() { Use = new("unknown", "orders") } }, "is not a secret provider" },
+        { "https://orders.example.com", new() { Basic = new() { Use = new("../tenant-b/orders") } }, "is not a valid secret path" },
+        { "https://orders.example.com", new() { Bearer = new() { Use = new(SecretProviders.Vault, "cloud-streams//orders") } }, "is not a valid secret path" }
     };
 
     [Theory]

@@ -69,7 +69,7 @@ public class CloudEventHubDispatcher(IServiceProvider serviceProvider, ILogger<C
             try
             {
                 var completion = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
-                var stream = await this.EventStore.ObserveAsync(nextOffset.HasValue ? (long)nextOffset.Value : StreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false);
+                var stream = await this.EventStore.ObserveAsync(null, nextOffset.HasValue ? (long)nextOffset.Value : StreamPosition.EndOfStream, stoppingToken).ConfigureAwait(false);
                 subscription = stream.SubscribeAsync(
                     async record =>
                     {
@@ -77,7 +77,7 @@ public class CloudEventHubDispatcher(IServiceProvider serviceProvider, ILogger<C
                         consecutiveFailures = 0;
                         var e = record.ToCloudEvent(default);
                         // each client belongs to a single group: one of the groups of the cloud event, if it is to receive it (see #221)
-                        try { await this.HubContext.Clients.Groups(CloudEventHub.GetGroupNames(e)).StreamEvent(e, stoppingToken).ConfigureAwait(false); }
+                        try { await this.HubContext.Clients.Groups(CloudEventHub.GetGroupNames(CloudEventStore.GetNamespace(record.Metadata), e)).StreamEvent(e, stoppingToken).ConfigureAwait(false); }
                         catch (Exception ex) when (ex is not OperationCanceledException) { this.Logger.LogWarning(ex, "Failed to dispatch the cloud event at offset '{offset}' to hub clients", record.Sequence); }
                     },
                     onErrorAsync: ex =>

@@ -182,4 +182,31 @@ public class ResourceValidationTests
         Assert.True(validator.AppliesTo(Operation.Patch, "cloud-streams.io", "v1", "gateways"));
     }
 
+    [Theory]
+    [InlineData("tenant-a", true)]
+    [InlineData("a", true)]
+    [InlineData("0rders", true)]
+    [InlineData("Tenant-A", false)]
+    [InlineData("tenant_a", false)]
+    [InlineData("tenant.a", false)]
+    [InlineData("-tenant", false)]
+    [InlineData("tenant-", false)]
+    [InlineData("a234567890123456789012345678901234567890123456789012345678901234", false)]
+    public async Task Namespaces_Should_Be_Named_After_A_Dns_Label(string name, bool allowed)
+    {
+        // arrange - the name of a namespace is part of stream names, keys, secret paths, environment variables and roles (see #215)
+        var validator = new CloudStreamsResourceValidator(Neuroglia.Serialization.Json.JsonSerializer.Default, []);
+        var @namespace = new Namespace() { Metadata = new() { Name = name } };
+        var definition = @namespace.Definition;
+        var request = new AdmissionReviewRequest(Guid.NewGuid().ToString(), Operation.Create, new ResourceReference(new ResourceDefinitionReference(definition.Group, definition.Version, definition.Plural), name, null), null!, null, @namespace, null, new Neuroglia.Security.UserInfo("tests", "tests", []), false);
+
+        // act
+        var response = await validator.ValidateAsync(request);
+
+        // assert
+        Assert.True(validator.AppliesTo(Operation.Create, definition.Group, definition.Version, definition.Plural));
+        Assert.Equal(allowed, response.Allowed);
+        if (!allowed) Assert.Contains(response.Problem!.Errors!, e => e.Key == "metadata.name");
+    }
+
 }

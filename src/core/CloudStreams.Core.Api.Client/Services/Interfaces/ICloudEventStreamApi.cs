@@ -25,16 +25,18 @@ public interface ICloudEventStreamApi
     /// Reads the gateway's <see cref="CloudEvent"/> stream
     /// </summary>
     /// <param name="options">An object used to configure the read options</param>
+    /// <param name="namespace">The namespace whose cloud events to read, if any. The partitions of the default namespace, and the whole stream, are read if not set</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing all the <see cref="CloudEvent"/>s read from the gateway's stream</returns>
-    Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, CancellationToken cancellationToken = default);
+    Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, string? @namespace = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the metadata used to describe the gateway's <see cref="CloudEvent"/> stream
     /// </summary>
+    /// <param name="namespace">The namespace whose cloud events to read, if any. The partitions of the default namespace, and the whole stream, are read if not set</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="StreamMetadata"/> used to describe the gateway's <see cref="CloudEvent"/> stream</returns>
-    Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default);
+    Task<StreamMetadata> GetStreamMetadataAsync(string? @namespace = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Describes the recent activity of the gateway's <see cref="CloudEvent"/> stream
@@ -42,8 +44,9 @@ public interface ICloudEventStreamApi
     /// <param name="period">The period, ending now, to describe. Defaults to 24 hours</param>
     /// <param name="buckets">The amount of consecutive slices to split the period into. Defaults to 24</param>
     /// <param name="sampleSize">The amount of most recent cloud events to compute the most active sources and types from. Defaults to 500</param>
+    /// <param name="namespace">The namespace whose cloud events to read, if any. The partitions of the default namespace, and the whole stream, are read if not set</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="StreamActivity"/> that describes the recent activity of the stream</returns>
-    Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, CancellationToken cancellationToken = default);
+    Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, string? @namespace = null, CancellationToken cancellationToken = default);
 
 }

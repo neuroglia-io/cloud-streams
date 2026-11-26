@@ -146,9 +146,9 @@ public class TransportTests
         // arrange
         var handler = new RecordingHandler();
         var endpoints = Substitute.For<IEndpointResolver>();
-        endpoints.GetSinkEndpointAsync("orders-webhook", Arg.Any<CancellationToken>()).Returns(new Endpoint(new Uri("https://orders.example.com/events"), new() { Bearer = new() { Use = new("orders-token") } }));
+        endpoints.GetSinkEndpointAsync("orders-webhook", Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new Endpoint(new Uri("https://orders.example.com/events"), new() { Bearer = new() { Use = new("orders-token") } }));
         var credentials = Substitute.For<ICredentialResolver>();
-        credentials.ResolveAsync(Arg.Any<AuthenticationPolicy>(), Arg.Any<CancellationToken>()).Returns(TransportCredentials.Bearer("token"));
+        credentials.ResolveAsync(Arg.Any<AuthenticationPolicy>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(TransportCredentials.Bearer("token"));
         var client = new CloudEventDeliveryClient(new HttpClient(handler), [], credentials, endpoints);
 
         // act
@@ -166,7 +166,7 @@ public class TransportTests
     {
         // arrange
         var endpoints = Substitute.For<IEndpointResolver>();
-        endpoints.GetSinkEndpointAsync("deleted", Arg.Any<CancellationToken>()).Returns(Task.FromException<Endpoint>(new InvalidOperationException("The sink 'deleted' does not exist")));
+        endpoints.GetSinkEndpointAsync("deleted", Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromException<Endpoint>(new InvalidOperationException("The sink 'deleted' does not exist")));
         var client = new CloudEventDeliveryClient(new HttpClient(), [], null, endpoints);
 
         // act
@@ -213,11 +213,13 @@ public class TransportTests
     {
         var mediator = Substitute.For<IMediator>();
         var services = new ServiceCollection().AddSingleton(mediator).BuildServiceProvider();
-        var service = new TestIngestionFeedService(services, Options.Create(new GatewayOptions() { Name = "gateway" }));
+        var service = new TestIngestionFeedService(services, Gateway);
         return (service, mediator);
     }
 
     const string Feed = "orders";
+
+    static readonly global::CloudStreams.Core.Resources.Gateway Gateway = new(new("gateway", Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName), new());
 
     static TransportMessage Structured(params CloudEvent[] events) => events.Length == 1
         ? new(CloudEventContentType.Json, [], Encoding.UTF8.GetBytes(JsonSerializer.Default.SerializeToText(events[0])), "a message")
@@ -293,13 +295,21 @@ public class TransportTests
         await mediator.DidNotReceiveWithAnyArgs().ExecuteAsync(Arg.Any<ConsumeEventCommand>(), default);
     }
 
-    sealed class TestIngestionFeedService(IServiceProvider serviceProvider, IOptions<GatewayOptions> options)
-        : IngestionFeedService(NullLogger<IngestionFeedService>.Instance, serviceProvider, Substitute.For<ICloudEventAdmissionControl>(), [], JsonSerializer.Default, options)
+    sealed class TestIngestionFeedService(IServiceProvider serviceProvider, global::CloudStreams.Core.Resources.Gateway gateway)
+        : IngestionFeedService(NullLogger<IngestionFeedService>.Instance, serviceProvider, Configuration(gateway), [], JsonSerializer.Default)
     {
 
         public new IReadOnlyList<CloudEvent> Decode(TransportMessage message) => base.Decode(message);
 
-        public new Task<bool> HandleAsync(string feed, TransportMessage message, CancellationToken cancellationToken) => base.HandleAsync(feed, message, cancellationToken);
+        public Task<bool> HandleAsync(string feed, TransportMessage message, CancellationToken cancellationToken) => base.HandleAsync(new FeedTarget(gateway.GetNamespace()!, gateway.GetName(), feed), message, cancellationToken);
+
+        static IGatewayConfiguration Configuration(global::CloudStreams.Core.Resources.Gateway gateway)
+        {
+            var configuration = Substitute.For<IGatewayConfiguration>();
+            configuration.Gateway.Returns(gateway);
+            configuration.IsReady.Returns(true);
+            return configuration;
+        }
 
     }
 

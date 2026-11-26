@@ -35,9 +35,10 @@ public interface ICloudEventsApi
     /// Searches the cloud event stream, or a partition
     /// </summary>
     /// <param name="options">The options of the search</param>
+    /// <param name="namespace">The namespace whose cloud events to read, if any. The partitions of the default namespace, and the whole stream, are read if not set</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The records found, and the offset to continue the search from</returns>
-    Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, CancellationToken cancellationToken = default);
+    Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, string? @namespace = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Publishes the specified cloud event, as the calling user, through the gateway's admission pipeline

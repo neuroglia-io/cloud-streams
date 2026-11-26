@@ -32,14 +32,15 @@ public class CloudEventsController(IMediator mediator, IServiceProvider serviceP
     /// Searches the cloud event stream, or a partition
     /// </summary>
     /// <param name="options">The options of the search. Attributes are passed as <c>attributes[name]=pattern</c></param>
+    /// <param name="namespace">The namespace whose cloud events to search, or null to search the whole stream, which requires access to the whole cluster</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the records found, and the offset to continue the search from</returns>
     [HttpGet("search")]
     [ProducesResponseType(typeof(CloudEventSearchResult), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> Search([FromQuery] CloudEventSearchOptions options, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> Search([FromQuery] CloudEventSearchOptions options, [FromQuery(Name = "namespace")] string? @namespace = null, CancellationToken cancellationToken = default)
     {
-        var result = await this.Mediator.ExecuteAsync(new SearchCloudEventsQuery(options), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new SearchCloudEventsQuery(options, @namespace), cancellationToken).ConfigureAwait(false);
         return result.Status is < 200 or >= 300 ? this.Problem(result) : this.Process(result);
     }
 
@@ -49,9 +50,10 @@ public class CloudEventsController(IMediator mediator, IServiceProvider serviceP
     /// <param name="cloudEvent">The cloud event to publish</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body describes what became of the cloud event</returns>
-    /// <remarks>Requires the operator role, and is only available on gateways</remarks>
+    /// <remarks>Requires the operator role in the namespace of the gateway, and is only available on gateways</remarks>
     [HttpPost("publish")]
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
+    [NamespaceFiltered]
     [ProducesResponseType(typeof(CloudEventPublication), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
     public virtual async Task<IActionResult> Publish([FromBody] CloudEvent cloudEvent, CancellationToken cancellationToken = default)

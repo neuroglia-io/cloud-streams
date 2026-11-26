@@ -33,12 +33,13 @@ public partial class CloudStreamsCoreApiClient
     ICloudEventStreamApi ICloudEventsApi.Stream => this;
 
     /// <inheritdoc/>
-    public virtual async Task<PartitionIdCollection> ListPartitionsByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionIdCollection> ListPartitionsByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (!string.IsNullOrEmpty(prefix)) query.Add($"prefix={Uri.EscapeDataString(prefix)}");
         if (maxResults.HasValue) query.Add($"maxResults={maxResults.Value}");
         if (!string.IsNullOrWhiteSpace(continuationToken)) query.Add($"continuationToken={Uri.EscapeDataString(continuationToken)}");
+        if (!string.IsNullOrWhiteSpace(@namespace)) query.Add($"namespace={Uri.EscapeDataString(@namespace)}");
         var uri = $"{CloudEventPartitionsApiPath}{type}{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}";
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
@@ -47,12 +48,13 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
-    public virtual async Task<PartitionMetadataCollection> ListPartitionMetadataByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionMetadataCollection> ListPartitionMetadataByTypeAsync(CloudEventPartitionType type, string? prefix = null, int? maxResults = null, string? continuationToken = null, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (!string.IsNullOrEmpty(prefix)) query.Add($"prefix={Uri.EscapeDataString(prefix)}");
         if (maxResults.HasValue) query.Add($"maxResults={maxResults.Value}");
         if (!string.IsNullOrWhiteSpace(continuationToken)) query.Add($"continuationToken={Uri.EscapeDataString(continuationToken)}");
+        if (!string.IsNullOrWhiteSpace(@namespace)) query.Add($"namespace={Uri.EscapeDataString(@namespace)}");
         var uri = $"{CloudEventPartitionsApiPath}{type}/metadata{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}";
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
@@ -61,12 +63,13 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
-    public virtual async Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, CancellationToken cancellationToken = default)
+    public virtual async Task<StreamActivity> GetStreamActivityAsync(TimeSpan? period = null, int? buckets = null, int? sampleSize = null, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (period.HasValue) query.Add($"period={Uri.EscapeDataString(System.Xml.XmlConvert.ToString(period.Value))}");
         if (buckets.HasValue) query.Add($"buckets={buckets.Value}");
         if (sampleSize.HasValue) query.Add($"sampleSize={sampleSize.Value}");
+        if (!string.IsNullOrWhiteSpace(@namespace)) query.Add($"namespace={Uri.EscapeDataString(@namespace)}");
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventStreamApiPath}activity{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -74,17 +77,17 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
-    public virtual async Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionMetadata?> GetPartitionMetadataAsync(CloudEventPartitionType type, string id, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) throw new ArgumentNullException(nameof(id));
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}/byId?id={Uri.EscapeDataString(id)}"), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventPartitionsApiPath}{type}/byId?id={Uri.EscapeDataString(id)}{(string.IsNullOrWhiteSpace(@namespace) ? string.Empty : $"&namespace={Uri.EscapeDataString(@namespace)}")}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<PartitionMetadata>(json);
     }
 
     /// <inheritdoc/>
-    public virtual async Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventSearchResult> SearchAsync(CloudEventSearchOptions options, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
         var query = new List<string>();
@@ -98,6 +101,7 @@ public partial class CloudStreamsCoreApiClient
         Add("expression", options.Expression);
         Add("maxResults", options.MaxResults);
         Add("maxScanned", options.MaxScanned);
+        Add("namespace", @namespace);
         foreach (var (name, pattern) in options.Attributes ?? []) Add($"attributes[{Uri.EscapeDataString(name)}]", pattern);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventsApiPath}search{(query.Count > 0 ? "?" + string.Join('&', query) : string.Empty)}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
@@ -117,16 +121,16 @@ public partial class CloudStreamsCoreApiClient
     }
 
     /// <inheritdoc/>
-    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(string? @namespace = null, CancellationToken cancellationToken = default)
     {
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, CloudEventStreamApiPath), cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, $"{CloudEventStreamApiPath}{ToQuery(("namespace", @namespace))}"), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<StreamMetadata>(json)!;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IAsyncEnumerable<CloudEvent?>> ReadStreamAsync(StreamReadOptions? options = null, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (options == null) options = new();
         var uri = $"{CloudEventStreamApiPath}read";
@@ -138,12 +142,19 @@ public partial class CloudStreamsCoreApiClient
         }
         if (options.Offset.HasValue) queryParameters.Add(nameof(options.Offset).ToCamelCase(), options.Offset.Value);
         queryParameters.Add(nameof(options.Length).ToCamelCase(), options.Length);
+        if (!string.IsNullOrWhiteSpace(@namespace)) queryParameters.Add("namespace", @namespace);
         // values are escaped: partition ids are often URIs, which carry their own query strings (see #178)
         uri += $"?{string.Join('&', queryParameters.Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(Convert.ToString(p.Value, CultureInfo.InvariantCulture) ?? string.Empty)}"))}";
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.DeserializeAsyncEnumerable<CloudEvent>(responseStream, cancellationToken: cancellationToken);
+    }
+
+    static string ToQuery(params (string Name, string? Value)[] parameters)
+    {
+        var query = parameters.Where(p => !string.IsNullOrWhiteSpace(p.Value)).Select(p => $"{p.Name}={Uri.EscapeDataString(p.Value!)}").ToList();
+        return query.Count > 0 ? "?" + string.Join('&', query) : string.Empty;
     }
 
 }

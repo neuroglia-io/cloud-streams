@@ -16,6 +16,10 @@ namespace CloudStreams.Gateway.Application.Configuration;
 /// <summary>
 /// Represents the options used to configure a Cloud Streams cloud event gateway
 /// </summary>
+/// <remarks>
+/// A gateway application serves a single <see cref="Core.Resources.Gateway"/> resource, which it creates when missing. The cloud events it ingests belong to the
+/// namespace of that resource (see #215)
+/// </remarks>
 public class GatewayOptions
 {
 
@@ -25,13 +29,30 @@ public class GatewayOptions
     public const string EnvironmentVariablePrefix = "CLOUDSTREAMS_GATEWAY_";
 
     /// <summary>
-    /// Gets/sets the gateway's name
+    /// Gets the name of the gateway when none is configured
     /// </summary>
-    public virtual string Name { get; set; } = null!;
+    public const string DefaultName = "default";
 
     /// <summary>
-    /// Gets/sets the gateway's namespace
+    /// Gets/sets the name of the gateway resource the application serves. Defaults to <c>default</c>
     /// </summary>
-    public virtual string? Namespace { get; set; } = null!;
+    public virtual string? Name { get; set; }
+
+    /// <summary>
+    /// Gets/sets the namespace of the gateway resource the application serves, which the cloud events it ingests belong to. Defaults to the default namespace
+    /// </summary>
+    public virtual string? Namespace { get; set; }
+
+    /// <summary>
+    /// Gets the name of the gateway resource the application serves
+    /// </summary>
+    /// <returns>The name of the gateway resource</returns>
+    public virtual string GetName() => string.IsNullOrWhiteSpace(this.Name) ? DefaultName : this.Name.Trim();
+
+    /// <summary>
+    /// Gets the namespace of the gateway resource the application serves
+    /// </summary>
+    /// <returns>The namespace of the gateway resource</returns>
+    public virtual string GetNamespace() => string.IsNullOrWhiteSpace(this.Namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : this.Namespace.Trim();
 
 }

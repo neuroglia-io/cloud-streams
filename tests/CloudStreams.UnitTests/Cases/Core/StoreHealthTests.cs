@@ -42,7 +42,7 @@ public class StoreHealthTests
     public async Task Only_The_Missing_Projections_Should_Be_Created()
     {
         // arrange - the by-source projection exists, which used to skip the setup of every other projection
-        var manager = ProjectionManager(Projections.PartitionBySource);
+        var manager = ProjectionManager(ProjectionNameHelper.PartitionBySource);
         var store = Store(manager);
 
         // act
@@ -50,11 +50,11 @@ public class StoreHealthTests
 
         // assert
         Assert.Empty(missing);
-        await manager.DidNotReceive().CreateAsync(Projections.PartitionBySource, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
-        await manager.Received(1).CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
-        await manager.Received(1).CreateAsync(Projections.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().CreateAsync(ProjectionNameHelper.PartitionBySource, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
+        await manager.Received(1).CreateAsync(ProjectionNameHelper.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
+        await manager.Received(1).CreateAsync(ProjectionNameHelper.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
         // partition ids are listed by the partition index rather than by projections, whose state grows with every partition (see #185)
-        await manager.DidNotReceive().CreateAsync(Arg.Is<string>(n => n.StartsWith(Projections.CloudEventPartitionsMetadataPrefix)), Arg.Any<Action<IProjectionSourceBuilder<List<object>>>>(), Arg.Any<CancellationToken>());
+        await manager.DidNotReceive().CreateAsync(Arg.Is<string>(n => n.StartsWith(ProjectionNameHelper.CloudEventPartitionsMetadataPrefix)), Arg.Any<Action<IProjectionSourceBuilder<List<object>>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class StoreHealthTests
 
         // assert
         Assert.Empty(missing);
-        await manager.Received(1).CreateAsync(Projections.PartitionBySource, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
+        await manager.Received(1).CreateAsync(ProjectionNameHelper.PartitionBySource, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -79,16 +79,16 @@ public class StoreHealthTests
     {
         // arrange
         var manager = ProjectionManager();
-        manager.CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("boom")));
+        manager.CreateAsync(ProjectionNameHelper.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("boom")));
         var store = Store(manager);
 
         // act
         var missing = await store.SetupProjectionsAsync();
 
         // assert
-        Assert.Equal([Projections.PartitionBySubject], missing);
-        Assert.Equal([Projections.PartitionBySubject], store.MissingProjections);
-        await manager.Received(1).CreateAsync(Projections.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
+        Assert.Equal([ProjectionNameHelper.PartitionBySubject], missing);
+        Assert.Equal([ProjectionNameHelper.PartitionBySubject], store.MissingProjections);
+        await manager.Received(1).CreateAsync(ProjectionNameHelper.PartitionByCausationId, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public class StoreHealthTests
         var created = false;
         var manager = Substitute.For<IProjectionManager>();
         manager.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(call => Task.FromResult(call.ArgAt<string>(0) == Projections.PartitionBySubject && created ? Substitute.For<IProjectionStatus>() : null!));
-        manager.CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(call.ArgAt<string>(0) == ProjectionNameHelper.PartitionBySubject && created ? Substitute.For<IProjectionStatus>() : null!));
+        manager.CreateAsync(ProjectionNameHelper.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>())
             .Returns(_ => { created = true; return Task.FromException(new InvalidOperationException("Envelope callback expected Updated, received Conflict instead")); });
         var store = Store(manager);
 
@@ -148,7 +148,7 @@ public class StoreHealthTests
     {
         // arrange
         var failing = ProjectionManager();
-        failing.CreateAsync(Projections.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("boom")));
+        failing.CreateAsync(ProjectionNameHelper.PartitionBySubject, Arg.Any<Action<IProjectionSourceBuilder<object>>>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("boom")));
         var notSetUp = Store(ProjectionManager());
         var faulty = Store(failing);
         await faulty.SetupProjectionsAsync();
@@ -166,7 +166,7 @@ public class StoreHealthTests
     {
         // arrange
         var eventStore = Substitute.For<ICloudEventStore>();
-        eventStore.GetStreamMetadataAsync(Arg.Any<CancellationToken>()).Returns(Task.FromException<StreamMetadata>(new InvalidOperationException("unreachable")));
+        eventStore.GetStreamMetadataAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromException<StreamMetadata>(new InvalidOperationException("unreachable")));
 
         // act
         var result = await new EventStoreHealthCheck(eventStore).CheckHealthAsync(new());

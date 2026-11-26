@@ -32,17 +32,19 @@ public class ConsumeEventCommand
     /// <summary>
     /// Initializes a new <see cref="ConsumeEventCommand"/>
     /// </summary>
-    protected ConsumeEventCommand() { this.CloudEvent = null!; }
+    protected ConsumeEventCommand() { this.CloudEvent = null!; this.Gateway = null!; }
 
     /// <summary>
     /// Initializes a new <see cref="ConsumeEventCommand"/>
     /// </summary>
     /// <param name="cloudEvent">The <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/> to consume</param>
+    /// <param name="gateway">The gateway the cloud event is published to, whose policies apply, and whose namespace the cloud event belongs to</param>
     /// <param name="allowedSources">The patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source</param>
     /// <param name="publisher">The name the publisher authenticated with, if any, which partitions the rate limits that apply to publishers</param>
-    public ConsumeEventCommand(CloudEvent cloudEvent, IReadOnlyCollection<string>? allowedSources = null, string? publisher = null)
+    public ConsumeEventCommand(CloudEvent cloudEvent, Core.Resources.Gateway gateway, IReadOnlyCollection<string>? allowedSources = null, string? publisher = null)
     {
         this.CloudEvent = cloudEvent;
+        this.Gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
         this.AllowedSources = allowedSources;
         this.Publisher = publisher;
     }
@@ -52,6 +54,11 @@ public class ConsumeEventCommand
     /// </summary>
     [Required]
     public CloudEvent CloudEvent { get; }
+
+    /// <summary>
+    /// Gets the gateway the cloud event is published to
+    /// </summary>
+    public Core.Resources.Gateway Gateway { get; }
 
     /// <summary>
     /// Gets the patterns of the sources the publisher may publish cloud events of, or null if it may publish cloud events of any source
@@ -111,7 +118,7 @@ public class ConsumeCloudEventCommandHandler(ILogger<ConsumeCloudEventCommandHan
         var outcome = IngestionOutcome.Failed;
         try
         {
-            var gateway = eventAdmissionControl.Gateway;
+            var gateway = command.Gateway;
             var scope = gateway?.GetQualifiedName();
             var ingestion = gateway?.Spec.Ingestion;
             if (scope != null && ingestion?.RateLimits is { Count: > 0 } rateLimits)
@@ -125,7 +132,7 @@ public class ConsumeCloudEventCommandHandler(ILogger<ConsumeCloudEventCommandHan
                         $"The cloud event exceeds the gateway's rate limits. Retry in {Math.Ceiling((decision.RetryAfter ?? TimeSpan.Zero).TotalSeconds)} seconds"));
                 }
             }
-            var admissionResult = await eventAdmissionControl.EvaluateAsync(e, command.AllowedSources, cancellationToken).ConfigureAwait(false);
+            var admissionResult = await eventAdmissionControl.EvaluateAsync(e, gateway, command.AllowedSources, cancellationToken).ConfigureAwait(false);
             if (admissionResult.Data == null || !admissionResult.IsSuccess())
             {
                 outcome = GetOutcome(admissionResult.Status);

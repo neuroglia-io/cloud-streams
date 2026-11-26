@@ -27,7 +27,7 @@ public sealed class CloudEventHubConnection
 
     readonly HubConnection _connection;
     readonly IJsonSerializer _serializer;
-    (string? Source, string? Type) _filter;
+    (string? Source, string? Type, string? Namespace) _filter;
 
     /// <summary>
     /// Initializes a new <see cref="CloudEventHubConnection"/>
@@ -43,7 +43,7 @@ public sealed class CloudEventHubConnection
             var cloudEvent = this._serializer.Deserialize<CloudEvent>(e.GetRawText());
             if (cloudEvent != null) this.Received?.Invoke(cloudEvent);
         });
-        this._connection.Reconnected += async _ => await this.SubscribeAsync(this._filter.Source, this._filter.Type).ConfigureAwait(false);
+        this._connection.Reconnected += async _ => await this.SubscribeAsync(this._filter.Source, this._filter.Type, this._filter.Namespace).ConfigureAwait(false);
         this._connection.Reconnecting += _ => this.NotifyStateChanged();
         this._connection.Closed += _ => this.NotifyStateChanged();
     }
@@ -78,11 +78,12 @@ public sealed class CloudEventHubConnection
     /// </summary>
     /// <param name="source">The source of the cloud events to receive, if any</param>
     /// <param name="type">The type of the cloud events to receive, if any</param>
+    /// <param name="namespace">The namespace of the cloud events to receive, if any. Every namespace, which requires access to the whole cluster, if not set (see #215)</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    public async Task SubscribeAsync(string? source, string? type)
+    public async Task SubscribeAsync(string? source, string? type, string? @namespace = null)
     {
-        this._filter = (string.IsNullOrWhiteSpace(source) ? null : source.Trim(), string.IsNullOrWhiteSpace(type) ? null : type.Trim());
-        if (this._connection.State == HubConnectionState.Connected) await this._connection.InvokeAsync("Subscribe", this._filter.Source, this._filter.Type).ConfigureAwait(false);
+        this._filter = (string.IsNullOrWhiteSpace(source) ? null : source.Trim(), string.IsNullOrWhiteSpace(type) ? null : type.Trim(), string.IsNullOrWhiteSpace(@namespace) ? null : @namespace.Trim());
+        if (this._connection.State == HubConnectionState.Connected) await this._connection.InvokeAsync("Subscribe", this._filter.Source, this._filter.Type, this._filter.Namespace).ConfigureAwait(false);
         this.StateChanged?.Invoke();
     }
 

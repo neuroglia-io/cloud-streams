@@ -23,9 +23,16 @@ namespace CloudStreams.Core.Application.Queries.Streams;
 /// Initializes a new <see cref="ReadEventStreamQuery"/>
 /// </remarks>
 /// <param name="options">The object used to configure the query to perform</param>
-public class ReadEventStreamQuery(StreamReadOptions options)
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
+public class ReadEventStreamQuery(StreamReadOptions options, string? @namespace = null)
         : Query<IAsyncEnumerable<object>>
 {
+
+    /// <summary>
+    /// Gets the namespace to read the cloud events of, or null to read the whole stream
+    /// </summary>
+    public virtual string? Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? null : @namespace;
+
     
     /// <summary>
     /// Gets the object used to configure the query to perform
@@ -52,7 +59,7 @@ public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
         if (query.Options.Time.HasValue)
         {
             // the first cloud event recorded at or after the specified time, if any (see #211)
-            var found = await eventStore.FindOffsetAsync(query.Options.Time.Value, query.Options.Partition, cancellationToken).ConfigureAwait(false);
+            var found = await eventStore.FindOffsetAsync(query.Namespace, query.Options.Time.Value, query.Options.Partition, cancellationToken).ConfigureAwait(false);
             switch (query.Options.Direction)
             {
                 case StreamReadDirection.Forwards:
@@ -83,8 +90,8 @@ public class ReadCloudEventStreamQueryHandler(ICloudEventStore eventStore)
             }
         }
         var events = query.Options.Partition == null ?
-            eventStore.ReadAsync(query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken)
-            : eventStore.ReadPartitionAsync(query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);
+            eventStore.ReadAsync(query.Namespace, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken)
+            : eventStore.ReadPartitionAsync(query.Namespace, query.Options.Partition, query.Options.Direction, offset.Value, length, cancellationToken: cancellationToken);
         var results = query.Options.Format switch
         {
             StreamReadOutputFormat.Event => events.Select(e => e.ToCloudEvent(default)).OfType<object>(),

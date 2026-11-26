@@ -1,6 +1,7 @@
 @namespace CloudStreams.Dashboard.Components
 @using CloudStreams.Core.Resources
 @using Neuroglia.Serialization
+@inject NamespaceContext NamespaceContext
 @inject ICloudStreamsCoreApiClient Api
 @inject IJsonSerializer JsonSerializer
 @inject IYamlSerializer YamlSerializer
@@ -169,6 +170,11 @@
     /// </summary>
     [Parameter] public PartitionReference? Partition { get; set; }
 
+    /// <summary>
+    /// Gets/sets the namespace of the subscription to test, whose cloud events it is tested against. Defaults to the selected namespace, or the default one (see #215)
+    /// </summary>
+    [Parameter] public string? Namespace { get; set; }
+
     /// <inheritdoc/>
     protected override void OnParametersSet()
     {
@@ -209,7 +215,7 @@
         running = true;
         try
         {
-            result = await Api.Resources.Subscriptions.TestAsync(request);
+            result = await Api.Resources.Subscriptions.TestAsync(request, this.Namespace ?? NamespaceContext.ForNewResources);
         }
         catch (ProblemDetailsException ex)
         {

@@ -463,19 +463,19 @@ public class AuthenticationTests
                 continue;
             }
             Assert.False(anonymous, $"'{route}' should not be anonymous");
-            var expected = route.StartsWith("GET ") || route.EndsWith("/compatibility") || route == "POST api/resources/v1/subscriptions/test" ? CloudStreamsAuthenticationDefaults.ReadPolicy
+            var expected = route.StartsWith("GET ") || route.EndsWith("/compatibility") || route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/test" ? CloudStreamsAuthenticationDefaults.ReadPolicy
                 : route.EndsWith("/suspend") || route.EndsWith("/resume") || route.EndsWith("/replay") || route.EndsWith("/skip") || route.EndsWith("/redeliver") || route.EndsWith("/publish") ? CloudStreamsAuthenticationDefaults.OperatePolicy
                 : CloudStreamsAuthenticationDefaults.AdministerPolicy;
             Assert.True(policies.SequenceEqual([expected]), $"'{route}' should require '{expected}', not '{string.Join(", ", policies)}'");
         }
-        Assert.Contains(endpoints, e => e.Route == "PATCH api/resources/v1/subscriptions/{name}/status" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.AdministerPolicy]));
-        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/replay");
-        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/suspend");
-        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/redeliver" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
+        Assert.Contains(endpoints, e => e.Route == "PATCH api/resources/v1/namespaces/{namespace}/subscriptions/{name}/status" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.AdministerPolicy]));
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/{name}/replay");
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/{name}/suspend");
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/{name}/redeliver" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
         Assert.Contains(endpoints, e => e.Route == "POST api/core/v1/cloud-events/publish" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
         Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/search" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.ReadPolicy]));
-        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/{name}/skip" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
-        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/subscriptions/test" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.ReadPolicy]));
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/{name}/skip" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.OperatePolicy]));
+        Assert.Contains(endpoints, e => e.Route == "POST api/resources/v1/namespaces/{namespace}/subscriptions/test" && e.Policies.SequenceEqual([CloudStreamsAuthenticationDefaults.ReadPolicy]));
         Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/stream/activity");
         Assert.Contains(endpoints, e => e.Route == "GET api/core/v1/cloud-events/partitions/{type}/metadata");
     }
@@ -525,7 +525,8 @@ public class TestResourcesController
 }
 
 /// <summary>
-/// Stands for the cloud event ingestion endpoint, which declares its own policy, and describes the sources the publisher may publish cloud events of
+/// Stands for the cloud event ingestion endpoint, which declares its own policy, authorizes publishers like it does for a gateway that declares no publisher of its own,
+/// and describes the sources the publisher may publish cloud events of
 /// </summary>
 [Route("api/test/events")]
 public class TestEventsController(CloudStreams.Core.Api.Configuration.CloudStreamsAuthenticationOptions options)
@@ -534,6 +535,12 @@ public class TestEventsController(CloudStreams.Core.Api.Configuration.CloudStrea
 
     [HttpPost("pub")]
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.IngestionPolicy)]
-    public IActionResult Publish() => this.Ok(new { name = this.User.Identity?.Name, sources = this.User.GetAllowedSources(options.Ingestion) });
+    public async Task<IActionResult> Publish()
+    {
+        var authorizer = new CloudStreams.Gateway.Api.Services.PublisherAuthorizer(Microsoft.Extensions.Logging.Abstractions.NullLogger<CloudStreams.Gateway.Api.Services.PublisherAuthorizer>.Instance, options, Substitute.For<CloudStreams.Core.Transports.Authentication.ICredentialResolver>());
+        var authorization = await authorizer.AuthorizeAsync(this.HttpContext, new(new("default", Namespace.DefaultNamespaceName), new()));
+        if (authorization.Status != (int)HttpStatusCode.OK) return this.StatusCode(authorization.Status);
+        return this.Ok(new { name = authorization.Publisher, sources = authorization.AllowedSources });
+    }
 
 }

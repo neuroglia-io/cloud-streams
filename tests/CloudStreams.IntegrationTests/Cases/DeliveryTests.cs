@@ -227,13 +227,13 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
         Assert.False(string.IsNullOrWhiteSpace(first.AckToken));
 
         // act: acknowledge the first event
-        using (var ack = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/subscriptions/{Name()}/ack", new { token = first.AckToken }))
+        using (var ack = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/namespaces/default/subscriptions/{Name()}/ack", new { token = first.AckToken }))
             Assert.Equal(HttpStatusCode.NoContent, ack.StatusCode);
         var second = (await endpoint.WaitForAsync(2))[1];
         Assert.Equal("event-1", second.Id);
 
         // act: reject the second one, which is then redelivered
-        using (var nack = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/subscriptions/{Name()}/nack", new { token = second.AckToken, reason = "not yet" }))
+        using (var nack = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/namespaces/default/subscriptions/{Name()}/nack", new { token = second.AckToken, reason = "not yet" }))
             Assert.Equal(HttpStatusCode.NoContent, nack.StatusCode);
 
         // assert
@@ -241,7 +241,7 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
         await WaitForAsync(Name(), s => s.Status?.Stream?.AckedOffset == 2, "both events acknowledged");
 
         // a token can only be used once
-        using var reused = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/subscriptions/{Name()}/ack", new { token = first.AckToken });
+        using var reused = await fixture.Gateway.PostAsJsonAsync($"api/resources/v1/namespaces/default/subscriptions/{Name()}/ack", new { token = first.AckToken });
         Assert.Equal(HttpStatusCode.Conflict, reused.StatusCode);
     }
 

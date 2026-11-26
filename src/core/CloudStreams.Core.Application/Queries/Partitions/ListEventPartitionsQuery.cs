@@ -20,12 +20,18 @@ namespace CloudStreams.Core.Application.Queries.Partitions;
 /// Represents the query used to list, page by page, the cloud event partitions of the specified type with their metadata (see #226)
 /// </summary>
 /// <param name="partitionType">The type of the partitions to list</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="prefix">The prefix, matched case-insensitively, the ids of the partitions to list must start with, if any</param>
 /// <param name="maxResults">The maximum amount of partitions to list</param>
 /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
-public class ListEventPartitionsQuery(CloudEventPartitionType partitionType, string? prefix = null, int? maxResults = null, string? continuationToken = null)
+public class ListEventPartitionsQuery(CloudEventPartitionType partitionType, string? prefix = null, int? maxResults = null, string? continuationToken = null, string? @namespace = null)
     : Query<PartitionMetadataCollection>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the type of the partitions to list
@@ -70,13 +76,13 @@ public class ListEventPartitionsQueryHandler(ICloudEventStore eventStore, IParti
         var maxResults = query.MaxResults ?? PartitionMetadataCollection.DefaultMaxResults;
         if (maxResults < 1 || maxResults > PartitionMetadataCollection.MaxResultsLimit)
             return new OperationResult<PartitionMetadataCollection>((int)HttpStatusCode.BadRequest, errors: [new Error(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, $"The maximum amount of results must be between 1 and {PartitionMetadataCollection.MaxResultsLimit}")]);
-        var ids = await new ListEventPartitionIdsQueryHandler(eventStore, partitionIndex).HandleAsync(new ListEventPartitionIdsQuery(query.PartitionType, query.Prefix, maxResults, query.ContinuationToken), cancellationToken).ConfigureAwait(false);
+        var ids = await new ListEventPartitionIdsQueryHandler(eventStore, partitionIndex).HandleAsync(new ListEventPartitionIdsQuery(query.PartitionType, query.Prefix, maxResults, query.ContinuationToken, query.Namespace), cancellationToken).ConfigureAwait(false);
         if (!ids.IsSuccess() || ids.Data == null) return new OperationResult<PartitionMetadataCollection>(ids.Status, errors: ids.Errors?.ToArray() ?? []);
         var items = new PartitionMetadata[ids.Data.Items.Count];
         await Parallel.ForEachAsync(Enumerable.Range(0, items.Length), new ParallelOptions() { MaxDegreeOfParallelism = MaxConcurrency, CancellationToken = cancellationToken }, async (index, token) =>
         {
             var partition = new PartitionReference(query.PartitionType, ids.Data.Items[index]);
-            try { items[index] = await eventStore.GetPartitionMetadataAsync(partition, token).ConfigureAwait(false); }
+            try { items[index] = await eventStore.GetPartitionMetadataAsync(query.Namespace, partition, token).ConfigureAwait(false); }
             catch (Exception ex) when (ex is StreamNotFoundException || (ex is ProblemDetailsException notFound && notFound.Problem.Status == (int)HttpStatusCode.NotFound))
             {
                 // a partition listed by the index may not have been projected yet: it is listed, without metadata

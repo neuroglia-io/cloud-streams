@@ -25,9 +25,10 @@ public interface IGatewayManagementApi
     /// </summary>
     /// <param name="name">The name of the gateway</param>
     /// <param name="request">An object that describes the spec to evaluate the cloud event against, and the cloud event</param>
+    /// <param name="namespace">The namespace the gateway belongs to, if any. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>What would become of the cloud event, and why</returns>
-    Task<GatewayAdmissionTestResult> TestAdmissionAsync(string name, GatewayAdmissionTestRequest request, CancellationToken cancellationToken = default);
+    Task<GatewayAdmissionTestResult> TestAdmissionAsync(string name, GatewayAdmissionTestRequest request, string? @namespace = null, CancellationToken cancellationToken = default);
 
 }
 

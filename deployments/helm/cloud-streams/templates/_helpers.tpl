@@ -52,14 +52,53 @@ app.kubernetes.io/component: {{ .component }}
 {{- printf "%s-connections" (include "cloud-streams.fullname" .) }}
 {{- end }}
 
-{{/* The name of the gateway resource */}}
-{{- define "cloud-streams.gatewayName" -}}
-{{- .Values.gateway.name | default (printf "%s-gateway" (include "cloud-streams.fullname" .)) }}
+{{/*
+The instances of a component, 'gateway' or 'broker', as a JSON object whose 'items' are the values of each instance: pass a dict with the root context and
+the component's name. Each item of the 'gateways' or 'brokers' list overrides the settings of 'gateway' or 'broker', which a single instance uses when the list
+is empty. Every instance serves one gateway or broker resource of a namespace (see the README's 'Namespaces' section), and is given:
+  - 'name' and 'namespace': the name and the namespace of the resource it serves
+  - 'objectName': the name of its Kubernetes objects
+  - 'instanceLabel': the value of the label that tells its pods apart from the other instances' ones, if there are several
+*/}}
+{{- define "cloud-streams.instances" -}}
+{{- $root := .root }}
+{{- $component := .component }}
+{{- $defaults := index $root.Values $component }}
+{{- $items := index $root.Values (printf "%ss" $component) | default list }}
+{{- $fullname := include "cloud-streams.fullname" $root }}
+{{- $instances := list }}
+{{- if $items }}
+{{- $names := dict }}
+{{- range $index, $item := $items }}
+{{- $values := mergeOverwrite (deepCopy $defaults) (deepCopy $item) }}
+{{- $name := required (printf "%ss[%d].name is required" $component $index) $item.name }}
+{{- $namespace := $item.namespace | default "default" }}
+{{- $key := printf "%s/%s" $namespace $name }}
+{{- if hasKey $names $key }}{{ fail (printf "%ss[%d]: the %s '%s' is listed more than once" $component $index $component $key) }}{{ end }}
+{{- $_ := set $names $key true }}
+{{- $_ := set $values "name" $name }}
+{{- $_ := set $values "namespace" $namespace }}
+{{- $_ := set $values "objectName" ($item.fullnameOverride | default (printf "%s-%s-%s-%s" $fullname $component $namespace $name | trunc 63 | trimSuffix "-")) }}
+{{- $_ := set $values "instanceLabel" (printf "%s.%s" $namespace $name | trunc 63 | trimSuffix "-" | trimSuffix ".") }}
+{{- $instances = append $instances $values }}
+{{- end }}
+{{- else }}
+{{- $values := deepCopy $defaults }}
+{{- $_ := set $values "name" ($defaults.name | default (printf "%s-%s" $fullname $component)) }}
+{{- $_ := set $values "namespace" ($defaults.namespace | default "default") }}
+{{- $_ := set $values "objectName" (printf "%s-%s" $fullname $component) }}
+{{- $_ := set $values "instanceLabel" "" }}
+{{- $instances = append $instances $values }}
+{{- end }}
+{{- toJson (dict "items" $instances) }}
 {{- end }}
 
-{{/* The name of the broker resource */}}
-{{- define "cloud-streams.brokerName" -}}
-{{- .Values.broker.name | default (printf "%s-broker" (include "cloud-streams.fullname" .)) }}
+{{/* The selector labels of an instance of a component: pass a dict with the root context, the component's name and the instance's values */}}
+{{- define "cloud-streams.instanceSelectorLabels" -}}
+{{- include "cloud-streams.selectorLabels" (dict "root" .root "component" .component) }}
+{{- with .instance.instanceLabel }}
+cloud-streams.io/{{ $.component }}: {{ . | quote }}
+{{- end }}
 {{- end }}
 
 {{/* The environment variables shared by the gateway and the broker */}}
@@ -99,6 +138,10 @@ readinessProbe:
 {{- range $index, $provider := .Values.secrets.providers }}
 - name: CloudStreams__Secrets__Providers__{{ $index }}
   value: {{ $provider | quote }}
+{{- end }}
+{{- range $index, $namespace := .Values.secrets.sharedWith }}
+- name: CloudStreams__Secrets__SharedWith__{{ $index }}
+  value: {{ $namespace | quote }}
 {{- end }}
 {{- if has "vault" .Values.secrets.providers }}
 {{- with .Values.secrets.vault }}

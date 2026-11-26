@@ -23,7 +23,8 @@ namespace CloudStreams.Dashboard.Pages.CloudEvents.List;
 /// Initializes a new <see cref="CloudEventListStore"/>
 /// </remarks>
 /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
-public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
+/// <param name="namespaceContext">The service that holds the namespace whose cloud events to read</param>
+public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi, NamespaceContext namespaceContext)
         : ComponentStore<CloudEventListState>(new())
 {
 
@@ -138,7 +139,7 @@ public class CloudEventListStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                     Offset = offset,
                     Length = Math.Min(readOptions.Length - (ulong)fetchedCloudEvents.Count, (ulong)StreamReadOptions.MaxLength)
                 };
-                var chunk = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(chunkOptions, request.CancellationToken).ConfigureAwait(false)).ToListAsync(request.CancellationToken).ConfigureAwait(false);
+                var chunk = await (await this.cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(chunkOptions, namespaceContext.Current, request.CancellationToken).ConfigureAwait(false)).ToListAsync(request.CancellationToken).ConfigureAwait(false);
                 var events = chunk.OfType<CloudEvent>().ToList();
                 fetchedCloudEvents.AddRange(events);
                 if ((ulong)events.Count < chunkOptions.Length) break;

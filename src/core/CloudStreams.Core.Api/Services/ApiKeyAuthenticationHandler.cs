@@ -77,6 +77,7 @@ public class ApiKeyAuthenticationHandler(IOptionsMonitor<ApiKeyAuthenticationOpt
         var claims = new List<Claim>() { new(ClaimTypes.Name, publisher?.Name ?? "api-key") };
         // a key bound to sources conveys them as claims, which the ingestion endpoint hands over to the admission control (see #147)
         if (publisher != null) claims.AddRange((publisher.Sources ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => new Claim(CloudStreamsAuthenticationDefaults.AllowedSourceClaimType, s)));
+        if (publisher != null) claims.AddRange((publisher.Namespaces ?? []).Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => new Claim(CloudStreamsAuthenticationDefaults.AllowedNamespaceClaimType, n.Trim())));
         var identity = new ClaimsIdentity(claims, AuthenticationScheme);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), AuthenticationScheme)));
     }

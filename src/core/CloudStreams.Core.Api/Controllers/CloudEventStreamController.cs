@@ -27,15 +27,16 @@ public class CloudEventStreamController(IMediator mediator)
     /// <summary>
     /// Gets the cloud event stream's metadata
     /// </summary>
+    /// <param name="namespace">The namespace whose cloud events to read, or null to read the whole stream, which requires access to the whole cluster</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<StreamMetadata>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> GetStreamMetadata(CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> GetStreamMetadata([FromQuery(Name = "namespace")] string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.ExecuteAsync(new GetEventStreamMetadataQuery(), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new GetEventStreamMetadataQuery(@namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -44,33 +45,35 @@ public class CloudEventStreamController(IMediator mediator)
     /// <param name="period">The period, ending now, to describe, in ISO 8601 duration format (e.g. <c>PT24H</c>). Defaults to 24 hours, and may not exceed 31 days</param>
     /// <param name="buckets">The amount of consecutive slices to split the period into, between 1 and 96. Defaults to 24</param>
     /// <param name="sampleSize">The amount of most recent cloud events to compute the most active sources and types from, between 0 and 1000. Defaults to 500</param>
+    /// <param name="namespace">The namespace whose cloud events to read, or null to read the whole stream, which requires access to the whole cluster</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     /// <remarks>See #225</remarks>
     [HttpGet("activity")]
     [ProducesResponseType(typeof(StreamActivity), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> GetStreamActivity([FromQuery] string? period = null, [FromQuery] int buckets = GetEventStreamActivityQuery.DefaultBuckets, [FromQuery] int sampleSize = GetEventStreamActivityQuery.DefaultSampleSize, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> GetStreamActivity([FromQuery] string? period = null, [FromQuery] int buckets = GetEventStreamActivityQuery.DefaultBuckets, [FromQuery] int sampleSize = GetEventStreamActivityQuery.DefaultSampleSize, [FromQuery(Name = "namespace")] string? @namespace = null, CancellationToken cancellationToken = default)
     {
         TimeSpan duration;
         try { duration = string.IsNullOrWhiteSpace(period) ? GetEventStreamActivityQuery.DefaultPeriod : System.Xml.XmlConvert.ToTimeSpan(period); }
         catch (FormatException) { return this.ValidationProblem(detail: $"The period '{period}' is not a valid ISO 8601 duration"); }
-        return this.Process(await this.Mediator.ExecuteAsync(new GetEventStreamActivityQuery(duration, buckets, sampleSize), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new GetEventStreamActivityQuery(duration, buckets, sampleSize, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Reads the cloud event stream
     /// </summary>
     /// <param name="options">The object used to configure the query to perform</param>
+    /// <param name="namespace">The namespace whose cloud events to read, or null to read the whole stream, which requires access to the whole cluster</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("read")]
     [ProducesResponseType(typeof(IEnumerable<object>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
-    public virtual async Task<IActionResult> ReadStream([FromQuery] StreamReadOptions options, CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> ReadStream([FromQuery] StreamReadOptions options, [FromQuery(Name = "namespace")] string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.ExecuteAsync(new ReadEventStreamQuery(options), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ReadEventStreamQuery(options, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
 }

@@ -449,8 +449,8 @@ public class SubscriptionHandler
                 {
                     try
                     {
-                        observedStream = await this.EventStore.ObserveAsync(offset, streamInitializationToken).ConfigureAwait(false);
-                        this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(streamInitializationToken).ConfigureAwait(false)).Length;
+                        observedStream = await this.EventStore.ObserveAsync(this.Namespace, offset, streamInitializationToken).ConfigureAwait(false);
+                        this.StreamOffset = (await this.EventStore.GetStreamMetadataAsync(this.Namespace, streamInitializationToken).ConfigureAwait(false)).Length;
                         if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                         break;
                     }
@@ -472,8 +472,8 @@ public class SubscriptionHandler
                 {
                     try
                     {
-                        observedStream = await this.EventStore.ObservePartitionAsync(this.Subscription.Spec.Partition, offset, streamInitializationToken).ConfigureAwait(false);
-                        this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Subscription.Spec.Partition, streamInitializationToken).ConfigureAwait(false)).Length;
+                        observedStream = await this.EventStore.ObservePartitionAsync(this.Namespace, this.Subscription.Spec.Partition, offset, streamInitializationToken).ConfigureAwait(false);
+                        this.StreamOffset = (await this.EventStore.GetPartitionMetadataAsync(this.Namespace, this.Subscription.Spec.Partition, streamInitializationToken).ConfigureAwait(false)).Length;
                         if (offset >= 0 && (ulong)offset == this.StreamOffset) offset = -1;
                         break;
                     }
@@ -700,7 +700,7 @@ public class SubscriptionHandler
                 var ackUri = this.GetAcknowledgementUri();
                 if (ackUri != null) headers.Add(new(CloudStreamsHeaders.AckUri, ackUri.OriginalString));
             }
-            var status = await this.Client.SendAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber), e, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            var status = await this.Client.SendAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber, this.Subscription.GetNamespace()), e, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             // per RFC 9110, '202 Accepted' means that the request has been accepted for processing, but that the processing has not been completed (see #133)
             deferred = ackToken != null && status == HttpStatusCode.Accepted;
             outcome = deferred ? DeliveryOutcome.Deferred : DeliveryOutcome.Delivered;
@@ -782,7 +782,7 @@ public class SubscriptionHandler
         activity?.SetTag("catchup", catchUpWhenAvailable);
         activity?.SetTag("reason", initialFailure.Message);
         var streamName = this.GetStreamName();
-        var subscriberUri = DeliveryTarget.Of(this.Subscription.Spec.Subscriber).ToString();
+        var subscriberUri = DeliveryTarget.Of(this.Subscription.Spec.Subscriber, this.Subscription.GetNamespace()).ToString();
         var schedule = new DeliveryRetrySchedule(this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy);
         var lastFailure = initialFailure;
         try
@@ -868,7 +868,7 @@ public class SubscriptionHandler
             DeadLetteredAt = DateTimeOffset.UtcNow
         };
         if (!policy.IsForwarded) await this.DeadLetters.AppendAsync(this.Subscription.GetQualifiedName(), deadLetter, this.CancellationTokenSource.Token).ConfigureAwait(false);
-        else await this.SendDeadLetterAsync(DeliveryTarget.Of(policy), deadLetter).ConfigureAwait(false);
+        else await this.SendDeadLetterAsync(DeliveryTarget.Of(policy, this.Subscription.GetNamespace()), deadLetter).ConfigureAwait(false);
         this.Metrics.IncrementTotalDeadLetters(this.Subscription.GetQualifiedName(), this.GetStreamName());
         this.Logger.LogWarning("Dead-lettered the cloud event at offset '{offset}' of subscription '{subscription}': {reason}", offset, this.Subscription.GetQualifiedName(), reason.Message);
     }
@@ -962,7 +962,12 @@ public class SubscriptionHandler
     /// Gets the name of the stream the subscription consumes, used to tag metrics
     /// </summary>
     /// <returns>The name of the stream the subscription consumes</returns>
-    protected virtual string GetStreamName() => this.Subscription.Spec.Partition != null ? this.Subscription.Spec.Partition.GetStreamName() : "All";
+    protected virtual string GetStreamName() => this.Subscription.Spec.Partition != null ? this.Subscription.Spec.Partition.GetStreamName(this.Namespace) : StreamNameHelper.ByNamespace(this.Namespace);
+
+    /// <summary>
+    /// Gets the namespace of the handled subscription, whose cloud events only it delivers (see #215)
+    /// </summary>
+    protected virtual string Namespace => string.IsNullOrWhiteSpace(this.Subscription.GetNamespace()) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : this.Subscription.GetNamespace()!;
 
     /// <summary>
     /// Catches up missed <see cref="CloudEvent"/>s
@@ -1248,7 +1253,7 @@ public class SubscriptionHandler
                 new(CloudStreamsHeaders.Subscription, this.Subscription.GetName()),
                 new(CloudStreamsHeaders.Offset, records[0].Sequence.ToString(CultureInfo.InvariantCulture))
             ];
-            await this.Client.SendBatchAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber), events, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            await this.Client.SendBatchAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber, this.Subscription.GetNamespace()), events, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             outcome = DeliveryOutcome.Delivered;
         }
         catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)
@@ -1305,8 +1310,8 @@ public class SubscriptionHandler
     protected virtual Task<List<CloudEventRecord>> ReadPageAsync(long offset, int length, CancellationToken cancellationToken)
     {
         var records = this.Subscription.Spec.Partition == null
-            ? this.EventStore.ReadAsync(StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken)
-            : this.EventStore.ReadPartitionAsync(this.Subscription.Spec.Partition, StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken);
+            ? this.EventStore.ReadAsync(this.Namespace, StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken)
+            : this.EventStore.ReadPartitionAsync(this.Namespace, this.Subscription.Spec.Partition, StreamReadDirection.Forwards, offset, (ulong)length, cancellationToken);
         return records.ToListAsync(cancellationToken).AsTask();
     }
 
@@ -1328,7 +1333,7 @@ public class SubscriptionHandler
     {
         var callbackUri = this.Broker.Resource.Spec.Dispatch?.Ack?.CallbackUri;
         if (callbackUri == null) return null;
-        return new Uri($"{callbackUri.OriginalString.TrimEnd('/')}/api/resources/v1/subscriptions/{Uri.EscapeDataString(this.Subscription.GetName())}/ack");
+        return new Uri($"{callbackUri.OriginalString.TrimEnd('/')}/api/resources/v1/namespaces/{Uri.EscapeDataString(this.Namespace)}/subscriptions/{Uri.EscapeDataString(this.Subscription.GetName())}/ack");
     }
 
     /// <summary>

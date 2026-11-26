@@ -17,8 +17,8 @@ namespace CloudStreams.Core.Api.Controllers;
 /// Represents the <see cref="ApiController"/> used to manage <see cref="Broker"/>s
 /// </summary>
 /// <inheritdoc/>
-[Route("api/resources/v1/brokers")]
+[Route("api/resources/v1/namespaces/{namespace}/brokers")]
 public class BrokersController(IMediator mediator)
-    : ClusterResourceApiController<Broker>(mediator)
+    : NamespacedResourceApiController<Broker>(mediator)
 {
 }

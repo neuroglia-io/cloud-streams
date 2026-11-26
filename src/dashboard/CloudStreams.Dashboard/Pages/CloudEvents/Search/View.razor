@@ -2,6 +2,7 @@
 @page "/events/search"
 @using CloudStreams.Core.Resources
 @using Neuroglia.Serialization
+@inject NamespaceContext NamespaceContext
 @inject ICloudStreamsCoreApiClient ApiClient
 @inject IJsonSerializer Serializer
 
@@ -155,7 +156,7 @@
         this.error = null;
         try
         {
-            var result = await this.ApiClient.CloudEvents.SearchAsync(options);
+            var result = await this.ApiClient.CloudEvents.SearchAsync(options, NamespaceContext.Current);
             this.records ??= [];
             this.records.AddRange(result.Records.Select(r => (r, r.ToCloudEvent(this.Serializer))));
             this.scanned += result.Scanned;

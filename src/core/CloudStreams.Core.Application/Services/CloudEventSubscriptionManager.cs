@@ -55,12 +55,13 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// <summary>
     /// Lists all subscriptions
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>All subscriptions, described as CloudEvents subscriptions</returns>
-    public virtual async Task<IReadOnlyList<CloudEventSubscription>> ListAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<IReadOnlyList<CloudEventSubscription>> ListAsync(string? @namespace = null, CancellationToken cancellationToken = default)
     {
         var subscriptions = new List<CloudEventSubscription>();
-        await foreach (var subscription in resources.GetAllAsync<Subscription>(null, null, cancellationToken).ConfigureAwait(false)) subscriptions.Add(this.Describe(subscription));
+        await foreach (var subscription in resources.GetAllAsync<Subscription>(Resolve(@namespace), null, cancellationToken).ConfigureAwait(false)) subscriptions.Add(this.Describe(subscription));
         return subscriptions;
     }
 
@@ -68,11 +69,12 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// Gets the specified subscription
     /// </summary>
     /// <param name="id">The id of the subscription to get</param>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The specified subscription, or null if it does not exist</returns>
-    public virtual async Task<CloudEventSubscription?> GetAsync(string id, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventSubscription?> GetAsync(string id, string? @namespace = null, CancellationToken cancellationToken = default)
     {
-        var subscription = await this.FindAsync(id, cancellationToken).ConfigureAwait(false);
+        var subscription = await this.FindAsync(id, @namespace, cancellationToken).ConfigureAwait(false);
         return subscription == null ? null : this.Describe(subscription);
     }
 
@@ -80,15 +82,16 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// Creates a new subscription. The id of the specified subscription, if any, is ignored
     /// </summary>
     /// <param name="subscription">The subscription to create</param>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The subscription created</returns>
     /// <exception cref="ProblemDetailsException">The subscription is invalid, or unsupported</exception>
-    public virtual async Task<CloudEventSubscription> CreateAsync(CloudEventSubscription subscription, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventSubscription> CreateAsync(CloudEventSubscription subscription, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subscription);
         var resource = new Subscription()
         {
-            Metadata = new() { Name = $"ce-{Guid.NewGuid():N}"[..19] },
+            Metadata = new() { Name = $"ce-{Guid.NewGuid():N}"[..19], Namespace = Resolve(@namespace) },
             Spec = new() { Subscriber = new() }
         };
         this.Apply(subscription, resource);
@@ -100,15 +103,16 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// Updates the specified subscription. Its Cloud Streams specific settings, such as its partition or its retry policy, are kept
     /// </summary>
     /// <param name="id">The id of the subscription to update</param>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="subscription">The subscription to update it with</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The updated subscription, or null if it does not exist</returns>
     /// <exception cref="ProblemDetailsException">The subscription is invalid, or unsupported</exception>
-    public virtual async Task<CloudEventSubscription?> UpdateAsync(string id, CloudEventSubscription subscription, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventSubscription?> UpdateAsync(string id, CloudEventSubscription subscription, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(subscription);
         if (subscription.Id != null && subscription.Id != id) throw Invalid($"The id of the subscription, '{subscription.Id}', differs from the one of the subscription to update, '{id}'");
-        var resource = await this.FindAsync(id, cancellationToken).ConfigureAwait(false);
+        var resource = await this.FindAsync(id, @namespace, cancellationToken).ConfigureAwait(false);
         if (resource == null) return null;
         this.Apply(subscription, resource);
         resource = await resources.ReplaceAsync(resource, false, cancellationToken).ConfigureAwait(false);
@@ -119,11 +123,12 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// Deletes the specified subscription
     /// </summary>
     /// <param name="id">The id of the subscription to delete</param>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The deleted subscription, or null if it does not exist</returns>
-    public virtual async Task<CloudEventSubscription?> DeleteAsync(string id, CancellationToken cancellationToken = default)
+    public virtual async Task<CloudEventSubscription?> DeleteAsync(string id, string? @namespace = null, CancellationToken cancellationToken = default)
     {
-        var resource = await this.FindAsync(id, cancellationToken).ConfigureAwait(false);
+        var resource = await this.FindAsync(id, @namespace, cancellationToken).ConfigureAwait(false);
         if (resource == null) return null;
         await resources.RemoveAsync<Subscription>(resource.GetName(), resource.GetNamespace(), false, cancellationToken).ConfigureAwait(false);
         return this.Describe(resource);
@@ -133,14 +138,17 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
     /// Finds the specified subscription
     /// </summary>
     /// <param name="id">The id of the subscription to find</param>
+    /// <param name="namespace">The namespace the subscriptions belong to. Defaults to the default namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The subscription, or null if it does not exist</returns>
-    protected virtual async Task<Subscription?> FindAsync(string id, CancellationToken cancellationToken)
+    protected virtual async Task<Subscription?> FindAsync(string id, string? @namespace, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        try { return await resources.GetAsync<Subscription>(id, null, cancellationToken).ConfigureAwait(false); }
+        try { return await resources.GetAsync<Subscription>(id, Resolve(@namespace), cancellationToken).ConfigureAwait(false); }
         catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { return null; }
     }
+
+    static string Resolve(string? @namespace) => string.IsNullOrWhiteSpace(@namespace) ? Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Applies the specified CloudEvents subscription to the specified Cloud Streams subscription

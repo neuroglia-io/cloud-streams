@@ -23,7 +23,8 @@ namespace CloudStreams.Dashboard.Components.ReadOptionsFormStateManagement;
 /// Initializes a new <see cref="ReadOptionsFormStore"/>
 /// </remarks>
 /// <param name="cloudStreamsApi">The service used to interact with the Cloud Streams Gateway API</param>
-public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
+/// <param name="namespaceContext">The service that holds the namespace whose cloud events to read</param>
+public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi, NamespaceContext namespaceContext)
     : ComponentStore<ReadOptionsFormState>(new())
 {
 
@@ -291,7 +292,7 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
         }
         try
         {
-            var page = await cloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, prefix, MaxSuggestedPartitions, null, this.CancellationTokenSource.Token).ConfigureAwait(false);
+            var page = await cloudStreamsApi.CloudEvents.Partitions.ListPartitionsByTypeAsync(partitionType.Value, prefix, MaxSuggestedPartitions, null, namespaceContext.Current, this.CancellationTokenSource.Token).ConfigureAwait(false);
             this.Reduce(state => state with
             {
                 Partitions = page.Items
@@ -313,7 +314,7 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
             (CloudEventPartitionType? type, string? id) = partition;
             if (!type.HasValue || string.IsNullOrWhiteSpace(id))
             {
-                StreamMetadata metadata = await cloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync(this.CancellationTokenSource.Token).ConfigureAwait(false);
+                StreamMetadata metadata = await cloudStreamsApi.CloudEvents.Stream.GetStreamMetadataAsync(namespaceContext.Current, this.CancellationTokenSource.Token).ConfigureAwait(false);
                 this.Reduce(state => state with
                 {
                     StreamLength = metadata.Length
@@ -321,7 +322,7 @@ public class ReadOptionsFormStore(ICloudStreamsCoreApiClient cloudStreamsApi)
             }
             else
             {
-                PartitionMetadata? metadata = await cloudStreamsApi.CloudEvents.Partitions.GetPartitionMetadataAsync(type!.Value, id!, this.CancellationTokenSource.Token).ConfigureAwait(false);
+                PartitionMetadata? metadata = await cloudStreamsApi.CloudEvents.Partitions.GetPartitionMetadataAsync(type!.Value, id!, namespaceContext.Current, this.CancellationTokenSource.Token).ConfigureAwait(false);
                 if (metadata != null)
                 {
                     this.Reduce(state => state with

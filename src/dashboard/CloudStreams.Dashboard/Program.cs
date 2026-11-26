@@ -40,6 +40,7 @@ builder.Services.AddCloudStreamsCoreApiClient(options =>
 builder.Services.AddScoped<IApplicationLayout, ApplicationLayout>();
 builder.Services.AddSingleton<ThemeService>();
 builder.Services.AddScoped<UserAccess>();
+builder.Services.AddScoped<NamespaceContext>();
 builder.Services.AddSingleton<CommonJsInterop>();
 builder.Services.AddSingleton<IMonacoEditorHelper, MonacoEditorHelper>();
 builder.Services.AddSingleton<MonacoInterop>();

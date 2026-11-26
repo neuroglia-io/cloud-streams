@@ -136,10 +136,11 @@ public interface ICredentialResolver
     /// Resolves the credentials the specified policy describes, reading the secret it uses, if any
     /// </summary>
     /// <param name="authentication">The policy to resolve the credentials of</param>
+    /// <param name="namespace">The namespace of the resource that defines the policy, whose secrets it may use</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The credentials, or null if there is no policy</returns>
     /// <exception cref="InvalidOperationException">The policy is invalid, or its secret cannot be read</exception>
-    Task<TransportCredentials?> ResolveAsync(AuthenticationPolicy? authentication, CancellationToken cancellationToken = default);
+    Task<TransportCredentials?> ResolveAsync(AuthenticationPolicy? authentication, string? @namespace, CancellationToken cancellationToken = default);
 
 }
 
@@ -153,11 +154,11 @@ public class CredentialResolver(ISecretStore secrets, IOAuth2TokenClient tokens)
 {
 
     /// <inheritdoc/>
-    public virtual async Task<TransportCredentials?> ResolveAsync(AuthenticationPolicy? authentication, CancellationToken cancellationToken = default)
+    public virtual async Task<TransportCredentials?> ResolveAsync(AuthenticationPolicy? authentication, string? @namespace, CancellationToken cancellationToken = default)
     {
         if (authentication == null) return null;
         var policy = authentication.Policy ?? throw new InvalidOperationException("An authentication policy must set exactly one of basic, bearer, apiKey, oauth2 or oidc");
-        var secret = policy.Use == null ? null : await secrets.GetAsync(policy.Use, cancellationToken).ConfigureAwait(false);
+        var secret = policy.Use == null ? null : await secrets.GetAsync(policy.Use, @namespace, cancellationToken).ConfigureAwait(false);
         string Required(string? inline, string key) => (secret == null ? inline : secret.Get(key) ?? inline) ?? throw new InvalidOperationException(secret == null ? $"The {authentication.Scheme} authentication requires '{key}'" : $"The secret '{policy.Use}' has no '{key}', which the {authentication.Scheme} authentication requires");
         string? Optional(string? inline, string key) => secret?.Get(key) ?? inline;
         switch (policy)

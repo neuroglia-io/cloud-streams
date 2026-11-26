@@ -63,6 +63,11 @@ public static class CloudStreamsAuthenticationDefaults
     public const string AllowedSourceClaimType = "cloud-streams:allowed-source";
 
     /// <summary>
+    /// Gets the type of the claims that convey the namespaces a publisher authenticated by an API key may publish cloud events to (see #215)
+    /// </summary>
+    public const string AllowedNamespaceClaimType = "cloud-streams:allowed-namespace";
+
+    /// <summary>
     /// Gets the name of the policy that protects the cloud event ingestion endpoint
     /// </summary>
     public const string IngestionPolicy = "cloud-streams:ingestion";
@@ -208,23 +213,20 @@ public static class CloudStreamsAuthenticationExtensions
                     policy.AddAuthenticationSchemes(CookieAuthenticationDefaults.AuthenticationScheme);
                     if (acceptBearerTokens && bearerEnabled) policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                     policy.RequireAuthenticatedUser();
-                    policy.RequireAssertion(context => options.Dashboard.GetAccessLevel(context.User) >= level);
+                    policy.RequireAssertion(context => IsAuthorized(context, options.Dashboard, level));
                 });
             }
             AddAccessPolicy(CloudStreamsAuthenticationDefaults.ReadPolicy, CloudStreamsAccessLevel.Read, true);
             AddAccessPolicy(CloudStreamsAuthenticationDefaults.OperatePolicy, CloudStreamsAccessLevel.Operate, true);
             AddAccessPolicy(CloudStreamsAuthenticationDefaults.AdministerPolicy, CloudStreamsAccessLevel.Administer, true);
             AddAccessPolicy(CloudStreamsAuthenticationDefaults.DashboardPagePolicy, CloudStreamsAccessLevel.Read, false);
+            // the policy only authenticates publishers: whether they may publish depends on the gateway they publish to, whose own publishers the cluster's schemes do not
+            // know, and is decided by the ingestion endpoint (see #215)
             authorization.AddPolicy(CloudStreamsAuthenticationDefaults.IngestionPolicy, policy =>
             {
-                if (!options.Ingestion.Enabled)
-                {
-                    policy.RequireAssertion(_ => true);
-                    return;
-                }
                 if (bearerEnabled) policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 if (apiKeyEnabled) policy.AddAuthenticationSchemes(ApiKeyAuthenticationHandler.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
+                policy.RequireAssertion(_ => true);
             });
         });
         return services;
@@ -277,7 +279,9 @@ public static class CloudStreamsAuthenticationExtensions
             authenticated = context.User.Identity?.IsAuthenticated == true,
             name = context.User.Identity?.Name,
             // lets the dashboard hide what the user may not do; the API enforces it regardless (see #147)
-            access = options.Dashboard.GetAccessLevel(context.User).ToString().ToLowerInvariant()
+            access = options.Dashboard.GetAccessLevel(context.User).ToString().ToLowerInvariant(),
+            // the levels granted per namespace by namespaced roles, in addition to the level granted in every namespace (see #215)
+            namespaces = options.Dashboard.GetNamespaceAccessLevels(context.User).ToDictionary(g => g.Key, g => g.Value.ToString().ToLowerInvariant())
         })).AllowAnonymous().ExcludeFromDescription();
         if (!options.Dashboard.Enabled) return endpoints;
         endpoints.MapGet("auth/login", (string? returnUrl) => Results.Challenge(new AuthenticationProperties { RedirectUri = ToLocalUrl(returnUrl) }, [OpenIdConnectDefaults.AuthenticationScheme]))
@@ -317,6 +321,38 @@ public static class CloudStreamsAuthenticationExtensions
         return allowedSources.Distinct(StringComparer.Ordinal).ToList();
     }
 
+    /// <summary>
+    /// Gets the namespaces the specified publisher may publish cloud events to, as the cluster's ingestion authentication allows
+    /// </summary>
+    /// <param name="publisher">The authenticated publisher</param>
+    /// <param name="options">The options used to configure the authentication of the cloud event ingestion endpoint</param>
+    /// <returns>A new <see cref="IReadOnlySet{T}"/> containing the namespaces the publisher may publish to, which is empty if none, or null if every namespace</returns>
+    /// <remarks>
+    /// API keys of configured publishers are bound to the namespaces they list, if any. Bearer tokens are bound to the namespaces listed by the claim configured by
+    /// <see cref="IngestionAuthenticationOptions.NamespaceClaimType"/>, if any (see #215)
+    /// </remarks>
+    public static IReadOnlySet<string>? GetAllowedNamespaces(this ClaimsPrincipal publisher, IngestionAuthenticationOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(options);
+        var identities = publisher.Identities.Where(i => i.IsAuthenticated).ToList();
+        if (identities.Count == 0) return new HashSet<string>();
+        var allowed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identity in identities)
+        {
+            if (identity.AuthenticationType == ApiKeyAuthenticationHandler.AuthenticationScheme)
+            {
+                var namespaces = identity.FindAll(CloudStreamsAuthenticationDefaults.AllowedNamespaceClaimType).Select(c => c.Value).ToList();
+                if (namespaces.Count == 0) return null;
+                allowed.UnionWith(namespaces);
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(options.NamespaceClaimType)) return null;
+            allowed.UnionWith(identity.FindAll(options.NamespaceClaimType).SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
+        }
+        return allowed;
+    }
+
     static IReadOnlyCollection<string>? GetAllowedSources(ClaimsIdentity identity, IngestionAuthenticationOptions options)
     {
         if (identity.AuthenticationType == ApiKeyAuthenticationHandler.AuthenticationScheme)
@@ -327,6 +363,84 @@ public static class CloudStreamsAuthenticationExtensions
         if (string.IsNullOrWhiteSpace(options.SourceClaimType)) return null;
         // a claim holding an array is mapped to one claim per value; a scope-like string lists them separated by spaces
         return [.. identity.FindAll(options.SourceClaimType).SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))];
+    }
+
+    /// <summary>
+    /// Determines whether or not the user of the specified authorization context is granted the specified level of access
+    /// </summary>
+    /// <param name="context">The <see cref="AuthorizationHandlerContext"/> to evaluate</param>
+    /// <param name="options">The options used to configure the authentication of the dashboard and of the management API</param>
+    /// <param name="level">The level of access to require</param>
+    /// <returns>A boolean indicating whether or not the user is granted the specified level of access</returns>
+    /// <remarks>
+    /// The level is evaluated in the namespace the request targets, named by its <c>namespace</c> route value or query parameter, if any, and in the whole cluster
+    /// otherwise. Endpoints marked with the <see cref="NamespaceFilteredAttribute"/> are also open to users granted the level in any namespace: they only answer with
+    /// what these namespaces hold (see #215)
+    /// </remarks>
+    public static bool IsAuthorized(AuthorizationHandlerContext context, DashboardAuthenticationOptions options, CloudStreamsAccessLevel level)
+    {
+        var httpContext = context.Resource switch
+        {
+            HttpContext http => http,
+            Microsoft.AspNetCore.SignalR.HubInvocationContext invocation => Microsoft.AspNetCore.SignalR.GetHttpContextExtensions.GetHttpContext(invocation.Context),
+            _ => null
+        };
+        var @namespace = GetTargetNamespace(httpContext);
+        if (options.GetAccessLevel(context.User, @namespace) >= level) return true;
+        if (@namespace != null || httpContext?.GetEndpoint()?.Metadata.GetMetadata<NamespaceFilteredAttribute>() == null) return false;
+        return options.GetAccessibleNamespaces(context.User, level) is not { Count: 0 };
+    }
+
+    /// <summary>
+    /// Gets the namespace the specified request targets, if any
+    /// </summary>
+    /// <param name="httpContext">The <see cref="HttpContext"/> of the request</param>
+    /// <returns>The namespace the request targets, if any</returns>
+    public static string? GetTargetNamespace(HttpContext? httpContext)
+    {
+        if (httpContext == null) return null;
+        if (httpContext.Request.RouteValues.TryGetValue("namespace", out var value) && value is string routed && !string.IsNullOrWhiteSpace(routed)) return routed;
+        var query = httpContext.Request.Query["namespace"].ToString();
+        return string.IsNullOrWhiteSpace(query) ? null : query;
+    }
+
+    /// <summary>
+    /// Gets the namespaces the current user may access at the specified level
+    /// </summary>
+    /// <param name="controller">The extended <see cref="ControllerBase"/></param>
+    /// <param name="level">The minimum level of access</param>
+    /// <returns>A new <see cref="IReadOnlySet{T}"/> containing the namespaces the user may access, or null if all</returns>
+    public static IReadOnlySet<string>? GetAccessibleNamespaces(this ControllerBase controller, CloudStreamsAccessLevel level)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        return controller.HttpContext.GetAccessibleNamespaces(level);
+    }
+
+    /// <summary>
+    /// Gets the namespaces the user of the specified request may access at the specified level
+    /// </summary>
+    /// <param name="httpContext">The <see cref="HttpContext"/> of the request</param>
+    /// <param name="level">The minimum level of access</param>
+    /// <returns>A new <see cref="IReadOnlySet{T}"/> containing the namespaces the user may access, or null if all</returns>
+    public static IReadOnlySet<string>? GetAccessibleNamespaces(this HttpContext httpContext, CloudStreamsAccessLevel level)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        var options = httpContext.RequestServices.GetService<CloudStreamsAuthenticationOptions>();
+        return options == null ? null : options.Dashboard.GetAccessibleNamespaces(httpContext.User, level);
+    }
+
+    /// <summary>
+    /// Determines whether or not the user of the specified request is granted the specified level of access in the specified namespace
+    /// </summary>
+    /// <param name="httpContext">The <see cref="HttpContext"/> of the request</param>
+    /// <param name="namespace">The namespace to check, or null to check the whole cluster</param>
+    /// <param name="level">The level of access to require</param>
+    /// <returns>A boolean indicating whether or not the user is granted the specified level of access</returns>
+    public static bool HasAccess(this HttpContext httpContext, string? @namespace, CloudStreamsAccessLevel level)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        var options = httpContext.RequestServices.GetService<CloudStreamsAuthenticationOptions>();
+        return options == null || options.Dashboard.GetAccessLevel(httpContext.User, @namespace) >= level;
     }
 
     static string ToLocalUrl(string? url) => !string.IsNullOrWhiteSpace(url) && url.StartsWith('/') && !url.StartsWith("//") && !url.StartsWith("/\\") ? url : "/";

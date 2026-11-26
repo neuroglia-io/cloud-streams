@@ -96,7 +96,7 @@ public sealed class CredentialTests
         SetVariable($"CLOUDSTREAMS_SECRETS__{name.ToUpperInvariant().Replace('-', '_')}__PASSWORD", "s3cr3t");
 
         // act
-        var secret = await this.Store().GetAsync(new(name));
+        var secret = await this.Store().GetAsync(new(name), null);
 
         // assert
         Assert.Equal("cloud-streams", secret.Get("client.id"));
@@ -110,7 +110,7 @@ public sealed class CredentialTests
         WriteSecret("orders-webhook", new Dictionary<string, string>() { ["username"] = "cloud-streams", ["password"] = "s3cr3t" });
 
         // act
-        var secret = await this.Store().GetAsync(new(SecretProviders.File, "orders-webhook"));
+        var secret = await this.Store().GetAsync(new(SecretProviders.File, "orders-webhook"), null);
 
         // assert
         Assert.Equal("s3cr3t", secret.Get("password"));
@@ -120,17 +120,17 @@ public sealed class CredentialTests
     public async Task A_Secret_Should_Not_Be_Read_Outside_The_Directory_Of_Secrets()
     {
         // act
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new(SecretProviders.File, "../../etc")));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new(SecretProviders.File, "../../etc"), null));
 
         // assert
-        Assert.Contains("outside the directory", ex.Message);
+        Assert.Contains("is not a valid secret path", ex.Message);
     }
 
     [Fact]
     public async Task A_Secret_Of_A_Provider_That_Is_Not_Enabled_Should_Not_Be_Read()
     {
         // act
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new(SecretProviders.Vault, "orders")));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new(SecretProviders.Vault, "orders"), null));
 
         // assert
         Assert.Contains("is not enabled", ex.Message);
@@ -140,7 +140,7 @@ public sealed class CredentialTests
     public async Task A_Missing_Secret_Should_Be_Reported_With_The_Providers_Asked()
     {
         // act
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new("does-not-exist")));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => this.Store().GetAsync(new("does-not-exist"), null));
 
         // assert
         Assert.Contains("env, file", ex.Message);
@@ -154,7 +154,7 @@ public sealed class CredentialTests
         var resolver = new CredentialResolver(this.Store(), Substitute.For<IOAuth2TokenClient>());
 
         // act
-        var credentials = await resolver.ResolveAsync(new() { Basic = new() { Use = new("orders-webhook"), Username = "cloud-streams", Password = "ignored" } });
+        var credentials = await Resolve(resolver, new() { Basic = new() { Use = new("orders-webhook"), Username = "cloud-streams", Password = "ignored" } });
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://orders.example.com");
         await credentials!.AuthenticateAsync(request);
 
@@ -173,8 +173,8 @@ public sealed class CredentialTests
         using var withToken = new HttpRequestMessage(HttpMethod.Post, "https://orders.example.com");
 
         // act
-        await (await resolver.ResolveAsync(new() { ApiKey = new() { Key = "key", Header = "X-Orders-Key" } }))!.AuthenticateAsync(withKey);
-        await (await resolver.ResolveAsync(new() { Bearer = new() { Token = "token" } }))!.AuthenticateAsync(withToken);
+        await (await Resolve(resolver, new() { ApiKey = new() { Key = "key", Header = "X-Orders-Key" } }))!.AuthenticateAsync(withKey);
+        await (await Resolve(resolver, new() { Bearer = new() { Token = "token" } }))!.AuthenticateAsync(withToken);
 
         // assert
         Assert.Equal("key", withKey.Headers.GetValues("X-Orders-Key").Single());
@@ -191,7 +191,7 @@ public sealed class CredentialTests
         var policy = new AuthenticationPolicy() { OAuth2 = new() { Authority = new("https://login.example.com/realm"), Client = new() { Id = "cloud-streams", Secret = "s3cr3t" }, Scopes = ["events", "orders"] } };
 
         // act
-        var credentials = await resolver.ResolveAsync(policy);
+        var credentials = await Resolve(resolver, policy);
         var first = await credentials!.GetTokenAsync();
         var second = await credentials.GetTokenAsync();
 
@@ -251,8 +251,8 @@ public sealed class CredentialTests
         var provider = new VaultSecretProvider(Factory(handler), options, TimeProvider.System);
 
         // act
-        var secret = await provider.GetAsync("orders-kafka");
-        await provider.GetAsync("orders-kafka");
+        var secret = await provider.GetAsync("orders-kafka", null);
+        await provider.GetAsync("orders-kafka", null);
 
         // assert
         Assert.Equal("s3cr3t", secret!.Get("password"));
@@ -278,8 +278,8 @@ public sealed class CredentialTests
         var provider = new KubernetesSecretProvider(Factory(handler), options);
 
         // act
-        var labelled = await provider.GetAsync("labelled");
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetAsync("unlabelled"));
+        var labelled = await provider.GetAsync("labelled", null);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetAsync("unlabelled", null));
 
         // assert
         Assert.Equal("s3cr3t", labelled!.Get("password"));
@@ -287,5 +287,7 @@ public sealed class CredentialTests
         Assert.Equal("Bearer service-account-token", handler.Requests[0].Request.Headers.Authorization!.ToString());
         Assert.Contains("cloud-streams.io/secret=true", ex.Message);
     }
+
+    static Task<TransportCredentials?> Resolve(ICredentialResolver resolver, AuthenticationPolicy policy) => resolver.ResolveAsync(policy, null);
 
 }

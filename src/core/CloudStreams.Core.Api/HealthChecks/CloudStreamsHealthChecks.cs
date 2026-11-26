@@ -146,7 +146,7 @@ public class EventStoreHealthCheck(ICloudEventStore eventStore)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
-            await eventStore.GetStreamMetadataAsync(timeout.Token).ConfigureAwait(false);
+            await eventStore.GetStreamMetadataAsync(null, timeout.Token).ConfigureAwait(false);
             return HealthCheckResult.Healthy();
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

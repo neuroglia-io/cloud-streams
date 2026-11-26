@@ -55,10 +55,10 @@ public class GetSubscriptionsHealthQueryHandler(ILogger<GetSubscriptionsHealthQu
         await foreach (var subscription in repository.GetAllAsync<Subscription>(query.Namespace, query.LabelSelectors, cancellationToken).ConfigureAwait(false))
         {
             var partition = subscription.Spec.Partition;
-            var streamKey = partition == null ? string.Empty : $"{EnumHelper.Stringify(partition.Type)}:{partition.Id}";
+            var streamKey = partition == null ? subscription.GetNamespace() ?? Namespace.DefaultNamespaceName : $"{subscription.GetNamespace()}:{EnumHelper.Stringify(partition.Type)}:{partition.Id}";
             if (!ranges.TryGetValue(streamKey, out var range))
             {
-                range = await this.GetRangeAsync(partition, cancellationToken).ConfigureAwait(false);
+                range = await this.GetRangeAsync(subscription.GetNamespace(), partition, cancellationToken).ConfigureAwait(false);
                 ranges[streamKey] = range;
             }
             var length = range.Length;
@@ -87,19 +87,20 @@ public class GetSubscriptionsHealthQueryHandler(ILogger<GetSubscriptionsHealthQu
     /// <summary>
     /// Gets the length of the specified partition or, if none, of the whole cloud event stream, and the offset of the first event it retains (see #206)
     /// </summary>
+    /// <param name="namespace">The namespace of the subscription</param>
     /// <param name="partition">The partition to get the range of, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The length of the specified partition or stream, and the offset of its first retained event, both null if not available, e.g. because no event has been published to it yet</returns>
-    protected virtual async Task<(ulong? Length, ulong? FirstOffset)> GetRangeAsync(PartitionReference? partition, CancellationToken cancellationToken)
+    protected virtual async Task<(ulong? Length, ulong? FirstOffset)> GetRangeAsync(string? @namespace, PartitionReference? partition, CancellationToken cancellationToken)
     {
         try
         {
             if (partition == null)
             {
-                var metadata = await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+                var metadata = await eventStore.GetStreamMetadataAsync(@namespace, cancellationToken).ConfigureAwait(false);
                 return (metadata.Length, metadata.FirstOffset);
             }
-            var partitionMetadata = await eventStore.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false);
+            var partitionMetadata = await eventStore.GetPartitionMetadataAsync(@namespace, partition, cancellationToken).ConfigureAwait(false);
             return (partitionMetadata.Length, partitionMetadata.FirstOffset);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

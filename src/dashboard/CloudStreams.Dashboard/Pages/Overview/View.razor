@@ -5,6 +5,7 @@
 @implements IDisposable
 @inject ICloudStreamsCoreApiClient Api
 @inject HttpClient Http
+@inject NamespaceContext NamespaceContext
 
 @* The health of the whole system at a glance: throughput, subscriptions, brokers and gateways, the most active sources and types, and the gateway's own checks (see #225) *@
 
@@ -116,7 +117,7 @@
                             @foreach (var subscription in attention)
                             {
                                 <li class="d-flex justify-content-between gap-2">
-                                    <a class="text-truncate" href="@($"subscriptions/{Uri.EscapeDataString(subscription.Name)}")">@subscription.Name</a>
+                                    <a class="text-truncate" href="@($"subscriptions/{Uri.EscapeDataString(subscription.Namespace ?? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName)}/{Uri.EscapeDataString(subscription.Name)}")">@subscription.Name</a>
                                     <span class="text-nowrap">@(subscription.Phase == SubscriptionHealth.FailedPhase ? "faulted" : subscription.SubscriberState == "unreachable" ? "unreachable" : $"behind by {subscription.Lag:N0}")</span>
                                 </li>
                             }
@@ -206,11 +207,11 @@
     async Task RefreshAsync()
     {
         await Task.WhenAll(
-            Try(async () => stream = await Api.CloudEvents.Stream.GetStreamMetadataAsync()),
-            Try(async () => { activity = await Api.CloudEvents.Stream.GetStreamActivityAsync(TimeSpan.FromHours(24), 24); activityError = null; }, ex => activityError = $"Failed to describe the activity of the stream: {ex.Message}"),
-            Try(async () => subscriptions = await Api.Resources.Subscriptions.GetHealthAsync()),
-            Try(async () => gateways = [.. (await (await Api.Resources.Gateways.ListAsync()).ToListAsync()).Select(g => (g.GetName(), g.Status?.HealthStatus)).OrderBy(g => HealthBadge.Order(g.Item2))]),
-            Try(async () => brokers = [.. (await (await Api.Resources.Brokers.ListAsync()).ToListAsync()).Select(b => (b.GetName(), b.Status?.HealthStatus)).OrderBy(b => HealthBadge.Order(b.Item2))]),
+            Try(async () => stream = await Api.CloudEvents.Stream.GetStreamMetadataAsync(NamespaceContext.Current)),
+            Try(async () => { activity = await Api.CloudEvents.Stream.GetStreamActivityAsync(TimeSpan.FromHours(24), 24, null, NamespaceContext.Current); activityError = null; }, ex => activityError = $"Failed to describe the activity of the stream: {ex.Message}"),
+            Try(async () => subscriptions = await Api.Resources.Subscriptions.GetHealthAsync(null, NamespaceContext.Current)),
+            Try(async () => gateways = [.. (await (await Api.Resources.Gateways.ListAsync(NamespaceContext.Current)).ToListAsync()).Select(g => (g.GetName(), g.Status?.HealthStatus)).OrderBy(g => HealthBadge.Order(g.Item2))]),
+            Try(async () => brokers = [.. (await (await Api.Resources.Brokers.ListAsync(NamespaceContext.Current)).ToListAsync()).Select(b => (b.GetName(), b.Status?.HealthStatus)).OrderBy(b => HealthBadge.Order(b.Item2))]),
             Try(async () =>
             {
                 // the readiness endpoint answers 503 when unhealthy, with the same body

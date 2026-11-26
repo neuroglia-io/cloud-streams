@@ -35,6 +35,9 @@ public partial class CloudStreamsCoreApiClient
     public IResourceManagementApi<Feed> Feeds { get; private set; } = null!;
 
     /// <inheritdoc/>
+    public IResourceManagementApi<Namespace> Namespaces { get; private set; } = null!;
+
+    /// <inheritdoc/>
     public ISubscriptionManagementApi Subscriptions { get; private set; } = null!;
 
     /// <inheritdoc/>

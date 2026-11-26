@@ -30,7 +30,7 @@ public static class IServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/></returns>
     public static IServiceCollection AddCoreApiQueries(this IServiceCollection services)
     {
-        foreach (Type queryableType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Resource).IsAssignableFrom(t)))
+        foreach (Type queryableType in GetManagedResourceTypes())
         {
             var serviceLifetime = ServiceLifetime.Scoped;
             Type queryType;
@@ -78,7 +78,7 @@ public static class IServiceCollectionExtensions
     /// <returns>The configured <see cref="IServiceCollection"/></returns>
     public static IServiceCollection AddCoreApiCommands(this IServiceCollection services)
     {
-        foreach (Type resourceType in typeof(Broker).Assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Resource).IsAssignableFrom(t)))
+        foreach (Type resourceType in GetManagedResourceTypes())
         {
             var serviceLifetime = ServiceLifetime.Scoped;
             Type commandType;
@@ -119,5 +119,13 @@ public static class IServiceCollectionExtensions
         }
         return services;
     }
+
+    /// <summary>
+    /// Gets the types of the resources the API manages: those of Cloud Streams, and namespaces (see #215)
+    /// </summary>
+    /// <returns>The types of the resources the API manages</returns>
+    static IEnumerable<Type> GetManagedResourceTypes() => typeof(Broker).Assembly.GetTypes()
+        .Where(t => t.IsClass && !t.IsAbstract && !t.IsGenericType && !t.IsInterface && typeof(Resource).IsAssignableFrom(t))
+        .Append(typeof(Namespace));
 
 }

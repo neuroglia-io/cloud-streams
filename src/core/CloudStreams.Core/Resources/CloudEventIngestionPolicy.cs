@@ -57,6 +57,16 @@ public record CloudEventIngestionPolicy
     [DataMember(Order = 5, Name = "feeds"), JsonPropertyOrder(5), JsonPropertyName("feeds"), YamlMember(Order = 5, Alias = "feeds")]
     public virtual List<FeedReference>? Feeds { get; set; }
 
+    /// <summary>
+    /// Gets/sets the publishers allowed to publish cloud events to the gateway, if any. Anyone the cluster's ingestion authentication admits may publish if not set
+    /// </summary>
+    /// <remarks>
+    /// When set, a request must be made by one of the gateway's publishers, or by a publisher the cluster's configuration allows to publish to the gateway's namespace.
+    /// The publishers' API keys are read from the secrets of the gateway's namespace (see #215)
+    /// </remarks>
+    [DataMember(Order = 6, Name = "publishers"), JsonPropertyOrder(6), JsonPropertyName("publishers"), YamlMember(Order = 6, Alias = "publishers")]
+    public virtual List<IngestionPublisher>? Publishers { get; set; }
+
 }
 
 /// <summary>

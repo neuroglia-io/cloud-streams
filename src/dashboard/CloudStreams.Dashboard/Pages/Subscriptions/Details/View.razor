@@ -1,5 +1,6 @@
 @namespace CloudStreams.Dashboard.Pages.Subscriptions.Details
 @page "/subscriptions/{Name}"
+@page "/subscriptions/{Namespace}/{Name}"
 @using CloudStreams.Core.Resources
 @using Neuroglia.Data.Infrastructure.EventSourcing
 @using System.Globalization
@@ -16,7 +17,7 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb small mb-2">
             <li class="breadcrumb-item"><a href="subscriptions">Subscriptions</a></li>
-            <li class="breadcrumb-item active" aria-current="page">@Name</li>
+            <li class="breadcrumb-item active" aria-current="page">@SubscriptionNamespace / @Name</li>
         </ol>
     </nav>
 
@@ -114,7 +115,7 @@
                                 }
                                 else
                                 {
-                                    <a href="@($"events?partitionType={subscription.Spec.Partition.Type}&partitionId={Uri.EscapeDataString(subscription.Spec.Partition.Id)}")">@subscription.Spec.Partition.Type '@subscription.Spec.Partition.Id'</a>
+                                    <a href="@($"events?partitionType={subscription.Spec.Partition.Type}&partitionId={Uri.EscapeDataString(subscription.Spec.Partition.Id)}&namespace={Uri.EscapeDataString(SubscriptionNamespace)}")">@subscription.Spec.Partition.Type '@subscription.Spec.Partition.Id'</a>
                                 }
                             </dd>
                             <dt class="col-5">Tracks an offset</dt>
@@ -260,7 +261,7 @@
 
         <div class="card mb-3">
             <div class="card-body">
-                <SubscriptionTester @key="Name" Id="playground" Spec="subscription.Spec" Partition="subscription.Spec.Partition" />
+                <SubscriptionTester @key="Name" Id="playground" Spec="subscription.Spec" Partition="subscription.Spec.Partition" Namespace="@SubscriptionNamespace" />
             </div>
         </div>
     }
@@ -294,18 +295,25 @@
     /// </summary>
     [Parameter] public string Name { get; set; } = null!;
 
+    /// <summary>
+    /// Gets/sets the namespace of the subscription, which defaults to the default namespace (see #215)
+    /// </summary>
+    [Parameter] public string? Namespace { get; set; }
+
+    string SubscriptionNamespace => string.IsNullOrWhiteSpace(this.Namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : this.Namespace;
+
     /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
-        canOperate = await UserAccess.CanOperateAsync();
+        canOperate = await UserAccess.CanOperateAsync(SubscriptionNamespace);
         _ = RefreshLoopAsync(cancellation.Token);
     }
 
     /// <inheritdoc/>
     protected override async Task OnParametersSetAsync()
     {
-        if (loadedName == Name) return;
-        loadedName = Name;
+        if (loadedName == $"{SubscriptionNamespace}/{Name}") return;
+        loadedName = $"{SubscriptionNamespace}/{Name}";
         subscription = null;
         // the page is reused when navigating from a subscription to another: nothing of the previous one is kept
         history = new();
@@ -337,7 +345,7 @@
         var name = Name;
         try
         {
-            subscription = await Api.Resources.Subscriptions.GetAsync(name);
+            subscription = await Api.Resources.Subscriptions.GetAsync(name, SubscriptionNamespace);
             notFound = false;
         }
         catch (ProblemDetailsException ex) when (ex.Problem.Status == 404)
@@ -350,7 +358,7 @@
             // a failed refresh keeps what is shown
             return;
         }
-        try { health = (await Api.Resources.Subscriptions.GetHealthAsync()).FirstOrDefault(h => h.Name == name); }
+        try { health = (await Api.Resources.Subscriptions.GetHealthAsync(null, SubscriptionNamespace)).FirstOrDefault(h => h.Name == name); }
         catch (Exception) { health = null; }
         history.Add(new(DateTimeOffset.Now, health?.Lag, subscription.Spec.Stream == null ? null : subscription.Status?.Stream?.AckedOffset));
         if (includeDeadLetters || (deadLetters == null && subscription.Spec.DeadLetter?.IsForwarded != true)) await LoadDeadLettersAsync();
@@ -359,7 +367,7 @@
     async Task LoadDeadLettersAsync()
     {
         if (subscription?.Spec.DeadLetter == null || subscription.Spec.DeadLetter.IsForwarded) return;
-        try { deadLetters = await Api.Resources.Subscriptions.GetDeadLettersAsync(Name, length: DeadLetterPageSize); }
+        try { deadLetters = await Api.Resources.Subscriptions.GetDeadLettersAsync(Name, length: DeadLetterPageSize, @namespace: SubscriptionNamespace); }
         catch (Exception) { deadLetters = []; }
     }
 
@@ -371,7 +379,7 @@
         try
         {
             var options = new StreamReadOptions(StreamReadDirection.Forwards, (long)offset, 1) { Partition = partition };
-            await foreach (var item in await Api.CloudEvents.Stream.ReadStreamAsync(options)) { e = item; break; }
+            await foreach (var item in await Api.CloudEvents.Stream.ReadStreamAsync(options, SubscriptionNamespace)) { e = item; break; }
         }
         catch (Exception ex)
         {
@@ -392,7 +400,7 @@
     {
         if (dialog == null || !await dialog.ShowAsync(title: $"Retry the event that faulted '{Name}'?", message1: "The fault is cleared, and the event is delivered again. If it fails again, the subscription is faulted again.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Retry", NoButtonText = "Cancel", IsVerticallyCentered = true })) return;
-        await RunAsync(() => Api.Resources.Subscriptions.ResumeAsync(Name), "The fault has been cleared: the event is being delivered again", "Failed to retry the event");
+        await RunAsync(() => Api.Resources.Subscriptions.ResumeAsync(Name, SubscriptionNamespace), "The fault has been cleared: the event is being delivered again", "Failed to retry the event");
     }
 
     async Task SkipAsync(ulong offset)
@@ -400,23 +408,23 @@
         if (dialog == null || !await dialog.ShowAsync(title: $"Skip the event at offset {offset}?", message1: "The event is never delivered to the subscriber: delivery resumes with the next one.",
             message2: subscription?.Spec.DeadLetter == null ? "The subscription has no dead-letter policy: the event is not set aside either." : "The event is not dead-lettered either.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Skip", YesButtonColor = ButtonColor.Danger, NoButtonText = "Cancel", IsVerticallyCentered = true })) return;
-        await RunAsync(() => Api.Resources.Subscriptions.SkipAsync(Name, offset), $"The event at offset {offset} has been skipped", "Failed to skip the event");
+        await RunAsync(() => Api.Resources.Subscriptions.SkipAsync(Name, offset, SubscriptionNamespace), $"The event at offset {offset} has been skipped", "Failed to skip the event");
     }
 
     async Task SuspendAsync()
     {
         if (dialog == null || !await dialog.ShowAsync(title: $"Suspend subscription '{Name}'?", message1: "Nothing is delivered to the subscriber until the subscription is resumed.",
             confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Suspend", YesButtonColor = ButtonColor.Warning, NoButtonText = "Cancel", IsVerticallyCentered = true })) return;
-        await RunAsync(() => Api.Resources.Subscriptions.SuspendAsync(Name), $"The subscription '{Name}' has been suspended", "Failed to suspend the subscription");
+        await RunAsync(() => Api.Resources.Subscriptions.SuspendAsync(Name, SubscriptionNamespace), $"The subscription '{Name}' has been suspended", "Failed to suspend the subscription");
     }
 
-    Task ResumeAsync() => RunAsync(() => Api.Resources.Subscriptions.ResumeAsync(Name), $"The subscription '{Name}' has been resumed", "Failed to resume the subscription");
+    Task ResumeAsync() => RunAsync(() => Api.Resources.Subscriptions.ResumeAsync(Name, SubscriptionNamespace), $"The subscription '{Name}' has been resumed", "Failed to resume the subscription");
 
     async Task RedeliverDeadLetterAsync(DeadLetter deadLetter)
     {
         try
         {
-            var redelivery = await Api.Resources.Subscriptions.RedeliverDeadLetterAsync(Name, deadLetter.Offset);
+            var redelivery = await Api.Resources.Subscriptions.RedeliverDeadLetterAsync(Name, deadLetter.Offset, SubscriptionNamespace);
             Notify(ToastType.Success, $"The event at offset {deadLetter.EventOffset} has been redelivered (status {redelivery.Status})");
         }
         catch (Exception ex)

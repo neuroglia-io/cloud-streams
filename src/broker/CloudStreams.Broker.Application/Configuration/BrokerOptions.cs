@@ -37,6 +37,23 @@ public class BrokerOptions
     /// <summary>
     /// Gets/sets the options used to configure the leases the broker holds on the subscriptions it handles
     /// </summary>
+    /// <summary>
+    /// Gets the name of the broker when none is configured
+    /// </summary>
+    public const string DefaultName = "default";
+
+    /// <summary>
+    /// Gets the name of the broker resource the application runs
+    /// </summary>
+    /// <returns>The name of the broker resource</returns>
+    public virtual string GetName() => string.IsNullOrWhiteSpace(this.Name) ? DefaultName : this.Name.Trim();
+
+    /// <summary>
+    /// Gets the namespace of the broker resource the application runs, whose subscriptions only it runs (see #215)
+    /// </summary>
+    /// <returns>The namespace of the broker resource</returns>
+    public virtual string GetNamespace() => string.IsNullOrWhiteSpace(this.Namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : this.Namespace.Trim();
+
     public virtual SubscriptionLeaseOptions Leases { get; set; } = new();
 
     /// <summary>

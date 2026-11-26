@@ -23,12 +23,18 @@ namespace CloudStreams.Core.Application.Commands.Subscriptions;
 /// Represents the command used to resolve a cloud event whose acknowledgement a subscriber has deferred, by acknowledging or negatively acknowledging it
 /// </summary>
 /// <param name="name">The name of the subscription the cloud event has been delivered for</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="token">The acknowledgement token the cloud event has been delivered with</param>
 /// <param name="acknowledge">A boolean indicating whether to acknowledge the cloud event (it is then considered processed) or to negatively acknowledge it (it is then redelivered)</param>
 /// <param name="reason">The reason why the cloud event is negatively acknowledged, if any</param>
-public class AcknowledgeSubscriptionEventCommand(string name, string token, bool acknowledge, string? reason = null)
+public class AcknowledgeSubscriptionEventCommand(string name, string token, bool acknowledge, string? reason = null, string? @namespace = null)
     : Command<Subscription>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the subscription the cloud event has been delivered for
@@ -113,7 +119,7 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
         while (true)
         {
             subscription = null;
-            try { subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false); }
+            try { subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false); }
             catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
             pendingAck = subscription?.Status?.Subscriber?.PendingAck;
             if (subscription != null && pendingAck != null && AcknowledgementTokens.Matches(command.Token, pendingAck.Token)) break;
@@ -144,7 +150,7 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
         }
         try
         {
-            subscription = await resources.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+            subscription = await resources.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), command.Name, command.Namespace, null, false, cancellationToken).ConfigureAwait(false);
         }
         catch (ProblemDetailsException ex) when (ex.Problem.Status is (int)HttpStatusCode.BadRequest or (int)HttpStatusCode.Conflict)
         {

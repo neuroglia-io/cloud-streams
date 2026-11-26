@@ -1,92 +1,96 @@
-{{- if .Values.broker.enabled }}
-{{- $component := dict "root" . "component" "broker" }}
-{{- $fullname := printf "%s-broker" (include "cloud-streams.fullname" .) }}
+{{- range $values := (include "cloud-streams.instances" (dict "root" . "component" "broker") | fromJson).items }}
+{{- if $values.enabled }}
+{{- $selector := dict "root" $ "component" "broker" "instance" $values }}
+{{- $fullname := $values.objectName }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $fullname }}
   labels:
-    {{- include "cloud-streams.labels" . | nindent 4 }}
+    {{- include "cloud-streams.labels" $ | nindent 4 }}
     app.kubernetes.io/component: broker
 spec:
-  replicas: {{ .Values.broker.replicaCount }}
+  replicas: {{ $values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+      {{- include "cloud-streams.instanceSelectorLabels" $selector | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "cloud-streams.selectorLabels" $component | nindent 8 }}
-        {{- with .Values.broker.podLabels }}
+        {{- include "cloud-streams.instanceSelectorLabels" $selector | nindent 8 }}
+        {{- with $values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       annotations:
-        checksum/connections: {{ printf "%s|%s" .Values.eventstore.connectionString .Values.redis.connectionString | sha256sum }}
-        {{- with .Values.broker.podAnnotations }}
+        checksum/connections: {{ printf "%s|%s" $.Values.eventstore.connectionString $.Values.redis.connectionString | sha256sum }}
+        {{- with $values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "cloud-streams.serviceAccountName" . }}
-      automountServiceAccountToken: {{ include "cloud-streams.needsServiceAccountToken" . }}
+      serviceAccountName: {{ include "cloud-streams.serviceAccountName" $ }}
+      automountServiceAccountToken: {{ include "cloud-streams.needsServiceAccountToken" $ }}
       # the variables Kubernetes would inject for every service of the namespace are not used, and some applications mistake them for their own settings
       enableServiceLinks: false
-      {{- with .Values.imagePullSecrets }}
+      {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       # a broker that stops gracefully releases its subscriptions, so that the other replicas take them over at once
       terminationGracePeriodSeconds: 30
-      {{- with .Values.secrets.files }}
+      {{- with $.Values.secrets.files }}
       volumes:
         {{- include "cloud-streams.secretVolumes" $ | nindent 8 }}
       {{- end }}
       containers:
         - name: broker
-          image: {{ include "cloud-streams.image" $component }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "cloud-streams.image" (dict "root" $ "component" "broker") }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml $.Values.securityContext | nindent 12 }}
           ports:
             - name: http
-              containerPort: {{ .Values.broker.port }}
+              containerPort: {{ $values.port }}
           env:
             - name: ASPNETCORE_HTTP_PORTS
-              value: {{ .Values.broker.port | quote }}
+              value: {{ $values.port | quote }}
             - name: CLOUDSTREAMS_BROKER_NAME
-              value: {{ include "cloud-streams.brokerName" . | quote }}
-            {{- include "cloud-streams.commonEnv" . | nindent 12 }}
-            {{- include "cloud-streams.secretsEnv" . | nindent 12 }}
-            {{- with .Values.broker.env }}
+              value: {{ $values.name | quote }}
+            - name: CLOUDSTREAMS_BROKER_NAMESPACE
+              value: {{ $values.namespace | quote }}
+            {{- include "cloud-streams.commonEnv" $ | nindent 12 }}
+            {{- include "cloud-streams.secretsEnv" $ | nindent 12 }}
+            {{- with $values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with .Values.broker.envFrom }}
+          {{- with $values.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.secrets.files }}
+          {{- with $.Values.secrets.files }}
           volumeMounts:
             {{- include "cloud-streams.secretVolumeMounts" $ | nindent 12 }}
           {{- end }}
-          {{- include "cloud-streams.probes" (dict "root" . "port" "http") | nindent 10 }}
-          {{- with .Values.broker.resources }}
+          {{- include "cloud-streams.probes" (dict "root" $ "port" "http") | nindent 10 }}
+          {{- with $values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.broker.nodeSelector }}
+      {{- with $values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.broker.affinity }}
+      {{- with $values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.broker.tolerations }}
+      {{- with $values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.broker.topologySpreadConstraints }}
+      {{- with $values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -97,33 +101,34 @@ kind: Service
 metadata:
   name: {{ $fullname }}
   labels:
-    {{- include "cloud-streams.labels" . | nindent 4 }}
+    {{- include "cloud-streams.labels" $ | nindent 4 }}
     app.kubernetes.io/component: broker
-  {{- with .Values.broker.service.annotations }}
+  {{- with $values.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.broker.service.type }}
+  type: {{ $values.service.type }}
   selector:
-    {{- include "cloud-streams.selectorLabels" $component | nindent 4 }}
+    {{- include "cloud-streams.instanceSelectorLabels" $selector | nindent 4 }}
   ports:
     - name: http
       port: 80
       targetPort: http
-{{- if .Values.broker.podDisruptionBudget.enabled }}
+{{- if $values.podDisruptionBudget.enabled }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ $fullname }}
   labels:
-    {{- include "cloud-streams.labels" . | nindent 4 }}
+    {{- include "cloud-streams.labels" $ | nindent 4 }}
     app.kubernetes.io/component: broker
 spec:
-  maxUnavailable: {{ .Values.broker.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ $values.podDisruptionBudget.maxUnavailable }}
   selector:
     matchLabels:
-      {{- include "cloud-streams.selectorLabels" $component | nindent 6 }}
+      {{- include "cloud-streams.instanceSelectorLabels" $selector | nindent 6 }}
+{{- end }}
 {{- end }}
 {{- end }}

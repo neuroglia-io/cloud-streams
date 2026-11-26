@@ -29,12 +29,12 @@ public class GatewayManagementApi(ILogger<ResourceManagementApi<Gateway>> logger
 {
 
     /// <inheritdoc/>
-    public virtual async Task<GatewayAdmissionTestResult> TestAdmissionAsync(string name, GatewayAdmissionTestRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<GatewayAdmissionTestResult> TestAdmissionAsync(string name, GatewayAdmissionTestRequest request, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         ArgumentNullException.ThrowIfNull(request);
         using var content = new StringContent(this.Serializer.SerializeToText(request), Encoding.UTF8, "application/json");
-        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/test") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name, @namespace)}/test") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<GatewayAdmissionTestResult>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))!;
     }
@@ -58,7 +58,7 @@ public class SchemaManagementApi(ILogger<ResourceManagementApi<Schema>> logger, 
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         ArgumentNullException.ThrowIfNull(schema);
         using var content = new StringContent(schema.ToJsonString(), Encoding.UTF8, "application/json");
-        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name)}/compatibility") { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var message = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, $"{this.GetResourceUri(name, null)}/compatibility") { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<SchemaCompatibilityResult>(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))!;
     }
