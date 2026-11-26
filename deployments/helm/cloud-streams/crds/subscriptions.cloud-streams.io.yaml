@@ -1,0 +1,271 @@
+# Generated from the definitions of src/core/CloudStreams.Core/Resources by CustomResourceDefinitionGenerator. Do not edit: see #276
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: subscriptions.cloud-streams.io
+spec:
+  scope: Namespaced
+  group: cloud-streams.io
+  names:
+    plural: subscriptions
+    singular: subscription
+    kind: Subscription
+    shortNames: [sub]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              partition:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [by-source, by-type, by-subject, by-correlation-id, by-causation-id]
+                  id:
+                    type: string
+                required: [type, id]
+              filter:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [attributes, expression]
+                  attributes:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  expression:
+                    type: string
+                oneOf:
+                - properties:
+                    type:
+                      enum: [attributes]
+                  required: [type, attributes]
+                - properties:
+                    type:
+                      enum: [expression]
+                  required: [type, expression]
+              mutation:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [expression, webhook]
+                  expression:
+                    description: A runtime expression that evaluates to the mutated cloud event, or an object whose values may be runtime expressions
+                    x-kubernetes-preserve-unknown-fields: true
+                  webhook:
+                    type: object
+                    properties:
+                      serviceUri:
+                        type: string
+                        format: uri
+                oneOf:
+                - properties:
+                    type:
+                      enum: [expression]
+                  required: [type, expression]
+                - properties:
+                    type:
+                      enum: [webhook]
+                  required: [type, webhook]
+              stream:
+                type: object
+                properties:
+                  offset:
+                    type: number
+              subscriber:
+                type: object
+                properties:
+                  endpoint:
+                    description: Where cloud events are delivered, if not to a sink. Either an address, whose scheme selects the transport (http, https, kafka, nats, amqp, amqps or cloudstreams), or an object with an address and how to authenticate to it
+                    x-kubernetes-preserve-unknown-fields: true
+                  rateLimit:
+                    type: number
+                    exclusiveMinimum: true
+                    minimum: 0
+                  retryPolicy:
+                    type: object
+                    properties:
+                      statusCodes:
+                        type: array
+                        items:
+                          type: number
+                      circuitBreaker:
+                        type: object
+                        properties:
+                          breakAfter:
+                            type: integer
+                          breakDuration:
+                            type: string
+                        required: [breakAfter, breakDuration]
+                      backoffDuration:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            enum: [constant, incremental, exponential]
+                          period:
+                            type: string
+                          exponent:
+                            type: number
+                            exclusiveMinimum: true
+                            description: The exponent of an exponential backoff. Required by exponential backoffs
+                            minimum: 0
+                          maxDelay:
+                            type: string
+                            description: The maximum amount of time, as an ISO 8601 duration, to wait between two retry attempts. Defaults to PT1H
+                        oneOf:
+                        - properties:
+                            type:
+                              enum: [constant]
+                          required: [type, period]
+                        - properties:
+                            type:
+                              enum: [incremental]
+                          required: [type, period]
+                        - properties:
+                            type:
+                              enum: [exponential]
+                          required: [type, period, exponent]
+                      maxAttempts:
+                        type: integer
+                        description: The maximum amount of retry attempts to perform. Defaults to 5. Set to a negative value to retry forever
+                    required: [backoffDuration]
+                  timeout:
+                    type: string
+                    description: The maximum amount of time, as an ISO 8601 duration, to wait for the subscriber to respond to a single delivery attempt. Defaults to the broker dispatch timeout
+                  ack:
+                    type: object
+                    description: Configures the deferred acknowledgement of the cloud events delivered to the subscriber, which defers an acknowledgement by responding 202 Accepted
+                    properties:
+                      timeout:
+                        type: string
+                        description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to the broker setting, or PT5M
+                  batch:
+                    type: object
+                    description: Delivers cloud events in batches, as application/cloudevents-batch+json. Excludes 'ordering', and deferred acknowledgements
+                    properties:
+                      maxSize:
+                        type: integer
+                        minimum: 1
+                        description: The maximum amount of cloud events per batch
+                      linger:
+                        type: string
+                        description: The maximum amount of time, as an ISO 8601 duration, to wait for a batch to fill once the subscription has caught up. Defaults to none
+                    required: [maxSize]
+                  ordering:
+                    type: object
+                    description: Delivers cloud events in parallel, in order per key. Excludes 'batch', and deferred acknowledgements
+                    properties:
+                      key:
+                        type: string
+                        pattern: "^[a-z0-9]+$"
+                        description: The context attribute whose value is the key cloud events are ordered by, e.g. subject
+                      maxConcurrency:
+                        type: integer
+                        minimum: 1
+                        description: The maximum amount of keys whose cloud events are delivered concurrently. Defaults to 8
+                    required: [key]
+                  sink:
+                    type: string
+                    description: The name of the sink to deliver cloud events to. Exactly one of endpoint and sink must be set
+              deadLetter:
+                type: object
+                description: Sets aside the cloud events the subscription fails to deliver, rather than faulting the subscription or dropping them
+                properties:
+                  endpoint:
+                    description: Where dead-lettered cloud events are sent, if not to a sink. If neither is set, they are stored in the subscription's dead-letter stream. Either an address, whose scheme selects the transport (http, https, kafka, nats, amqp, amqps or cloudstreams), or an object with an address and how to authenticate to it
+                    x-kubernetes-preserve-unknown-fields: true
+                  sink:
+                    type: string
+                    description: The name of the sink to send dead-lettered cloud events to. It cannot be combined with endpoint
+              suspended:
+                type: boolean
+                description: Whether or not the subscription is suspended. While it is, nothing is delivered, and its offset is kept, so that delivery resumes where it stopped
+            required: [subscriber]
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: [inactive, active, suspended]
+              observedGeneration:
+                type: number
+              stream:
+                type: object
+                properties:
+                  ackedOffset:
+                    type: number
+                  fault:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        format: uri
+                      title:
+                        type: string
+                      status:
+                        type: integer
+                      detail:
+                        type: string
+                      instance:
+                        type: string
+                        format: uri
+                      errors:
+                        type: array
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                    required: [type, title, status]
+                  faultedOffset:
+                    type: number
+              subscriber:
+                type: object
+                properties:
+                  state:
+                    type: string
+                    enum: [unknown, reachable, unreachable]
+                  reason:
+                    type: string
+                  pendingAck:
+                    type: object
+                    description: The cloud event whose acknowledgement the subscriber has deferred, if any
+                    properties:
+                      offset:
+                        type: number
+                      token:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                    required: [offset, token, expiresAt]
+                  lastAcknowledgedAt:
+                    type: string
+                    format: date-time
+        required: [spec]
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: ".status.phase"
+    - name: Subscriber
+      type: string
+      jsonPath: ".status.subscriber.state"
+    - name: Acked
+      type: integer
+      jsonPath: ".status.stream.ackedOffset"
+      description: The offset of the next event to deliver
+    - name: Suspended
+      type: boolean
+      jsonPath: ".spec.suspended"
+    - name: Age
+      type: date
+      jsonPath: ".metadata.creationTimestamp"

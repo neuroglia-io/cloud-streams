@@ -1,0 +1,349 @@
+# Generated from the definitions of src/core/CloudStreams.Core/Resources by CustomResourceDefinitionGenerator. Do not edit: see #276
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gateways.cloud-streams.io
+spec:
+  scope: Namespaced
+  group: cloud-streams.io
+  names:
+    plural: gateways
+    singular: gateway
+    kind: Gateway
+    shortNames: [gw]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              authorization:
+                type: object
+                properties:
+                  decisionStrategy:
+                    type: string
+                    enum: [consensus, minority, unanimous]
+                    default: unanimous
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        attributeName:
+                          type: string
+                        attributeValue:
+                          type: string
+                        maxSize:
+                          type: number
+                        from:
+                          type: string
+                          format: date-time
+                        to:
+                          type: string
+                          format: date-time
+                      anyOf:
+                      - properties:
+                          type:
+                            enum: [attribute]
+                        required: [type, attributeName]
+                      - properties:
+                          type:
+                            enum: [payload]
+                        required: [type, maxSize]
+                      - properties:
+                          type:
+                            enum: [timeOfDay]
+                        required: [type, from, to]
+                      - properties:
+                          type:
+                            enum: [temporary]
+                        required: [type, from, to]
+              validation:
+                type: object
+                properties:
+                  skip:
+                    type: boolean
+                  validationStrategy:
+                    type: string
+                    enum: [none, warn, fail]
+                    default: fail
+                  dataSchema:
+                    type: object
+                    properties:
+                      required:
+                        type: boolean
+                        default: true
+                      autoGenerate:
+                        type: boolean
+              sources:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uri:
+                      type: string
+                      format: uri
+                    authorization:
+                      type: object
+                      properties:
+                        decisionStrategy:
+                          type: string
+                          enum: [consensus, minority, unanimous]
+                          default: unanimous
+                        rules:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                              attributeName:
+                                type: string
+                              attributeValue:
+                                type: string
+                              maxSize:
+                                type: number
+                              from:
+                                type: string
+                                format: date-time
+                              to:
+                                type: string
+                                format: date-time
+                            anyOf:
+                            - properties:
+                                type:
+                                  enum: [attribute]
+                              required: [type, attributeName]
+                            - properties:
+                                type:
+                                  enum: [payload]
+                              required: [type, maxSize]
+                            - properties:
+                                type:
+                                  enum: [timeOfDay]
+                              required: [type, from, to]
+                            - properties:
+                                type:
+                                  enum: [temporary]
+                              required: [type, from, to]
+                    validation:
+                      type: object
+                      properties:
+                        skip:
+                          type: boolean
+                        validationStrategy:
+                          type: string
+                          enum: [none, warn, fail]
+                          default: fail
+                        dataSchema:
+                          type: object
+                          properties:
+                            required:
+                              type: boolean
+                              default: true
+                            autoGenerate:
+                              type: boolean
+                  required: [uri]
+              events:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    source:
+                      type: string
+                    type:
+                      type: string
+                    metadata:
+                      type: object
+                      properties:
+                        properties:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              strategy:
+                                type: string
+                                enum: [attribute, expression]
+                              attribute:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                                  value:
+                                    type: string
+                                required: [name]
+                              expression:
+                                type: string
+                            anyOf:
+                            - properties:
+                                strategy:
+                                  enum: [attribute]
+                              required: [name, attribute]
+                            - properties:
+                                strategy:
+                                  enum: [expression]
+                              required: [name, expression]
+                    schema:
+                      type: object
+                      description: The registered schema the data of the cloud events the configuration applies to must be valid against
+                      properties:
+                        name:
+                          type: string
+                        version:
+                          type: integer
+                          minimum: 1
+                          description: The version of the schema. Defaults to the latest one
+                      required: [name]
+                  required: [source, type]
+              splitHorizon:
+                type: object
+                description: Configures how the gateway detects and handles events that loop between gateways
+                properties:
+                  originAttribute:
+                    type: string
+                    pattern: "^[a-z0-9]+$"
+                    description: The name of the extension attribute used to track the gateways an event went through. Defaults to 'origin'
+                  trackingMode:
+                    type: string
+                    enum: [single, chain]
+                  evaluationMode:
+                    type: string
+                    enum: [last, contains, single]
+                  loopAction:
+                    type: string
+                    enum: [ignore, reject, forward]
+                  maxChainLength:
+                    type: integer
+                    minimum: 1
+                    description: The maximum amount of gateways an event may have gone through. Only applies when 'trackingMode' is 'chain'
+                  allowedOrigins:
+                    type: array
+                    items:
+                      type: string
+                  excludedOrigins:
+                    type: array
+                    items:
+                      type: string
+              service:
+                type: object
+                properties:
+                  uri:
+                    type: string
+                    format: uri
+                  healthChecks:
+                    type: object
+                    properties:
+                      request:
+                        type: object
+                        properties:
+                          method:
+                            type: string
+                          path:
+                            type: string
+                          headers:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          body:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        required: [method, path]
+                      interval:
+                        type: string
+                        pattern: "^P([0-9]+(?:[,\\.][0-9]+)?Y)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?D)?(?:T([0-9]+(?:[,\\.][0-9]+)?H)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?S)?)?$"
+                    required: [request]
+                required: [uri]
+              ingestion:
+                type: object
+                description: Configures how the gateway ingests cloud events
+                properties:
+                  maxRequestBodySize:
+                    type: integer
+                    minimum: 1
+                    description: The maximum size, in bytes, of an ingestion request. Defaults to the server's limit
+                  maxBatchSize:
+                    type: integer
+                    minimum: 1
+                    description: The maximum amount of cloud events a batch may contain. Unlimited if not set
+                  deduplication:
+                    type: object
+                    description: Deduplicates cloud events by source and id. Cloud events are not deduplicated if not set
+                    properties:
+                      window:
+                        type: string
+                        description: How long, as an ISO 8601 duration, a stored cloud event is remembered, and its duplicates ignored
+                    required: [window]
+                  rateLimits:
+                    type: array
+                    description: The limits of the rate at which cloud events may be published, counted in fixed windows shared by all replicas
+                    items:
+                      type: object
+                      properties:
+                        partition:
+                          type: string
+                          enum: [publisher, source]
+                        limit:
+                          type: integer
+                          minimum: 1
+                        period:
+                          type: string
+                          description: The period, as an ISO 8601 duration, the limit applies to. A long period, such as P1D, makes the limit a quota
+                      required: [partition, limit, period]
+                  feeds:
+                    type: array
+                    description: The Kafka topics, NATS subjects or AMQP queues the gateway consumes cloud events from, in addition to its HTTP endpoint. Each is the name of a feed, or a feed of the gateway's own, with a name and an endpoint
+                    items:
+                      x-kubernetes-preserve-unknown-fields: true
+                  publishers:
+                    type: array
+                    description: The publishers allowed to publish cloud events to the gateway. Anyone the cluster's ingestion authentication admits may publish if not set
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: The publisher's name, which identifies it in rate limits and metrics
+                        apiKey:
+                          type: object
+                          description: The API key that identifies the publisher, preferably read from a secret of the gateway's namespace with 'use'
+                          x-kubernetes-preserve-unknown-fields: true
+                        subject:
+                          type: string
+                          description: The subject ('sub' claim) of the bearer tokens that identify the publisher
+                        claims:
+                          type: object
+                          description: The claims the bearer tokens that identify the publisher must all have
+                          additionalProperties:
+                            type: string
+                        sources:
+                          type: array
+                          description: The patterns of the sources the publisher may publish cloud events of. Any if not set
+                          items:
+                            type: string
+                      required: [name]
+          status:
+            type: object
+            properties:
+              healthStatus:
+                type: string
+              lastHealthCheckAt:
+                type: string
+                format: date-time
+        required: [spec]
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Health
+      type: string
+      jsonPath: ".status.healthStatus"
+    - name: Age
+      type: date
+      jsonPath: ".metadata.creationTimestamp"

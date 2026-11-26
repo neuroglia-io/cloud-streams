@@ -39,7 +39,8 @@ public static class IResourceRepositoryExtensions
         try { if (await repository.GetAsync<Namespace>(@namespace, null, cancellationToken).ConfigureAwait(false) != null) return; }
         catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
         try { await repository.AddAsync(new Namespace() { Metadata = new() { Name = @namespace } }, false, cancellationToken).ConfigureAwait(false); }
-        catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { /* created by another process in the meantime */ }
+        // created by another process in the meantime, which the database reports as a conflict, whose status may be 400 (see #275)
+        catch (ProblemDetailsException ex) when (ex.Problem.IsConflict()) { }
     }
 
 }

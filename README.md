@@ -11,6 +11,7 @@
 - [Documentation](#documentation)
 	+ [Fundamentals](#fundamentals)
 	+ [Getting started](#getting-started)
+	+ [Kubernetes-native resources](#kubernetes-native-resources)
 	+ [Delivery and retries](#delivery-and-retries)
 	+ [Namespaces](#namespaces)
 	+ [Authentication](#authentication)
@@ -176,6 +177,46 @@ Note that, by default, subscriptions will only process cloud events published **
 The `Dashboard UI` is served by the `gateway` and is reachable at [http://localhost:8080](http://localhost:8080/).
 
 The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhost:8080/api/doc](http://localhost:8080/api/doc).
+
+### Kubernetes-native resources
+
+Resources are stored in Redis by default, which lets Cloud Streams run anywhere. On Kubernetes, they can be Kubernetes custom resources instead, managed with `kubectl`, GitOps tools and Kubernetes RBAC, as well as with the API and the dashboard (see #274):
+
+```yaml
+CloudStreams:
+  Resources:
+    Store: kubernetes                  # redis (default) or kubernetes
+    Kubernetes:
+      DefaultNamespace: cloud-streams  # the Kubernetes namespace of the 'default' namespace of Cloud Streams; 'default' by default
+      CreateNamespaces: true           # whether creating a namespace of Cloud Streams creates its Kubernetes namespace, or only labels an existing one
+      Context: docker-desktop          # outside of a cluster only: the kubeconfig context, or KubeConfigPath. In a cluster, the pod's service account is used
+```
+
+Redis is still required in this mode, for the partition index, deduplication and rate limits.
+
+**CustomResourceDefinitions.**
+- **Source:** they're generated from the definitions of Cloud Streams, and shipped in the chart's `crds/` directory. A test fails if they drift from the definitions. `CLOUDSTREAMS_UPDATE_CRDS=true dotnet test --filter CustomResourceDefinitionTests` regenerates them.
+- **Installation:** `helm install` installs them. On a cluster where you may not create CRDs, use `--skip-crds` in Redis mode, or have an administrator run `kubectl apply -f deployments/helm/cloud-streams/crds`.
+- **Startup check:** the applications never create nor update them, and fail at startup if they aren't installed.
+- **Schemas:** Kubernetes only accepts structural schemas. Fields that can be an address or an object, such as endpoints and feeds, are kept as they are by Kubernetes, and checked by the validators of Cloud Streams. The API and the dashboard keep serving the richer definitions.
+
+**Namespaces.** A namespace of Cloud Streams is a Kubernetes namespace labelled `cloud-streams.io/enabled=true`:
+- **Creating** a namespace labels its Kubernetes namespace, or creates it.
+- **Deleting** one removes the label, and keeps the Kubernetes namespace.
+- **Gateways and brokers** label, or create, the namespace they serve.
+
+**Usage.**
+
+```shell
+kubectl get subscriptions -A                  # with their phase, subscriber state and acknowledged offset
+kubectl apply -f subscription.yaml            # the same YAML as the dashboard and the API
+kubectl -n orders patch subscription billing --type merge -p '{"spec":{"suspended":true}}'
+```
+
+**Not covered yet:**
+- **Validation:** resources applied with `kubectl` aren't validated beyond their schema until the admission webhooks (#278) are in place.
+- **Deployment:** gateways and brokers are still deployed by the chart, until the operator (#279).
+- **Coordination:** leases and data-protection keys still use Redis (#280).
 
 ### Delivery and retries
 

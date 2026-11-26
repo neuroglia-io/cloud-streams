@@ -21,7 +21,7 @@
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.0.0" />
     <PackageReference Include="Grpc.Core.Api" Version="2.71.0" />
-	<PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.23.1" />
+	<PackageReference Include="Neuroglia.Data.Expressions.Abstractions" Version="4.24.0" />
     <PackageReference Include="Polly" Version="8.6.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.41" />
   </ItemGroup>

@@ -111,10 +111,25 @@ public class CloudStreamsApplicationBuilder
             options.AbortOnConnectFail = false;
             return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
         });
-        // registered in place of the base Redis database, whose updates are not atomic (see #161)
-        this.Services.AddSingleton<AtomicRedisDatabase>();
-        this.Services.AddSingleton<RedisDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
-        this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
+        // resources are stored in Redis, or as Kubernetes custom resources, which the configuration chooses (see #275)
+        var resourceStore = new ResourceStoreOptions();
+        configuration.GetSection(ResourceStoreOptions.ConfigurationSection).Bind(resourceStore);
+        resourceStore.Validate();
+        this.Services.AddSingleton(resourceStore);
+        if (resourceStore.UsesKubernetes)
+        {
+            this.Services.AddSingleton(resourceStore.Kubernetes);
+            this.Services.TryAddSingleton<k8s.IKubernetes>(_ => new k8s.Kubernetes(KubernetesClientConfigurationFactory.Create(resourceStore.Kubernetes)));
+            this.Services.AddSingleton<KubernetesResourceDatabase>();
+            this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<KubernetesResourceDatabase>());
+        }
+        else
+        {
+            // registered in place of the base Redis database, whose updates are not atomic (see #161)
+            this.Services.AddSingleton<AtomicRedisDatabase>();
+            this.Services.AddSingleton<RedisDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
+            this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<AtomicRedisDatabase>());
+        }
         // a single process at a time monitors the health of each gateway and broker (see #180)
         this.Services.TryAddSingleton<IHealthMonitorLeaseManager, RedisHealthMonitorLeaseManager>();
         this.Services.AddSingleton<IPartitionIndex, RedisPartitionIndex>();
@@ -130,7 +145,8 @@ public class CloudStreamsApplicationBuilder
         this.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventStore>());
         this.Services.TryAddSingleton<IDeadLetterStore, EventStoreDeadLetterStore>();
         this.Services.TryAddScoped<CloudEventSubscriptionManager>();
-        this.Services.AddHostedService<Application.Services.DatabaseInitializer>();
+        if (resourceStore.UsesKubernetes) this.Services.AddHostedService<KubernetesDatabaseInitializer>();
+        else this.Services.AddHostedService<Application.Services.DatabaseInitializer>();
         this.Services.AddSingleton<IAdmissionControl, AdmissionControl>();
         this.Services.AddSingleton<ResourceDryRun>();
         this.Services.AddSingleton<IVersionControl, VersionControl>();

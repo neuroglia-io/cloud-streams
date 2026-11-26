@@ -1,0 +1,181 @@
+# Generated from the definitions of src/core/CloudStreams.Core/Resources by CustomResourceDefinitionGenerator. Do not edit: see #276
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: brokers.cloud-streams.io
+spec:
+  scope: Namespaced
+  group: cloud-streams.io
+  names:
+    plural: brokers
+    singular: broker
+    kind: Broker
+    shortNames: [bkr]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              dispatch:
+                type: object
+                properties:
+                  retryPolicy:
+                    type: object
+                    properties:
+                      statusCodes:
+                        type: array
+                        items:
+                          type: number
+                      circuitBreaker:
+                        type: object
+                        properties:
+                          breakAfter:
+                            type: integer
+                          breakDuration:
+                            type: string
+                        required: [breakAfter, breakDuration]
+                      backoffDuration:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            enum: [constant, incremental, exponential]
+                          period:
+                            type: string
+                          exponent:
+                            type: number
+                            exclusiveMinimum: true
+                            description: The exponent of an exponential backoff. Required by exponential backoffs
+                            minimum: 0
+                          maxDelay:
+                            type: string
+                            description: The maximum amount of time, as an ISO 8601 duration, to wait between two retry attempts. Defaults to PT1H
+                        oneOf:
+                        - properties:
+                            type:
+                              enum: [constant]
+                          required: [type, period]
+                        - properties:
+                            type:
+                              enum: [incremental]
+                          required: [type, period]
+                        - properties:
+                            type:
+                              enum: [exponential]
+                          required: [type, period, exponent]
+                      maxAttempts:
+                        type: integer
+                        description: The maximum amount of retry attempts to perform. Defaults to 5. Set to a negative value to retry forever
+                    required: [backoffDuration]
+                  timeout:
+                    type: string
+                    description: The maximum amount of time, as an ISO 8601 duration, to wait for a subscriber to respond to a single delivery attempt. Defaults to PT100S
+                  ack:
+                    type: object
+                    description: Configures the deferred acknowledgement of the cloud events dispatched by the broker, unless overridden by the subscription
+                    properties:
+                      timeout:
+                        type: string
+                        description: The maximum amount of time, as an ISO 8601 duration, a cloud event whose acknowledgement has been deferred may remain unacknowledged before it is redelivered. Defaults to PT5M
+                      callbackUri:
+                        type: string
+                        format: uri
+                        description: The base uri, as reachable by subscribers, of the gateway that exposes the acknowledgement endpoints. When set, it is advertised to subscribers in the cloudstreams-ack-uri header
+                  sequencing:
+                    type: object
+                    properties:
+                      strategy:
+                        type: string
+                        enum: [none, attribute]
+                      attributeName:
+                        type: string
+                        pattern: "^[a-z0-9]{3,20}$"
+                      attributeConflictResolution:
+                        type: string
+                        enum: [overwrite, fallback]
+                      fallbackAttributeName:
+                        type: string
+                        pattern: "^[a-z0-9]{3,20}$"
+                    oneOf:
+                    - properties:
+                        strategy:
+                          enum: [none]
+                    - properties:
+                        strategy:
+                          enum: [attribute]
+                        attributeConflictResolution:
+                          enum: [overwrite]
+                      required:
+                      - strategy
+                      - attributeConflictResolution
+                      - attributeName
+                    - properties:
+                        strategy:
+                          enum: [attribute]
+                        attributeConflictResolution:
+                          enum: [fallback]
+                      required:
+                      - strategy
+                      - attributeConflictResolution
+                      - attributeName
+                      - fallbackAttributeName
+              selector:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              service:
+                type: object
+                properties:
+                  uri:
+                    type: string
+                    format: uri
+                  healthChecks:
+                    type: object
+                    properties:
+                      request:
+                        type: object
+                        properties:
+                          method:
+                            type: string
+                          path:
+                            type: string
+                          headers:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          body:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        required: [method, path]
+                      interval:
+                        type: string
+                        pattern: "^P([0-9]+(?:[,\\.][0-9]+)?Y)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?D)?(?:T([0-9]+(?:[,\\.][0-9]+)?H)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?S)?)?$"
+                    required: [request]
+                required: [uri]
+          status:
+            type: object
+            properties:
+              healthStatus:
+                type: string
+              lastHealthCheckAt:
+                type: string
+                format: date-time
+              observedGeneration:
+                type: number
+              stream:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+        required: [spec]
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Health
+      type: string
+      jsonPath: ".status.healthStatus"
+    - name: Age
+      type: date
+      jsonPath: ".metadata.creationTimestamp"
