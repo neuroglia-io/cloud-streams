@@ -67,6 +67,25 @@ public class CloudEventRecordExtensionsTests
     }
 
     /// <summary>
+    /// The CloudEvents specification defines the source as a URI-reference, so a relative one such as <c>infra-manager.example.com</c> is valid, and must be delivered
+    /// </summary>
+    [Theory]
+    [InlineData("infra-manager.example.com")]
+    [InlineData("/sensors/tn-1234567/alerts")]
+    [InlineData("urn:event:from:myapi/resource/123")]
+    public void ToCloudEvent_Should_Support_A_Relative_Source(string source)
+    {
+        // arrange
+        var record = CreateRecord(attributes => attributes[CloudEventAttributes.Source] = source);
+
+        // act
+        var e = record.ToCloudEvent(CloudEventSequencingConfiguration.Default);
+
+        // assert
+        Assert.Equal(source, e.Source.OriginalString);
+    }
+
+    /// <summary>
     /// Regression guard for pull request #71: the conversion assumed the event's data was always a JSON object, and threw when it was an array.
     /// </summary>
     [Fact]
