@@ -243,7 +243,7 @@ public class ResourceEditorStore<TResource>(ICloudStreamsCoreApiClient resourceM
                 yamlSerializer.ConvertToJson(textEditorValue);
             this.SetEditorValue(text);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             await monacoEditorHelper.ChangePreferredLanguageAsync(language == PreferredLanguage.YAML ? PreferredLanguage.JSON : PreferredLanguage.YAML);
         }

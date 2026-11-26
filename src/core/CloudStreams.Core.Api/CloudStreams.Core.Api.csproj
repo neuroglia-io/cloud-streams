@@ -21,6 +21,10 @@
 	<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 	<DockerfileContext>..\..\..</DockerfileContext>
 	<ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+	<!-- the package is referenced as a library, by the gateway: the content of the application, such as the WebAssembly debugging proxy, does not belong in it -->
+	<IncludeContentInPack>false</IncludeContentInPack>
+	<!-- OpenTelemetry.Instrumentation.StackExchangeRedis has no stable release yet -->
+	<NoWarn>$(NoWarn);NU5104</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,7 +36,7 @@
 	<PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.21" />
 	<PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="9.0.21" />
 	<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.2" />
-	<PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.1.0-preview.11" />
+	<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
 	<PackageReference Include="Neuroglia.Data.Infrastructure.EventSourcing.EventStore" Version="4.23.1" />
 	<PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented.Redis" Version="4.23.1" />
 	<PackageReference Include="Neuroglia.Mediation.AspNetCore" Version="4.23.1" />

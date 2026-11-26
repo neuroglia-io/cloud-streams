@@ -99,7 +99,7 @@ public sealed class TransportTests(CloudStreamsFixture fixture, ITestOutputHelpe
             try
             {
                 var events = await (await fixture.Api.CloudEvents.Stream.ReadStreamAsync(new(new PartitionReference(CloudEventPartitionType.ByType, type)), null, timeout.Token)).ToListAsync(timeout.Token);
-                if (events.Count >= count) return events;
+                if (events.Count >= count) return [.. events.OfType<CloudEvent>()];
             }
             catch (Neuroglia.ProblemDetailsException ex) when (ex.Problem.Status == 404) { }
             await Task.Delay(500, timeout.Token);

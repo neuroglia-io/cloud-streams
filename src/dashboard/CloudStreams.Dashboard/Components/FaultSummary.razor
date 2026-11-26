@@ -1,0 +1,21 @@
+@namespace CloudStreams.Dashboard.Components
+
+@* The fault of a subscription, as shown to confirm resuming it: the reason of the fault, verbatim, is set apart from the explanation *@
+
+<p class="mb-2">The subscription is @(Suspended ? "suspended and " : "")faulted:</p>
+<pre class="small bg-body-tertiary border rounded p-2 mb-3" style="white-space: pre-wrap; word-break: break-word; max-height: 40vh;"><code>@(Fault?.Detail ?? Fault?.Title)</code></pre>
+<p class="mb-0">Resuming clears the fault and retries the event that caused it. To skip that event instead, open the subscription and skip it.</p>
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the fault of the subscription
+    /// </summary>
+    [Parameter] public ProblemDetails? Fault { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether the subscription is also suspended
+    /// </summary>
+    [Parameter] public bool Suspended { get; set; }
+
+}

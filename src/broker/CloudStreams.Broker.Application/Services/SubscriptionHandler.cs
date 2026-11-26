@@ -99,7 +99,6 @@ public class SubscriptionHandler
         this.DeadLetters = deadLetters;
         this.Pipeline = new(expressionEvaluator, cloudEventValidators, httpClient, serializer);
         this.Client = delivery ?? new(httpClient);
-        this.Acknowledgements = new(delta => this.Metrics.AddPendingAcknowledgements(this.Subscription.GetQualifiedName(), this.GetStreamName(), delta), this.OnAcknowledgementTimeoutAsync);
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.HostApplicationLifetime = hostApplicationLifetime;
         this.Serializer = serializer;
@@ -115,6 +114,7 @@ public class SubscriptionHandler
         this.Metrics = metrics;
         this.Options = options.Value;
         this.Subscription = subscription;
+        this.Acknowledgements = new(delta => this.Metrics.AddPendingAcknowledgements(this.Subscription.GetQualifiedName(), this.GetStreamName(), delta), this.OnAcknowledgementTimeoutAsync);
         this.StatusReporter = new(resourceRepository, this.Logger, subscription);
         this.DefaultRetryPolicy = this.Broker.Resource.Spec.Dispatch?.RetryPolicy ?? new HttpClientRetryPolicy();
         this._applicationStoppingRegistration = hostApplicationLifetime.ApplicationStopping.Register(this.OnApplicationStopping);
@@ -782,6 +782,7 @@ public class SubscriptionHandler
         activity?.SetTag("catchup", catchUpWhenAvailable);
         activity?.SetTag("reason", initialFailure.Message);
         var streamName = this.GetStreamName();
+        // described as "'uri'" or "sink 'name'"
         var subscriberUri = DeliveryTarget.Of(this.Subscription.Spec.Subscriber, this.Subscription.GetNamespace()).ToString();
         var schedule = new DeliveryRetrySchedule(this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy);
         var lastFailure = initialFailure;
@@ -792,8 +793,8 @@ public class SubscriptionHandler
             await this.SetSubscriberStateAsync(SubscriberState.Unreachable, lastFailure.Message).ConfigureAwait(false);
             while (true)
             {
-                if (!schedule.IsRetryable(lastFailure)) throw new HttpRequestException($"Failed to deliver the cloud event at offset '{offset}' to subscriber '{subscriberUri}': the subscriber responded with status code '{lastFailure.StatusCode}', which the retry policy is not configured to retry. {lastFailure.Message}. {DescribeHowToResume(offset)}", lastFailure, lastFailure.StatusCode);
-                if (schedule.IsExhausted) throw new HttpRequestException($"Failed to deliver the cloud event at offset '{offset}' to subscriber '{subscriberUri}' after {schedule.Attempts + 1} attempt(s). Last failure: {lastFailure.Message}. {DescribeHowToResume(offset)}", lastFailure, lastFailure.StatusCode);
+                if (!schedule.IsRetryable(lastFailure)) throw new HttpRequestException($"Failed to deliver the cloud event at offset '{offset}' to {subscriberUri}: the subscriber responded with status code '{lastFailure.StatusCode}', which the retry policy is not configured to retry. {lastFailure.Message}. {DescribeHowToResume(offset)}", lastFailure, lastFailure.StatusCode);
+                if (schedule.IsExhausted) throw new HttpRequestException($"Failed to deliver the cloud event at offset '{offset}' to {subscriberUri} after {schedule.Attempts + 1} attempt(s). Last failure: {lastFailure.Message}. {DescribeHowToResume(offset)}", lastFailure, lastFailure.StatusCode);
                 var consecutiveFailures = schedule.ConsecutiveFailures;
                 var delay = schedule.Next(out var circuitBroken);
                 if (circuitBroken) this.Logger.LogWarning("The circuit of subscription '{subscription}' has been broken after {failures} consecutive delivery failures. Delivery will resume in {delay}", this.Subscription.GetQualifiedName(), consecutiveFailures, delay);
@@ -887,7 +888,7 @@ public class SubscriptionHandler
     /// <exception cref="HttpRequestException">The dead-letter service could not be reached, or did not accept the dead letter</exception>
     protected virtual async Task SendDeadLetterAsync(DeliveryTarget target, DeadLetter deadLetter)
     {
-        var reason = deadLetter.Reason.Detail ?? deadLetter.Reason.Title;
+        var reason = deadLetter.Reason.Detail ?? deadLetter.Reason.Title ?? ProblemDetailsExtensions.GetDefaultTitle(deadLetter.Reason.Status);
         if (reason.Length > 1024) reason = reason[..1024];
         for (var attempt = 1; ; attempt++)
         {
@@ -917,7 +918,7 @@ public class SubscriptionHandler
         }
     }
 
-    static string DescribeHowToResume(ulong offset) => $"Set the subscription's 'spec.stream.offset' to '{offset}' to retry delivering the event, or to '{offset + 1}' to skip it";
+    static string DescribeHowToResume(ulong offset) => $"Resume the subscription to retry delivering the event at offset '{offset}', or skip it to resume with the next one";
 
     /// <summary>
     /// Gets the maximum amount of time to wait for the subscriber to respond to a single delivery attempt

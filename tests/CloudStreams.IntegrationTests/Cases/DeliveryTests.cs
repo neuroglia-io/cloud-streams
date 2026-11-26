@@ -113,6 +113,25 @@ public sealed class DeliveryTests(CloudStreamsFixture fixture, ITestOutputHelper
         Assert.Equal(5, endpoint.Deliveries.Count);
     }
 
+    /// <summary>
+    /// The CloudEvents specification defines the source as a URI-reference: a relative one, such as a host name, is valid, and must be delivered
+    /// </summary>
+    [Fact]
+    public async Task Events_With_A_Relative_Source_Should_Be_Delivered()
+    {
+        // arrange
+        var source = new Uri($"{Name()}.e2e.cloud-streams.io", UriKind.Relative);
+        var endpoint = fixture.Subscriber.Register(Name());
+        await SubscribeAsync(Name(), source, endpoint);
+
+        // act
+        await PublishAsync(source, 3);
+
+        // assert
+        Assert.Equal(Expected(3), Ids(await endpoint.WaitForAsync(3)));
+        await WaitForAsync(Name(), s => s.Status?.Stream?.AckedOffset == 3 && s.Status.Stream.Fault == null, "all 3 events acknowledged");
+    }
+
     [Fact]
     public async Task A_New_Subscription_Should_Catch_Up_With_Events_Published_Before_It()
     {

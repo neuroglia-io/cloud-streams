@@ -42,7 +42,7 @@ public class SubscriptionHandlerRetryPolicyTests
         Assert.Equal(4, context.Metrics.TotalDeliveryFailures);
         var fault = context.Patches.Operations.Single(o => o.Path.ToString() == "/status/stream/fault").Value!.ToString();
         Assert.Contains("after 4 attempt(s)", fault);
-        Assert.Contains("to skip it", fault);
+        Assert.Contains("skip it to resume with the next one", fault);
         // the offset of the event is recorded with the fault, so that it can be skipped (see #224)
         Assert.Equal("41", context.Patches.Operations.Single(o => o.Path.ToString() == "/status/stream/faultedOffset").Value!.ToString());
         Assert.False(context.Patches.Touched("/status/stream/ackedOffset"));

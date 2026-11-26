@@ -31,6 +31,7 @@ public interface ICloudEventSink
     /// Delivers the specified cloud events, in order, and waits for the transport to confirm that it has received them
     /// </summary>
     /// <param name="address">The address to deliver the cloud events to</param>
+    /// <param name="credentials">The credentials used to authenticate to the transport, if any</param>
     /// <param name="events">The cloud events to deliver</param>
     /// <param name="headers">The headers to send with each cloud event, such as the name of the subscription and the offset</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>, which bounds how long to wait for the confirmation</param>
@@ -55,6 +56,7 @@ public interface ICloudEventFeedConsumer
     /// Consumes the messages of the specified channel until cancelled
     /// </summary>
     /// <param name="address">The address of the channel to consume</param>
+    /// <param name="credentials">The credentials used to authenticate to the transport, if any</param>
     /// <param name="group">The name of the group of consumers that share the consumption of the feed, i.e. the name of the gateway</param>
     /// <param name="name">A name that uniquely identifies the consumer within its group, e.g. to name a durable NATS JetStream consumer</param>
     /// <param name="handler">A function that handles each message, and returns whether it should be acknowledged. A message that is not is consumed again, later</param>

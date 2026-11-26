@@ -52,7 +52,7 @@ public class ResourceDryRunTests
 
         // assert - the repository used to persist resources created with a dry run
         Assert.Equal(200, result.Status);
-        await repository.DidNotReceiveWithAnyArgs().AddAsync(default!, default, default, default, default, default);
+        await repository.DidNotReceiveWithAnyArgs().AddAsync(default!, default!, default!, default!, default, default);
     }
 
     [Fact]

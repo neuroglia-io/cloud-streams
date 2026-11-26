@@ -528,7 +528,7 @@ public abstract class ResourceManagementComponent<TComponent, TStore, TState, TR
 /// <summary>
 /// Represents the base class for all components used to manage <see cref="IResource"/>s
 /// </summary>
-/// <typeparam name="TStore">The type of the component's <see cref="Store"/></typeparam>
+/// <typeparam name="TStore">The type of the component's store</typeparam>
 /// <typeparam name="TState">The type of the component's state</typeparam>
 /// <typeparam name="TResource">The type of <see cref="IResource"/> to manage</typeparam>
 public abstract class ResourceManagementComponent<TStore, TState, TResource>

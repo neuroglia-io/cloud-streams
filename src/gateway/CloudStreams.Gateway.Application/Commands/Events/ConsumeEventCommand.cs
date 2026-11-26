@@ -119,8 +119,8 @@ public class ConsumeCloudEventCommandHandler(ILogger<ConsumeCloudEventCommandHan
         try
         {
             var gateway = command.Gateway;
-            var scope = gateway?.GetQualifiedName();
-            var ingestion = gateway?.Spec.Ingestion;
+            var scope = gateway.GetQualifiedName();
+            var ingestion = gateway.Spec.Ingestion;
             if (scope != null && ingestion?.RateLimits is { Count: > 0 } rateLimits)
             {
                 var decision = await rateLimiter.EvaluateAsync(scope, e, command.Publisher, rateLimits, cancellationToken).ConfigureAwait(false);

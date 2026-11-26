@@ -29,6 +29,8 @@ namespace CloudStreams.Core.Api.Tools;
 /// </summary>
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="mediator">The service used to mediate calls</param>
+/// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
+/// <param name="httpContextAccessor">The service used to access the current HTTP context, whose user the tools authorize</param>
 [McpServerToolType]
 public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator mediator, IServiceProvider serviceProvider, IHttpContextAccessor httpContextAccessor)
 {

@@ -329,9 +329,9 @@ public static class CloudEventSubscriptionFilter
     /// <summary>
     /// Compiles the specified conditions into attribute filters, if each applies to a different attribute, and is a match, or a choice between exact values
     /// </summary>
-    static Dictionary<string, string?>? ToAttributeFilters(IReadOnlyList<Node> conditions)
+    static Dictionary<string, string>? ToAttributeFilters(IReadOnlyList<Node> conditions)
     {
-        var attributes = new Dictionary<string, string?>();
+        var attributes = new Dictionary<string, string>();
         foreach (var condition in conditions)
         {
             string attribute, pattern;

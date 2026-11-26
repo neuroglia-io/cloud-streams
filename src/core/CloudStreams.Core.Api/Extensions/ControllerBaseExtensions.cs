@@ -37,7 +37,7 @@ public static class ControllerBaseExtensions
         var error = result.Errors?.FirstOrDefault();
         var problem = error == null
             ? new Neuroglia.ProblemDetails(new Uri($"https://httpstatuses.io/{result.Status}"), ReasonPhrases.GetReasonPhrase(result.Status), result.Status)
-            : new Neuroglia.ProblemDetails(error.Type, error.Title, error.Status, error.Detail, error.Instance, error.Errors?.ToDictionary(e => e.Key, e => e.Value));
+            : error.ToProblemDetails();
         return new ObjectResult(problem) { StatusCode = result.Status, ContentTypes = { "application/problem+json" } };
     }
 

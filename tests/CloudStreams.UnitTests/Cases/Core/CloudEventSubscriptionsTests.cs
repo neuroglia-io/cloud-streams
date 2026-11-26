@@ -144,7 +144,7 @@ public class CloudEventSubscriptionsTests
             {
                 Partition = new(CloudEventPartitionType.BySource, "https://orders.example.com"),
                 Subscriber = new() { Endpoint = new Uri("https://subscriber.example.com/events") },
-                Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string?>() { ["type"] = "^order\\.placed\\z", ["subject"] = "^eu/", ["region"] = "(eu|us)" } },
+                Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string>() { ["type"] = "^order\\.placed\\z", ["subject"] = "^eu/", ["region"] = "(eu|us)" } },
                 Stream = new() { Offset = 0 }
             }
         };

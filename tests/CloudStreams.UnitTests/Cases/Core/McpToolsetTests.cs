@@ -31,6 +31,24 @@ namespace CloudStreams.UnitTests.Cases.Core;
 public class McpToolsetTests
 {
 
+    /// <summary>
+    /// The SDK binds tool arguments with its own options, whose enum converter ignores the <c>EnumMember</c> values of enums: an agent listing the partitions
+    /// <c>by-source</c> got an error
+    /// </summary>
+    [Theory]
+    [InlineData("by-source", CloudEventPartitionType.BySource)]
+    [InlineData("by-correlation-id", CloudEventPartitionType.ByCorrelationId)]
+    public void Tool_Arguments_Should_Bind_Enums_By_Their_EnumMember_Value(string value, CloudEventPartitionType expected)
+    {
+        // act
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<CloudEventPartitionType>($"\"{value}\"", ICloudStreamsApiBuilderExtensions.McpSerializerOptions);
+        var written = System.Text.Json.JsonSerializer.Serialize(expected, ICloudStreamsApiBuilderExtensions.McpSerializerOptions);
+
+        // assert
+        Assert.Equal(expected, parsed);
+        Assert.Equal($"\"{value}\"", written);
+    }
+
     const string Reader = "reader";
     const string Operator = "operator";
 
@@ -87,7 +105,7 @@ public class McpToolsetTests
 
         // assert
         Assert.Same(Subscription, replayed);
-        await mediator.Received(1).ExecuteAsync(Arg.Is<ReplaySubscriptionCommand>(c => c.Name == "orders" && c.From == from), Arg.Any<CancellationToken>());
+        await mediator.Received(1).ExecuteAsync(Arg.Is<ReplaySubscriptionCommand>(c => c!.Name == "orders" && c.From == from), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -133,7 +151,7 @@ public class McpToolsetTests
 
         // assert - the event is published as the calling user
         Assert.Equal(outcome, result);
-        await publisher.Received(1).PublishAsync(Event, Arg.Is<ClaimsPrincipal>(u => u.Identity!.Name == "alice"), Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishAsync(Event, Arg.Is<ClaimsPrincipal>(u => u!.Identity!.Name == "alice"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

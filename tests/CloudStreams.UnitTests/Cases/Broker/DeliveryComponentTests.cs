@@ -244,7 +244,7 @@ public class DeliveryComponentTests
     {
         // arrange
         var pipeline = new SubscriptionEventPipeline(Substitute.For<IExpressionEvaluator>(), [], new HttpClient(), Neuroglia.Serialization.Json.JsonSerializer.Default);
-        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") }, Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string?>() { ["type"] = "^com\\.cloud-streams\\.test" } } } };
+        var subscription = new Subscription() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") }, Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string>() { ["type"] = "^com\\.cloud-streams\\.test" } } } };
 
         // act and assert
         Assert.True(await pipeline.FiltersAsync(subscription, BrokerTestContext.CreateRecord(1)));

@@ -27,7 +27,7 @@ public sealed class IngestionRedisTests
     : IAsyncLifetime
 {
 
-    readonly RedisContainer _redis = new RedisBuilder().WithImage("redis:7.4-alpine").Build();
+    readonly RedisContainer _redis = new RedisBuilder("redis:7.4-alpine").Build();
     ConnectionMultiplexer _connection = null!;
 
     public async Task InitializeAsync()

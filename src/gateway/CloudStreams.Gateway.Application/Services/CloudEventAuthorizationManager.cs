@@ -21,6 +21,7 @@ namespace CloudStreams.Gateway.Application.Services;
 /// Represents the default implementation of the <see cref="ICloudEventAuthorizationManager"/> interface
 /// </summary>
 /// <param name="serializer">The service used to serialize/deserialize objects to/from JSON</param>
+/// <param name="timeProvider">The service used to get the current time, which defaults to the system clock</param>
 public class CloudEventAuthorizationManager(IJsonSerializer serializer, TimeProvider? timeProvider = null)
     : ICloudEventAuthorizationManager
 {

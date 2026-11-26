@@ -14,7 +14,7 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Resources;
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Transport;
+using ModelContextProtocol.Protocol;
 using Neuroglia.Data.Infrastructure.ResourceOriented;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -49,9 +49,15 @@ public sealed class McpTests(CloudStreamsFixture fixture, ITestOutputHelper outp
         return Task.CompletedTask;
     }
 
-    Task<IMcpClient> ConnectAsync() => McpClientFactory.CreateAsync(new SseClientTransport(new SseClientTransportOptions() { Endpoint = new(fixture.GatewayUri, "mcp/sse"), Name = "e2e" }));
+    // agents connect with the Streamable HTTP transport, at /mcp
+    Task<McpClient> ConnectAsync() => McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions()
+    {
+        Endpoint = new(fixture.GatewayUri, "mcp"),
+        TransportMode = HttpTransportMode.StreamableHttp,
+        Name = "e2e"
+    }));
 
-    static string Text(ModelContextProtocol.Protocol.Types.CallToolResponse response) => string.Concat(response.Content.Select(c => c.Text));
+    static string Text(CallToolResult result) => string.Concat(result.Content.OfType<TextContentBlock>().Select(c => c.Text));
 
     [Fact]
     public async Task Agents_Should_Discover_The_Tools()
@@ -89,7 +95,7 @@ public sealed class McpTests(CloudStreamsFixture fixture, ITestOutputHelper outp
         // assert
         Assert.Contains("stored", Text(published));
         Assert.Equal("mcp-0", delivery.Id);
-        Assert.Equal(true, JsonDocument.Parse(Text(suspended)).RootElement.GetProperty("spec").GetProperty("suspended").GetBoolean());
+        Assert.True(JsonDocument.Parse(Text(suspended)).RootElement.GetProperty("spec").GetProperty("suspended").GetBoolean());
         Assert.Contains(JsonDocument.Parse(Text(listed)).RootElement.EnumerateArray(), s => s.GetProperty("name").GetString() == Name());
         Assert.Contains(Source().OriginalString, Text(partitions));
     }

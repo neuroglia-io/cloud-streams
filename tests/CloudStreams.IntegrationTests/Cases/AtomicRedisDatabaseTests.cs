@@ -38,7 +38,7 @@ public sealed class AtomicRedisDatabaseTests
     : IAsyncLifetime
 {
 
-    readonly RedisContainer _redis = new RedisBuilder().WithImage("redis:7.4-alpine").Build();
+    readonly RedisContainer _redis = new RedisBuilder("redis:7.4-alpine").Build();
     ConnectionMultiplexer _connection = null!;
     AtomicRedisDatabase _database = null!;
 

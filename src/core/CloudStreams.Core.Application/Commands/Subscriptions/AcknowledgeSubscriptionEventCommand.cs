@@ -97,7 +97,7 @@ public class AcknowledgeSubscriptionEventCommandHandler(IResourceRepository reso
         }
         catch (ProblemDetailsException ex) when (ex.Problem.Status is >= 400 and < 500)
         {
-            return new OperationResult<Subscription>(ex.Problem.Status, errors: [new Error(ex.Problem.Type, ex.Problem.Title, ex.Problem.Status, ex.Problem.Detail)]);
+            return new OperationResult<Subscription>(ex.Problem.Status, errors: [ex.Problem.ToError()]);
         }
     }
 

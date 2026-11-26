@@ -25,12 +25,15 @@ public class PartitionReferenceExtensionsTests
 {
 
     /// <summary>
-    /// Regression guard for issue #66: partition ids containing <c>/</c> could not be resolved. The id must survive verbatim into the stream name.
+    /// Regression guard for issue #66: partition ids containing <c>/</c> could not be resolved. The id must survive verbatim into the stream name. A source is a
+    /// URI-reference: a relative one, such as a host name, faulted every subscription to its partition in 0.82.0
     /// </summary>
     [Theory]
     [InlineData("https://server.com")]
     [InlineData("https://server.com/some/nested/path")]
     [InlineData("https://neuroglia.io/demo/api/v4")]
+    [InlineData("infra-manager.example.com")]
+    [InlineData("/sensors/tn-1234567/alerts")]
     public void GetStreamName_Should_Preserve_A_Source_Containing_Path_Segments(string source)
     {
         // arrange

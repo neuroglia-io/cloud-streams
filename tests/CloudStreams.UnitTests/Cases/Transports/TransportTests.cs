@@ -137,7 +137,7 @@ public class TransportTests
 
         // assert
         Assert.Equal(HttpStatusCode.OK, status);
-        await sink.Received(1).SendAsync(Arg.Is<TransportAddress>(a => a.Path == "orders"), null, Arg.Is<IReadOnlyList<CloudEvent>>(e => e.Count == 2 && e[0].Id == "1"), Arg.Is<IReadOnlyList<KeyValuePair<string, string>>>(h => h.Single().Value == "orders"), Arg.Any<CancellationToken>());
+        await sink.Received(1).SendAsync(Arg.Is<TransportAddress>(a => a!.Path == "orders"), null, Arg.Is<IReadOnlyList<CloudEvent>>(e => e!.Count == 2 && e[0].Id == "1"), Arg.Is<IReadOnlyList<KeyValuePair<string, string>>>(h => h!.Single().Value == "orders"), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public class TransportTests
 
         // assert
         Assert.True(acknowledged);
-        await mediator.Received(1).ExecuteAsync(Arg.Is<ConsumeEventCommand>(c => c.Publisher == IngestionFeedService.PublisherPrefix + "orders" && c.CloudEvent.Id == "1"), Arg.Any<CancellationToken>());
+        await mediator.Received(1).ExecuteAsync(Arg.Is<ConsumeEventCommand>(c => c!.Publisher == IngestionFeedService.PublisherPrefix + "orders" && c.CloudEvent.Id == "1"), Arg.Any<CancellationToken>());
     }
 
     [Theory]

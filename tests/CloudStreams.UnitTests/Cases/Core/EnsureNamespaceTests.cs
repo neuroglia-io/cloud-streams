@@ -34,7 +34,7 @@ public class EnsureNamespaceTests
         await repository.EnsureNamespaceAsync("tenant-a");
 
         // assert
-        await repository.Received(1).AddAsync(Arg.Is<IResource>(r => r.GetName() == "tenant-a"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), false, Arg.Any<CancellationToken>());
+        await repository.Received(1).AddAsync(Arg.Is<IResource>(r => r!.GetName() == "tenant-a"), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
