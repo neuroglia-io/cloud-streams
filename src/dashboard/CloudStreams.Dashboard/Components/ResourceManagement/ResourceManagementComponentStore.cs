@@ -109,14 +109,21 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
             InternalResources,
             SearchTerm.Throttle(TimeSpan.FromMilliseconds(100)).StartWith(""),
             Sort,
-            (resources, searchTerm, sort) =>
+            ResourcePredicate,
+            (resources, searchTerm, sort, predicate) =>
             {
                 if (resources == null) return [];
                 IEnumerable<TResource> filtered = string.IsNullOrWhiteSpace(searchTerm) ? resources : resources.Where(r => r.GetName().Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+                if (predicate != null) filtered = filtered.Where(predicate);
                 return new EquatableList<TResource>(this.SortResources(filtered, sort.Column, sort.Descending));
             }
          )
         .DistinctUntilChanged();
+
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe the predicate the listed resources must match, besides the search term, if any
+    /// </summary>
+    protected virtual IObservable<Func<TResource, bool>?> ResourcePredicate => Observable.Return<Func<TResource, bool>?>(null);
 
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the column the resources are sorted by, and in which order

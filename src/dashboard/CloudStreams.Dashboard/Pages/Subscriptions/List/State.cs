@@ -30,4 +30,9 @@ public record SubscriptionListState
     /// Gets/sets the lengths of each partition
     /// </summary>
     public EquatableDictionary<string, ulong> PartitionLengths { get; set; } = [];
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether only the subscriptions that need attention, which are faulted or suspended, are listed (see #272)
+    /// </summary>
+    public bool NeedingAttentionOnly { get; set; }
 }

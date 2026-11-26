@@ -4,7 +4,7 @@
 @* The toolbar of resource lists: search, label filter, import, and the actions on selected resources (see #227) *@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
     <div class="d-flex align-items-baseline gap-3">
-        <h2 class="h4 mb-0">@Title</h2>
+        <h2 class="h4 mb-0">@Title@if (HelpTopic != null) {<HelpPopover Topic="HelpTopic" />}</h2>
         <span class="text-secondary small" role="status">@Count @(Count == 1 ? "item" : "items")@(SelectedCount > 0 ? $", {SelectedCount} selected" : string.Empty)</span>
     </div>
     <div class="d-flex flex-wrap align-items-start gap-2">
@@ -57,6 +57,11 @@
     /// Gets/sets the title of the list, e.g. "Subscriptions"
     /// </summary>
     [Parameter, EditorRequired] public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the help topic of the listed resources, which the information button next to the title summarizes (see #271)
+    /// </summary>
+    [Parameter] public HelpTopic? HelpTopic { get; set; }
 
     /// <summary>
     /// Gets/sets the amount of resources listed

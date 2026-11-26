@@ -1,0 +1,285 @@
+@namespace CloudStreams.Dashboard.Pages.Help
+@page "/help"
+@using CloudStreams.Dashboard.Components.Help
+@implements IDisposable
+@inject NavigationManager NavigationManager
+@inject CommonJsInterop JsInterop
+
+@* The dashboard's help: one section per concept of Cloud Streams, whose summary is the contextual help of the pages that show it (see #271) *@
+
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Overview">Help</ApplicationTitle>
+
+<div class="container-fluid px-0" style="max-width: 60rem;">
+    <h2 class="h4">Help</h2>
+    <p class="text-secondary">What Cloud Streams is made of, and how to use it. Each page of the dashboard links to the section it relates to, with the <i class="bi bi-info-circle" aria-hidden="true"></i><span class="visually-hidden">information</span> button next to its title, and from the <i class="bi bi-question-circle" aria-hidden="true"></i><span class="visually-hidden">help</span> menu at the top right.</p>
+
+    <nav aria-label="Help topics" class="mb-4">
+        <ul class="list-inline mb-0">
+            @foreach (var topic in HelpTopicCatalog.All)
+            {
+                <li class="list-inline-item"><a href="@topic.Href">@topic.Title</a></li>
+            }
+        </ul>
+    </nav>
+
+    @Section(HelpTopicCatalog.Overview, @<text>
+        <ol class="list-unstyled d-flex flex-wrap align-items-center gap-2 small mb-3" aria-label="The flow of events">
+            @foreach (var (step, index) in FlowSteps.Select((s, i) => (s, i)))
+            {
+                <li class="d-flex align-items-center gap-2">
+                    <span class="border rounded bg-body-tertiary px-3 py-2 text-center d-block" style="min-width: 7rem;">
+                        <strong class="d-block">@step.Name</strong>
+                        <span class="text-secondary">@step.Does</span>
+                    </span>
+                    @if (index < FlowSteps.Length - 1)
+                    {
+                        <i class="bi bi-arrow-right fs-5 text-secondary" aria-hidden="true"></i>
+                    }
+                </li>
+            }
+        </ol>
+        <ul>
+            <li><strong>Gateways</strong> receive events, admit or refuse them, and record them in the <strong>stream</strong>.</li>
+            <li>The stream is indexed in <strong>partitions</strong>, by source, type, subject, correlation id and causation id.</li>
+            <li><strong>Brokers</strong> deliver the events of the stream, or of a partition, to the subscribers of <strong>subscriptions</strong>, which are endpoints or <strong>sinks</strong>.</li>
+            <li>Every resource, except schemas, belongs to a <strong>namespace</strong>, which isolates it from the others.</li>
+        </ul>
+        <p>Resources are declared in YAML or JSON, like Kubernetes resources: an <code>apiVersion</code>, a <code>kind</code>, <code>metadata</code> with a name and a namespace, a <code>spec</code> that you write, and a <code>status</code> that Cloud Streams reports. The dashboard edits them with forms, or in their YAML.</p>
+    </text>)
+
+    @Section(HelpTopicCatalog.Events, @<text>
+        <ul>
+            <li>Events are <a href="https://cloudevents.io" target="_blank" rel="noopener">CloudEvents</a>: their <code>id</code>, <code>source</code>, <code>type</code>, <code>subject</code>, <code>time</code> and <code>data</code> are standard attributes.</li>
+            <li>Each event gets an <strong>offset</strong>, its position in the stream, which only grows. The gateway also records when it received the event.</li>
+            <li>The <em>Events</em> menu lists, searches, follows live and publishes events, and shows them on a timeline.</li>
+            <li>The stream's retention policy decides how long events are kept. An event that expires before a subscription delivered it is never delivered.</li>
+        </ul>
+    </text>)
+
+    @Section(HelpTopicCatalog.Partitions, @<text>
+        <ul>
+            <li>Partitions are created as events are admitted: there is nothing to declare.</li>
+            <li>A partition keeps the order of the stream, and has its own offsets, from 0.</li>
+            <li>A subscription to a partition only reads the events of that partition, which is faster than filtering the whole stream.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>spec:
+  partition:
+    type: by-source          # by-source, by-type, by-subject, by-correlation-id or by-causation-id
+    id: https://orders.example.com</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Gateways, @<text>
+        <ul>
+            <li>Publishers send events with a <code>POST</code> to the gateway's <code>/api/events/pub</code>, one at a time or in batches.</li>
+            <li>A gateway may also consume <a href="@HelpTopicCatalog.Feeds.Href">feeds</a>.</li>
+            <li>Its spec decides who may publish (<code>ingestion.publishers</code>), how fast (<code>ingestion.rateLimits</code>), which events are valid, and against which <a href="@HelpTopicCatalog.Schemas.Href">schema</a>.</li>
+            <li>A refused event is answered with a <code>4xx</code> status that explains why, and is not recorded.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>apiVersion: cloud-streams.io/v1
+kind: Gateway
+metadata:
+  name: orders
+  namespace: default
+spec:
+  ingestion:
+    publishers:
+      - name: orders
+        apiKey: { use: orders-publisher }      # a secret that holds the API key
+        sources: [ 'https://orders.example.com/*' ]
+  events:
+    - source: ^https://orders\.example\.com$
+      type: order.placed
+      schema:
+        name: order-placed</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Brokers, @<text>
+        <ul>
+            <li>Each broker process serves one broker resource. It runs the subscriptions of its namespace, which several replicas share.</li>
+            <li>Its spec sets the defaults of its subscriptions: the dispatch timeout, the retry policy, and the acknowledgement callback.</li>
+            <li>A subscription's own settings take precedence over its broker's.</li>
+        </ul>
+    </text>)
+
+    @Section(HelpTopicCatalog.Subscriptions, @<text>
+        <ul>
+            <li><strong>What:</strong> the whole stream, or a partition, optionally narrowed by a <strong>filter</strong>, on attributes or with an expression.</li>
+            <li><strong>Where:</strong> a <strong>subscriber</strong>, which is an endpoint, such as <code>https://…</code>, <code>kafka://…</code> or <code>nats://…</code>, or the name of a <a href="@HelpTopicCatalog.Sinks.Href">sink</a>.</li>
+            <li><strong>How:</strong> an optional <strong>mutation</strong> that transforms events before they are delivered, a retry policy, a rate limit, and a dead-letter policy for the events that cannot be delivered.</li>
+            <li><strong>From where:</strong> <code>stream.offset</code> makes the subscription track an offset, from the start (<code>0</code>) or the end (<code>-1</code>) of what it reads. Without it, only new events are delivered, and those that fail are dropped.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>apiVersion: cloud-streams.io/v1
+kind: Subscription
+metadata:
+  name: orders-to-billing
+  namespace: default
+spec:
+  partition:
+    type: by-source
+    id: https://orders.example.com
+  filter:
+    type: attributes
+    attributes:
+      type: ^order\.placed$
+  stream:
+    offset: 0
+  subscriber:
+    endpoint: https://billing.example.com/events   # or sink: billing</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Delivery, @<text>
+        <ul>
+            <li>The broker delivers each event with a <code>POST</code>, or over the transport the subscriber's address selects. A <code>2xx</code> response acknowledges the event.</li>
+            <li>The subscription's <code>status.stream.ackedOffset</code> is the offset of the next event to deliver. It only moves once events are acknowledged, so an event may be delivered more than once: subscribers should be idempotent.</li>
+            <li>A subscriber that needs time responds <code>202 Accepted</code>, and acknowledges the event later, at the URI of the <code>cloudstreams-ack-uri</code> header, with the token of the <code>cloudstreams-ack-token</code> header. Delivery waits for it, up to a timeout.</li>
+            <li>The <em>lag</em> of a subscription is the number of events it still has to deliver.</li>
+        </ul>
+    </text>)
+
+    @Section(HelpTopicCatalog.Faults, @<text>
+        <ul>
+            <li>A failed delivery is retried according to the retry policy, while the subscriber is reported <span class="badge bg-danger">unreachable</span>. The event is never skipped.</li>
+            <li>When the retries are exhausted, or the subscriber responds with a status the policy does not retry, the subscription is <span class="badge text-bg-danger">faulted</span>: it stops at the event that caused the fault, until an operator recovers it.</li>
+            <li>A faulted or suspended subscription is counted next to <em>Subscriptions</em> in the menu, in every namespace you may read.</li>
+        </ul>
+        <dl>
+            <dt>Resume</dt>
+            <dd>Clears the fault, and retries the event that caused it. Fix the subscriber first, e.g. its address or its credentials.</dd>
+            <dt>Skip</dt>
+            <dd>Never delivers the event that caused the fault, and resumes with the next one.</dd>
+            <dt>Suspend</dt>
+            <dd>Pauses delivery, e.g. while the subscriber is under maintenance. Resuming catches up with the events published in the meantime.</dd>
+            <dt>Replay</dt>
+            <dd>Delivers every matching event again, from the start of the stream, or from a point in time.</dd>
+        </dl>
+        <p>These actions are in the menu of each subscription, and on its page, which also shows the event that caused the fault. A dead-letter policy sends the events that cannot be delivered elsewhere, instead of faulting the subscription.</p>
+    </text>)
+
+    @Section(HelpTopicCatalog.Sinks, @<text>
+        <ul>
+            <li>A sink keeps an endpoint, and its credentials, apart from the subscriptions that use it: administrators manage sinks, and whoever edits a subscription can deliver to a sink, but can neither read its credentials nor send them elsewhere.</li>
+            <li>The scheme of its address selects the transport: <code>https</code>, <code>kafka</code>, <code>nats</code>, <code>amqp</code> or <code>cloudstreams</code>, another gateway.</li>
+            <li>Credentials are read from secrets, named with <code>use</code>, rather than written in the resource.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>apiVersion: cloud-streams.io/v1
+kind: Sink
+metadata:
+  name: billing
+  namespace: default
+spec:
+  endpoint:
+    uri: https://billing.example.com/events
+    authentication:
+      bearer:
+        use: billing-token     # a secret that holds the token</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Feeds, @<text>
+        <ul>
+            <li>A gateway consumes the feeds its spec lists, by name, or feeds of its own.</li>
+            <li>The replicas of a gateway share the consumption of a feed, as a consumer group named after the gateway by default.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>apiVersion: cloud-streams.io/v1
+kind: Feed
+metadata:
+  name: legacy-orders
+  namespace: default
+spec:
+  endpoint: kafka://kafka:9092/orders
+---
+kind: Gateway
+spec:
+  ingestion:
+    feeds:
+      - legacy-orders</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Schemas, @<text>
+        <ul>
+            <li>A gateway validates the data of the events its spec binds to a schema, against its latest version, or a pinned one. Events whose data is invalid are refused.</li>
+            <li>The compatibility mode, <code>backward</code> by default, <code>forward</code>, <code>full</code> or <code>none</code>, decides whether a new version may be registered.</li>
+        </ul>
+        <pre class="small bg-body-tertiary border rounded p-2"><code>apiVersion: cloud-streams.io/v1
+kind: Schema
+metadata:
+  name: order-placed
+spec:
+  compatibility: backward
+  versions:
+    - version: 1
+      schema: { "type": "object", "properties": { "id": { "type": "string" } }, "required": [ "id" ] }</code></pre>
+    </text>)
+
+    @Section(HelpTopicCatalog.Namespaces, @<text>
+        <ul>
+            <li>The selector at the top right of the menu chooses the namespace the pages show, or every namespace you may read.</li>
+            <li>Each gateway and each broker serves a single namespace. A gateway records its events in its namespace, and a broker only delivers them to the subscriptions of its namespace.</li>
+            <li>Each namespace reads its own secrets first, then the secrets shared with it.</li>
+            <li>The <code>default</code> namespace, and a namespace that still holds resources, cannot be deleted.</li>
+        </ul>
+    </text>)
+
+    @Section(HelpTopicCatalog.Playground, @<text>
+        <ul>
+            <li>Write a filter and a mutation, in YAML or JSON, and run them against the most recent events of the stream or of a partition, or against sample events.</li>
+            <li>Each event shows whether the filter keeps it, and what the mutation turns it into.</li>
+            <li>The page of each subscription has a playground too, which starts with the subscription's own filter and mutation.</li>
+        </ul>
+    </text>)
+</div>
+
+@code {
+
+    static readonly (string Name, string Does)[] FlowSteps =
+    [
+        ("Publishers, feeds", "send cloud events"),
+        ("Gateway", "admits or refuses them"),
+        ("Stream", "records them in order"),
+        ("Broker", "delivers them"),
+        ("Subscription", "filters, mutates, retries"),
+        ("Endpoint or sink", "receives them")
+    ];
+
+    RenderFragment Section(HelpTopic topic, RenderFragment body) => @<section class="mb-5" aria-labelledby="@topic.Id">
+        <h2 id="@topic.Id" tabindex="-1" class="h5 border-bottom pb-1">@topic.Title</h2>
+        <p class="lead fs-6">@topic.Summary</p>
+        @body
+    </section>;
+
+    /// <inheritdoc/>
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    /// <inheritdoc/>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (firstRender) await ShowFragmentAsync(NavigationManager.Uri);
+    }
+
+    async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        try { await ShowFragmentAsync(e.Location); }
+        catch (Exception) { /* the page may have been left in the meantime */ }
+    }
+
+    /// <summary>
+    /// Scrolls to the section the fragment of the specified location names, and moves the focus to its heading, so that screen readers announce it
+    /// </summary>
+    async Task ShowFragmentAsync(string location)
+    {
+        var fragment = new Uri(location).Fragment.TrimStart('#');
+        if (HelpTopicCatalog.All.Any(t => t.Id == fragment)) await JsInterop.FocusAsync(fragment);
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        GC.SuppressFinalize(this);
+    }
+
+}

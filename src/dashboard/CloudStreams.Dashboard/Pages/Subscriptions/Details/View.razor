@@ -11,7 +11,7 @@
 
 @* The details of a subscription: its state, its lag and acknowledgement rate while the page is open, its fault, its failure history, and a playground (see #224) *@
 
-<ApplicationTitle>@($"Subscription {Name}")</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Subscriptions">@($"Subscription {Name}")</ApplicationTitle>
 
 <div class="container-fluid px-0">
     <nav aria-label="breadcrumb">
@@ -35,7 +35,7 @@
         var faultedOffset = subscription.Status?.Stream?.FaultedOffset;
         var pendingAck = subscription.Status?.Subscriber?.PendingAck;
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <h2 class="h5 mb-0 me-2">@Name</h2>
+            <h2 class="h5 mb-0 me-2">@Name<HelpPopover Topic="HelpTopicCatalog.Subscriptions" /></h2>
             @PhaseBadge(subscription)
             @if (canOperate)
             {

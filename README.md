@@ -865,6 +865,9 @@ The details of an event show its data as indented JSON, as text, or, for binary 
 
 ### Dashboard
 
+- **Navigation.** The menu follows the flow of events: *Events*, then ingestion (*Gateways*, *Feeds*, *Schemas*), delivery (*Brokers*, *Sinks*, *Subscriptions*) and *Namespaces*. The **?** menu at the top right opens the help, and *About*.
+- **Help.** `/help` explains each concept, with an example. The ⓘ button next to the title of a page summarizes its concept and links to its section, as does *Help about this page* in the **?** menu.
+- **Subscriptions needing attention.** Red and yellow badges next to *Subscriptions* count the faulted and suspended subscriptions of every namespace the user may read, live. Their tooltip names the namespaces, and the subscriptions whose subscriber is unreachable but still being retried. Clicking them lists those subscriptions (`/subscriptions?status=attention`).
 - **Resources.** The gateway, broker and subscription lists can be:
   - sorted by clicking their column headers;
   - filtered by name, or by labels with the same selectors as the API (`env=prod,tier!=db`, `tier in (edge,core)`).

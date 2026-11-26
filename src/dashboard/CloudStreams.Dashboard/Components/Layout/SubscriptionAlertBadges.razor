@@ -1,0 +1,64 @@
+@namespace CloudStreams.Dashboard.Components
+@implements IDisposable
+@inject SubscriptionAlertMonitor Monitor
+@inject NamespaceContext NamespaceContext
+@inject NavigationManager NavigationManager
+
+@* The faulted and suspended subscriptions of every namespace the user may read, counted next to the Subscriptions menu, so that they are noticed from any page (see #272) *@
+
+@if (summary.HasAlerts)
+{
+    <a href="subscriptions?status=attention" class="d-inline-flex align-items-center gap-1 text-decoration-none me-2" title="@summary.Describe()" @onclick="ShowAsync" @onclick:preventDefault>
+        @if (summary.Faulted.Count > 0)
+        {
+            <span class="badge rounded-pill text-bg-danger">@summary.Faulted.Count<span class="visually-hidden"> faulted @(summary.Faulted.Count == 1 ? "subscription" : "subscriptions")</span></span>
+        }
+        @if (summary.Suspended.Count > 0)
+        {
+            <span class="badge rounded-pill text-bg-warning">@summary.Suspended.Count<span class="visually-hidden"> suspended @(summary.Suspended.Count == 1 ? "subscription" : "subscriptions")</span></span>
+        }
+        <span class="visually-hidden">: show them</span>
+    </a>
+}
+<span class="visually-hidden" role="status" aria-live="polite">@announcement</span>
+
+@code {
+
+    SubscriptionAlertSummary summary = SubscriptionAlertSummary.Empty;
+    string? announcement;
+    bool initialized;
+    IDisposable? subscription;
+
+    /// <inheritdoc/>
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        subscription = Monitor.Summary.Subscribe(value =>
+        {
+            // the counts are announced when they change, but not when the dashboard loads
+            if (initialized && (value.Faulted.Count != summary.Faulted.Count || value.Suspended.Count != summary.Suspended.Count)) announcement = value.Describe();
+            initialized = true;
+            summary = value;
+            InvokeAsync(StateHasChanged);
+        });
+        _ = Monitor.StartAsync();
+    }
+
+    /// <summary>
+    /// Shows the faulted and suspended subscriptions, in every namespace the user may read
+    /// </summary>
+    Task ShowAsync()
+    {
+        NamespaceContext.Select(null);
+        NavigationManager.NavigateTo("subscriptions?status=attention");
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        subscription?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+}

@@ -1,0 +1,47 @@
+@namespace CloudStreams.Dashboard.Components.Help
+
+@* The contextual help of a page: an info button, next to its title, that discloses the summary of its topic and links to its section of the Help page (see #271) *@
+
+<span class="help-popover position-relative d-inline-block align-middle" @onkeydown="OnKeyDown">
+    <button @ref="button" type="button" class="btn btn-link btn-sm p-0 ms-2 link-info lh-1 fs-6" aria-expanded="@(open ? "true" : "false")" aria-controls="@panelId"
+            aria-label="@($"About {Topic.Title.ToLowerInvariant()}")" title="@($"About {Topic.Title.ToLowerInvariant()}")" @onclick="Toggle">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+    </button>
+    @if (open)
+    {
+        <span id="@panelId" role="region" aria-label="@Topic.Title" class="card shadow position-absolute start-0 mt-2 p-3 text-start fw-normal fs-6 lh-base" style="z-index: 1080; width: min(26rem, 80vw); top: 100%;">
+            <span class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <strong class="small">@Topic.Title</strong>
+                <button type="button" class="btn-close btn-sm" aria-label="Close" @onclick="CloseAsync"></button>
+            </span>
+            <span class="d-block small mb-2">@Topic.Summary</span>
+            <a class="small" href="@Topic.Href" @onclick="() => open = false">Learn more <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+        </span>
+    }
+</span>
+
+@code {
+
+    readonly string panelId = $"help-{Guid.NewGuid():N}";
+    ElementReference button;
+    bool open;
+
+    /// <summary>
+    /// Gets/sets the topic to give contextual help about
+    /// </summary>
+    [Parameter, EditorRequired] public HelpTopic Topic { get; set; } = null!;
+
+    void Toggle() => open = !open;
+
+    async Task CloseAsync()
+    {
+        open = false;
+        await button.FocusAsync();
+    }
+
+    async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (open && e.Key == "Escape") await CloseAsync();
+    }
+
+}

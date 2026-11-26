@@ -6,7 +6,7 @@
 
 @* The feeds: endpoints, with the means to authenticate to them, that gateways consume by name (see #218) *@
 
-<ApplicationTitle>Feeds</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Feeds">Feeds</ApplicationTitle>
 
 <div class="table-container">
     @if (Loading)
@@ -17,7 +17,7 @@
             </div>
         </div>
     }
-    <ResourceListToolbar Id="feeds" Title="Feeds" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+    <ResourceListToolbar Id="feeds" Title="Feeds" HelpTopic="HelpTopicCatalog.Feeds" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
                          LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
                          OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">

@@ -2,7 +2,7 @@
 @page "/brokers"
 @inherits ResourceManagementComponent<Broker>
 
-<ApplicationTitle>Brokers</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Brokers">Brokers</ApplicationTitle>
 
 <div class="table-container">
     @if (Loading)
@@ -13,7 +13,7 @@
             </div>
         </div>
     }
-    <ResourceListToolbar Id="brokers" Title="Brokers" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+    <ResourceListToolbar Id="brokers" Title="Brokers" HelpTopic="HelpTopicCatalog.Brokers" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
                          LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
                          OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">

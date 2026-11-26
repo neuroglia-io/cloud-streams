@@ -7,7 +7,7 @@
 @inherits ResourceManagementComponent<View, SubscriptionListStore, SubscriptionListState, Subscription>
 @inject ICloudStreamsCoreApiClient ApiClient;
 
-<ApplicationTitle>Subscriptions</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Subscriptions">Subscriptions</ApplicationTitle>
 
 <div class="table-container">
     @if (Loading)
@@ -18,7 +18,15 @@
             </div>
         </div>
     }
-    <ResourceListToolbar Id="subscriptions" Title="Subscriptions" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+    @if (NeedingAttentionOnly)
+    {
+        <div class="alert alert-warning py-2 px-3 small d-flex align-items-center gap-2" role="status">
+            <i class="bi bi-funnel" aria-hidden="true"></i>
+            <span>Showing only the faulted and suspended subscriptions.</span>
+            <a class="ms-auto" href="subscriptions">Show all</a>
+        </div>
+    }
+    <ResourceListToolbar Id="subscriptions" Title="Subscriptions" HelpTopic="HelpTopicCatalog.Subscriptions" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
                          LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
                          OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">
@@ -63,7 +71,8 @@
                         }
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">
-                            @switch (resource.Status?.Phase)
+                            @* a subscription no broker has reported on yet, e.g. in a namespace without a broker, shows what its spec asks for *@
+                            @switch (EffectivePhase(resource))
                             {
                                 case SubscriptionStatusPhase.Active:
                                     <span class="badge text-dark bg-primary">active</span>
@@ -73,6 +82,9 @@
                                     break;
                                 case SubscriptionStatusPhase.Suspended:
                                     <span class="badge text-dark bg-warning" title="Nothing is delivered until the subscription is resumed">suspended</span>
+                                    break;
+                                default:
+                                    <span class="badge text-bg-secondary bg-opacity-50" title="No broker has reported on this subscription yet: its namespace may have no broker">pending</span>
                                     break;
                             }
                             @if(resource.Status?.Stream?.Fault != null)
@@ -208,11 +220,16 @@
 
     EquatableDictionary<string, ulong> subscriptionLengths = [];
 
+    /// <summary>
+    /// Gets the phase of the specified subscription, as its broker reports it, or as its spec asks for, if no broker has reported on it yet
+    /// </summary>
+    static SubscriptionStatusPhase? EffectivePhase(Subscription subscription) => subscription.Status?.Phase ?? (subscription.Spec?.Suspended == true ? SubscriptionStatusPhase.Suspended : null);
+
     /// <inheritdoc/>
     protected override void ConfigureSortKeys(IDictionary<string, Func<Subscription, IComparable?>> sortKeys)
     {
         // faulted subscriptions come first, then suspended, inactive and active ones
-        sortKeys["phase"] = s => s.Status?.Stream?.Fault != null ? 0 : s.Status?.Phase switch
+        sortKeys["phase"] = s => s.Status?.Stream?.Fault != null ? 0 : EffectivePhase(s) switch
         {
             SubscriptionStatusPhase.Suspended => 1,
             SubscriptionStatusPhase.Inactive => 2,
@@ -225,6 +242,20 @@
             SubscriberState.Unknown => 1,
             _ => 2
         };
+    }
+
+    /// <summary>
+    /// Gets/sets the status of the subscriptions to list: <c>attention</c> lists only the faulted and suspended ones, as the badges of the main menu count them (see #272)
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+
+    bool NeedingAttentionOnly => string.Equals(Status, "attention", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        Store.SetNeedingAttentionOnly(NeedingAttentionOnly);
     }
 
     /// <inheritdoc/>

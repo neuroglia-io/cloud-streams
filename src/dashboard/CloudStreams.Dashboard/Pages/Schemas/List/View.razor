@@ -4,7 +4,7 @@
 
 @* The schema registry: the JSON schemas gateways validate the data of events against, and their versions (see #264) *@
 
-<ApplicationTitle>Schemas</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Schemas">Schemas</ApplicationTitle>
 
 <div class="table-container">
     @if (Loading)
@@ -15,7 +15,7 @@
             </div>
         </div>
     }
-    <ResourceListToolbar Id="schemas" Title="Schemas" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+    <ResourceListToolbar Id="schemas" Title="Schemas" HelpTopic="HelpTopicCatalog.Schemas" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
                          LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
                          OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">
