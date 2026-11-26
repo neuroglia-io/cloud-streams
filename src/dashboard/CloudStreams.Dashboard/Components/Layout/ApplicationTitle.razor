@@ -10,6 +10,12 @@
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>
+    /// Gets/sets the help topic the page relates to, which the Help menu opens (see #271)
+    /// </summary>
+    [Parameter]
+    public HelpTopic? HelpTopic { get; set; }
+
     /// <inheritdoc/>
     protected override void OnInitialized()
     {

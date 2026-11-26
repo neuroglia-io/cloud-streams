@@ -74,6 +74,28 @@ public class SubscriptionListStore(ILogger<SubscriptionListStore> logger, ICloud
          )
         .DistinctUntilChanged();
 
+    /// <summary>
+    /// Gets an <see cref="IObservable{T}"/> used to observe whether only the subscriptions that need attention are listed
+    /// </summary>
+    public IObservable<bool> NeedingAttentionOnly => this.Select(state => state.NeedingAttentionOnly).DistinctUntilChanged();
+
+    /// <inheritdoc/>
+    /// <remarks>Lists only the faulted and suspended subscriptions, if requested, as the badges of the main menu count them (see #272)</remarks>
+    protected override IObservable<Func<Subscription, bool>?> ResourcePredicate => NeedingAttentionOnly.Select(only => only ? (Func<Subscription, bool>?)NeedsAttention : null);
+
+    /// <summary>
+    /// Determines whether the specified subscription needs attention, which is to say that it is faulted or suspended
+    /// </summary>
+    /// <param name="subscription">The subscription to check</param>
+    /// <returns>A boolean indicating whether the subscription needs attention</returns>
+    public static bool NeedsAttention(Subscription subscription) => subscription.Status?.Stream?.Fault != null || subscription.Spec?.Suspended == true || subscription.Status?.Phase == SubscriptionStatusPhase.Suspended;
+
+    /// <summary>
+    /// Sets whether only the subscriptions that need attention are listed
+    /// </summary>
+    /// <param name="only">A boolean indicating whether only the subscriptions that need attention are listed</param>
+    public void SetNeedingAttentionOnly(bool only) => Reduce(state => state with { NeedingAttentionOnly = only });
+
     /// <inheritdoc/>
     public override async Task InitializeAsync()
     {

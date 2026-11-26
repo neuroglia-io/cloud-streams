@@ -52,24 +52,11 @@
                         </li>
                     </ul>
                 </li>
+                @* the resources follow the flow of events: ingestion, then delivery, then the namespaces they belong to (see #271) *@
+                <li class="d-none d-lg-flex align-items-center" aria-hidden="true"><span class="vr mx-2 opacity-25"></span></li>
                 <li class="nav-item">
                     <NavLink class="nav-link" href="gateways" Match="NavLinkMatch.All">
                         <span class="btn-label">Gateways</span>
-                    </NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="brokers" Match="NavLinkMatch.All">
-                        <span class="btn-label">Brokers</span>
-                    </NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="subscriptions" Match="NavLinkMatch.Prefix">
-                        <span class="btn-label">Subscriptions</span>
-                    </NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="sinks" Match="NavLinkMatch.Prefix">
-                        <span class="btn-label">Sinks</span>
                     </NavLink>
                 </li>
                 <li class="nav-item">
@@ -82,14 +69,27 @@
                         <span class="btn-label">Schemas</span>
                     </NavLink>
                 </li>
+                <li class="d-none d-lg-flex align-items-center" aria-hidden="true"><span class="vr mx-2 opacity-25"></span></li>
                 <li class="nav-item">
-                    <NavLink class="nav-link" href="namespaces" Match="NavLinkMatch.All">
-                        <span class="btn-label">Namespaces</span>
+                    <NavLink class="nav-link" href="brokers" Match="NavLinkMatch.All">
+                        <span class="btn-label">Brokers</span>
                     </NavLink>
                 </li>
                 <li class="nav-item">
-                    <NavLink class="nav-link" href="about" Match="NavLinkMatch.All">
-                        <span class="btn-label">About</span>
+                    <NavLink class="nav-link" href="sinks" Match="NavLinkMatch.Prefix">
+                        <span class="btn-label">Sinks</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item d-flex align-items-center">
+                    <NavLink class="nav-link" href="subscriptions" Match="NavLinkMatch.Prefix">
+                        <span class="btn-label">Subscriptions</span>
+                    </NavLink>
+                    <SubscriptionAlertBadges />
+                </li>
+                <li class="d-none d-lg-flex align-items-center" aria-hidden="true"><span class="vr mx-2 opacity-25"></span></li>
+                <li class="nav-item">
+                    <NavLink class="nav-link" href="namespaces" Match="NavLinkMatch.All">
+                        <span class="btn-label">Namespaces</span>
                     </NavLink>
                 </li>
             </ul>
@@ -107,6 +107,21 @@
                 </span>
             }
             <NamespaceSelector />
+            @* help and information about Cloud Streams, apart from the resources (see #271) *@
+            <div class="dropdown me-2">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle @(IsOnHelpPage || IsOnAboutPage ? "active" : "")" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Help" title="Help">
+                    <i class="bi bi-question-circle" aria-hidden="true"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    @if (Layout.Title?.HelpTopic is { } topic && !IsOnHelpPage)
+                    {
+                        <li><a class="dropdown-item" href="@topic.Href"><i class="bi bi-info-circle me-2" aria-hidden="true"></i>Help about @topic.Title.ToLowerInvariant()</a></li>
+                    }
+                    <li><a class="dropdown-item @(IsOnHelpPage ? "active" : "")" href="help" aria-current="@(IsOnHelpPage ? "page" : null)"><i class="bi bi-book me-2" aria-hidden="true"></i>Help contents</a></li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li><a class="dropdown-item @(IsOnAboutPage ? "active" : "")" href="about" aria-current="@(IsOnAboutPage ? "page" : null)"><i class="bi bi-info-square me-2" aria-hidden="true"></i>About Cloud Streams</a></li>
+                </ul>
+            </div>
             <div class="dropdown me-3">
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Color theme: {ThemeLabel(ThemeService.Preference)}")" title="Color theme">
                     <i class="bi @ThemeIcon(ThemeService.Theme)" aria-hidden="true"></i>
@@ -176,6 +191,14 @@
     [Inject] ThemeService ThemeService { get; set; } = null!;
 
     [Inject] IApplicationLayout Layout { get; set; } = null!;
+
+    [Inject] NavigationManager NavigationManager { get; set; } = null!;
+
+    string CurrentPage => NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('#', '?')[0];
+
+    bool IsOnHelpPage => CurrentPage == "help";
+
+    bool IsOnAboutPage => CurrentPage == "about";
 
     static string ThemeLabel(string theme) => theme switch
     {

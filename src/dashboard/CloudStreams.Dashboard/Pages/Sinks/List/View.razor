@@ -6,7 +6,7 @@
 
 @* The sinks: endpoints, with the means to authenticate to them, that subscriptions deliver to by name (see #218) *@
 
-<ApplicationTitle>Sinks</ApplicationTitle>
+<ApplicationTitle HelpTopic="HelpTopicCatalog.Sinks">Sinks</ApplicationTitle>
 
 <div class="table-container">
     @if (Loading)
@@ -17,7 +17,7 @@
             </div>
         </div>
     }
-    <ResourceListToolbar Id="sinks" Title="Sinks" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
+    <ResourceListToolbar Id="sinks" Title="Sinks" HelpTopic="HelpTopicCatalog.Sinks" Count="Resources?.Count ?? 0" SelectedCount="SelectedResourceNames.Count" SearchTerm="@SearchTerm" OnSearch="term => Store.SetSearchTerm(term)"
                          LabelSelector="@LabelSelector" LabelSelectorError="@LabelSelectorError" OnLabelSelector="OnLabelSelector" CanAdminister="CanAdminister"
                          OnImport="OnImportAsync" OnExportSelected="OnExportSelectedResourcesAsync" OnDeleteSelected="OnDeleteSelectedResourcesAsync" />
     <table class="table table-striped table-hover">
