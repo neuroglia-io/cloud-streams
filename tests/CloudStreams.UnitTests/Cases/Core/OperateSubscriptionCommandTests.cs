@@ -36,9 +36,9 @@ public class OperateSubscriptionCommandTests
             this.Repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                 .Returns(_ => Task.FromResult<IResource?>(this.Current));
             this.Repository.PatchAsync(Arg.Any<Patch>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(call => Task.FromResult<IResource>(this.Apply(call.Arg<Patch>(), this.SpecPatches)));
+                .Returns(call => Task.FromResult<IResource>(this.Apply(call.Arg<Patch>()!, this.SpecPatches)));
             this.Repository.PatchSubResourceAsync(Arg.Any<Patch>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(call => Task.FromResult<IResource>(this.Apply(call.Arg<Patch>(), this.StatusPatches)));
+                .Returns(call => Task.FromResult<IResource>(this.Apply(call.Arg<Patch>()!, this.StatusPatches)));
         }
 
         public IResourceRepository Repository { get; } = Substitute.For<IResourceRepository>();

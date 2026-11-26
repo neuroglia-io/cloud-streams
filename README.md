@@ -921,7 +921,9 @@ Logs of the HTTP clients used by the OpenTelemetry exporters are lowered to `War
 
 #### MCP
 
-The gateway and the API serve a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp/sse`, so that agents can inspect and operate Cloud Streams. It requires the reader role, and the tools that change something require the operator role, as the endpoints they mirror do.
+The gateway and the API serve a [Model Context Protocol](https://modelcontextprotocol.io) endpoint at `/mcp`, over the Streamable HTTP transport, so that agents can inspect and operate Cloud Streams. It requires the reader role, and the tools that change something require the operator role, as the endpoints they mirror do. The endpoint is stateless, so it needs no session affinity behind several replicas.
+
+> **Upgrading:** earlier versions served the legacy SSE transport at `/mcp/sse`, which is no longer served, since it has no backpressure. Point agents at `/mcp`.
 
 | Tool | Does | Role |
 |---|---|---|

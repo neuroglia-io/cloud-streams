@@ -36,8 +36,7 @@ public sealed class RetentionTests
 
     static readonly Uri Source = new("https://retention.cloud-streams.io");
 
-    readonly IContainer _eventStore = new ContainerBuilder()
-        .WithImage("eventstore/eventstore:24.10.6")
+    readonly IContainer _eventStore = new ContainerBuilder("eventstore/eventstore:24.10.6")
         .WithEnvironment("EVENTSTORE_INSECURE", "true")
         .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "All")
         .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")

@@ -179,7 +179,7 @@ public sealed class SubscriptionRecoveryTests(CloudStreamsFixture fixture, ITest
         Assert.Equal((int)HttpStatusCode.Conflict, stale.Problem.Status);
         var deliveries = await endpoint.WaitForAsync(3);
         Assert.Equal(["event-0", "poison", "event-2"], deliveries.Select(d => d.Id));
-        var skipped = await WaitForSubscriptionAsync(Name(), s => s.Status?.Stream?.Fault == null && s.Status.Stream.AckedOffset == 3);
+        var skipped = await WaitForSubscriptionAsync(Name(), s => s.Status?.Stream is { Fault: null, AckedOffset: 3 });
         Assert.Null(skipped.Status!.Stream!.FaultedOffset);
     }
 

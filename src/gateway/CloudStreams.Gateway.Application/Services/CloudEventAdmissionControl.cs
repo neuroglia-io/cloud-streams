@@ -106,8 +106,8 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// </summary>
     /// <param name="result">The failed <see cref="OperationResult"/> to convert</param>
     /// <returns>A new failed <see cref="OperationResult{T}"/></returns>
-    /// <remarks><see cref="OperationResult.OfType{T}"/> drops the errors, and with them the reason why the event has been refused</remarks>
-    protected static OperationResult<CloudEventDescriptor> Failure(OperationResult result) => new(result.Status, errors: result.Errors?.ToArray());
+    /// <remarks><c>OperationResult.OfType&lt;T&gt;()</c> drops the errors, and with them the reason why the event has been refused</remarks>
+    protected static OperationResult<CloudEventDescriptor> Failure(OperationResult result) => new(result.Status, errors: result.Errors?.ToArray() ?? []);
 
     /// <inheritdoc/>
     public virtual Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, Core.Resources.Gateway gateway, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default)
@@ -184,6 +184,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// Authorizes the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to authorize</param>
+    /// <param name="gateway">The gateway that ingests the <see cref="CloudEvent"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A <see cref="OperationResult"/> that describes the result of the operation</returns>
     protected virtual async Task<OperationResult> AuthorizeAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)
@@ -233,6 +234,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// Validates the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to validate</param>
+    /// <param name="gateway">The gateway that ingests the <see cref="CloudEvent"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A <see cref="OperationResult"/> that describes the result of the operation</returns>
     protected virtual async Task<OperationResult> ValidateAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)
@@ -314,6 +316,7 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// Extracts metadata from the specified <see cref="CloudEvent"/>
     /// </summary>
     /// <param name="e">The <see cref="CloudEvent"/> to extract metadata from</param>
+    /// <param name="gateway">The gateway that ingests the <see cref="CloudEvent"/></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The metadata extracted from the specified <see cref="CloudEvent"/></returns>
     protected virtual async Task<CloudEventMetadata> ExtractMetadataAsync(CloudEvent e, Core.Resources.Gateway gateway, CancellationToken cancellationToken = default)

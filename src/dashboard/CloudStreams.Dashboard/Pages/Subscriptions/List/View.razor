@@ -142,16 +142,19 @@
                                 <ul class="dropdown-menu">
                                     @if (CanOperate)
                                     {
-                                        <li>
-                                            @if (resource.Spec.Suspended)
-                                            {
-                                                <button class="dropdown-item" title="Resume delivering events to the subscriber of @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', where it stopped" @onclick="async _ => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PlayFill" /> Resume</button>
-                                            }
-                                            else
-                                            {
-                                                <button class="dropdown-item" title="Stop delivering events to the subscriber of @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name' until it is resumed" @onclick="async _ => await OnSuspendSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PauseFill" /> Suspend</button>
-                                            }
-                                        </li>
+                                        @* a faulted subscription is resumed too, which clears its fault and retries the event that caused it *@
+                                        @if (resource.Spec?.Suspended == true || resource.Status?.Stream?.Fault != null)
+                                        {
+                                            <li>
+                                                <button class="dropdown-item" title="@(resource.Status?.Stream?.Fault != null ? $"Clear the fault of the subscription '{resource.Metadata.Name}', and retry the event that caused it" : $"Resume delivering events to the subscriber of the subscription '{resource.Metadata.Name}', where it stopped")" @onclick="async _ => await OnResumeSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PlayFill" /> Resume</button>
+                                            </li>
+                                        }
+                                        @if (resource.Spec?.Suspended != true)
+                                        {
+                                            <li>
+                                                <button class="dropdown-item" title="Stop delivering events to the subscriber of the subscription '@resource.Metadata.Name' until it is resumed" @onclick="async _ => await OnSuspendSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.PauseFill" /> Suspend</button>
+                                            </li>
+                                        }
                                         <li>
                                             <button class="dropdown-item" title="Replay all events matching @(typeof(Subscription).Name.ToLower()) '@resource.Metadata.Name', which implicitly enables streaming." @onclick="async _ => await OnRestartSubscriptionAsync(resource)" @onclick:preventDefault @onclick:stopPropagation><Icon Name="IconName.ArrowClockwise" /> Replay</button>
                                         </li>
@@ -261,11 +264,11 @@
     {
         if (Dialog == null) return;
         var fault = subscription.Status?.Stream?.Fault;
-        var confirmed = await Dialog.ShowAsync(
-            title: $"Resume subscription '{subscription.Metadata.Name}'?",
-            message1: fault == null ? "The subscription is suspended: delivery resumes where it stopped." : $"The subscription is {(subscription.Spec.Suspended ? "suspended and " : "")}faulted: {fault.Detail ?? fault.Title}",
-            message2: fault == null ? null : "Resuming clears the fault and retries the event that caused it. To skip that event instead, open the subscription and skip it.",
-            confirmDialogOptions: new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true });
+        var title = $"Resume subscription '{subscription.Metadata.Name}'?";
+        var options = new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true };
+        var confirmed = fault == null
+            ? await Dialog.ShowAsync(title, "The subscription is suspended: delivery resumes where it stopped.", options)
+            : await Dialog.ShowAsync<FaultSummary>(title, new Dictionary<string, object>() { [nameof(FaultSummary.Fault)] = fault, [nameof(FaultSummary.Suspended)] = subscription.Spec.Suspended }, new ConfirmDialogOptions() { YesButtonText = "Resume", NoButtonText = "Cancel", IsVerticallyCentered = true, Size = DialogSize.Large });
         if (!confirmed) return;
         try
         {

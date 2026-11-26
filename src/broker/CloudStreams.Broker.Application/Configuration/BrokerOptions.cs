@@ -54,6 +54,9 @@ public class BrokerOptions
     /// <returns>The namespace of the broker resource</returns>
     public virtual string GetNamespace() => string.IsNullOrWhiteSpace(this.Namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : this.Namespace.Trim();
 
+    /// <summary>
+    /// Gets/sets the options used to configure the leases that ensure a single replica of the broker runs each subscription
+    /// </summary>
     public virtual SubscriptionLeaseOptions Leases { get; set; } = new();
 
     /// <summary>

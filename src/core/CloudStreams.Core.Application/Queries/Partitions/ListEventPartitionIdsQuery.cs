@@ -62,6 +62,7 @@ public class ListEventPartitionIdsQuery(CloudEventPartitionType partitionType, s
 /// Represents the service used to handle <see cref="ListEventPartitionIdsQuery"/> instances
 /// </summary>
 /// <param name="eventStore">The service used to store cloud events</param>
+/// <param name="partitionIndex">The index of the partitions cloud events have been published to, if any</param>
 /// <remarks>
 /// Ids are sorted when they are read rather than when they are projected, so that the order applies to every deployment without resetting its projections,
 /// and is the same for every client (see #20). The whole list of ids is held by the projection's state anyway, so sorting it costs little compared to reading it.

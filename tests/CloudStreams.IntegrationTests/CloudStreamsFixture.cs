@@ -60,9 +60,8 @@ public sealed class CloudStreamsFixture
     const string RabbitMqUser = "cloud-streams";
     const string RabbitMqPassword = "e2e-secret";
 
-    readonly RedisContainer _redis = new RedisBuilder().WithImage(RedisImage).Build();
-    readonly IContainer _eventStore = new ContainerBuilder()
-        .WithImage(EventStoreImage)
+    readonly RedisContainer _redis = new RedisBuilder(RedisImage).Build();
+    readonly IContainer _eventStore = new ContainerBuilder(EventStoreImage)
         .WithEnvironment("EVENTSTORE_INSECURE", "true")
         .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "All")
         .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
@@ -70,17 +69,15 @@ public sealed class CloudStreamsFixture
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(2113).ForPath("/health/live").ForStatusCode(HttpStatusCode.NoContent)))
         .Build();
     // the transports other than HTTP that cloud events are delivered over and consumed from (see #218)
-    readonly KafkaContainer _kafka = new KafkaBuilder().WithImage(KafkaImage).Build();
-    readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder().WithImage(RabbitMqImage).WithUsername(RabbitMqUser).WithPassword(RabbitMqPassword).Build();
-    readonly IContainer _vault = new ContainerBuilder()
-        .WithImage(VaultImage)
+    readonly KafkaContainer _kafka = new KafkaBuilder(KafkaImage).Build();
+    readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder(RabbitMqImage).WithUsername(RabbitMqUser).WithPassword(RabbitMqPassword).Build();
+    readonly IContainer _vault = new ContainerBuilder(VaultImage)
         .WithEnvironment("VAULT_DEV_ROOT_TOKEN_ID", VaultToken)
         .WithEnvironment("SKIP_SETCAP", "true")
         .WithPortBinding(8200, true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(8200).ForPath("/v1/sys/health")))
         .Build();
-    readonly IContainer _nats = new ContainerBuilder()
-        .WithImage(NatsImage)
+    readonly IContainer _nats = new ContainerBuilder(NatsImage)
         .WithCommand("--jetstream")
         .WithPortBinding(4222, true)
         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Server is ready"))

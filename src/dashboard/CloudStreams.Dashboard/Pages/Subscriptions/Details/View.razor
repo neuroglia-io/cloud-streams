@@ -46,6 +46,11 @@
                     }
                     else
                     {
+                        @* resuming a faulted subscription clears its fault and retries the event that caused it *@
+                        @if (fault != null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="RetryAsync" title="Clear the fault, and retry the event that caused it"><i class="bi bi-play-fill" aria-hidden="true"></i> Resume</button>
+                        }
                         <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="SuspendAsync"><i class="bi bi-pause-fill" aria-hidden="true"></i> Suspend</button>
                     }
                 </div>
@@ -63,7 +68,7 @@
         {
             <section class="alert alert-danger" aria-labelledby="fault-title">
                 <h3 id="fault-title" class="h6 alert-heading"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> Faulted: delivery is stopped</h3>
-                <p class="mb-2 text-break">@(fault.Detail ?? fault.Title)</p>
+                <pre class="small bg-body border rounded p-2 mb-2" style="white-space: pre-wrap; word-break: break-word; max-height: 40vh;"><code>@(fault.Detail ?? fault.Title)</code></pre>
                 <p class="small mb-2">
                     @if (faultedOffset.HasValue)
                     {
@@ -448,7 +453,7 @@
 
     void Notify(ToastType type, string message) => ToastService.Notify(new(type, message));
 
-    static string Describe(Exception ex) => ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title : ex.Message;
+    static string Describe(Exception ex) => ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title ?? ex.Message : ex.Message;
 
     static RenderFragment PhaseBadge(Subscription subscription) => __builder =>
     {

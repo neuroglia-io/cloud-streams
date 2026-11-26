@@ -205,7 +205,7 @@ public class InsightQueryTests
         store.ListPartitionIdsAsync(CloudEventPartitionType.BySource, Arg.Any<CancellationToken>()).Returns(new[] { "c", "a", "b", "pending" }.ToAsyncEnumerable());
         store.GetPartitionMetadataAsync(Arg.Any<string?>(), Arg.Any<PartitionReference>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
-            var partition = call.Arg<PartitionReference>();
+            var partition = call.Arg<PartitionReference>()!;
             if (partition.Id == "pending") throw new StreamNotFoundException(partition.Id);
             return new PartitionMetadata() { Type = partition.Type, Id = partition.Id, Length = (ulong)partition.Id[0], FirstEvent = Now.AddDays(-1), LastEvent = Now };
         });

@@ -57,6 +57,6 @@ public class ResourceDryRun(IEnumerable<IResourceValidator> validators)
     /// <typeparam name="TResult">The type of the result of the operation</typeparam>
     /// <param name="problem">The refusal to convert</param>
     /// <returns>A new failed <see cref="OperationResult{T}"/></returns>
-    public static OperationResult<TResult> Refused<TResult>(ProblemDetails problem) => new(problem.Status, errors: [new Error(problem.Type, problem.Title, problem.Status, problem.Detail, problem.Instance, problem.Errors)]);
+    public static OperationResult<TResult> Refused<TResult>(ProblemDetails problem) => new(problem.Status, errors: [problem.ToError()]);
 
 }

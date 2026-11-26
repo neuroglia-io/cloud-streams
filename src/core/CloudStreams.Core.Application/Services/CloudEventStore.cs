@@ -32,6 +32,7 @@ namespace CloudStreams.Core.Application.Services;
 /// <param name="serializer">The service used to serialize/deserialize data to/from JSON</param>
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="partitionIndex">The index of the partitions cloud events have been published to, if any</param>
+/// <param name="retentionStore">The service used to get and set the retention policy of the cloud event stream, if any</param>
 public class CloudEventStore(IEventStore eventStore, IProjectionManager projectionManager, IJsonSerializer serializer, ILogger<CloudEventStore>? logger = null, IPartitionIndex? partitionIndex = null,
     IStreamRetentionStore? retentionStore = null)
     : IHostedService, ICloudEventStore, IDisposable

@@ -202,7 +202,7 @@ public class RetentionUnitTests
         await initializer.ExecuteTask!;
 
         // assert
-        await store.Received(applied ? 1 : 0).SetAsync(Arg.Is<StreamRetention>(r => r.MaxCount == 1000), Arg.Any<CancellationToken>());
+        await store.Received(applied ? 1 : 0).SetAsync(Arg.Is<StreamRetention>(r => r!.MaxCount == 1000), Arg.Any<CancellationToken>());
     }
 
     [Fact]

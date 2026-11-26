@@ -22,7 +22,7 @@ using System.Text.Json.Nodes;
 namespace CloudStreams.Core.Api.Services;
 
 /// <summary>
-/// Represents a <see cref="RedisDatabase"/> that applies patches and replacements atomically
+/// Represents a <see cref="Neuroglia.Data.Infrastructure.ResourceOriented.Services.RedisDatabase"/> that applies patches and replacements atomically
 /// </summary>
 /// <remarks>
 /// The base implementation reads a resource, applies the patch, and writes the result back, with nothing to prevent another writer from changing the resource in

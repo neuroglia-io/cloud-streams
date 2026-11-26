@@ -135,7 +135,7 @@ public class PublisherAuthorizationTests
         Assert.Equal(403, operatorOfOther.Status);
         Assert.Equal(403, reader.Status);
         Assert.Equal(201, @operator.Status);
-        await mediator.Received(1).ExecuteAsync(Arg.Is<ConsumeEventCommand>(c => c.Gateway.GetNamespace() == Tenant), Arg.Any<CancellationToken>());
+        await mediator.Received(1).ExecuteAsync(Arg.Is<ConsumeEventCommand>(c => c!.Gateway.GetNamespace() == Tenant), Arg.Any<CancellationToken>());
     }
 
 }

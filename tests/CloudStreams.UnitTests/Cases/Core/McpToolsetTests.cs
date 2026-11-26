@@ -87,7 +87,7 @@ public class McpToolsetTests
 
         // assert
         Assert.Same(Subscription, replayed);
-        await mediator.Received(1).ExecuteAsync(Arg.Is<ReplaySubscriptionCommand>(c => c.Name == "orders" && c.From == from), Arg.Any<CancellationToken>());
+        await mediator.Received(1).ExecuteAsync(Arg.Is<ReplaySubscriptionCommand>(c => c!.Name == "orders" && c.From == from), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class McpToolsetTests
 
         // assert - the event is published as the calling user
         Assert.Equal(outcome, result);
-        await publisher.Received(1).PublishAsync(Event, Arg.Is<ClaimsPrincipal>(u => u.Identity!.Name == "alice"), Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishAsync(Event, Arg.Is<ClaimsPrincipal>(u => u!.Identity!.Name == "alice"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

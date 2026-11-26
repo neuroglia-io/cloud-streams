@@ -91,7 +91,7 @@ public class PartitionIndexTests
         await store.AppendAsync(Descriptor());
 
         // assert
-        await index.Received(1).AddAsync(Namespace.DefaultNamespaceName, Arg.Is<IEnumerable<PartitionReference>>(p => p.Count() == 2), Arg.Any<CancellationToken>());
+        await index.Received(1).AddAsync(Namespace.DefaultNamespaceName, Arg.Is<IEnumerable<PartitionReference>>(p => p!.Count() == 2), Arg.Any<CancellationToken>());
     }
 
     [Fact]

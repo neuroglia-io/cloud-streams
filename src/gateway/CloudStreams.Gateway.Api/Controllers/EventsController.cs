@@ -257,7 +257,7 @@ public class EventsController(IMediator mediator, IGatewayConfiguration configur
         var error = result.Errors?.FirstOrDefault();
         return error == null
             ? new(new Uri($"https://httpstatuses.io/{result.Status}"), ReasonPhrases.GetReasonPhrase(result.Status), result.Status)
-            : new(error.Type, error.Title, error.Status, error.Detail, error.Instance, error.Errors?.ToDictionary(e => e.Key, e => e.Value));
+            : error.ToProblemDetails();
     }
 
     /// <summary>
