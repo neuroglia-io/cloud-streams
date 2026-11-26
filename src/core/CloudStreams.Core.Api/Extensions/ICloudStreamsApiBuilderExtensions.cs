@@ -14,6 +14,7 @@
 using CloudStreams.Core.Transports;
 using CloudStreams.Core.Api.Services;
 using CloudStreams.Core.Application.Services;
+using System.Text.Json;
 
 namespace CloudStreams.Core.Api;
 
@@ -22,6 +23,23 @@ namespace CloudStreams.Core.Api;
 /// </summary>
 public static class ICloudStreamsApiBuilderExtensions
 {
+
+    /// <summary>
+    /// Gets the options used to bind the arguments of MCP tools, and to serialize their results
+    /// </summary>
+    /// <remarks>
+    /// The converters of the SDK's options take precedence over the converters the types declare: enums are read and written by their <see cref="System.Runtime.Serialization.EnumMemberAttribute"/>
+    /// value instead, e.g. <c>by-source</c>, as they are everywhere else
+    /// </remarks>
+    public static JsonSerializerOptions McpSerializerOptions { get; } = CreateMcpSerializerOptions();
+
+    static JsonSerializerOptions CreateMcpSerializerOptions()
+    {
+        var options = new JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions);
+        options.Converters.Insert(0, new Neuroglia.Serialization.Json.Converters.StringEnumConverter());
+        options.MakeReadOnly();
+        return options;
+    }
 
     /// <summary>
     /// Configures CloudStreams to use the Core API
@@ -39,7 +57,7 @@ public static class ICloudStreamsApiBuilderExtensions
         builder.Services.AddHostedService<PartitionIndexInitializer>();
         builder.Services.AddHostedService<BrokerResourceController>();
         // agents connect with the Streamable HTTP transport, at /mcp. The legacy SSE transport, which has no backpressure, is not served
-        builder.Services.AddMcpServer().WithToolsFromAssembly().WithHttpTransport();
+        builder.Services.AddMcpServer().WithToolsFromAssembly(serializerOptions: McpSerializerOptions).WithHttpTransport();
         builder.Services.AddHostedService<SecurityConfigurationAuditor>();
         return builder;
     }
