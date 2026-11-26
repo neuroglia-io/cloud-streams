@@ -20,11 +20,17 @@ namespace CloudStreams.Core.Application.Queries.Streams;
 /// Represents the query used to describe the recent activity of the cloud event stream (see #225)
 /// </summary>
 /// <param name="period">The period, ending now, to describe the activity of</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="buckets">The amount of consecutive slices to split the period into</param>
 /// <param name="sampleSize">The amount of most recent cloud events to compute the most active sources and types from</param>
-public class GetEventStreamActivityQuery(TimeSpan period, int buckets, int sampleSize)
+public class GetEventStreamActivityQuery(TimeSpan period, int buckets, int sampleSize, string? @namespace = null)
     : Query<StreamActivity>
 {
+
+    /// <summary>
+    /// Gets the namespace to read the cloud events of, or null to read the whole stream
+    /// </summary>
+    public virtual string? Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? null : @namespace;
 
     /// <summary>
     /// Gets the default period
@@ -95,7 +101,7 @@ public class GetEventStreamActivityQueryHandler(ICloudEventStore eventStore)
         ulong length, first;
         try
         {
-            var metadata = await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+            var metadata = await eventStore.GetStreamMetadataAsync(query.Namespace, cancellationToken).ConfigureAwait(false);
             (length, first) = (metadata.Length ?? 0, metadata.FirstOffset ?? 0);
         }
         catch (StreamNotFoundException) { (length, first) = (0, 0); }
@@ -106,7 +112,7 @@ public class GetEventStreamActivityQueryHandler(ICloudEventStore eventStore)
         var low = Math.Min(first, length);
         for (var i = 0; i < query.Buckets; i++)
         {
-            bounds[i] = await this.FindOffsetAsync(from + step * i, low, length, cancellationToken).ConfigureAwait(false);
+            bounds[i] = await this.FindOffsetAsync(query.Namespace, from + step * i, low, length, cancellationToken).ConfigureAwait(false);
             low = bounds[i];
         }
         for (var i = 0; i < query.Buckets; i++)
@@ -122,7 +128,7 @@ public class GetEventStreamActivityQueryHandler(ICloudEventStore eventStore)
         {
             var sources = new Dictionary<string, int>(StringComparer.Ordinal);
             var types = new Dictionary<string, int>(StringComparer.Ordinal);
-            await foreach (var record in eventStore.ReadAsync(StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)query.SampleSize, cancellationToken).ConfigureAwait(false))
+            await foreach (var record in eventStore.ReadAsync(query.Namespace, StreamReadDirection.Backwards, StreamPosition.EndOfStream, (ulong)query.SampleSize, cancellationToken).ConfigureAwait(false))
             {
                 activity.SampleSize++;
                 Count(sources, record, CloudEventAttributes.Source);
@@ -137,18 +143,19 @@ public class GetEventStreamActivityQueryHandler(ICloudEventStore eventStore)
     /// <summary>
     /// Finds the offset of the first cloud event recorded at or after the specified time, between the specified offsets
     /// </summary>
+    /// <param name="namespace">The namespace to search the stream of, or null to search the whole stream</param>
     /// <param name="time">The time to find the offset of</param>
     /// <param name="low">The lowest offset the cloud event may be at</param>
     /// <param name="high">The offset to return if no cloud event has been recorded at or after the specified time, which is to say the length of the stream</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The offset of the first cloud event recorded at or after the specified time, or <paramref name="high"/> if there is none</returns>
     /// <remarks>A record whose timestamp is unknown is deemed recorded at or after the time, like <see cref="ICloudEventStore.FindOffsetAsync"/> does</remarks>
-    protected virtual async Task<ulong> FindOffsetAsync(DateTimeOffset time, ulong low, ulong high, CancellationToken cancellationToken)
+    protected virtual async Task<ulong> FindOffsetAsync(string? @namespace, DateTimeOffset time, ulong low, ulong high, CancellationToken cancellationToken)
     {
         while (low < high)
         {
             var middle = low + (high - low) / 2;
-            var record = await eventStore.ReadAsync(StreamReadDirection.Forwards, (long)middle, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var record = await eventStore.ReadAsync(@namespace, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             if (record?.Timestamp == null || record.Timestamp >= time) high = middle;
             else low = middle + 1;
         }

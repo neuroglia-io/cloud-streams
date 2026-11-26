@@ -40,6 +40,11 @@ public interface IResourceManagementApiClient
     public IResourceManagementApi<Feed> Feeds { get; }
 
     /// <summary>
+    /// Gets the API used to manage <see cref="Namespace"/>s, which isolate tenants from each other (see #215)
+    /// </summary>
+    public IResourceManagementApi<Namespace> Namespaces { get; }
+
+    /// <summary>
     /// Gets the API used to manage <see cref="Subscription"/>s
     /// </summary>
     public ISubscriptionManagementApi Subscriptions { get; }

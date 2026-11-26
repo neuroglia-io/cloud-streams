@@ -27,7 +27,7 @@ public class SubscriptionHandlerLagTests
 
         // assert
         Assert.True(context.Metrics.ObservesLag);
-        Assert.Equal(("All", 0ul), context.Metrics.Lag);
+        Assert.Equal(("$by-namespace-default", 0ul), context.Metrics.Lag);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public class SubscriptionHandlerLagTests
 
         // assert
         await WaitUntilAsync(() => context.Http.AttemptCount >= 1 && context.Metrics.Lag is { Lag: 3 }, "the lag to be reported");
-        Assert.Equal("All", context.Metrics.Lag!.Value.Stream);
+        Assert.Equal("$by-namespace-default", context.Metrics.Lag!.Value.Stream);
     }
 
     [Fact]

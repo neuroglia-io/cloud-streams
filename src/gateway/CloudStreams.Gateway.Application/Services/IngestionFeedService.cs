@@ -17,36 +17,36 @@ using CloudStreams.Core.Transports;
 using CloudStreams.Core.Transports.Authentication;
 using CloudStreams.Core.Transports.Services;
 using CloudStreams.Gateway.Application.Commands.CloudEvents;
-using CloudStreams.Gateway.Application.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Neuroglia.Data.Infrastructure.ResourceOriented;
 using Neuroglia.Mediation;
 using Neuroglia.Serialization;
 
 namespace CloudStreams.Gateway.Application.Services;
 
 /// <summary>
-/// Consumes cloud events from the feeds the gateway's ingestion policy lists, such as Kafka topics, NATS subjects or AMQP queues, and ingests them like published
-/// ones (see #218)
+/// Consumes cloud events from the feeds the gateway's ingestion policy lists, such as Kafka topics, NATS subjects or AMQP queues, and ingests them
+/// like published ones (see #218). The cloud events of a feed belong to the namespace of its gateway (see #215)
 /// </summary>
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
-/// <param name="admissionControl">The service that holds the gateway's configuration</param>
+/// <param name="configuration">The service that holds the configuration of the gateway</param>
 /// <param name="consumers">The transports cloud events can be consumed from</param>
 /// <param name="serializer">The service used to deserialize cloud events</param>
-/// <param name="options">The service used to access the current <see cref="GatewayOptions"/></param>
 /// <remarks>
-/// <para>The feeds are reconciled with the gateway's configuration, and with the <see cref="Feed"/> resources it refers to, periodically: added feeds are consumed,
-/// removed ones are not anymore, and changed ones are consumed anew. A feed whose consumption fails, e.g. because its broker is unreachable, its resource does not
-/// exist, or its secret cannot be read, is consumed again after a delay that grows up to a minute, with credentials read anew.</para>
+/// <para>The feeds are reconciled with the configuration of the gateways, and with the <see cref="Feed"/> resources they refer to, periodically: added feeds are
+/// consumed, removed ones are not anymore, and changed ones are consumed anew. A feed whose consumption fails, e.g. because its broker is unreachable, its resource
+/// does not exist, or its secret cannot be read, is consumed again after a delay that grows up to a minute, with credentials read anew.</para>
 /// <para>A message is acknowledged once its cloud events have been stored, ignored or refused. It is consumed again if one of them could not be stored for a reason
 /// that may pass, i.e. a rate limit or an unavailable event store, so that no cloud event is lost. A message that is not a cloud event is acknowledged, and logged,
 /// since consuming it again would not change that.</para>
+/// <para>The replicas of the gateway share the consumption of its feeds, as a Kafka consumer group, a NATS queue group or competing AMQP consumers named after
+/// the gateway and its namespace.</para>
 /// </remarks>
-public class IngestionFeedService(ILogger<IngestionFeedService> logger, IServiceProvider serviceProvider, ICloudEventAdmissionControl admissionControl,
-    IEnumerable<ICloudEventFeedConsumer> consumers, IJsonSerializer serializer, IOptions<GatewayOptions> options)
+public class IngestionFeedService(ILogger<IngestionFeedService> logger, IServiceProvider serviceProvider, IGatewayConfiguration configuration,
+    IEnumerable<ICloudEventFeedConsumer> consumers, IJsonSerializer serializer)
     : BackgroundService
 {
 
@@ -60,12 +60,12 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
     readonly Dictionary<string, RunningFeed> _feeds = [];
 
     /// <summary>
-    /// Gets/sets how often the feeds are reconciled with the gateway's configuration
+    /// Gets/sets how often the feeds are reconciled with the configuration of the gateways
     /// </summary>
     public TimeSpan ReconciliationInterval { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Gets the names of the feeds being consumed
+    /// Gets the feeds being consumed, as <c>{namespace}/{gateway}/{feed}</c>
     /// </summary>
     public IReadOnlyCollection<string> Feeds
     {
@@ -82,7 +82,7 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await this.ReconcileAsync(admissionControl.Gateway?.Spec.Ingestion?.Feeds ?? [], stoppingToken).ConfigureAwait(false);
+                await this.ReconcileAsync(configuration.Gateway is { } gateway ? [gateway] : [], stoppingToken).ConfigureAwait(false);
                 await Task.Delay(this.ReconciliationInterval, stoppingToken).ConfigureAwait(false);
             }
         }
@@ -100,39 +100,46 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
     }
 
     /// <summary>
-    /// Starts consuming the specified feeds, and stops consuming the others
+    /// Starts consuming the feeds of the specified gateways, and stops consuming the others
     /// </summary>
-    /// <param name="feeds">The feeds to consume</param>
+    /// <param name="gateways">The gateways whose feeds to consume</param>
     /// <param name="stoppingToken">A <see cref="CancellationToken"/> that stops the consumption of every feed</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task ReconcileAsync(IReadOnlyCollection<FeedReference> feeds, CancellationToken stoppingToken)
+    protected virtual async Task ReconcileAsync(IReadOnlyCollection<Core.Resources.Gateway> gateways, CancellationToken stoppingToken)
     {
         var resolver = serviceProvider.GetRequiredService<IEndpointResolver>();
-        var desired = new Dictionary<string, Endpoint>();
-        foreach (var feed in feeds)
+        var desired = new Dictionary<string, (FeedTarget Target, Endpoint Endpoint)>();
+        foreach (var gateway in gateways)
         {
-            if (feed?.EffectiveName is not { } name || desired.ContainsKey(name)) continue;
-            try { desired[name] = (await resolver.GetFeedAsync(feed, stoppingToken).ConfigureAwait(false)).Endpoint; }
-            catch (InvalidOperationException ex)
+            var @namespace = gateway.GetNamespace() ?? Namespace.DefaultNamespaceName;
+            foreach (var feed in gateway.Spec.Ingestion?.Feeds ?? [])
             {
-                // a feed that cannot be resolved for now, e.g. one whose resource has been deleted, keeps being consumed as it was, if it was
-                lock (this._feeds) if (this._feeds.TryGetValue(name, out var running)) desired[name] = running.Endpoint;
-                logger.LogWarning("Cannot resolve the feed '{feed}': {reason}", name, ex.Message);
+                if (feed?.EffectiveName is not { } feedName) continue;
+                var target = new FeedTarget(@namespace, gateway.GetName(), feedName);
+                if (desired.ContainsKey(target.Key)) continue;
+                // a feed refers to a Feed resource of the gateway's namespace
+                try { desired[target.Key] = (target, (await resolver.GetFeedAsync(feed, @namespace, stoppingToken).ConfigureAwait(false)).Endpoint); }
+                catch (InvalidOperationException ex)
+                {
+                    // a feed that cannot be resolved for now, e.g. one whose resource has been deleted, keeps being consumed as it was, if it was
+                    lock (this._feeds) if (this._feeds.TryGetValue(target.Key, out var running)) desired[target.Key] = (target, running.Endpoint);
+                    logger.LogWarning("Cannot resolve the feed '{feed}': {reason}", target.Key, ex.Message);
+                }
             }
         }
         lock (this._feeds)
         {
-            foreach (var (name, running) in this._feeds.ToList())
+            foreach (var (key, running) in this._feeds.ToList())
             {
-                if (desired.TryGetValue(name, out var endpoint) && Fingerprint(endpoint) == running.Fingerprint) continue;
-                logger.LogInformation("Stopped consuming the feed '{feed}' ({uri})", name, running.Endpoint.Uri);
-                this._feeds.Remove(name);
+                if (desired.TryGetValue(key, out var wanted) && Fingerprint(wanted.Endpoint) == running.Fingerprint) continue;
+                logger.LogInformation("Stopped consuming the feed '{feed}' ({uri})", key, running.Endpoint.Uri);
+                this._feeds.Remove(key);
                 _ = running.StopAsync();
             }
-            foreach (var (name, endpoint) in desired.Where(d => !this._feeds.ContainsKey(d.Key)))
+            foreach (var (key, (target, endpoint)) in desired.Where(d => !this._feeds.ContainsKey(d.Key)))
             {
                 var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                this._feeds[name] = new(name, endpoint, Fingerprint(endpoint), cancellationTokenSource, this.ConsumeAsync(name, endpoint, cancellationTokenSource.Token));
+                this._feeds[key] = new(key, endpoint, Fingerprint(endpoint), cancellationTokenSource, this.ConsumeAsync(target, endpoint, cancellationTokenSource.Token));
             }
         }
     }
@@ -140,13 +147,14 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
     /// <summary>
     /// Consumes the specified feed until cancelled, consuming it again whenever its consumption fails
     /// </summary>
-    /// <param name="name">The name of the feed</param>
+    /// <param name="target">The feed to consume</param>
     /// <param name="endpoint">The endpoint of the feed</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/> that stops the consumption</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    protected virtual async Task ConsumeAsync(string name, Endpoint endpoint, CancellationToken cancellationToken)
+    protected virtual async Task ConsumeAsync(FeedTarget target, Endpoint endpoint, CancellationToken cancellationToken)
     {
         await Task.Yield();
+        var name = target.Key;
         if (!TransportAddress.TryParse(endpoint.Uri, true, out var address, out var error))
         {
             logger.LogError("Cannot consume the feed '{feed}': {reason}", name, error);
@@ -164,9 +172,9 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
             try
             {
                 // credentials are resolved anew whenever the consumption starts, so that a rotated secret is picked up when the previous one stops working
-                var credentials = endpoint.Authentication == null ? null : await serviceProvider.GetRequiredService<ICredentialResolver>().ResolveAsync(endpoint.Authentication, cancellationToken).ConfigureAwait(false);
+                var credentials = endpoint.Authentication == null ? null : await serviceProvider.GetRequiredService<ICredentialResolver>().ResolveAsync(endpoint.Authentication, target.Namespace, cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("Consuming the feed '{feed}' ({uri})", name, endpoint.Uri);
-                await consumer.ConsumeAsync(address, credentials, options.Value.Name, name, (message, token) => this.HandleAsync(name, message, token), cancellationToken).ConfigureAwait(false);
+                await consumer.ConsumeAsync(address, credentials, target.Consumer, target.Feed, (message, token) => this.HandleAsync(target, message, token), cancellationToken).ConfigureAwait(false);
                 delay = TimeSpan.FromSeconds(1);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
@@ -183,12 +191,20 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
     /// <summary>
     /// Ingests the cloud events the specified message carries
     /// </summary>
-    /// <param name="feed">The name of the feed the message has been consumed from</param>
+    /// <param name="target">The feed the message has been consumed from</param>
     /// <param name="message">The message to handle</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A boolean indicating whether the message should be acknowledged, which it should not if one of its cloud events could not be stored for now</returns>
-    protected virtual async Task<bool> HandleAsync(string feed, TransportMessage message, CancellationToken cancellationToken)
+    protected virtual async Task<bool> HandleAsync(FeedTarget target, TransportMessage message, CancellationToken cancellationToken)
     {
+        var feed = target.Key;
+        // the gateway's current policies apply: a gateway that is not served anymore stores nothing, and its feeds are stopped shortly
+        var gateway = configuration.Gateway;
+        if (gateway == null || gateway.GetName() != target.Gateway || gateway.GetNamespace() != target.Namespace)
+        {
+            logger.LogWarning("Cannot ingest {message} of feed '{feed}': its gateway has changed", message.Description, feed);
+            return false;
+        }
         IReadOnlyList<CloudEvent> events;
         try { events = this.Decode(message); }
         catch (FormatException ex)
@@ -200,7 +216,7 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
         foreach (var e in events)
         {
-            var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e, null, PublisherPrefix + feed), cancellationToken).ConfigureAwait(false);
+            var result = await mediator.ExecuteAsync(new ConsumeEventCommand(e, gateway, null, PublisherPrefix + target.Feed), cancellationToken).ConfigureAwait(false);
             if (result.Status is >= 200 and < 300) continue;
             var problem = result.Errors?.FirstOrDefault();
             var reason = problem?.Detail ?? problem?.Title ?? $"status {result.Status}";
@@ -238,6 +254,27 @@ public class IngestionFeedService(ILogger<IngestionFeedService> logger, IService
     /// Gets a value that changes whenever the specified endpoint does, so that a changed feed is consumed anew
     /// </summary>
     string Fingerprint(Endpoint endpoint) => serializer.SerializeToText(endpoint);
+
+    /// <summary>
+    /// Represents a feed of a gateway
+    /// </summary>
+    /// <param name="Namespace">The namespace of the gateway, which the cloud events of the feed belong to</param>
+    /// <param name="Gateway">The name of the gateway</param>
+    /// <param name="Feed">The name of the feed, which identifies it as the publisher of its cloud events</param>
+    protected sealed record FeedTarget(string Namespace, string Gateway, string Feed)
+    {
+
+        /// <summary>
+        /// Gets the key that identifies the feed
+        /// </summary>
+        public string Key => $"{this.Namespace}/{this.Gateway}/{this.Feed}";
+
+        /// <summary>
+        /// Gets the name of the consumer group, queue group or consumer the feed is consumed as, shared by the replicas of every application that serves the gateway
+        /// </summary>
+        public string Consumer => $"{this.Gateway}.{this.Namespace}";
+
+    }
 
     sealed record RunningFeed(string Name, Endpoint Endpoint, string Fingerprint, CancellationTokenSource CancellationTokenSource, Task Task)
     {

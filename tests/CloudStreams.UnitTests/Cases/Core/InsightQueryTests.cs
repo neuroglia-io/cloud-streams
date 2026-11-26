@@ -48,12 +48,12 @@ public class InsightQueryTests
     static ICloudEventStore Store(IReadOnlyList<CloudEventRecord> records)
     {
         var store = Substitute.For<ICloudEventStore>();
-        store.GetStreamMetadataAsync(Arg.Any<CancellationToken>()).Returns(new StreamMetadata() { Length = (ulong)records.Count });
-        store.ReadAsync(Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>()).Returns(call =>
+        store.GetStreamMetadataAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new StreamMetadata() { Length = (ulong)records.Count });
+        store.ReadAsync(Arg.Any<string?>(), Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
-            var direction = call.ArgAt<StreamReadDirection>(0);
-            var offset = call.ArgAt<long>(1);
-            var length = (int)Math.Min(call.ArgAt<ulong?>(2) ?? ulong.MaxValue, int.MaxValue);
+            var direction = call.ArgAt<StreamReadDirection>(1);
+            var offset = call.ArgAt<long>(2);
+            var length = (int)Math.Min(call.ArgAt<ulong?>(3) ?? ulong.MaxValue, int.MaxValue);
             IEnumerable<CloudEventRecord> selected = direction == StreamReadDirection.Forwards
                 ? records.Skip((int)offset)
                 : records.Take(offset == StreamPosition.EndOfStream ? records.Count : (int)offset + 1).Reverse();
@@ -203,7 +203,7 @@ public class InsightQueryTests
         // arrange
         var store = Substitute.For<ICloudEventStore>();
         store.ListPartitionIdsAsync(CloudEventPartitionType.BySource, Arg.Any<CancellationToken>()).Returns(new[] { "c", "a", "b", "pending" }.ToAsyncEnumerable());
-        store.GetPartitionMetadataAsync(Arg.Any<PartitionReference>(), Arg.Any<CancellationToken>()).Returns(call =>
+        store.GetPartitionMetadataAsync(Arg.Any<string?>(), Arg.Any<PartitionReference>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
             var partition = call.Arg<PartitionReference>();
             if (partition.Id == "pending") throw new StreamNotFoundException(partition.Id);

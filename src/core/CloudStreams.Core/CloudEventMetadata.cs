@@ -51,3 +51,16 @@ public record CloudEventMetadata
     public IDictionary<string, object>? ExtensionData { get; set; }
 
 }
+/// <summary>
+/// Exposes the names of the metadata Cloud Streams stores along with cloud events, which are not delivered as context attributes
+/// </summary>
+public static class CloudEventMetadataAttributes
+{
+
+    /// <summary>
+    /// Gets the name of the metadata attribute that holds the namespace a cloud event belongs to, which is the namespace of the gateway that ingested it (see #215)
+    /// </summary>
+    /// <remarks>Cloud events stored by earlier versions have none: they belong to the default namespace</remarks>
+    public const string Namespace = "$namespace";
+
+}

@@ -58,6 +58,39 @@ public class SecretOptions
     /// <returns>The providers to read secrets from</returns>
     public virtual IReadOnlyList<string> GetProviders() => this.Providers.Count > 0 ? [.. this.Providers.Select(p => p.Trim().ToLowerInvariant()).Distinct()] : [SecretProviders.Environment, SecretProviders.File];
 
+    /// <summary>
+    /// Gets the name of the path segment, environment variable segment or label under which the secrets of each namespace are stored
+    /// </summary>
+    public const string NamespacesSegment = "namespaces";
+
+    /// <summary>
+    /// Gets the name of the namespace allowed to read shared secrets by default
+    /// </summary>
+    public const string DefaultSharedNamespace = "default";
+
+    /// <summary>
+    /// Gets/sets the namespaces allowed to read shared secrets, which do not belong to a namespace, in addition to their own. <c>*</c> allows all of them.
+    /// Defaults to the <c>default</c> namespace only
+    /// </summary>
+    /// <remarks>
+    /// Each namespace reads its own secrets, which no other namespace can read, so that whoever may edit the resources of a namespace cannot have Cloud Streams send
+    /// the secrets of another namespace to an endpoint of theirs. Shared secrets, such as the credentials of a Kafka cluster every namespace delivers to, are readable
+    /// by the namespaces listed here, whose administrators can therefore read them all (see #215)
+    /// </remarks>
+    public virtual List<string> SharedWith { get; set; } = [];
+
+    /// <summary>
+    /// Determines whether or not the specified namespace may read shared secrets
+    /// </summary>
+    /// <param name="namespace">The namespace to check</param>
+    /// <returns>A boolean indicating whether or not the namespace may read shared secrets</returns>
+    public virtual bool IsSharedWith(string? @namespace)
+    {
+        if (string.IsNullOrWhiteSpace(@namespace)) return true;
+        var namespaces = this.SharedWith.Count > 0 ? this.SharedWith : [DefaultSharedNamespace];
+        return namespaces.Any(n => n.Trim() == "*" || string.Equals(n.Trim(), @namespace, StringComparison.Ordinal));
+    }
+
 }
 
 /// <summary>

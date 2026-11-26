@@ -3,7 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   name: gateways.cloud-streams.io
 spec:
-  scope: Cluster
+  scope: Namespaced
   group: cloud-streams.io
   names:
     plural: gateways
@@ -367,6 +367,33 @@ spec:
                                 description: The endpoint of the feed, either an address or an object with an address and how to authenticate to it
                                 x-kubernetes-preserve-unknown-fields: true
                             required: [ name, endpoint ]
+                    publishers:
+                      type: array
+                      description: The publishers allowed to publish cloud events to the gateway. Anyone the cluster's ingestion authentication admits may publish if not set
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                            description: The publisher's name, which identifies it in rate limits and metrics
+                          apiKey:
+                            type: object
+                            description: The API key that identifies the publisher, preferably read from a secret of the gateway's namespace with 'use'
+                            x-kubernetes-preserve-unknown-fields: true
+                          subject:
+                            type: string
+                            description: The subject ('sub' claim) of the bearer tokens that identify the publisher
+                          claims:
+                            type: object
+                            description: The claims the bearer tokens that identify the publisher must all have
+                            additionalProperties:
+                              type: string
+                          sources:
+                            type: array
+                            description: The patterns of the sources the publisher may publish cloud events of. Any if not set
+                            items:
+                              type: string
+                        required: [ name ]
             status:
               type: object
               properties:

@@ -62,7 +62,7 @@ public class RedisSubscriptionLeaseManager
     {
         this.Redis = redis;
         this.Options = options.Value.Leases;
-        this.OwnerId = $"{options.Value.Name}/{Environment.MachineName}/{Guid.NewGuid():N}";
+        this.OwnerId = $"{options.Value.GetNamespace()}/{options.Value.GetName()}/{Environment.MachineName}/{Guid.NewGuid():N}";
     }
 
     /// <summary>

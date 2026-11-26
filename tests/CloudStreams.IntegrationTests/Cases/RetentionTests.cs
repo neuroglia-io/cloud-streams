@@ -96,7 +96,7 @@ public sealed class RetentionTests
         {
             try
             {
-                var metadata = await this._store.GetPartitionMetadataAsync(new(CloudEventPartitionType.BySource, Source.OriginalString));
+                var metadata = await this._store.GetPartitionMetadataAsync(null, new(CloudEventPartitionType.BySource, Source.OriginalString));
                 if (metadata.Length >= length) return metadata;
             }
             catch (ProblemDetailsException) when (DateTime.UtcNow < deadline) { }
@@ -117,21 +117,21 @@ public sealed class RetentionTests
         await this._retention.SetAsync(new() { MaxCount = 2 });
 
         // assert - the stream
-        var stream = await this._store.GetStreamMetadataAsync();
+        var stream = await this._store.GetStreamMetadataAsync(null);
         Assert.Equal(5ul, stream.Length);
         Assert.Equal(3ul, stream.FirstOffset);
         Assert.Equal(2ul, stream.Retention!.MaxCount);
-        Assert.Equal([3ul, 4ul], await this._store.ReadAsync(StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync());
+        Assert.Equal([3ul, 4ul], await this._store.ReadAsync(null, StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync());
 
         // assert - the partition, whose links to expired events can no longer be read
-        var metadata = await this._store.GetPartitionMetadataAsync(partition);
+        var metadata = await this._store.GetPartitionMetadataAsync(null, partition);
         Assert.Equal(5ul, metadata.Length);
         Assert.Equal(3ul, metadata.FirstOffset);
-        Assert.Equal([3ul, 4ul], await this._store.ReadPartitionAsync(partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync());
-        Assert.Equal([3ul], await this._store.ReadPartitionAsync(partition, StreamReadDirection.Forwards, 1, 1).Select(r => r.Sequence).ToListAsync());
-        Assert.Equal([4ul, 3ul], await this._store.ReadPartitionAsync(partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream).Select(r => r.Sequence).ToListAsync());
-        Assert.Empty(await this._store.ReadPartitionAsync(partition, StreamReadDirection.Backwards, 2).ToListAsync());
-        Assert.Equal(3ul, await this._store.FindOffsetAsync(DateTimeOffset.UtcNow.AddHours(-1), partition));
+        Assert.Equal([3ul, 4ul], await this._store.ReadPartitionAsync(null, partition, StreamReadDirection.Forwards, StreamPosition.StartOfStream).Select(r => r.Sequence).ToListAsync());
+        Assert.Equal([3ul], await this._store.ReadPartitionAsync(null, partition, StreamReadDirection.Forwards, 1, 1).Select(r => r.Sequence).ToListAsync());
+        Assert.Equal([4ul, 3ul], await this._store.ReadPartitionAsync(null, partition, StreamReadDirection.Backwards, StreamPosition.EndOfStream).Select(r => r.Sequence).ToListAsync());
+        Assert.Empty(await this._store.ReadPartitionAsync(null, partition, StreamReadDirection.Backwards, 2).ToListAsync());
+        Assert.Equal(3ul, await this._store.FindOffsetAsync(null, DateTimeOffset.UtcNow.AddHours(-1), partition));
 
         // act - the policy is removed
         await this._retention.SetAsync(new());

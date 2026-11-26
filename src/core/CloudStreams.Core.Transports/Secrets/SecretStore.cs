@@ -58,10 +58,12 @@ public interface ISecretProvider
     /// Reads the specified secret
     /// </summary>
     /// <param name="path">The name or the path of the secret, within the provider</param>
+    /// <param name="namespace">The namespace the secret belongs to, or null to read a shared secret, which belongs to no namespace</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The secret, or null if the provider does not have it</returns>
     /// <exception cref="InvalidOperationException">The provider is not configured, cannot be reached, or refused to provide the secret</exception>
-    Task<Secret?> GetAsync(string path, CancellationToken cancellationToken = default);
+    /// <remarks>The secrets of a namespace and shared secrets are stored apart, so that a path can never designate a secret of another namespace (see #215)</remarks>
+    Task<Secret?> GetAsync(string path, string? @namespace, CancellationToken cancellationToken = default);
 
 }
 
@@ -75,10 +77,15 @@ public interface ISecretStore
     /// Gets the specified secret
     /// </summary>
     /// <param name="reference">The reference to the secret</param>
+    /// <param name="namespace">The namespace of the resource that refers to the secret, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The secret</returns>
     /// <exception cref="InvalidOperationException">The secret does not exist, or its provider is not configured</exception>
-    Task<Secret> GetAsync(SecretReference reference, CancellationToken cancellationToken = default);
+    /// <remarks>
+    /// The secret is looked for among the secrets of the namespace first, then among the shared secrets if the namespace may read them
+    /// (see <see cref="SecretOptions.SharedWith"/>). Without a namespace, only shared secrets are read
+    /// </remarks>
+    Task<Secret> GetAsync(SecretReference reference, string? @namespace, CancellationToken cancellationToken = default);
 
 }
 
@@ -95,28 +102,39 @@ public class SecretStore(IEnumerable<ISecretProvider> providers, IOptionsMonitor
     readonly ConcurrentDictionary<string, (Secret Secret, DateTimeOffset ExpiresAt)> _cache = new();
 
     /// <inheritdoc/>
-    public virtual async Task<Secret> GetAsync(SecretReference reference, CancellationToken cancellationToken = default)
+    public virtual async Task<Secret> GetAsync(SecretReference reference, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
-        var key = reference.ToString();
+        if (!SecretReference.IsValidPath(reference.Name)) throw new InvalidOperationException($"'{reference.Name}' is not a valid secret path: {SecretReference.PathRules}");
+        if (string.IsNullOrWhiteSpace(@namespace)) @namespace = null;
+        var key = $"{@namespace}|{reference}";
         var now = timeProvider.GetUtcNow();
         if (this._cache.TryGetValue(key, out var cached) && cached.ExpiresAt > now) return cached.Secret;
-        var configured = options.CurrentValue.GetProviders();
+        var configuration = options.CurrentValue;
+        var configured = configuration.GetProviders();
         IEnumerable<string> candidates;
         if (reference.Provider == null) candidates = configured;
         else if (!configured.Contains(reference.Provider)) throw new InvalidOperationException($"The secret '{reference}' cannot be read: the '{reference.Provider}' secret provider is not enabled. Enable it with '{SecretOptions.ConfigurationSection}:Providers'");
         else candidates = [reference.Provider];
-        foreach (var name in candidates)
+        var resolved = candidates.Select(name => providers.FirstOrDefault(p => p.Name == name) ?? throw new InvalidOperationException($"The secret provider '{name}' is not supported: use one of {string.Join(", ", SecretProviders.AsEnumerable())}")).ToList();
+        // the secrets of the namespace take precedence over shared ones, in every provider
+        var scopes = new List<string?>(2);
+        if (@namespace != null) scopes.Add(@namespace);
+        if (configuration.IsSharedWith(@namespace)) scopes.Add(null);
+        foreach (var scope in scopes)
         {
-            var provider = providers.FirstOrDefault(p => p.Name == name) ?? throw new InvalidOperationException($"The secret provider '{name}' is not supported: use one of {string.Join(", ", SecretProviders.AsEnumerable())}");
-            var secret = await provider.GetAsync(reference.Name, cancellationToken).ConfigureAwait(false);
-            if (secret == null) continue;
-            this._cache[key] = (secret, now + options.CurrentValue.CacheDuration);
-            return secret;
+            foreach (var provider in resolved)
+            {
+                var secret = await provider.GetAsync(reference.Name, scope, cancellationToken).ConfigureAwait(false);
+                if (secret == null) continue;
+                this._cache[key] = (secret, now + configuration.CacheDuration);
+                return secret;
+            }
         }
+        var where = @namespace == null ? "among the shared secrets" : scopes.Count > 1 ? $"among the secrets of the namespace '{@namespace}' and the shared secrets" : $"among the secrets of the namespace '{@namespace}'";
         throw new InvalidOperationException(reference.Provider == null
-            ? $"The secret '{reference.Name}' does not exist: none of the configured providers ({string.Join(", ", configured)}) has it"
-            : $"The secret '{reference.Name}' does not exist in the '{reference.Provider}' provider");
+            ? $"The secret '{reference.Name}' does not exist {where}: none of the configured providers ({string.Join(", ", configured)}) has it"
+            : $"The secret '{reference.Name}' does not exist {where} of the '{reference.Provider}' provider");
     }
 
 }

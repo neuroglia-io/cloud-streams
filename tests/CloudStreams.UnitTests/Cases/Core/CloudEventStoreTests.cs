@@ -42,7 +42,7 @@ public class CloudEventStoreTests
     public async Task Reading_The_Stream_Of_An_Empty_Store_Should_Yield_Nothing()
     {
         // act
-        var records = await CreateStore().ReadAsync(StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync();
+        var records = await CreateStore().ReadAsync(null, StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync();
 
         // assert
         Assert.Empty(records);
@@ -57,7 +57,7 @@ public class CloudEventStoreTests
     public async Task Reading_A_Partition_Whose_Stream_Does_Not_Exist_Should_Fail_With_A_Not_Found_Problem(CloudEventPartitionType type, string id)
     {
         // act
-        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => CreateStore().ReadPartitionAsync(new(type, id), StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<ProblemDetailsException>(() => CreateStore().ReadPartitionAsync(null, new(type, id), StreamReadDirection.Forwards, StreamPosition.StartOfStream).ToListAsync().AsTask());
 
         // assert
         Assert.Equal((int)HttpStatusCode.NotFound, exception.Problem.Status);
@@ -67,7 +67,7 @@ public class CloudEventStoreTests
     public async Task Reading_A_Source_Partition_Whose_Id_Is_Not_A_Uri_Should_Fail_With_A_Bad_Request_Problem()
     {
         // act
-        var exception = Assert.Throws<ProblemDetailsException>(() => CreateStore().ReadPartitionAsync(new(CloudEventPartitionType.BySource, "http://[invalid"), StreamReadDirection.Forwards, StreamPosition.StartOfStream));
+        var exception = Assert.Throws<ProblemDetailsException>(() => CreateStore().ReadPartitionAsync(null, new(CloudEventPartitionType.BySource, "http://[invalid"), StreamReadDirection.Forwards, StreamPosition.StartOfStream));
 
         // assert
         Assert.Equal((int)HttpStatusCode.BadRequest, exception.Problem.Status);
@@ -82,7 +82,7 @@ public class CloudEventStoreTests
         eventStore.ReadAsync(Arg.Any<string>(), Arg.Any<StreamReadDirection>(), Arg.Any<long>(), Arg.Any<ulong?>(), Arg.Any<CancellationToken>()).Returns(AsyncEnumerable.Empty<IEventRecord>());
 
         // act
-        var metadata = await CreateStore(eventStore).GetStreamMetadataAsync();
+        var metadata = await CreateStore(eventStore).GetStreamMetadataAsync(null);
 
         // assert
         Assert.Null(metadata.Length);

@@ -37,10 +37,10 @@ public class PartitionReferenceExtensionsTests
         var partition = new PartitionReference(CloudEventPartitionType.BySource, source);
 
         // act
-        var streamName = partition.GetStreamName();
+        var streamName = partition.GetStreamName(null);
 
         // assert
-        Assert.Equal($"{Streams.ByCloudEventSourcePrefix}{source}", streamName);
+        Assert.Equal($"{StreamNameHelper.ByCloudEventSourcePrefix}default/{source}", streamName);
         Assert.EndsWith(source, streamName);
     }
 
@@ -55,29 +55,29 @@ public class PartitionReferenceExtensionsTests
         var partition = new PartitionReference(CloudEventPartitionType.BySource, "https://test.com");
 
         // act
-        var streamName = partition.GetStreamName();
+        var streamName = partition.GetStreamName(null);
 
         // assert
-        Assert.Equal($"{Streams.ByCloudEventSourcePrefix}https://test.com", streamName);
+        Assert.Equal($"{StreamNameHelper.ByCloudEventSourcePrefix}default/https://test.com", streamName);
         Assert.DoesNotContain("test.com/", streamName);
     }
 
     [Theory]
-    [InlineData(CloudEventPartitionType.BySubject, Streams.ByCloudEventSubjectPrefix)]
-    [InlineData(CloudEventPartitionType.ByType, Streams.ByCloudEventTypePrefix)]
-    [InlineData(CloudEventPartitionType.ByCorrelationId, Streams.ByCorrelationIdPrefix)]
-    [InlineData(CloudEventPartitionType.ByCausationId, Streams.ByCausationIdPrefix)]
+    [InlineData(CloudEventPartitionType.BySubject, StreamNameHelper.ByCloudEventSubjectPrefix)]
+    [InlineData(CloudEventPartitionType.ByType, StreamNameHelper.ByCloudEventTypePrefix)]
+    [InlineData(CloudEventPartitionType.ByCorrelationId, StreamNameHelper.ByCorrelationIdPrefix)]
+    [InlineData(CloudEventPartitionType.ByCausationId, StreamNameHelper.ByCausationIdPrefix)]
     public void GetStreamName_Should_Prefix_NonSource_Partitions_With_Their_Type(CloudEventPartitionType type, string expectedPrefix)
     {
         // arrange
         var partition = new PartitionReference(type, "some.partition.id");
 
         // act
-        var streamName = partition.GetStreamName();
+        var streamName = partition.GetStreamName(null);
 
         // assert
-        Assert.Equal($"{expectedPrefix}some.partition.id", streamName);
-        Assert.True(Streams.IsPartition(streamName, type));
+        Assert.Equal($"{expectedPrefix}default/some.partition.id", streamName);
+        Assert.True(StreamNameHelper.IsPartition(streamName, type));
     }
 
 }

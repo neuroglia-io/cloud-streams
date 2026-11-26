@@ -1,5 +1,6 @@
 @namespace CloudStreams.Dashboard.Pages.Partitions
 @page "/partitions"
+@inject NamespaceContext NamespaceContext
 @inject ICloudStreamsCoreApiClient Api
 @inject NavigationManager Navigation
 
@@ -150,7 +151,7 @@
         error = null;
         try
         {
-            page = await Api.CloudEvents.Partitions.ListPartitionMetadataByTypeAsync(partitionType, string.IsNullOrWhiteSpace(prefix) ? null : prefix.Trim(), PageSize, token);
+            page = await Api.CloudEvents.Partitions.ListPartitionMetadataByTypeAsync(partitionType, string.IsNullOrWhiteSpace(prefix) ? null : prefix.Trim(), PageSize, token, @namespace: NamespaceContext.Current);
             currentToken = token;
         }
         catch (Exception ex)

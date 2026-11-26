@@ -58,10 +58,13 @@ builder.UseCloudStreams(builder =>
 
 builder.Services.Configure<GatewayOptions>(builder.Configuration);
 builder.Services.AddHostedService<DatabaseProvisioner>();
+builder.Services.AddSingleton<GatewayConfiguration>();
+builder.Services.AddSingleton<IGatewayConfiguration>(provider => provider.GetRequiredService<GatewayConfiguration>());
+builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<GatewayConfiguration>());
 builder.Services.AddSingleton<CloudEventAdmissionControl>();
 builder.Services.AddSingleton<ICloudEventAdmissionControl>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
 builder.Services.AddSingleton<IGatewayAdmissionTester>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
-builder.Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<CloudEventAdmissionControl>());
+builder.Services.AddSingleton<IPublisherAuthorizer, PublisherAuthorizer>();
 builder.Services.AddSingleton<ICloudEventAuthorizationManager, CloudEventAuthorizationManager>();
 builder.Services.AddHostedService<CloudEventHubDispatcher>();
 builder.Services.AddCloudStreamsTransports(builder.Configuration);
@@ -102,9 +105,9 @@ app.UseSwaggerUI(builder =>
     builder.DisplayOperationId();
 });
 app.MapControllers();
-app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy);
-app.MapHub<CloudEventHub>("api/ws/events").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy);
-app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy);
+app.MapHub<ResourceEventWatchHub>("api/ws/resources/watch").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy).WithMetadata(new NamespaceFilteredAttribute());
+app.MapHub<CloudEventHub>("api/ws/events").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy).WithMetadata(new NamespaceFilteredAttribute());
+app.MapMcp("mcp").RequireAuthorization(CloudStreamsAuthenticationDefaults.ReadPolicy).WithMetadata(new NamespaceFilteredAttribute());
 app.MapCloudStreamsAuthenticationEndpoints();
 app.MapFallbackToFile("index.html").RequireAuthorization(CloudStreamsAuthenticationDefaults.DashboardPagePolicy);
 

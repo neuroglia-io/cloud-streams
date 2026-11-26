@@ -22,15 +22,15 @@ namespace CloudStreams.Core.Api.Controllers;
 /// Represents the <see cref="ResourceApiController{TResource}"/> used to manage <see cref="Subscription"/>s
 /// </summary>
 /// <inheritdoc/>
-[Route("api/resources/v1/subscriptions")]
+[Route("api/resources/v1/namespaces/{namespace}/subscriptions")]
 public class SubscriptionsController(IMediator mediator)
-    : ClusterResourceApiController<Subscription>(mediator)
+    : NamespacedResourceApiController<Subscription>(mediator)
 {
 
     /// <summary>
     /// Describes the health of all subscriptions matching the specified filters, including their lag, in a flat format suited to monitoring tools such as Grafana
     /// </summary>
-    /// <param name="namespace">The namespace the subscriptions to describe belong to, if any. Subscriptions are cluster-scoped, so it is usually omitted</param>
+    /// <param name="namespace">The namespace the subscriptions to describe belong to</param>
     /// <param name="labelSelector">A comma-separated list of label selectors used to filter the subscriptions to describe, if any (e.g. <c>app=content,env=prod</c>)</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is a JSON array at root level, empty if no subscription matches</returns>
@@ -38,15 +38,35 @@ public class SubscriptionsController(IMediator mediator)
     [HttpGet("health")]
     [ProducesResponseType(typeof(IEnumerable<SubscriptionHealth>), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> GetSubscriptionsHealth([FromQuery(Name = "namespace")] string? @namespace = null, string? labelSelector = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> GetSubscriptionsHealth(string @namespace, string? labelSelector = null, CancellationToken cancellationToken = default)
     {
         if (!this.TryParseLabelSelectors(labelSelector, out var labelSelectors)) return this.InvalidLabelSelector(labelSelector!);
         return this.Process(await this.Mediator.ExecuteAsync(new GetSubscriptionsHealthQuery(@namespace, labelSelectors), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
+    /// Describes the health of the subscriptions of all the namespaces the user may read
+    /// </summary>
+    /// <param name="labelSelector">A comma-separated list of label selectors used to filter the subscriptions to describe, if any (e.g. <c>app=content,env=prod</c>)</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IActionResult"/> whose body is a JSON array at root level, empty if no subscription matches</returns>
+    [HttpGet("~/api/resources/v1/subscriptions/health")]
+    [NamespaceFiltered]
+    [ProducesResponseType(typeof(IEnumerable<SubscriptionHealth>), (int)HttpStatusCode.OK)]
+    [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
+    public virtual async Task<IActionResult> GetAllSubscriptionsHealth(string? labelSelector = null, CancellationToken cancellationToken = default)
+    {
+        if (!this.TryParseLabelSelectors(labelSelector, out var labelSelectors)) return this.InvalidLabelSelector(labelSelector!);
+        var result = await this.Mediator.ExecuteAsync(new GetSubscriptionsHealthQuery(null, labelSelectors), cancellationToken).ConfigureAwait(false);
+        if (result.Status is < 200 or >= 300 || result.Data == null) return this.Process(result);
+        var namespaces = this.GetAccessibleNamespaces(Configuration.CloudStreamsAccessLevel.Read);
+        return this.Ok(namespaces == null ? result.Data : result.Data.Where(h => h.Namespace != null && namespaces.Contains(h.Namespace)).ToList());
+    }
+
+    /// <summary>
     /// Acknowledges a cloud event whose acknowledgement the subscriber has deferred by responding '202 Accepted'. Delivery then resumes after it
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription the cloud event has been delivered for</param>
     /// <param name="request">An object that describes the acknowledgement</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -57,16 +77,17 @@ public class SubscriptionsController(IMediator mediator)
     [ProducesResponseType((int)HttpStatusCode.NoContent)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
-    public virtual async Task<IActionResult> AcknowledgeEvent(string name, [FromBody] AcknowledgementRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> AcknowledgeEvent(string @namespace, string name, [FromBody] AcknowledgementRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, true), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, true, null, @namespace), cancellationToken).ConfigureAwait(false);
         return result.Status is >= 200 and < 300 ? this.NoContent() : this.Problem(result);
     }
 
     /// <summary>
     /// Negatively acknowledges a cloud event whose acknowledgement the subscriber has deferred by responding '202 Accepted'. The cloud event is then redelivered
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription the cloud event has been delivered for</param>
     /// <param name="request">An object that describes the negative acknowledgement</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -77,16 +98,17 @@ public class SubscriptionsController(IMediator mediator)
     [ProducesResponseType((int)HttpStatusCode.NoContent)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.Conflict)]
-    public virtual async Task<IActionResult> NegativelyAcknowledgeEvent(string name, [FromBody] NegativeAcknowledgementRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> NegativelyAcknowledgeEvent(string @namespace, string name, [FromBody] NegativeAcknowledgementRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, false, request.Reason), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new AcknowledgeSubscriptionEventCommand(name, request.Token, false, request.Reason, @namespace), cancellationToken).ConfigureAwait(false);
         return result.Status is >= 200 and < 300 ? this.NoContent() : this.Problem(result);
     }
 
     /// <summary>
     /// Suspends the specified subscription: nothing is delivered, and its offset is kept, until it is resumed
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to suspend</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the suspended subscription</returns>
@@ -95,15 +117,16 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> SuspendSubscription(string name, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> SuspendSubscription(string @namespace, string name, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new SuspendSubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new SuspendSubscriptionCommand(name, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Resumes the specified suspended or faulted subscription. A faulted subscription has its fault cleared, so that the cloud event that caused it is retried: to skip that event
     /// instead, change the subscription's offset
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to resume</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the resumed subscription</returns>
@@ -112,14 +135,15 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ResumeSubscription(string name, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ResumeSubscription(string @namespace, string name, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new ResumeSubscriptionCommand(name), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ResumeSubscriptionCommand(name, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Skips the cloud event that faulted the specified subscription: delivery resumes with the cloud event that follows it
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to skip the faulted cloud event of</param>
     /// <param name="offset">The offset of the cloud event to skip, which must be the one that faulted the subscription, as described by its <c>status.stream.faultedOffset</c></param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -129,14 +153,15 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> SkipSubscriptionEvent(string name, [FromQuery] ulong offset, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> SkipSubscriptionEvent(string @namespace, string name, [FromQuery] ulong offset, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new SkipSubscriptionEventCommand(name, offset), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new SkipSubscriptionEventCommand(name, offset, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Runs a filter and a mutation against sample cloud events, or against the most recent cloud events of the stream or of a partition, without delivering anything
     /// </summary>
+    /// <param name="namespace">The namespace the subscription to test belongs to</param>
     /// <param name="request">An object that describes the test to run</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body describes, for each cloud event, whether it matched and what the subscriber would receive</returns>
@@ -145,15 +170,16 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.ReadPolicy)]
     [ProducesResponseType(typeof(SubscriptionTestResult), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> TestSubscription([FromBody] SubscriptionTestRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> TestSubscription(string @namespace, [FromBody] SubscriptionTestRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
-        return this.Process(await this.Mediator.ExecuteAsync(new TestSubscriptionQuery(request), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new TestSubscriptionQuery(request, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Replays the specified subscription, by delivering every cloud event matching it again, from the beginning of the stream or from the specified time
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to replay</param>
     /// <param name="from">The time, in ISO 8601 format, from which to replay the subscription, if any: it is replayed from the first cloud event recorded at or after that time</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -163,14 +189,15 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(Subscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ReplaySubscription(string name, [FromQuery] DateTimeOffset? from = null, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ReplaySubscription(string @namespace, string name, [FromQuery] DateTimeOffset? from = null, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new ReplaySubscriptionCommand(name, from), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ReplaySubscriptionCommand(name, from, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Reads the cloud events the specified subscription failed to deliver, and has stored in its dead-letter stream, most recent first by default
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to read the dead letters of</param>
     /// <param name="direction">The direction in which to read the dead letters</param>
     /// <param name="offset">The offset starting from which to read the dead letters, if any</param>
@@ -180,14 +207,15 @@ public class SubscriptionsController(IMediator mediator)
     [HttpGet("{name}/dead-letters")]
     [ProducesResponseType(typeof(IAsyncEnumerable<DeadLetter>), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ReadDeadLetters(string name, [FromQuery] StreamReadDirection direction = StreamReadDirection.Backwards, [FromQuery] long? offset = null, [FromQuery] ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ReadDeadLetters(string @namespace, string name, [FromQuery] StreamReadDirection direction = StreamReadDirection.Backwards, [FromQuery] long? offset = null, [FromQuery] ulong length = StreamReadOptions.MaxLength, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new ReadSubscriptionDeadLettersQuery(name, direction, offset, length), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new ReadSubscriptionDeadLettersQuery(name, direction, offset, length, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Delivers the specified dead letter to the subscriber again, once
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription the dead letter belongs to</param>
     /// <param name="offset">The offset of the dead letter in the subscription's dead-letter stream</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -197,15 +225,16 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(DeadLetterRedelivery), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> RedeliverDeadLetter(string name, ulong offset, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> RedeliverDeadLetter(string @namespace, string name, ulong offset, CancellationToken cancellationToken = default)
     {
-        var result = await this.Mediator.ExecuteAsync(new RedeliverDeadLetterCommand(name, offset), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new RedeliverDeadLetterCommand(name, offset, @namespace), cancellationToken).ConfigureAwait(false);
         return result.Status is < 200 or >= 300 ? this.Problem(result) : this.Process(result);
     }
 
     /// <summary>
     /// Delivers the specified recorded cloud event to the subscriber of the specified subscription again, once
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the subscription to redeliver the cloud event to</param>
     /// <param name="request">An object that describes the cloud event to redeliver: its offset, in the stream or in the specified partition</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -215,24 +244,25 @@ public class SubscriptionsController(IMediator mediator)
     [Authorize(Policy = CloudStreamsAuthenticationDefaults.OperatePolicy)]
     [ProducesResponseType(typeof(CloudEventRedelivery), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> RedeliverCloudEvent(string name, [FromBody] CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> RedeliverCloudEvent(string @namespace, string name, [FromBody] CloudEventRedeliveryRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await this.Mediator.ExecuteAsync(new RedeliverCloudEventCommand(name, request), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new RedeliverCloudEventCommand(name, request, @namespace), cancellationToken).ConfigureAwait(false);
         return result.Status is < 200 or >= 300 ? this.Problem(result) : this.Process(result);
     }
 
     /// <summary>
     /// Exports the specified subscription
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the resource to get</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}/export")]
     [ProducesResponseType(typeof(IAsyncEnumerable<Resource>), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> ExportSubscription(string name, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> ExportSubscription(string @namespace, string name, CancellationToken cancellationToken = default)
     {
-        var result = await this.Mediator.ExecuteAsync(new ExportSubscriptionCommand(name), cancellationToken).ConfigureAwait(false);
+        var result = await this.Mediator.ExecuteAsync(new ExportSubscriptionCommand(name, @namespace), cancellationToken).ConfigureAwait(false);
         if (result.Status is < 200 or >= 300 || result.Data == null) return this.Process(result);
         return this.File(result.Data, "application/x-yaml", $"{name}.yaml");
     }

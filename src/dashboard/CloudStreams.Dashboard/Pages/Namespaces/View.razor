@@ -1,0 +1,117 @@
+@namespace CloudStreams.Dashboard.Pages.Namespaces
+@page "/namespaces"
+@inject ICloudStreamsCoreApiClient Api
+@inject NamespaceContext NamespaceContext
+@inject UserAccess UserAccess
+
+@* The namespaces, which isolate tenants from each other: their resources, their cloud events and their secrets (see #215) *@
+
+<ApplicationTitle>Namespaces</ApplicationTitle>
+
+<div class="container-fluid px-0">
+    <h2 class="h5">Namespaces</h2>
+    <p class="text-body-secondary small">
+        Subscriptions, sinks, feeds, gateways and brokers belong to a namespace, as do the cloud events its gateways ingest. Users granted a role in a namespace only see and manage
+        what it holds. A namespace can only be deleted once it holds no resource, and the <code>default</code> namespace cannot be deleted.
+    </p>
+    @if (message != null)
+    {
+        <div class="alert @(succeeded ? "alert-success" : "alert-danger") py-2" role="status">@message</div>
+    }
+    @if (canAdminister)
+    {
+        <form class="d-flex gap-2 mb-3" @onsubmit="CreateAsync" @onsubmit:preventDefault="true">
+            <label for="new-namespace" class="visually-hidden">Name of the namespace to create</label>
+            <input id="new-namespace" type="text" class="form-control form-control-sm w-auto" placeholder="orders" @bind="newName" @bind:event="oninput" autocomplete="off" aria-describedby="new-namespace-help" />
+            <button type="submit" class="btn btn-sm btn-primary" disabled="@(busy || !ResourceNames.IsValid(newName))">Create</button>
+            <span id="new-namespace-help" class="form-text align-self-center">Lower-case letters, digits and dashes, starting and ending with a letter or a digit</span>
+        </form>
+    }
+    <table class="table table-striped table-hover">
+        <caption class="visually-hidden">Namespaces</caption>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th class="text-center">Created At</th>
+                <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in namespaces)
+            {
+                <tr>
+                    <td><button type="button" class="btn btn-link btn-sm p-0" title="Show the resources of the namespace '@item.GetName()'" @onclick="() => NamespaceContext.Select(item.GetName())">@item.GetName()</button></td>
+                    <td class="text-center">@item.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
+                    <td class="text-end">
+                        @if (canAdminister && item.GetName() != Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete the namespace '@item.GetName()'" disabled="@busy" @onclick="() => DeleteAsync(item.GetName())"><Icon Name="IconName.Trash" /> Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+
+    List<Namespace> namespaces = [];
+    bool canAdminister;
+    bool busy;
+    string? newName;
+    string? message;
+    bool succeeded;
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        canAdminister = await UserAccess.CanAdministerAsync();
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        try { namespaces = [.. (await (await Api.Resources.Namespaces.ListAsync()).ToListAsync()).OrderBy(n => n.GetName(), StringComparer.Ordinal)]; }
+        catch (Exception ex) { Report(false, $"Failed to list the namespaces: {ex.Message}"); }
+    }
+
+    async Task CreateAsync()
+    {
+        if (!ResourceNames.IsValid(newName)) return;
+        busy = true;
+        try
+        {
+            await Api.Resources.Namespaces.CreateAsync(new Namespace(newName!));
+            Report(true, $"The namespace '{newName}' has been created");
+            newName = null;
+            await LoadAsync();
+            await NamespaceContext.RefreshAsync();
+        }
+        catch (Exception ex) { Report(false, $"Failed to create the namespace: {Describe(ex)}"); }
+        finally { busy = false; }
+    }
+
+    async Task DeleteAsync(string name)
+    {
+        busy = true;
+        try
+        {
+            await Api.Resources.Namespaces.DeleteAsync(name);
+            Report(true, $"The namespace '{name}' has been deleted");
+            await LoadAsync();
+            await NamespaceContext.RefreshAsync();
+        }
+        catch (Exception ex) { Report(false, $"Failed to delete the namespace '{name}': {Describe(ex)}"); }
+        finally { busy = false; }
+    }
+
+    void Report(bool success, string text)
+    {
+        succeeded = success;
+        message = text;
+    }
+
+    static string Describe(Exception ex) => ex is ProblemDetailsException problem ? problem.Problem.Detail ?? problem.Problem.Title ?? ex.Message : ex.Message;
+
+}

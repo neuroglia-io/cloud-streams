@@ -31,11 +31,13 @@ public class ConsumeCloudEventCommandHandlerTests
         RateLimits = [new() { Partition = CloudEventRateLimitPartitioning.Publisher, Limit = 10, Period = Duration.FromSeconds(1) }]
     };
 
-    static ICloudEventAdmissionControl Admits(CloudEventIngestionPolicy? ingestion = null)
+    CloudStreams.Core.Resources.Gateway gateway = new(new ResourceMetadata("gateway"), new GatewaySpec());
+
+    ICloudEventAdmissionControl Admits(CloudEventIngestionPolicy? ingestion = null)
     {
         var admission = Substitute.For<ICloudEventAdmissionControl>();
-        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.OK, new CloudEventDescriptor(new(), null)));
-        admission.Gateway.Returns(new CloudStreams.Core.Resources.Gateway(new ResourceMetadata("gateway"), new GatewaySpec() { Ingestion = ingestion }));
+        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CloudStreams.Core.Resources.Gateway>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.OK, new CloudEventDescriptor(new(), null)));
+        this.gateway = new CloudStreams.Core.Resources.Gateway(new ResourceMetadata("gateway"), new GatewaySpec() { Ingestion = ingestion });
         return admission;
     }
 
@@ -64,7 +66,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(), metrics);
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         Assert.Equal((int)HttpStatusCode.Created, result.Status);
@@ -82,7 +84,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(), metrics, store);
 
         // act
-        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None));
 
         // assert
         metrics.Received(1).IncrementTotalAppendFailures(Event.Source);
@@ -101,12 +103,12 @@ public class ConsumeCloudEventCommandHandlerTests
         // arrange
         var metrics = Substitute.For<IGatewayMetrics>();
         var admission = Substitute.For<ICloudEventAdmissionControl>();
-        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)status));
+        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CloudStreams.Core.Resources.Gateway>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)status));
         var store = Substitute.For<ICloudEventStore>();
         var handler = CreateHandler(admission, metrics, store);
 
         // act
-        await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         metrics.Received(1).RecordIngestionDuration(outcome, Arg.Any<TimeSpan>());
@@ -124,13 +126,13 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(admission, metrics, store, limiter);
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, publisher: "orders"), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway, publisher: "orders"), CancellationToken.None);
 
         // assert
         Assert.Equal((int)HttpStatusCode.TooManyRequests, result.Status);
         Assert.Equal(TimeSpan.FromMilliseconds(1500), Assert.IsType<IngestionResult>(result).RetryAfter);
         await limiter.Received(1).EvaluateAsync("gateway", Event, "orders", Policy.RateLimits!, Arg.Any<CancellationToken>());
-        await admission.DidNotReceive().EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>());
+        await admission.DidNotReceive().EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CloudStreams.Core.Resources.Gateway>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>());
         await store.DidNotReceive().AppendAsync(Arg.Any<CloudEventDescriptor>(), Arg.Any<CancellationToken>());
         metrics.Received(1).IncrementTotalRejectedEvents(RejectionReason.RateLimit);
         metrics.Received(1).RecordIngestionDuration(IngestionOutcome.Rejected, Arg.Any<TimeSpan>());
@@ -145,7 +147,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(), rateLimiter: limiter, deduplicator: deduplicator);
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         Assert.Equal((int)HttpStatusCode.Created, result.Status);
@@ -161,7 +163,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(Policy), deduplicator: deduplicator);
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         Assert.Equal((int)HttpStatusCode.Created, result.Status);
@@ -178,7 +180,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(Policy), metrics, store, deduplicator: Deduplicator(DeduplicationOutcome.Duplicate));
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         Assert.Equal((int)HttpStatusCode.OK, result.Status);
@@ -195,7 +197,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(Policy), store: store, deduplicator: Deduplicator(DeduplicationOutcome.InFlight));
 
         // act
-        var result = await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        var result = await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert - the first attempt may yet fail: the publisher must retry to find out
         Assert.Equal((int)HttpStatusCode.ServiceUnavailable, result.Status);
@@ -213,7 +215,7 @@ public class ConsumeCloudEventCommandHandlerTests
         var handler = CreateHandler(Admits(Policy), store: store, deduplicator: deduplicator);
 
         // act
-        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None));
 
         // assert
         await deduplicator.Received(1).ReleaseAsync("gateway", Event, Arg.Any<CancellationToken>());
@@ -225,12 +227,12 @@ public class ConsumeCloudEventCommandHandlerTests
     {
         // arrange - a refused event must not be remembered, or its corrected version, published with the same id, would be ignored
         var admission = Admits(Policy);
-        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.BadRequest));
+        admission.EvaluateAsync(Arg.Any<CloudEvent>(), Arg.Any<CloudStreams.Core.Resources.Gateway>(), Arg.Any<IReadOnlyCollection<string>?>(), Arg.Any<CancellationToken>()).Returns(new OperationResult<CloudEventDescriptor>((int)HttpStatusCode.BadRequest));
         var deduplicator = Deduplicator(DeduplicationOutcome.Reserved);
         var handler = CreateHandler(admission, deduplicator: deduplicator);
 
         // act
-        await handler.HandleAsync(new ConsumeEventCommand(Event), CancellationToken.None);
+        await handler.HandleAsync(new ConsumeEventCommand(Event, this.gateway), CancellationToken.None);
 
         // assert
         await deduplicator.DidNotReceiveWithAnyArgs().TryReserveAsync(default!, default!, default);

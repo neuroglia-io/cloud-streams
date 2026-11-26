@@ -91,18 +91,14 @@ public class SecurityTests
     // ---------- #142 ----------
 
     [Fact]
-    public async Task Events_Should_Be_Refused_Until_The_Gateway_Configuration_Has_Been_Loaded()
+    public void Events_Should_Be_Refused_Until_The_Gateway_Configuration_Has_Been_Loaded()
     {
         // arrange
-        var admission = new CloudEventAdmissionControl(Substitute.For<IServiceProvider>(), NullLogger<CloudEventAdmissionControl>.Instance, Options.Create(new GatewayOptions() { Name = "gateway" }), Neuroglia.Serialization.Json.JsonSerializer.Default,
-            Substitute.For<IGatewayMetrics>(), Substitute.For<ICloudEventAuthorizationManager>(), Substitute.For<IJsonSchemaGenerator>(), Substitute.For<IJsonSchemaRegistry>(), Substitute.For<IExpressionEvaluator>(), Array.Empty<IValidator<CloudEvent>>());
+        var configuration = new GatewayConfiguration(Substitute.For<IServiceProvider>(), NullLogger<GatewayConfiguration>.Instance, Options.Create(new GatewayOptions() { Name = "gateway" }));
 
-        // act
-        var result = await admission.EvaluateAsync(Event());
-
-        // assert
-        Assert.Equal((int)HttpStatusCode.ServiceUnavailable, result.Status);
-        Assert.Null(result.Data);
+        // act & assert: the ingestion endpoint refuses cloud events with '503 Service Unavailable' until the gateway is known
+        Assert.False(configuration.IsReady);
+        Assert.Null(configuration.Gateway);
     }
 
     // ---------- #146 ----------

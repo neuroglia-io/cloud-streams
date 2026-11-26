@@ -17,8 +17,8 @@ namespace CloudStreams.Core.Api.Controllers;
 /// Represents the <see cref="ApiController"/> used to manage <see cref="Sink"/>s (see #218)
 /// </summary>
 /// <inheritdoc/>
-[Route("api/resources/v1/sinks")]
+[Route("api/resources/v1/namespaces/{namespace}/sinks")]
 public class SinksController(IMediator mediator)
-    : ClusterResourceApiController<Sink>(mediator)
+    : NamespacedResourceApiController<Sink>(mediator)
 {
 }

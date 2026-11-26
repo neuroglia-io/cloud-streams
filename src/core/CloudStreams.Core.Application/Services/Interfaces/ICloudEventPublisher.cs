@@ -29,6 +29,7 @@ public interface ICloudEventPublisher
     /// <param name="user">The user to publish the cloud event on behalf of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The result of the ingestion: <c>201</c> if the cloud event has been stored, <c>202</c> if it has been ignored, <c>200</c> if it is a duplicate</returns>
+    /// <remarks>The cloud event belongs to the namespace of the gateway, and the user must be allowed to operate it (see #215)</remarks>
     Task<IOperationResult> PublishAsync(CloudEvent e, ClaimsPrincipal user, CancellationToken cancellationToken = default);
 
 }

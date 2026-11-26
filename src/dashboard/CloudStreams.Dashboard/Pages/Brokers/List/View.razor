@@ -21,6 +21,10 @@
         <thead>
             <tr>
                 <SortableHeader Column="@ResourceSortColumns.Name" Title="Name" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" />
+                @if (ShowNamespace)
+                {
+                    <th class="sticky-header">Namespace</th>
+                }
                 <SortableHeader Column="@ResourceSortColumns.Created" Title="Created At" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <SortableHeader Column="@ResourceSortColumns.Generation" Title="Generation" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Retry Policy</th>
@@ -38,6 +42,10 @@
                 <Virtualize Context="resource" Items="@Resources">
                     <tr @onclick="async _ => await OnShowResourceDetailsAsync(resource)" @onkeydown="e => OnActivationKeyDown(e, () => OnShowResourceDetailsAsync(resource))" tabindex="0" class="cursor-pointer">
                         <td>@resource.Metadata.Name</td>
+                        @if (ShowNamespace)
+                        {
+                            <td>@resource.GetNamespace()</td>
+                        }
                         <td class="text-center">@resource.Metadata.CreationTimestamp?.LocalDateTime.ToString("g")</td>
                         <td class="text-center">@resource.Metadata.Generation</td>
                         <td class="text-center">@(resource.Spec?.Dispatch?.RetryPolicy == null ? "no" : "yes")</td>
@@ -63,7 +71,7 @@
                             </div>
                         </td>
                         <td class="text-center align-middle">
-                            <input type="checkbox" aria-label="@($"Select the broker '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
+                            <input type="checkbox" aria-label="@($"Select the broker '{resource.Metadata.Name}'")" checked="@SelectedResourceNames.Contains(resource.GetQualifiedName())" @onclick="(_) => Store.ToggleResourceSelection(resource.GetQualifiedName())" @onclick:preventDefault="true" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" />
                         </td>
                     </tr>
                 </Virtualize>

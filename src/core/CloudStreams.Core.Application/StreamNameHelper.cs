@@ -18,7 +18,11 @@ namespace CloudStreams;
 /// <summary>
 /// Exposes constants about the event sourcing streams used by Cloud Streams
 /// </summary>
-public static class Streams
+/// <remarks>
+/// Every cloud event is stored in a single stream. The streams of namespaces and of partitions link to its events: those of a partition are named after the
+/// partition's namespace and id, so that the partitions of a namespace hold its events only (see #215)
+/// </remarks>
+public static class StreamNameHelper
 {
 
     /// <summary>
@@ -26,6 +30,10 @@ public static class Streams
     /// </summary>
     public const string All = "cloud-events";
 
+    /// <summary>
+    /// Gets the prefix of the names of the streams that contain the <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s of a namespace
+    /// </summary>
+    public const string ByNamespacePrefix = "$by-namespace-";
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.BySource"/> partition EventStore streams
     /// </summary>
@@ -37,36 +45,50 @@ public static class Streams
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByType"/> partition EventStore streams
     /// </summary>
-    public const string ByCloudEventTypePrefix = "$et-";
+    public const string ByCloudEventTypePrefix = "$by-type-";
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByCorrelationId"/> partition EventStore streams
     /// </summary>
-    public const string ByCorrelationIdPrefix = "$bc-";
+    public const string ByCorrelationIdPrefix = "$by-correlation-";
     /// <summary>
     /// Gets the prefix of the names of all <see cref="CloudEventPartitionType.ByCausationId"/> partition EventStore streams
     /// </summary>
     public const string ByCausationIdPrefix = "$by-causation-";
 
     /// <summary>
-    /// Gets the name of the stream that partitions <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s by source
+    /// Gets the separator between the namespace and the id of a partition, in the name of its stream. Namespaces cannot contain it
     /// </summary>
-    public static string ByCloudEventSource(Uri source) => $"{ByCloudEventSourcePrefix}{source.OriginalString}";
+    public const char NamespaceSeparator = '/';
+
     /// <summary>
-    /// Gets the name of the stream that partitions <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s by subject
+    /// Gets the name of the stream that contains the <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s of the specified namespace
     /// </summary>
-    public static string ByCloudEventSubject(string subject) => $"{ByCloudEventSubjectPrefix}{subject}";
+    /// <param name="namespace">The namespace to get the stream of</param>
+    public static string ByNamespace(string @namespace) => $"{ByNamespacePrefix}{@namespace}";
+
     /// <summary>
-    /// Gets the name of the stream that partitions <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s by type
+    /// Gets the name of the stream of the specified partition
     /// </summary>
-    public static string ByCloudEventType(string type) => $"{ByCloudEventTypePrefix}{type}";
+    /// <param name="partitionType">The type of the partition</param>
+    /// <param name="namespace">The namespace the partition belongs to</param>
+    /// <param name="id">The id of the partition</param>
+    /// <returns>The name of the partition's stream</returns>
+    public static string ByPartition(CloudEventPartitionType partitionType, string @namespace, string id) => $"{GetPrefix(partitionType)}{@namespace}{NamespaceSeparator}{id}";
+
     /// <summary>
-    /// Gets the name of the stream that partitions <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s by correlation id
+    /// Gets the prefix of the names of the streams of the partitions of the specified type
     /// </summary>
-    public static string ByCorrelationId(string correlationId) => $"{ByCorrelationIdPrefix}{correlationId}";
-    /// <summary>
-    /// Gets the name of the stream that partitions <see cref="Neuroglia.Eventing.CloudEvents.CloudEvent"/>s by causation id
-    /// </summary>
-    public static string ByCausationId(string causationId) => $"{ByCausationIdPrefix}{causationId}";
+    /// <param name="partitionType">The type of partitions</param>
+    /// <returns>The prefix of the names of their streams</returns>
+    public static string GetPrefix(CloudEventPartitionType partitionType) => partitionType switch
+    {
+        CloudEventPartitionType.BySource => ByCloudEventSourcePrefix,
+        CloudEventPartitionType.BySubject => ByCloudEventSubjectPrefix,
+        CloudEventPartitionType.ByType => ByCloudEventTypePrefix,
+        CloudEventPartitionType.ByCorrelationId => ByCorrelationIdPrefix,
+        CloudEventPartitionType.ByCausationId => ByCausationIdPrefix,
+        _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
+    };
 
     /// <summary>
     /// Gets the prefix of the names of the streams that contain the cloud events subscriptions failed to deliver
@@ -87,35 +109,8 @@ public static class Streams
     public static bool IsPartition(string streamName, CloudEventPartitionType partitionType)
     {
         if (string.IsNullOrWhiteSpace(streamName)) throw new ArgumentNullException(nameof(streamName));
-        return partitionType switch
-        {
-            CloudEventPartitionType.BySource => streamName.StartsWith(ByCloudEventSourcePrefix),
-            CloudEventPartitionType.BySubject => streamName.StartsWith(ByCloudEventSubjectPrefix),
-            CloudEventPartitionType.ByType => streamName.StartsWith(ByCloudEventTypePrefix),
-            CloudEventPartitionType.ByCorrelationId => streamName.StartsWith(ByCorrelationIdPrefix),
-            CloudEventPartitionType.ByCausationId => streamName.StartsWith(ByCausationIdPrefix),
-            _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
-        };
-    }
-
-    /// <summary>
-    /// Extracts the id of a partition of the specified type from an EventStore stream name
-    /// </summary>
-    /// <param name="streamName">The EventStore stream name to extract the id from</param>
-    /// <param name="partitionType">The type of partition ot get the id of</param>
-    /// <returns>The id of the specified partition</returns>
-    public static string ExtractPartitionIdFrom(string streamName, CloudEventPartitionType partitionType)
-    {
-        if (string.IsNullOrWhiteSpace(streamName)) throw new ArgumentNullException(nameof(streamName));
-        return partitionType switch
-        {
-            CloudEventPartitionType.BySource => streamName[ByCloudEventSourcePrefix.Length..],
-            CloudEventPartitionType.BySubject => streamName[ByCloudEventSubjectPrefix.Length..],
-            CloudEventPartitionType.ByType => streamName[ByCloudEventTypePrefix.Length..],
-            CloudEventPartitionType.ByCorrelationId => streamName[ByCorrelationIdPrefix.Length..],
-            CloudEventPartitionType.ByCausationId => streamName[ByCausationIdPrefix.Length..],
-            _ => throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partitionType}' is not supported")
-        };
+        var prefix = GetPrefix(partitionType);
+        return streamName.StartsWith(prefix, StringComparison.Ordinal) && streamName.IndexOf(NamespaceSeparator, prefix.Length) > prefix.Length;
     }
 
 }

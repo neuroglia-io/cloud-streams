@@ -70,11 +70,11 @@ public class PartitionIndexInitializer(ILogger<PartitionIndexInitializer> logger
         {
             batch.Add(new(partitionType, id));
             if (batch.Count < BatchSize) continue;
-            await partitionIndex.AddAsync(batch, cancellationToken).ConfigureAwait(false);
+            await partitionIndex.AddAsync(Namespace.DefaultNamespaceName, batch, cancellationToken).ConfigureAwait(false);
             count += batch.Count;
             batch.Clear();
         }
-        if (batch.Count > 0) await partitionIndex.AddAsync(batch, cancellationToken).ConfigureAwait(false);
+        if (batch.Count > 0) await partitionIndex.AddAsync(Namespace.DefaultNamespaceName, batch, cancellationToken).ConfigureAwait(false);
         count += batch.Count;
         await partitionIndex.MarkInitializedAsync(partitionType, cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Backfilled the index of the partitions of type '{partitionType}' with {count} id(s) from the projections of earlier versions", EnumHelper.Stringify(partitionType), count);

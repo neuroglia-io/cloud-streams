@@ -29,7 +29,7 @@ public class EsdbStreamRetentionStore(EventStoreClient client)
     /// <inheritdoc/>
     public virtual async Task<StreamRetention?> GetAsync(CancellationToken cancellationToken = default)
     {
-        var result = await client.GetStreamMetadataAsync(Streams.All, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await client.GetStreamMetadataAsync(StreamNameHelper.All, cancellationToken: cancellationToken).ConfigureAwait(false);
         var metadata = result.Metadata;
         if (metadata.MaxAge == null && metadata.MaxCount == null) return null;
         return new()
@@ -44,11 +44,11 @@ public class EsdbStreamRetentionStore(EventStoreClient client)
     public virtual async Task SetAsync(StreamRetention retention, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(retention);
-        var current = (await client.GetStreamMetadataAsync(Streams.All, cancellationToken: cancellationToken).ConfigureAwait(false)).Metadata;
+        var current = (await client.GetStreamMetadataAsync(StreamNameHelper.All, cancellationToken: cancellationToken).ConfigureAwait(false)).Metadata;
         var maxAge = retention.MaxAge?.ToTimeSpan() is TimeSpan age && age > TimeSpan.Zero ? age : (TimeSpan?)null;
         var maxCount = retention.MaxCount is ulong count && count > 0 ? (int)Math.Min(count, int.MaxValue) : (int?)null;
         var metadata = new EsdbStreamMetadata(maxCount, maxAge, current.TruncateBefore, current.CacheControl, current.Acl, current.CustomMetadata);
-        await client.SetStreamMetadataAsync(Streams.All, StreamState.Any, metadata, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await client.SetStreamMetadataAsync(StreamNameHelper.All, StreamState.Any, metadata, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
 }

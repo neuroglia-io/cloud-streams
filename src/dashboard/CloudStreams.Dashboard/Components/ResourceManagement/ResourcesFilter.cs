@@ -24,6 +24,11 @@ public record ResourcesFilter
     /// </summary>
     public EquatableList<LabelSelector>? LabelSelectors { get; set; }
 
+    /// <summary>
+    /// Gets/sets the namespace to list the resources of, if any. The resources of every namespace the user may read are listed if not set
+    /// </summary>
+    public string? Namespace { get; set; }
+
 }
 
 /// <summary>

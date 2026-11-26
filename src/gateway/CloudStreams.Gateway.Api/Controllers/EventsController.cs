@@ -14,6 +14,7 @@
 using CloudStreams.Core;
 using CloudStreams.Core.Api;
 using CloudStreams.Gateway.Application.Commands.CloudEvents;
+using CloudStreams.Gateway.Api.Services;
 using CloudStreams.Gateway.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
@@ -29,11 +30,11 @@ namespace CloudStreams.Gateway.Controllers;
 /// Represents the API controller used to manage events
 /// </summary>
 /// <param name="mediator">The service used to mediate calls</param>
-/// <param name="authenticationOptions">The options used to configure authentication, which determine the sources publishers may publish cloud events of</param>
-/// <param name="admissionControl">The service used to admit cloud events, which exposes the gateway's ingestion policy</param>
+/// <param name="configuration">The service that holds the configuration of the gateway</param>
+/// <param name="publishers">The service that decides whether a request may publish to a gateway</param>
 /// <param name="serializer">The service used to deserialize cloud events</param>
 [Route("api/events")]
-public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configuration.CloudStreamsAuthenticationOptions authenticationOptions, ICloudEventAdmissionControl admissionControl, IJsonSerializer serializer)
+public class EventsController(IMediator mediator, IGatewayConfiguration configuration, IPublisherAuthorizer publishers, IJsonSerializer serializer)
     : Controller
 {
 
@@ -53,12 +54,28 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
     public static readonly Uri MalformedProblemType = new("https://cloud-streams.io/problems/malformed-cloud-event");
 
     /// <summary>
+    /// Gets the type of the problem that describes a request made while the gateway's configuration is being loaded
+    /// </summary>
+    public static readonly Uri GatewayUnavailableProblemType = new("https://cloud-streams.io/problems/gateway-unavailable");
+
+    /// <summary>
+    /// Gets the type of the problem that describes a request made by an unknown publisher to a gateway that requires one
+    /// </summary>
+    public static readonly Uri UnauthorizedProblemType = new("https://cloud-streams.io/problems/unauthorized-publisher");
+
+    /// <summary>
+    /// Gets the type of the problem that describes a request made by a publisher that may not publish to the gateway
+    /// </summary>
+    public static readonly Uri ForbiddenProblemType = new("https://cloud-streams.io/problems/forbidden-publisher");
+
+    /// <summary>
     /// Publishes the cloud event, or the batch of cloud events, described by the request, in any content mode of the CloudEvents HTTP binding:
     /// <list type="bullet">
     /// <item><description>structured: the body is a cloud event, of type <c>application/cloudevents+json</c>;</description></item>
     /// <item><description>batched: the body is an array of cloud events, of type <c>application/cloudevents-batch+json</c>, each admitted individually;</description></item>
     /// <item><description>binary: the body is the cloud event's data, whose context attributes are carried by <c>ce-</c> prefixed headers.</description></item>
     /// </list>
+    /// The cloud events belong to the namespace of the gateway (see #215)
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/>: <c>204 No Content</c> once a cloud event has been accepted, or <c>200 OK</c> with the result of each cloud event of a batch</returns>
@@ -73,15 +90,24 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.UnsupportedMediaType)]
     [ProducesResponseType(typeof(Neuroglia.ProblemDetails), (int)HttpStatusCode.TooManyRequests)]
     [ProducesResponseType((int)HttpStatusCode.Unauthorized)]
-    public virtual async Task<IActionResult> PublishCloudEvent(CancellationToken cancellationToken)
+    public virtual async Task<IActionResult> PublishCloudEvent(CancellationToken cancellationToken = default)
     {
-        var ingestion = admissionControl.Gateway?.Spec.Ingestion;
+        // until the gateway's configuration has been loaded, its policies are unknown: admitting events would bypass authorization and validation (see #142)
+        var target = configuration.Gateway;
+        if (target == null)
+        {
+            this.SetRetryAfter(TimeSpan.FromSeconds(5));
+            return ProblemResult(GatewayUnavailableProblemType, HttpStatusCode.ServiceUnavailable, "The gateway is starting: its configuration has not been loaded yet. Please retry later");
+        }
+        var authorization = await publishers.AuthorizeAsync(this.HttpContext, target, cancellationToken).ConfigureAwait(false);
+        if (!authorization.Allowed) return ProblemResult(authorization.Status == (int)HttpStatusCode.Unauthorized ? UnauthorizedProblemType : ForbiddenProblemType, (HttpStatusCode)authorization.Status, authorization.Reason ?? "The publisher may not publish to the gateway");
+        var ingestion = target.Spec.Ingestion;
         var mode = CloudEventHttpBinding.GetContentMode(this.Request.ContentType, this.Request.Headers.ContainsKey(CloudEventHttpBinding.SpecVersionHeader));
         if (mode == CloudEventContentMode.Unsupported) return ProblemResult(UnsupportedMediaTypeProblemType, HttpStatusCode.UnsupportedMediaType,
             $"Cloud events must be published as '{CloudEventContentType.Json}', as '{CloudEventHttpBinding.BatchContentType}', or in the binary content mode, which requires the '{CloudEventHttpBinding.SpecVersionHeader}' header");
         var body = await this.ReadBodyAsync(ingestion?.MaxRequestBodySize, cancellationToken).ConfigureAwait(false);
         if (body == null) return ProblemResult(PayloadTooLargeProblemType, HttpStatusCode.RequestEntityTooLarge, $"The request's body must not exceed {ingestion!.MaxRequestBodySize} bytes");
-        if (mode == CloudEventContentMode.Batch) return await this.PublishBatchAsync(body, ingestion, cancellationToken).ConfigureAwait(false);
+        if (mode == CloudEventContentMode.Batch) return await this.PublishBatchAsync(body, target, authorization, cancellationToken).ConfigureAwait(false);
         CloudEvent e;
         try
         {
@@ -93,7 +119,7 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
         {
             return ProblemResult(MalformedProblemType, HttpStatusCode.BadRequest, ex.Message);
         }
-        var result = await this.IngestAsync(e, cancellationToken).ConfigureAwait(false);
+        var result = await this.IngestAsync(e, target, authorization, cancellationToken).ConfigureAwait(false);
         this.SetRetryAfter(GetRetryAfter(result));
         // the first error describes why the event has been refused: publishers get its detail rather than a generic validation problem
         if (result.Status is < 200 or >= 300) return this.Problem(result);
@@ -108,11 +134,13 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
     /// prevent the others from being ingested
     /// </summary>
     /// <param name="body">The request's body</param>
-    /// <param name="ingestion">The gateway's ingestion policy, if any</param>
+    /// <param name="gateway">The gateway the cloud events are published to</param>
+    /// <param name="authorization">The authorization of the publisher</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> that describes the result of each cloud event</returns>
-    protected virtual async Task<IActionResult> PublishBatchAsync(byte[] body, Core.Resources.CloudEventIngestionPolicy? ingestion, CancellationToken cancellationToken)
+    protected virtual async Task<IActionResult> PublishBatchAsync(byte[] body, Core.Resources.Gateway gateway, PublisherAuthorization authorization, CancellationToken cancellationToken)
     {
+        var ingestion = gateway.Spec.Ingestion;
         IReadOnlyList<System.Text.Json.Nodes.JsonNode?> batch;
         try { batch = CloudEventHttpBinding.ReadBatch(body); }
         catch (FormatException ex) { return ProblemResult(MalformedProblemType, HttpStatusCode.BadRequest, ex.Message); }
@@ -128,7 +156,7 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
                 results.Add(new() { Index = index, Status = (int)HttpStatusCode.BadRequest, Problem = new(MalformedProblemType, "Bad Request", (int)HttpStatusCode.BadRequest, ex.Message) });
                 continue;
             }
-            var result = await this.IngestAsync(e, cancellationToken).ConfigureAwait(false);
+            var result = await this.IngestAsync(e, gateway, authorization, cancellationToken).ConfigureAwait(false);
             if (GetRetryAfter(result) is TimeSpan delay && (retryAfter == null || delay > retryAfter)) retryAfter = delay;
             var succeeded = result.Status is >= 200 and < 300;
             results.Add(new()
@@ -149,12 +177,13 @@ public class EventsController(IMediator mediator, CloudStreams.Core.Api.Configur
     /// Ingests the specified cloud event
     /// </summary>
     /// <param name="e">The cloud event to ingest</param>
+    /// <param name="gateway">The gateway the cloud event is published to</param>
+    /// <param name="authorization">The authorization of the publisher</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The result of the ingestion</returns>
-    protected virtual Task<IOperationResult> IngestAsync(CloudEvent e, CancellationToken cancellationToken)
+    protected virtual Task<IOperationResult> IngestAsync(CloudEvent e, Core.Resources.Gateway gateway, PublisherAuthorization authorization, CancellationToken cancellationToken)
     {
-        var publisher = this.User.Identity?.IsAuthenticated == true ? this.User.Identity.Name : null;
-        return mediator.ExecuteAsync(new ConsumeEventCommand(e, this.User.GetAllowedSources(authenticationOptions.Ingestion), publisher), cancellationToken);
+        return mediator.ExecuteAsync(new ConsumeEventCommand(e, gateway, authorization.AllowedSources, authorization.Publisher), cancellationToken);
     }
 
     /// <summary>

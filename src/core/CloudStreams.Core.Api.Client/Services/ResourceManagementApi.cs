@@ -54,12 +54,44 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     protected string Path { get; } = CloudStreamsCoreApiClient.ResourceManagementApiPath + $"{new TResource().GetVersion()}/{path}";
 
     /// <summary>
+    /// Gets the path to the API version the resources belong to
+    /// </summary>
+    protected string VersionPath { get; } = CloudStreamsCoreApiClient.ResourceManagementApiPath + new TResource().GetVersion();
+
+    /// <summary>
+    /// Gets the plural name of the managed resources
+    /// </summary>
+    protected string Plural { get; } = path;
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the managed resources belong to namespaces
+    /// </summary>
+    protected bool IsNamespaced { get; } = CloudStreamsDefaults.Resources.Definitions.AsEnumerable().FirstOrDefault(d => d.Spec.Names.Plural == path)?.Spec.Scope == ResourceScope.Namespaced;
+
+    /// <summary>
+    /// Gets the uri of the collection of the resources of the specified namespace
+    /// </summary>
+    /// <param name="namespace">The namespace of the resources, if any. Namespaced resources of every namespace are addressed if not set</param>
+    /// <returns>The uri of the collection</returns>
+    /// <remarks>Namespaced resources are addressed at <c>namespaces/{namespace}/{plural}</c>, and cluster resources at <c>{plural}</c> (see #215)</remarks>
+    protected virtual string GetCollectionUri(string? @namespace) => this.IsNamespaced && !string.IsNullOrWhiteSpace(@namespace)
+        ? $"{this.VersionPath}/namespaces/{Uri.EscapeDataString(@namespace)}/{this.Plural}"
+        : this.Path;
+
+    /// <summary>
     /// Gets the uri of the specified resource
     /// </summary>
     /// <param name="name">The name of the resource to get the uri of</param>
+    /// <param name="namespace">The namespace of the resource, if it is namespaced. Defaults to the default namespace</param>
     /// <returns>The uri of the specified resource</returns>
-    /// <remarks>Cloud Streams resources are cluster-scoped, so their uri never includes a namespace</remarks>
-    protected virtual string GetResourceUri(string name) => $"{this.Path}/{Uri.EscapeDataString(name)}";
+    protected virtual string GetResourceUri(string name, string? @namespace) => $"{this.GetCollectionUri(this.IsNamespaced ? ResolveNamespace(@namespace) : null)}/{Uri.EscapeDataString(name)}";
+
+    /// <summary>
+    /// Gets the namespace of the specified resource, or the default namespace if it names none
+    /// </summary>
+    /// <param name="namespace">The namespace to resolve</param>
+    /// <returns>The resolved namespace</returns>
+    protected static string ResolveNamespace(string? @namespace) => string.IsNullOrWhiteSpace(@namespace) ? Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Asks the server to only validate the request, if specified
@@ -78,7 +110,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         var json = this.Serializer.SerializeToText(resource);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, WithDryRun(this.Path, dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Post, WithDryRun(this.GetCollectionUri(this.IsNamespaced ? ResolveNamespace(resource.GetNamespace()) : null), dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<TResource>(json)!;
@@ -97,7 +129,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     public virtual async Task<TResource> GetAsync(string name, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        var uri = this.GetResourceUri(name);
+        var uri = this.GetResourceUri(name, @namespace);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -107,9 +139,9 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     /// <inheritdoc/>
     public virtual async Task<IAsyncEnumerable<TResource>> ListAsync(string? @namespace = null, IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
     {
-        var uri = this.Path;
+        // namespaced resources are listed in the specified namespace, or in every namespace the user may read if none is specified (see #215)
+        var uri = this.GetCollectionUri(@namespace);
         var queryStringArguments = new Dictionary<string, string>();
-        // resources are cluster-scoped: the server accepts no namespace (see #178)
         if (labelSelectors?.Any() == true) queryStringArguments.Add("labelSelector", labelSelectors.Select(s => s.ToString()).Join(','));
         if (queryStringArguments.Count != 0) uri += $"?{queryStringArguments.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}").Join('&')}";
         var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Get, uri), cancellationToken).ConfigureAwait(false);
@@ -127,7 +159,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
         if (resource == null) throw new ArgumentNullException(nameof(resource));
         var json = this.Serializer.SerializeToText(resource);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
-        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, WithDryRun(this.Path, dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
+        using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Put, WithDryRun(this.GetCollectionUri(this.IsNamespaced ? ResolveNamespace(resource.GetNamespace()) : null), dryRun)) { Content = content }, cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return this.Serializer.Deserialize<TResource>(json)!;
@@ -140,7 +172,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     public virtual async Task<TResource> PatchAsync(Patch patch, string name, string? @namespace, bool dryRun, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        var uri = WithDryRun(this.GetResourceUri(name), dryRun);
+        var uri = WithDryRun(this.GetResourceUri(name, @namespace), dryRun);
         var json = this.Serializer.SerializeToText(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, uri) { Content = content }, cancellationToken).ConfigureAwait(false);
@@ -153,7 +185,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     public virtual async Task<TResource> PatchStatusAsync(Patch patch, string name, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        var uri = $"{this.GetResourceUri(name)}/status";
+        var uri = $"{this.GetResourceUri(name, @namespace)}/status";
         var json = this.Serializer.SerializeToText(patch);
         using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Patch, uri) { Content = content }, cancellationToken).ConfigureAwait(false);
@@ -166,7 +198,7 @@ public class ResourceManagementApi<TResource>(ILogger<ResourceManagementApi<TRes
     public virtual async Task DeleteAsync(string name, string? @namespace = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
-        var uri = this.GetResourceUri(name);
+        var uri = this.GetResourceUri(name, @namespace);
         using var request = await this.ProcessRequestAsync(new HttpRequestMessage(HttpMethod.Delete, uri), cancellationToken).ConfigureAwait(false);
         using var response = await this.ProcessResponseAsync(await this.HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }

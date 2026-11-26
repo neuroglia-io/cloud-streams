@@ -55,7 +55,7 @@ public class SubscriptionHandlerAcknowledgementTests
         Assert.Equal("test-subscription", headers[CloudStreamsHeaders.Subscription]);
         Assert.Equal("41", headers[CloudStreamsHeaders.Offset]);
         Assert.True(headers[CloudStreamsHeaders.AckToken].Length >= 32);
-        Assert.Equal("https://cloud-streams.example.com/api/resources/v1/subscriptions/test-subscription/ack", headers[CloudStreamsHeaders.AckUri]);
+        Assert.Equal("https://cloud-streams.example.com/api/resources/v1/namespaces/default/subscriptions/test-subscription/ack", headers[CloudStreamsHeaders.AckUri]);
     }
 
     [Fact]

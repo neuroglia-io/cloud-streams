@@ -61,7 +61,7 @@ public sealed class EventToolsTests(CloudStreamsFixture fixture, ITestOutputHelp
         await using var connection = new HubConnectionBuilder().WithUrl(new Uri(fixture.GatewayUri, "api/ws/events")).Build();
         connection.On<JsonElement>("StreamEvent", e => received.Enqueue(e.GetProperty("id").GetString()!));
         await connection.StartAsync();
-        await connection.InvokeAsync("Subscribe", Source().OriginalString, "com.example.order.placed");
+        await connection.InvokeAsync("Subscribe", Source().OriginalString, "com.example.order.placed", Namespace.DefaultNamespaceName);
 
         // act
         await fixture.Api.CloudEvents.PublishAsync(Event(Source(), "order", "com.example.order.placed", 1));

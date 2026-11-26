@@ -20,12 +20,18 @@ namespace CloudStreams.Core.Application.Queries.Subscriptions;
 /// Represents the query used to read the cloud events a <see cref="Subscription"/> failed to deliver, and has stored in its dead-letter stream (see #207)
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to read the dead letters of</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="direction">The direction in which to read the dead letters</param>
 /// <param name="offset">The offset starting from which to read the dead letters, if any. Defaults to the oldest when reading forwards, and to the most recent otherwise</param>
 /// <param name="length">The maximum amount of dead letters to read</param>
-public class ReadSubscriptionDeadLettersQuery(string name, StreamReadDirection direction = StreamReadDirection.Backwards, long? offset = null, ulong length = StreamReadOptions.MaxLength)
+public class ReadSubscriptionDeadLettersQuery(string name, StreamReadDirection direction = StreamReadDirection.Backwards, long? offset = null, ulong length = StreamReadOptions.MaxLength, string? @namespace = null)
     : Query<IAsyncEnumerable<DeadLetter>>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to read the dead letters of
@@ -61,7 +67,7 @@ public class ReadSubscriptionDeadLettersQueryHandler(IResourceRepository resourc
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<IAsyncEnumerable<DeadLetter>>> HandleAsync(ReadSubscriptionDeadLettersQuery query, CancellationToken cancellationToken)
     {
-        var subscription = await resources.GetAsync<Subscription>(query.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(query.Name, query.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return new OperationResult<IAsyncEnumerable<DeadLetter>>((int)HttpStatusCode.NotFound);
         var length = Math.Clamp(query.Length, 1, (ulong)StreamReadOptions.MaxLength);
         var offset = query.Offset ?? (query.Direction == StreamReadDirection.Forwards ? StreamPosition.StartOfStream : StreamPosition.EndOfStream);

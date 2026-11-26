@@ -26,6 +26,7 @@ namespace CloudStreams.Core.Api.Controllers;
 /// </remarks>
 [ApiController]
 [Route("api/cloudevents/v1/subscriptions")]
+[Route("api/cloudevents/v1/namespaces/{namespace}/subscriptions")]
 public class CloudEventSubscriptionsController(CloudEventSubscriptionManager manager)
     : ControllerBase
 {
@@ -33,45 +34,50 @@ public class CloudEventSubscriptionsController(CloudEventSubscriptionManager man
     /// <summary>
     /// Lists the subscriptions
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. The default namespace when the route names none</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the subscriptions</returns>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<CloudEventSubscription>), (int)HttpStatusCode.OK)]
-    public virtual async Task<IActionResult> ListSubscriptions(CancellationToken cancellationToken = default) => this.Ok(await manager.ListAsync(cancellationToken).ConfigureAwait(false));
+    public virtual async Task<IActionResult> ListSubscriptions(string? @namespace = null, CancellationToken cancellationToken = default) => this.Ok(await manager.ListAsync(@namespace, cancellationToken).ConfigureAwait(false));
 
     /// <summary>
     /// Gets the specified subscription
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. The default namespace when the route names none</param>
     /// <param name="id">The id of the subscription to get</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the subscription</returns>
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(CloudEventSubscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> GetSubscription(string id, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> GetSubscription(string? @namespace, string id, CancellationToken cancellationToken = default)
     {
-        var subscription = await manager.GetAsync(id, cancellationToken).ConfigureAwait(false);
+        var subscription = await manager.GetAsync(id, @namespace, cancellationToken).ConfigureAwait(false);
         return subscription == null ? NotFound(id) : this.Ok(subscription);
     }
 
     /// <summary>
     /// Creates a new subscription. Its id, if any, is ignored: the subscription manager assigns one
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. The default namespace when the route names none</param>
     /// <param name="subscription">The subscription to create</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the created subscription</returns>
     [HttpPost]
     [ProducesResponseType(typeof(CloudEventSubscription), (int)HttpStatusCode.Created)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> CreateSubscription([FromBody] CloudEventSubscription subscription, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> CreateSubscription(string? @namespace, [FromBody] CloudEventSubscription subscription, CancellationToken cancellationToken = default)
     {
-        var created = await manager.CreateAsync(subscription, cancellationToken).ConfigureAwait(false);
-        return this.Created($"{this.Request.PathBase}/api/cloudevents/v1/subscriptions/{Uri.EscapeDataString(created.Id!)}", created);
+        var created = await manager.CreateAsync(subscription, @namespace, cancellationToken).ConfigureAwait(false);
+        var scope = string.IsNullOrWhiteSpace(@namespace) ? string.Empty : $"namespaces/{Uri.EscapeDataString(@namespace)}/";
+        return this.Created($"{this.Request.PathBase}/api/cloudevents/v1/{scope}subscriptions/{Uri.EscapeDataString(created.Id!)}", created);
     }
 
     /// <summary>
     /// Updates the specified subscription
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. The default namespace when the route names none</param>
     /// <param name="id">The id of the subscription to update</param>
     /// <param name="subscription">The subscription to update it with</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -79,24 +85,25 @@ public class CloudEventSubscriptionsController(CloudEventSubscriptionManager man
     [HttpPut("{id}")]
     [ProducesResponseType(typeof(CloudEventSubscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> UpdateSubscription(string id, [FromBody] CloudEventSubscription subscription, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> UpdateSubscription(string? @namespace, string id, [FromBody] CloudEventSubscription subscription, CancellationToken cancellationToken = default)
     {
-        var updated = await manager.UpdateAsync(id, subscription, cancellationToken).ConfigureAwait(false);
+        var updated = await manager.UpdateAsync(id, subscription, @namespace, cancellationToken).ConfigureAwait(false);
         return updated == null ? NotFound(id) : this.Ok(updated);
     }
 
     /// <summary>
     /// Deletes the specified subscription
     /// </summary>
+    /// <param name="namespace">The namespace the subscriptions belong to. The default namespace when the route names none</param>
     /// <param name="id">The id of the subscription to delete</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/> whose body is the deleted subscription</returns>
     [HttpDelete("{id}")]
     [ProducesResponseType(typeof(CloudEventSubscription), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> DeleteSubscription(string id, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> DeleteSubscription(string? @namespace, string id, CancellationToken cancellationToken = default)
     {
-        var deleted = await manager.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+        var deleted = await manager.DeleteAsync(id, @namespace, cancellationToken).ConfigureAwait(false);
         return deleted == null ? NotFound(id) : this.Ok(deleted);
     }
 

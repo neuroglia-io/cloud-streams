@@ -82,26 +82,29 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.Start");
         try
         {
-            broker = await this.Repository.GetAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, cancellationToken).ConfigureAwait(false);
+            broker = await this.Repository.GetAsync<Core.Resources.Broker>(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace(), cancellationToken).ConfigureAwait(false);
         }
         catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
         finally
         {
             if (broker == null)
             {
-                broker = new Core.Resources.Broker(new ResourceMetadata(this.BrokerOptions.Name, this.BrokerOptions.Namespace), new BrokerSpec()
+                broker = new Core.Resources.Broker(new ResourceMetadata(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace()), new BrokerSpec()
                 {
                     Dispatch = new()
                     {
                         Sequencing = CloudEventSequencingConfiguration.Default
                     }
                 });
+                await this.Repository.EnsureNamespaceAsync(this.BrokerOptions.GetNamespace(), cancellationToken).ConfigureAwait(false);
                 // another replica may have created the broker in the meantime
                 try { broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false); }
                 catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { }
             }
-            this.Broker = await this.Repository.MonitorAsync<Core.Resources.Broker>(this.BrokerOptions.Name, this.BrokerOptions.Namespace, false, cancellationToken).ConfigureAwait(false);
+            this.Broker = await this.Repository.MonitorAsync<Core.Resources.Broker>(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace(), false, cancellationToken).ConfigureAwait(false);
         }
+        // a broker only runs the subscriptions of its own namespace (see #215)
+        this.Options.ResourceNamespace = this.BrokerOptions.GetNamespace();
         await base.StartAsync(cancellationToken).ConfigureAwait(false);
         foreach (var subscription in this.Resources.Values.ToList())
         {
@@ -114,7 +117,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         this.Broker!.Select(b => b.Resource.Spec.Selector).SubscribeAsync(this.OnBrokerSelectorChangedAsync, cancellationToken: cancellationToken);
         await this.OnBrokerSelectorChangedAsync(this.Broker!.Resource.Spec.Selector).ConfigureAwait(false);
         if (this.BrokerOptions.Leases.Enabled) this.Logger.LogInformation("Broker replica '{owner}' handles the subscriptions it holds a lease on", this.Leases.OwnerId);
-        else this.Logger.LogWarning("Subscription leases are disabled: running several replicas of broker '{broker}' would deliver every event more than once", this.BrokerOptions.Name);
+        else this.Logger.LogWarning("Subscription leases are disabled: running several replicas of broker '{broker}' would deliver every event more than once", this.BrokerOptions.GetName());
         this._leaseRenewalTask = Task.Run(() => this.RenewLeasesAsync(this.CancellationToken), CancellationToken.None);
     }
 
@@ -260,6 +263,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("SubscriptionManager.OnSubscriptionCreated");
         activity?.SetTag("subscription.name", subscription.GetName());
         activity?.SetTag("subscription.namespace", subscription.GetNamespace());
+        if (subscription.GetNamespace() != this.BrokerOptions.GetNamespace()) return;
         var key = this.GetSubscriptionHandlerCacheKey(subscription.GetName(), subscription.GetNamespace());
         while (true)
         {

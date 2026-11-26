@@ -23,9 +23,13 @@ using System.Text.Json.Nodes;
 namespace CloudStreams.Core.Transports.Secrets;
 
 /// <summary>
-/// Reads secrets from environment variables named <c>CLOUDSTREAMS_SECRETS__{NAME}__{KEY}</c>, e.g. <c>CLOUDSTREAMS_SECRETS__ORDERS_WEBHOOK__PASSWORD</c>
+/// Reads secrets from environment variables: the secrets of a namespace from <c>CLOUDSTREAMS_SECRETS__NAMESPACES__{NAMESPACE}__{NAME}__{KEY}</c>, e.g.
+/// <c>CLOUDSTREAMS_SECRETS__NAMESPACES__ORDERS__WEBHOOK__PASSWORD</c>, and shared secrets from <c>CLOUDSTREAMS_SECRETS__{NAME}__{KEY}</c>
 /// </summary>
-/// <remarks>Names and keys are matched regardless of case, and of dashes, dots and underscores, which environment variables cannot all contain</remarks>
+/// <remarks>
+/// Names and keys are matched regardless of case, and of dashes, dots and underscores, which environment variables cannot all contain. The dashes of namespaces
+/// are written as underscores, and namespaces are matched exactly otherwise
+/// </remarks>
 public class EnvironmentSecretProvider
     : ISecretProvider
 {
@@ -39,16 +43,21 @@ public class EnvironmentSecretProvider
     public string Name => SecretProviders.Environment;
 
     /// <inheritdoc/>
-    public virtual Task<Secret?> GetAsync(string path, CancellationToken cancellationToken = default)
+    public virtual Task<Secret?> GetAsync(string path, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var name = Normalize(path);
+        var namespaces = $"{SecretOptions.NamespacesSegment}__";
+        // a shared secret cannot be named after the segment that holds the secrets of namespaces
+        if (@namespace == null && name == SecretOptions.NamespacesSegment) return Task.FromResult<Secret?>(null);
+        var prefix = @namespace == null ? Prefix : $"{Prefix}{namespaces}{@namespace.Replace('-', '_')}__";
         var values = new Dictionary<string, string>();
         foreach (DictionaryEntry variable in Environment.GetEnvironmentVariables())
         {
             var key = variable.Key.ToString()!;
-            if (!key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) continue;
-            var rest = key[Prefix.Length..];
+            if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            var rest = key[prefix.Length..];
+            if (@namespace == null && rest.StartsWith(namespaces, StringComparison.OrdinalIgnoreCase)) continue;
             var separator = rest.IndexOf("__", StringComparison.Ordinal);
             if (separator < 1 || Normalize(rest[..separator]) != name) continue;
             values[rest[(separator + 2)..]] = variable.Value?.ToString() ?? string.Empty;
@@ -61,7 +70,8 @@ public class EnvironmentSecretProvider
 }
 
 /// <summary>
-/// Reads secrets from files: each secret is a sub-directory of the configured directory, each of whose files is a key, as Kubernetes mounts secrets
+/// Reads secrets from files: each secret is a sub-directory, each of whose files is a key, as Kubernetes mounts secrets. The secrets of a namespace are read from
+/// <c>{directory}/namespaces/{namespace}/{name}</c>, and shared secrets from <c>{directory}/{name}</c>
 /// </summary>
 /// <param name="options">The service used to access the current <see cref="SecretOptions"/></param>
 /// <remarks>Trailing line breaks are ignored, so that a file written with a final line break holds the value without it</remarks>
@@ -73,13 +83,16 @@ public class FileSecretProvider(IOptionsMonitor<SecretOptions> options)
     public string Name => SecretProviders.File;
 
     /// <inheritdoc/>
-    public virtual async Task<Secret?> GetAsync(string path, CancellationToken cancellationToken = default)
+    public virtual async Task<Secret?> GetAsync(string path, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var root = Path.GetFullPath(options.CurrentValue.File.Directory);
+        var directoryRoot = Path.GetFullPath(options.CurrentValue.File.Directory);
+        var namespacesRoot = Path.Combine(directoryRoot, SecretOptions.NamespacesSegment);
+        var root = @namespace == null ? directoryRoot : Path.Combine(namespacesRoot, @namespace);
         var directory = Path.GetFullPath(Path.Combine(root, path));
-        // a path cannot escape the configured directory, e.g. with '..'
-        if (!directory.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) throw new InvalidOperationException($"The secret '{path}' is outside the directory secrets are read from");
+        // a path cannot escape the directory of its namespace, e.g. with '..', nor designate the secrets of namespaces when it is the path of a shared secret
+        if (!IsWithin(directory, root)) throw new InvalidOperationException($"The secret '{path}' is outside the directory secrets are read from");
+        if (@namespace == null && (IsWithin(directory, namespacesRoot) || directory == namespacesRoot)) return null;
         if (!Directory.Exists(directory)) return null;
         var values = new Dictionary<string, string>();
         foreach (var file in Directory.EnumerateFiles(directory))
@@ -92,6 +105,8 @@ public class FileSecretProvider(IOptionsMonitor<SecretOptions> options)
         return values.Count == 0 ? null : new Secret(values);
     }
 
+    static bool IsWithin(string path, string root) => path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
 }
 
 /// <summary>
@@ -100,8 +115,14 @@ public class FileSecretProvider(IOptionsMonitor<SecretOptions> options)
 /// <param name="httpClientFactory">The service used to create <see cref="HttpClient"/>s</param>
 /// <param name="options">The service used to access the current <see cref="SecretOptions"/></param>
 /// <remarks>
+/// <para>
 /// Only secrets with the configured label, <c>cloud-streams.io/secret=true</c> by default, are read, so that the broker and the gateway cannot read every secret of
-/// their namespace even when their role allows them to. The service account needs to be allowed to get secrets
+/// their namespace even when their role allows them to. The service account needs to be allowed to get secrets.
+/// </para>
+/// <para>
+/// The secrets of a Cloud Streams namespace are labelled <c>cloud-streams.io/namespace={namespace}</c>, which only that namespace may read. Secrets without that
+/// label are shared (see #215)
+/// </para>
 /// </remarks>
 public class KubernetesSecretProvider(IHttpClientFactory httpClientFactory, IOptionsMonitor<SecretOptions> options)
     : ISecretProvider
@@ -112,22 +133,29 @@ public class KubernetesSecretProvider(IHttpClientFactory httpClientFactory, IOpt
     /// </summary>
     public const string HttpClientName = "cloud-streams-kubernetes";
 
+    /// <summary>
+    /// Gets the label that binds a secret to a Cloud Streams namespace
+    /// </summary>
+    public const string NamespaceLabel = "cloud-streams.io/namespace";
+
     /// <inheritdoc/>
     public string Name => SecretProviders.Kubernetes;
 
     /// <inheritdoc/>
-    public virtual async Task<Secret?> GetAsync(string path, CancellationToken cancellationToken = default)
+    public virtual async Task<Secret?> GetAsync(string path, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var configuration = options.CurrentValue.Kubernetes;
         var server = configuration.Server ?? GetInClusterServer();
-        var @namespace = configuration.Namespace ?? await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "namespace", cancellationToken).ConfigureAwait(false);
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server, $"api/v1/namespaces/{Uri.EscapeDataString(@namespace)}/secrets/{Uri.EscapeDataString(path)}"));
+        var kubernetesNamespace = configuration.Namespace ?? await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "namespace", cancellationToken).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server, $"api/v1/namespaces/{Uri.EscapeDataString(kubernetesNamespace)}/secrets/{Uri.EscapeDataString(path)}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "token", cancellationToken).ConfigureAwait(false));
         using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
-        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Kubernetes did not provide the secret '{path}' of the namespace '{@namespace}': it responded with '{(int)response.StatusCode} {response.StatusCode}'. Is the service account allowed to get secrets?");
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Kubernetes did not provide the secret '{path}' of the namespace '{kubernetesNamespace}': it responded with '{(int)response.StatusCode} {response.StatusCode}'. Is the service account allowed to get secrets?");
         var secret = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))!;
+        // a secret of another namespace, or of a namespace when a shared one is read, is answered as missing rather than refused, so as not to reveal it
+        if (secret["metadata"]?["labels"]?[NamespaceLabel]?.GetValue<string>() != @namespace) return null;
         if (!string.IsNullOrWhiteSpace(configuration.LabelSelector))
         {
             var separator = configuration.LabelSelector.IndexOf('=');
@@ -167,7 +195,10 @@ public class KubernetesSecretProvider(IHttpClientFactory httpClientFactory, IOpt
 /// <param name="httpClientFactory">The service used to create <see cref="HttpClient"/>s</param>
 /// <param name="options">The service used to access the current <see cref="SecretOptions"/></param>
 /// <param name="timeProvider">The service used to get the current time</param>
-/// <remarks>What the broker and the gateway can read is what the policies of their Vault identity allow</remarks>
+/// <remarks>
+/// What the broker and the gateway can read is what the policies of their Vault identity allow. The secrets of a namespace are read from
+/// <c>{prefix}/namespaces/{namespace}/{path}</c>, and shared secrets from <c>{prefix}/{path}</c> (see #215)
+/// </remarks>
 public class VaultSecretProvider(IHttpClientFactory httpClientFactory, IOptionsMonitor<SecretOptions> options, TimeProvider timeProvider)
     : ISecretProvider
 {
@@ -184,13 +215,17 @@ public class VaultSecretProvider(IHttpClientFactory httpClientFactory, IOptionsM
     public string Name => SecretProviders.Vault;
 
     /// <inheritdoc/>
-    public virtual async Task<Secret?> GetAsync(string path, CancellationToken cancellationToken = default)
+    public virtual async Task<Secret?> GetAsync(string path, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var configuration = options.CurrentValue.Vault;
         if (configuration.Address == null) throw new InvalidOperationException($"The Vault secret provider requires '{SecretOptions.ConfigurationSection}:Vault:Address'");
         var mount = configuration.Mount.Trim('/');
-        var fullPath = $"{configuration.Prefix?.Trim('/')}{(string.IsNullOrWhiteSpace(configuration.Prefix) ? string.Empty : "/")}{path.Trim('/')}";
+        var relativePath = path.Trim('/');
+        // a shared secret cannot be read from the path that holds the secrets of namespaces
+        if (@namespace == null && (relativePath == SecretOptions.NamespacesSegment || relativePath.StartsWith(SecretOptions.NamespacesSegment + "/", StringComparison.Ordinal))) return null;
+        if (@namespace != null) relativePath = $"{SecretOptions.NamespacesSegment}/{@namespace}/{relativePath}";
+        var fullPath = $"{configuration.Prefix?.Trim('/')}{(string.IsNullOrWhiteSpace(configuration.Prefix) ? string.Empty : "/")}{relativePath}";
         var relative = configuration.KvVersion == 1 ? $"v1/{mount}/{fullPath}" : $"v1/{mount}/data/{fullPath}";
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(configuration.Address, relative));
         request.Headers.TryAddWithoutValidation("X-Vault-Token", await this.GetTokenAsync(configuration, cancellationToken).ConfigureAwait(false));

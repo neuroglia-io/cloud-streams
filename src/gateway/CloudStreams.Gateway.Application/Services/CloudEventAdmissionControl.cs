@@ -36,7 +36,6 @@ namespace CloudStreams.Gateway.Application.Services;
 /// </remarks>
 /// <param name="serviceProvider">The current <see cref="IServiceProvider"/></param>
 /// <param name="logger">The service used to perform logging</param>
-/// <param name="gatewayOptions">The service used to access the current <see cref="Configuration.GatewayOptions"/></param>
 /// <param name="serializer">The service used to serialize/deserialize objects to/from JSON</param>
 /// <param name="metrics">The service used to manage Cloud Streams gateway related metrics</param>
 /// <param name="authorizationManager">The service used to manage authorization</param>
@@ -44,9 +43,9 @@ namespace CloudStreams.Gateway.Application.Services;
 /// <param name="schemaRegistry">The service used to register and manage <see cref="JsonSchema"/>s</param>
 /// <param name="expressionEvaluator">The service used to evaluate runtime expressions</param>
 /// <param name="validators">An <see cref="IEnumerable{T}"/> containing the <see cref="IValidator"/>s used to validate <see cref="CloudEvent"/>s</param>
-public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogger<CloudEventAdmissionControl> logger, IOptions<GatewayOptions> gatewayOptions, IJsonSerializer serializer, IGatewayMetrics metrics, ICloudEventAuthorizationManager authorizationManager,
+public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogger<CloudEventAdmissionControl> logger, IJsonSerializer serializer, IGatewayMetrics metrics, ICloudEventAuthorizationManager authorizationManager,
     IJsonSchemaGenerator schemaGenerator, IJsonSchemaRegistry schemaRegistry, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators)
-        : BackgroundService, ICloudEventAdmissionControl, IGatewayAdmissionTester, IDisposable
+        : ICloudEventAdmissionControl, IGatewayAdmissionTester
 {
 
     /// <summary>
@@ -55,7 +54,6 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     public static readonly Uri SourceNotAllowedProblemType = new("https://cloud-streams.io/problems/source-not-allowed");
 
     readonly IGatewayMetrics _metrics = metrics;
-    bool _disposed;
 
     /// <summary>
     /// Gets the current <see cref="IServiceProvider"/>
@@ -67,10 +65,6 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     /// </summary>
     protected ILogger Logger { get; } = logger;
 
-    /// <summary>
-    /// gets the object used to configure a 
-    /// </summary>
-    protected GatewayOptions GatewayOptions { get; } = gatewayOptions.Value;
 
     /// <summary>
     /// Gets the service used to serialize/deserialize objects to/from JSON
@@ -108,19 +102,6 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     protected IEnumerable<IValidator<CloudEvent>> Validators { get; } = validators;
 
     /// <summary>
-    /// Gets the service used to manage the state of the current <see cref="Core.Resources.Gateway"/>
-    /// </summary>
-    protected IResourceMonitor<Core.Resources.Gateway>? Configuration { get; set; }
-
-    /// <summary>
-    /// Gets a boolean indicating whether or not the gateway's configuration has been loaded, and cloud events can therefore be admitted
-    /// </summary>
-    public bool IsReady => this.Configuration != null;
-
-    /// <inheritdoc/>
-    public Core.Resources.Gateway? Gateway => this.Configuration?.Resource;
-
-    /// <summary>
     /// Converts the specified failed <see cref="OperationResult"/> into a failed <see cref="OperationResult{T}"/>, keeping its errors
     /// </summary>
     /// <param name="result">The failed <see cref="OperationResult"/> to convert</param>
@@ -129,59 +110,11 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
     protected static OperationResult<CloudEventDescriptor> Failure(OperationResult result) => new(result.Status, errors: result.Errors?.ToArray());
 
     /// <inheritdoc/>
-    /// <remarks>
-    /// The gateway's resource is only created when it does not exist, a conflict with a replica that created it concurrently is tolerated, and transient failures are
-    /// retried with backoff rather than stopping the host (see #142)
-    /// </remarks>
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public virtual Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, Core.Resources.Gateway gateway, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default)
     {
-        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Execute");
-        for (var attempt = 1; !stoppingToken.IsCancellationRequested; attempt++)
-        {
-            try
-            {
-                Core.Resources.Gateway? gateway = null;
-                try
-                {
-                    gateway = await this.Resources.GetAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, stoppingToken).ConfigureAwait(false);
-                }
-                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { }
-                if (gateway == null)
-                {
-                    try
-                    {
-                        await this.Resources.AddAsync(new Core.Resources.Gateway(new ResourceMetadata(this.GatewayOptions.Name, this.GatewayOptions.Namespace), new GatewaySpec()), false, stoppingToken).ConfigureAwait(false);
-                    }
-                    catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { /* created by another replica in the meantime */ }
-                }
-                this.Configuration = await this.Resources.MonitorAsync<Core.Resources.Gateway>(this.GatewayOptions.Name, this.GatewayOptions.Namespace, false, stoppingToken).ConfigureAwait(false);
-                this.Logger.LogInformation("The configuration of gateway '{gateway}' has been loaded: admitting cloud events", this.GatewayOptions.Name);
-                return;
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, attempt - 1), 30));
-                this.Logger.LogError(ex, "Failed to load the configuration of gateway '{gateway}' (attempt {attempt}). Cloud events are refused until it is loaded. Retrying in {delay}...", this.GatewayOptions.Name, attempt, delay);
-                try { await Task.Delay(delay, stoppingToken).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return; }
-            }
-        }
-    }
-
-    /// <inheritdoc/>
-    public virtual async Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, IReadOnlyCollection<string>? allowedSources = null, CancellationToken cancellationToken = default)
-    {
-        using var activity = CloudStreamsDefaults.Telemetry.ActivitySource.StartActivity("CloudEventAdmissionControl.Evaluate");
-        // until the gateway's configuration has been loaded, its policies are unknown: admitting events would bypass authorization and validation (see #142)
-        if (this.Configuration == null)
-        {
-            return new((int)HttpStatusCode.ServiceUnavailable, errors: [new Error(new Uri("https://cloud-streams.io/problems/gateway-unavailable"), "Service Unavailable", (int)HttpStatusCode.ServiceUnavailable, "The gateway is starting: its configuration has not been loaded yet. Please retry later")]);
-        }
-        return await this.EvaluateAsync(e, this.Configuration.Resource, allowedSources, this._metrics, cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(e);
+        ArgumentNullException.ThrowIfNull(gateway);
+        return this.EvaluateAsync(e, gateway, allowedSources, this._metrics, cancellationToken);
     }
 
     /// <summary>
@@ -390,6 +323,8 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         var metadata = new CloudEventMetadata(e.GetContextAttributes().ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         // binary data is not a context attribute, and would otherwise be lost: it is kept with them, the event's data being stored as JSON
         if (e.Data == null && !string.IsNullOrEmpty(e.DataBase64)) metadata.ContextAttributes[CloudEventAttributes.DataBase64] = e.DataBase64;
+        // the cloud event belongs to the namespace of the gateway that ingests it, which the event store partitions by (see #215)
+        metadata.ContextAttributes[CloudEventMetadataAttributes.Namespace] = gateway.GetNamespace() ?? Namespace.DefaultNamespaceName;
         var splitHorizon = gateway.Spec.SplitHorizon;
         if (splitHorizon != null)
         {
@@ -490,24 +425,5 @@ public class CloudEventAdmissionControl(IServiceProvider serviceProvider, ILogge
         };
     }
 
-    /// <summary>
-    /// Disposes of the <see cref="CloudEventAdmissionControl"/>
-    /// </summary>
-    /// <param name="disposing">A boolean indicating whether or not the <see cref="CloudEventAdmissionControl"/> is being disposed of</param>
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!this._disposed)
-        {
-            if (disposing) this.Configuration?.Dispose();
-            this._disposed = true;
-        }
-    }
-
-    /// <inheritdoc/>
-    public override void Dispose()
-    {
-        this.Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
 
 }

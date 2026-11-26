@@ -63,9 +63,10 @@ public class ResourceWatchEventHubController(IResourceRepository resources, IHub
     /// <param name="connectionId">The id of the SignalR connection to create the watch for</param>
     /// <param name="definition">The type of resource to watch</param>
     /// <param name="namespace">The namespace resources to watch belong to, if any</param>
+    /// <param name="namespaces">The namespaces the connection may read, or null if all of them</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    public virtual async Task WatchResourcesAsync(string connectionId, ResourceDefinitionInfo definition, string? @namespace = null, CancellationToken cancellationToken = default)
+    public virtual async Task WatchResourcesAsync(string connectionId, ResourceDefinitionInfo definition, string? @namespace = null, IReadOnlySet<string>? namespaces = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(connectionId)) throw new ArgumentNullException(nameof(connectionId));
         ArgumentNullException.ThrowIfNull(definition);
@@ -88,7 +89,8 @@ public class ResourceWatchEventHubController(IResourceRepository resources, IHub
             watch.Dispose();
             return;
         }
-        watch.SubscribeAsync(e => this.OnResourceWatchEventAsync(connectionId, e));
+        // the events of namespaced resources are only sent to connections allowed to read their namespace
+        watch.SubscribeAsync(e => namespaces == null || string.IsNullOrWhiteSpace(e.Resource.GetNamespace()) || namespaces.Contains(e.Resource.GetNamespace()!) ? this.OnResourceWatchEventAsync(connectionId, e) : Task.CompletedTask);
     }
 
     /// <summary>

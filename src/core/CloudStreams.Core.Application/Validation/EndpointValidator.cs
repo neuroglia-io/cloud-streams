@@ -69,6 +69,8 @@ public static partial class EndpointValidator
         if (policy.Use != null)
         {
             if (string.IsNullOrWhiteSpace(policy.Use.Name)) errors.Add(($"{policyPath}.use", $"'{policyPath}.use' must name a secret"));
+            // secrets are resolved within the namespace of the resource: a path such as '../other' could otherwise designate the secrets of another namespace (see #215)
+            else if (!SecretReference.IsValidPath(policy.Use.Name)) errors.Add(($"{policyPath}.use", $"'{policy.Use.Name}' is not a valid secret path: {SecretReference.PathRules}"));
             if (policy.Use.Provider != null && !SecretProviders.AsEnumerable().Contains(policy.Use.Provider)) errors.Add(($"{policyPath}.use", $"'{policy.Use.Provider}' is not a secret provider: use one of {string.Join(", ", SecretProviders.AsEnumerable())}"));
             return errors;
         }

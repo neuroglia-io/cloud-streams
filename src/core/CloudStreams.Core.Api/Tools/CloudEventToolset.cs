@@ -14,6 +14,7 @@
 using CloudStreams.Core.Application.Queries.Partitions;
 using CloudStreams.Core.Application.Queries.Streams;
 using CloudStreams.Core.Application.Services;
+using CloudStreams.Core.Api.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 using Neuroglia.Data.Infrastructure.EventSourcing;
@@ -29,7 +30,7 @@ namespace CloudStreams.Core.Api.Tools;
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="mediator">The service used to mediate calls</param>
 [McpServerToolType]
-public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator mediator, IServiceProvider serviceProvider, IAuthorizationService authorization, IHttpContextAccessor httpContextAccessor)
+public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator mediator, IServiceProvider serviceProvider, IHttpContextAccessor httpContextAccessor)
 {
 
     /// <summary>
@@ -42,7 +43,6 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     public virtual async Task<string> PublishEventAsync([Description("The cloud event to publish, which must define 'specversion', 'id', 'source' and 'type'")] CloudEvent cloudEvent, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(cloudEvent);
-        await ToolAuthorization.AuthorizeAsync(authorization, httpContextAccessor, CloudStreamsAuthenticationDefaults.OperatePolicy).ConfigureAwait(false);
         var publisher = serviceProvider.GetService<ICloudEventPublisher>() ?? throw new NotSupportedException("Cloud events can only be published through a gateway");
         var result = await publisher.PublishAsync(cloudEvent, httpContextAccessor.HttpContext!.User, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess())
@@ -68,12 +68,14 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     /// <summary>
     /// Gets the cloud event stream's metadata
     /// </summary>
+    /// <param name="namespace">The namespace whose stream to describe, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The cloud event stream's metadata</returns>
     [McpServerTool(Name = "GetStreamMetadata"), Description("Gets the cloud event stream's metadata")]
-    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<StreamMetadata> GetStreamMetadataAsync([Description("The namespace whose cloud events to read. Reads the whole stream, which requires access to the whole cluster, if not set")] string? @namespace = null, CancellationToken cancellationToken = default)
     {
-        var result = ProcessResult(await Mediator.ExecuteAsync(new GetEventStreamMetadataQuery(), cancellationToken).ConfigureAwait(false));
+        ToolAuthorization.EnsureAccess(httpContextAccessor, @namespace, CloudStreamsAccessLevel.Read);
+        var result = ProcessResult(await Mediator.ExecuteAsync(new GetEventStreamMetadataQuery(@namespace), cancellationToken).ConfigureAwait(false));
         return result.Data!;
     }
 
@@ -82,16 +84,19 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     /// </summary>
     /// <param name="type">The type of the partition to get the metadata of</param>
     /// <param name="id">The id of the partition to get the metadata of</param>
+    /// <param name="namespace">The namespace the partition belongs to</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The cloud event partition's metadata</returns>
     [McpServerTool(Name = "GetPartitionMetadata"), Description("Gets the specified cloud event partition's metadata")]
     public virtual async Task<PartitionMetadata> GetStreamMetadataAsync(
         [Description("The type of the partition to get the metadata of")] CloudEventPartitionType type,
         [Description("The id of the partition to get the metadata of")] string id,
+        [Description("The namespace the partitions belong to. Defaults to 'default'")] string? @namespace = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        var result = ProcessResult(await Mediator.ExecuteAsync(new GetEventPartitionMetadataQuery(new(type, id)), cancellationToken).ConfigureAwait(false));
+        ToolAuthorization.EnsureAccess(httpContextAccessor, @namespace ?? Namespace.DefaultNamespaceName, CloudStreamsAccessLevel.Read);
+        var result = ProcessResult(await Mediator.ExecuteAsync(new GetEventPartitionMetadataQuery(new(type, id), @namespace), cancellationToken).ConfigureAwait(false));
         return result.Data!;
     }
 
@@ -102,6 +107,7 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     /// <param name="prefix">The prefix, matched case-insensitively, the ids to list must start with, if any</param>
     /// <param name="maxResults">The maximum amount of ids to return</param>
     /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
+    /// <param name="namespace">The namespace the partitions belong to</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="PartitionIdCollection"/> containing the requested page of partition ids</returns>
     [McpServerTool(Name = "ListPartitions"), Description("Lists, page by page, the ids of the cloud event partitions of the specified type, sorted alphabetically")]
@@ -110,9 +116,11 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
         [Description("The prefix, matched case-insensitively, the ids to list must start with, if any")] string? prefix = null,
         [Description("The maximum amount of ids to return, between 1 and 1000. Defaults to 100")] int? maxResults = null,
         [Description("The continuation token returned with the previous page, used to get the next one, if any")] string? continuationToken = null,
+        [Description("The namespace the partitions belong to. Defaults to 'default'")] string? @namespace = null,
         CancellationToken cancellationToken = default)
     {
-        var result = ProcessResult(await Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type, prefix, maxResults, continuationToken), cancellationToken).ConfigureAwait(false));
+        ToolAuthorization.EnsureAccess(httpContextAccessor, @namespace ?? Namespace.DefaultNamespaceName, CloudStreamsAccessLevel.Read);
+        var result = ProcessResult(await Mediator.ExecuteAsync(new ListEventPartitionIdsQuery(type, prefix, maxResults, continuationToken, @namespace), cancellationToken).ConfigureAwait(false));
         return result.Data!;
     }
 
@@ -124,6 +132,7 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
     /// <param name="direction">The direction in which to read the stream of cloud events</param>
     /// <param name="offset">The offset starting from which to read the stream</param>
     /// <param name="length">The amount of events to read from the stream</param>
+    /// <param name="namespace">The namespace whose cloud events to read, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IEnumerable{T}"/> containing the events that have been read</returns>
     [McpServerTool(Name = "ReadStream"), Description("Reads events from the specified stream")]
@@ -133,11 +142,13 @@ public class CloudEventToolset(ILogger<CloudEventToolset> logger, IMediator medi
         [Description("The direction in which to read the stream of cloud events")] StreamReadDirection direction = StreamReadDirection.Forwards,
         [Description("The offset starting from which to read the stream")] long? offset = null,
         [Description("The amount of events to read from the stream")] ulong length = 100,
+        [Description("The namespace whose cloud events to read. Reads the whole stream, which requires access to the whole cluster, if not set")] string? @namespace = null,
         CancellationToken cancellationToken = default)
     {
+        ToolAuthorization.EnsureAccess(httpContextAccessor, @namespace, CloudStreamsAccessLevel.Read);
         var partitionReference = partitionType.HasValue && !string.IsNullOrWhiteSpace(partitionId) ? new PartitionReference(partitionType.Value, partitionId) : null;
         var readOptions = new StreamReadOptions(partitionReference!, direction, offset, length, StreamReadOutputFormat.Record);
-        var result = ProcessResult(await Mediator.ExecuteAsync(new ReadEventStreamQuery(readOptions), cancellationToken).ConfigureAwait(false));
+        var result = ProcessResult(await Mediator.ExecuteAsync(new ReadEventStreamQuery(readOptions, @namespace), cancellationToken).ConfigureAwait(false));
         return await result.Data!.OfType<CloudEventRecord>().ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 

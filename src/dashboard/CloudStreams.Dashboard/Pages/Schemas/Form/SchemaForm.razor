@@ -5,6 +5,7 @@
 @using System.Text.Json.Nodes
 @using Microsoft.AspNetCore.Components.Forms
 @inherits ResourceFormBase<Schema>
+@inject NamespaceContext NamespaceContext
 
 @* A form to register schemas and versions of them, which checks new versions against the latest one before saving them (see #264) *@
 
@@ -150,7 +151,7 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        try { types = [.. (await Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType, maxResults: 100)).Items]; }
+        try { types = [.. (await Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(CloudEventPartitionType.ByType, maxResults: 100, @namespace: NamespaceContext.Current)).Items]; }
         catch (Exception) { types = []; }
     }
 

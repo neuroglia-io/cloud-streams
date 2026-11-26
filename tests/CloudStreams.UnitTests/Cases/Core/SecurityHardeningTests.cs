@@ -88,10 +88,11 @@ public class SecurityHardeningTests
     [InlineData("/api/events/pub", true)]
     [InlineData("/healthz", true)]
     [InlineData("/healthz/live", true)]
-    [InlineData("/api/resources/v1/subscriptions/orders/ack", true)]
-    [InlineData("/api/resources/v1/subscriptions/orders/nack", true)]
+    [InlineData("/api/resources/v1/namespaces/default/subscriptions/orders/ack", true)]
+    [InlineData("/api/resources/v1/namespaces/default/subscriptions/orders/nack", true)]
     [InlineData("/api/resources/v1/subscriptions", false)]
-    [InlineData("/api/resources/v1/subscriptions/orders", false)]
+    [InlineData("/api/resources/v1/namespaces/default/subscriptions/orders", false)]
+    [InlineData("/api/resources/v1/namespaces/default/subscriptions/orders/status/ack", false)]
     [InlineData("/mcp", false)]
     [InlineData("/", false)]
     public void Only_Ingestion_Acknowledgements_And_Health_Checks_Should_Be_Public(string path, bool expected)
@@ -135,7 +136,7 @@ public class SecurityHardeningTests
 
         // act & assert
         Assert.Equal(System.Net.HttpStatusCode.NotFound, (await client.GetAsync("/api/resources/v1/subscriptions")).StatusCode);
-        Assert.Equal(System.Net.HttpStatusCode.OK, (await client.PostAsync("/api/resources/v1/subscriptions/orders/ack", null)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.OK, (await client.PostAsync("/api/resources/v1/namespaces/default/subscriptions/orders/ack", null)).StatusCode);
     }
 
     [Fact]

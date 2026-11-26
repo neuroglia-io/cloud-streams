@@ -27,6 +27,11 @@ public class CheckGatewayHealthQuery
 {
 
     /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = null!;
+
+    /// <summary>
     /// Initializes a new <see cref="CheckGatewayHealthQuery"/>
     /// </summary>
     protected CheckGatewayHealthQuery() { }
@@ -35,8 +40,10 @@ public class CheckGatewayHealthQuery
     /// Initializes a new <see cref="CheckGatewayHealthQuery"/>
     /// </summary>
     /// <param name="name">The name of the gateway to check the health of</param>
-    public CheckGatewayHealthQuery(string name)
+    /// <param name="namespace">The namespace the resource belongs to, if any</param>
+    public CheckGatewayHealthQuery(string name, string? @namespace = null)
     {
+        this.Namespace = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
         this.Name = name;
     }
 
@@ -57,7 +64,7 @@ public class CheckGatewayHealthQueryHandler(IResourceRepository repository, Http
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<HealthCheckResponse?>> HandleAsync(CheckGatewayHealthQuery query, CancellationToken cancellationToken)
     {
-        var gateway = await repository.GetAsync<Gateway>(query.Name, null, cancellationToken).ConfigureAwait(false);
+        var gateway = await repository.GetAsync<Gateway>(query.Name, query.Namespace, cancellationToken).ConfigureAwait(false);
         if (gateway == null) return this.NotFound();
         if (gateway.Spec.Service == null || gateway.Spec.Service.HealthChecks == null) return this.Ok(null);
         using var request = new HttpRequestMessage(new HttpMethod(gateway.Spec.Service.HealthChecks.Request.Method), $"{gateway.Spec.Service.Uri.OriginalString}{gateway.Spec.Service.HealthChecks.Request.Path}");

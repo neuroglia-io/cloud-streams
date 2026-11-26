@@ -24,8 +24,9 @@ namespace CloudStreams.Core.Api.Hubs;
 /// Initializes a new <see cref="ResourceEventWatchHub"/>
 /// </remarks>
 /// <param name="controller">The service used to control <see cref="ResourceEventWatchHub"/>s</param>
+/// <param name="authenticationOptions">The options used to configure authentication, which determine the namespaces users may watch the resources of</param>
 [Route("api/resource-management/v1/ws/watch")]
-public class ResourceEventWatchHub(ResourceWatchEventHubController controller)
+public class ResourceEventWatchHub(ResourceWatchEventHubController controller, Configuration.CloudStreamsAuthenticationOptions? authenticationOptions = null)
         : Hub<IResourceEventWatchHubClient>, IResourceEventWatchHub
 {
 
@@ -35,7 +36,13 @@ public class ResourceEventWatchHub(ResourceWatchEventHubController controller)
     protected ResourceWatchEventHubController Controller { get; } = controller;
 
     /// <inheritdoc/>
-    public virtual Task Watch(ResourceDefinitionInfo definition, string? @namespace = null) => this.Controller.WatchResourcesAsync(this.Context.ConnectionId, definition, @namespace);
+    public virtual Task Watch(ResourceDefinitionInfo definition, string? @namespace = null)
+    {
+        // users granted access to some namespaces only watch the resources of these namespaces, and cluster resources (see #215)
+        var namespaces = this.Context.User == null || authenticationOptions == null ? null : authenticationOptions.Dashboard.GetAccessibleNamespaces(this.Context.User, Configuration.CloudStreamsAccessLevel.Read);
+        if (!string.IsNullOrWhiteSpace(@namespace) && namespaces != null && !namespaces.Contains(@namespace)) throw new HubException($"Access to the namespace '{@namespace}' is denied");
+        return this.Controller.WatchResourcesAsync(this.Context.ConnectionId, definition, @namespace, namespaces);
+    }
 
     /// <inheritdoc/>
     public virtual Task StopWatching(ResourceDefinitionInfo definition, string? @namespace = null) => this.Controller.StopWatchingResourcesAsync(this.Context.ConnectionId, definition, @namespace);

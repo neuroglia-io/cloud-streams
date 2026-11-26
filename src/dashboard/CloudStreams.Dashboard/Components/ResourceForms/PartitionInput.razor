@@ -1,5 +1,6 @@
 @namespace CloudStreams.Dashboard.Components.ResourceForms
 @using CloudStreams.Core.Resources
+@inject NamespaceContext NamespaceContext
 @inject ICloudStreamsCoreApiClient Api
 
 @* A partition: a type, and an id picked from the partitions that exist, which are searched as you type (see #226, #260) *@
@@ -88,7 +89,7 @@
         {
             // the requests that follow quickly are coalesced
             await Task.Delay(200, cancellation.Token);
-            var page = await this.Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(type ?? this.Value?.Type ?? CloudEventPartitionType.BySource, string.IsNullOrWhiteSpace(prefix) ? null : prefix, 20, null, cancellation.Token);
+            var page = await this.Api.CloudEvents.Partitions.ListPartitionsByTypeAsync(type ?? this.Value?.Type ?? CloudEventPartitionType.BySource, string.IsNullOrWhiteSpace(prefix) ? null : prefix, 20, null, this.NamespaceContext.Current, cancellation.Token);
             this.suggestions = [.. page.Items];
             this.StateHasChanged();
         }

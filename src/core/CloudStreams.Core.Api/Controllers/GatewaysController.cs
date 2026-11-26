@@ -20,26 +20,28 @@ namespace CloudStreams.Core.Api.Controllers;
 /// Represents the <see cref="ResourceApiController{TResource}"/> used to manage <see cref="Gateway"/>s
 /// </summary>
 /// <inheritdoc/>
-[Route("api/resources/v1/gateways")]
+[Route("api/resources/v1/namespaces/{namespace}/gateways")]
 public class GatewaysController(IMediator mediator)
-    : ClusterResourceApiController<Gateway>(mediator)
+    : NamespacedResourceApiController<Gateway>(mediator)
 {
 
     /// <summary>
     /// Checks the health of the specified gateway service, if any
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">Gets the name of the gateway to check the health of</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new <see cref="IActionResult"/></returns>
     [HttpGet("{name}/health")]
-    public virtual async Task<IActionResult> CheckGatewayHealth(string name, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> CheckGatewayHealth(string @namespace, string name, CancellationToken cancellationToken = default)
     {
-        return this.Process(await this.Mediator.ExecuteAsync(new CheckGatewayHealthQuery(name), cancellationToken).ConfigureAwait(false));
+        return this.Process(await this.Mediator.ExecuteAsync(new CheckGatewayHealthQuery(name, @namespace), cancellationToken).ConfigureAwait(false));
     }
 
     /// <summary>
     /// Evaluates a cloud event against the specified spec of the specified gateway, which may not be saved yet, without ingesting it
     /// </summary>
+    /// <param name="namespace">The namespace the resource belongs to</param>
     /// <param name="name">The name of the gateway, which split-horizon policies identify it with</param>
     /// <param name="request">An object that describes the spec to evaluate the cloud event against, and the cloud event</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
@@ -48,7 +50,7 @@ public class GatewaysController(IMediator mediator)
     [HttpPost("{name}/test")]
     [ProducesResponseType(typeof(GatewayAdmissionTestResult), (int)HttpStatusCode.OK)]
     [ProducesErrorResponseType(typeof(Neuroglia.ProblemDetails))]
-    public virtual async Task<IActionResult> TestAdmission(string name, [FromBody] GatewayAdmissionTestRequest request, CancellationToken cancellationToken = default)
+    public virtual async Task<IActionResult> TestAdmission(string @namespace, string name, [FromBody] GatewayAdmissionTestRequest request, CancellationToken cancellationToken = default)
     {
         if (!this.ModelState.IsValid) return this.ValidationProblem(this.ModelState);
         var tester = this.HttpContext.RequestServices.GetService<IGatewayAdmissionTester>();
@@ -56,7 +58,7 @@ public class GatewaysController(IMediator mediator)
         {
             StatusCode = (int)HttpStatusCode.NotImplemented
         };
-        return this.Ok(await tester.TestAsync(new Gateway(new ResourceMetadata(name, null), request.Spec), request.Event, cancellationToken).ConfigureAwait(false));
+        return this.Ok(await tester.TestAsync(new Gateway(new ResourceMetadata(name, @namespace), request.Spec), request.Event, cancellationToken).ConfigureAwait(false));
     }
 
 }

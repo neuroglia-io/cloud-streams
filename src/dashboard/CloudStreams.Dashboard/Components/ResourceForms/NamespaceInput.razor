@@ -1,0 +1,69 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@implements IDisposable
+@inject NamespaceContext NamespaceContext
+
+@* Chooses the namespace a new resource is created in, among the namespaces the user may read. A resource cannot move to another namespace, so the input is
+   read-only once it exists (see #215) *@
+
+<FormField Id="@Id" Label="Namespace" Required="true" Help="@Help">
+    @if (Disabled)
+    {
+        <input id="@Id" type="text" class="form-control form-control-sm" value="@Value" readonly aria-describedby="@FormField.DescribedBy(Id)" />
+    }
+    else
+    {
+        <select id="@Id" class="form-select form-select-sm" value="@Value" @onchange="OnChangedAsync" aria-describedby="@FormField.DescribedBy(Id)">
+            @foreach (var option in Options)
+            {
+                <option value="@option">@option</option>
+            }
+        </select>
+    }
+</FormField>
+
+@code {
+
+    IReadOnlyList<string> namespaces = [];
+    IDisposable? subscription;
+
+    /// <summary>
+    /// Gets/sets the id of the input
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets the selected namespace
+    /// </summary>
+    [Parameter] public string? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the selected namespace changes
+    /// </summary>
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not the namespace can be changed, which it cannot once the resource exists
+    /// </summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    string Help => this.Disabled ? "The namespace the resource belongs to. It cannot change." : "The namespace to create the resource in, whose secrets, sinks and feeds it may use. It cannot change later.";
+
+    IEnumerable<string> Options => string.IsNullOrWhiteSpace(this.Value) || this.namespaces.Contains(this.Value) ? this.namespaces : [this.Value, .. this.namespaces];
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        this.subscription = this.NamespaceContext.Namespaces.Subscribe(namespaces => this.InvokeAsync(() =>
+        {
+            this.namespaces = namespaces;
+            this.StateHasChanged();
+        }));
+        await this.NamespaceContext.RefreshAsync();
+    }
+
+    Task OnChangedAsync(ChangeEventArgs e) => this.ValueChanged.InvokeAsync(e.Value?.ToString());
+
+    /// <inheritdoc/>
+    public void Dispose() => this.subscription?.Dispose();
+
+}

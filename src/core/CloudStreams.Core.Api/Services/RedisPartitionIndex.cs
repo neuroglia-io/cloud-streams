@@ -45,9 +45,13 @@ public class RedisPartitionIndex(IConnectionMultiplexer redis)
     /// <summary>
     /// Gets the Redis key of the index of the specified type of partitions
     /// </summary>
+    /// <param name="namespace">The namespace the partitions belong to</param>
     /// <param name="partitionType">The type of partitions to get the key for</param>
     /// <returns>The Redis key of the index of the specified type of partitions</returns>
-    public static RedisKey GetKey(CloudEventPartitionType partitionType) => KeyPrefix + EnumHelper.Stringify(partitionType);
+    /// <remarks>The partitions of the default namespace are kept in the keys of earlier versions, which indexed the partitions of the default namespace only (see #215)</remarks>
+    public static RedisKey GetKey(string @namespace, CloudEventPartitionType partitionType) => @namespace == Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName
+        ? KeyPrefix + EnumHelper.Stringify(partitionType)
+        : $"{KeyPrefix}namespaces:{@namespace}:{EnumHelper.Stringify(partitionType)}";
 
     static RedisKey GetInitializationKey(CloudEventPartitionType partitionType) => KeyPrefix + EnumHelper.Stringify(partitionType) + ":initialized";
 
@@ -61,19 +65,19 @@ public class RedisPartitionIndex(IConnectionMultiplexer redis)
     static string FromMember(string member) => member[(member.IndexOf(Separator) + 1)..];
 
     /// <inheritdoc/>
-    public virtual async Task AddAsync(IEnumerable<PartitionReference> partitions, CancellationToken cancellationToken = default)
+    public virtual async Task AddAsync(string @namespace, IEnumerable<PartitionReference> partitions, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(partitions);
         var database = redis.GetDatabase();
         var tasks = partitions
             .Where(p => !string.IsNullOrEmpty(p.Id))
             .GroupBy(p => p.Type)
-            .Select(g => database.SortedSetAddAsync(GetKey(g.Key), [.. g.Select(p => p.Id).Distinct(StringComparer.Ordinal).Select(id => new SortedSetEntry(ToMember(id), 0))]));
+            .Select(g => database.SortedSetAddAsync(GetKey(@namespace, g.Key), [.. g.Select(p => p.Id).Distinct(StringComparer.Ordinal).Select(id => new SortedSetEntry(ToMember(id), 0))]));
         await Task.WhenAll(tasks).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IReadOnlyList<string>> ListAsync(CloudEventPartitionType partitionType, string? prefix, string? after, int maxResults, CancellationToken cancellationToken = default)
+    public virtual async Task<IReadOnlyList<string>> ListAsync(string @namespace, CloudEventPartitionType partitionType, string? prefix, string? after, int maxResults, CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxResults, 1);
         RedisValue min = default;
@@ -95,7 +99,7 @@ public class RedisPartitionIndex(IConnectionMultiplexer redis)
                 exclude = Exclude.Start;
             }
         }
-        var members = await redis.GetDatabase().SortedSetRangeByValueAsync(GetKey(partitionType), min, max, exclude, Order.Ascending, 0, maxResults).WaitAsync(cancellationToken).ConfigureAwait(false);
+        var members = await redis.GetDatabase().SortedSetRangeByValueAsync(GetKey(@namespace, partitionType), min, max, exclude, Order.Ascending, 0, maxResults).WaitAsync(cancellationToken).ConfigureAwait(false);
         return [.. members.Select(m => FromMember(m!))];
     }
 

@@ -24,6 +24,11 @@ public class ExportSubscriptionCommand
 {
 
     /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = null!;
+
+    /// <summary>
     /// Initializes a new <see cref="ExportSubscriptionCommand"/>
     /// </summary>
     protected ExportSubscriptionCommand() { }
@@ -32,8 +37,10 @@ public class ExportSubscriptionCommand
     /// Initializes a new <see cref="ExportSubscriptionCommand"/>
     /// </summary>
     /// <param name="name">The name of the <see cref="IResource"/> to patch</param>
-    public ExportSubscriptionCommand(string name)
+    /// <param name="namespace">The namespace the resource belongs to, if any</param>
+    public ExportSubscriptionCommand(string name, string? @namespace = null)
     {
+        this.Namespace = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
         this.Name = name;
     }
@@ -67,7 +74,7 @@ public class ExportSubscriptionCommandHandler(IResourceRepository resources, IYa
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<Stream>> HandleAsync(ExportSubscriptionCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await this.Resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await this.Resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         var map = new Dictionary<string, object>()
         {

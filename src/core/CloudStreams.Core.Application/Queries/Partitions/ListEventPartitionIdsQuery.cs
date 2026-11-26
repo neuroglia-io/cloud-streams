@@ -22,12 +22,18 @@ namespace CloudStreams.Core.Application.Queries.Partitions;
 /// Represents the query used to list, page by page, the ids of the cloud event partitions of the specified type, sorted alphabetically
 /// </summary>
 /// <param name="partitionType">The type of the partitions to list the ids of</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="prefix">The prefix, matched case-insensitively, the ids to list must start with, if any</param>
 /// <param name="maxResults">The maximum amount of ids to return. Defaults to <see cref="PartitionIdCollection.DefaultMaxResults"/></param>
 /// <param name="continuationToken">The token returned with the previous page, used to get the next one, if any</param>
-public class ListEventPartitionIdsQuery(CloudEventPartitionType partitionType, string? prefix = null, int? maxResults = null, string? continuationToken = null)
+public class ListEventPartitionIdsQuery(CloudEventPartitionType partitionType, string? prefix = null, int? maxResults = null, string? continuationToken = null, string? @namespace = null)
     : Query<PartitionIdCollection>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the type of the partitions to list the ids of
@@ -75,11 +81,12 @@ public class ListEventPartitionIdsQueryHandler(ICloudEventStore eventStore, IPar
         if (partitionIndex != null)
         {
             // the index serves the requested page directly, instead of loading, sorting and filtering every partition id (see #185)
-            items = [.. await partitionIndex.ListAsync(query.PartitionType, query.Prefix, after, maxResults + 1, cancellationToken).ConfigureAwait(false)];
+            items = [.. await partitionIndex.ListAsync(query.Namespace, query.PartitionType, query.Prefix, after, maxResults + 1, cancellationToken).ConfigureAwait(false)];
         }
         else
         {
-            IEnumerable<string> ids = (await eventStore.ListPartitionIdsAsync(query.PartitionType, cancellationToken).ToListAsync(cancellationToken).ConfigureAwait(false)).Distinct(StringComparer.Ordinal);
+            // without an index, partitions are listed by the projections of earlier versions, which only listed the partitions of the default namespace
+            IEnumerable<string> ids = query.Namespace != Namespace.DefaultNamespaceName ? [] : (await eventStore.ListPartitionIdsAsync(query.PartitionType, cancellationToken).ToListAsync(cancellationToken).ConfigureAwait(false)).Distinct(StringComparer.Ordinal);
             if (!string.IsNullOrEmpty(query.Prefix)) ids = ids.Where(id => id.StartsWith(query.Prefix, StringComparison.OrdinalIgnoreCase));
             ids = ids.Order(PartitionIdCollection.Comparer);
             if (after != null) ids = ids.Where(id => PartitionIdCollection.Comparer.Compare(id, after) > 0);

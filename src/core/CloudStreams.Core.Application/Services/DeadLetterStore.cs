@@ -65,7 +65,7 @@ public class EventStoreDeadLetterStore(IEventStore eventStore, IJsonSerializer s
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subscription);
         ArgumentNullException.ThrowIfNull(deadLetter);
-        return await eventStore.AppendAsync(Streams.DeadLetters(subscription), [new EventDescriptor(EventType, deadLetter)], cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await eventStore.AppendAsync(StreamNameHelper.DeadLetters(subscription), [new EventDescriptor(EventType, deadLetter)], cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -73,7 +73,7 @@ public class EventStoreDeadLetterStore(IEventStore eventStore, IJsonSerializer s
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subscription);
         // the underlying store reports a missing stream while the records are being enumerated: a subscription that never dead-lettered anything has no stream
-        var enumerator = eventStore.ReadAsync(Streams.DeadLetters(subscription), readDirection, offset, length, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        var enumerator = eventStore.ReadAsync(StreamNameHelper.DeadLetters(subscription), readDirection, offset, length, cancellationToken).GetAsyncEnumerator(cancellationToken);
         try
         {
             while (true)

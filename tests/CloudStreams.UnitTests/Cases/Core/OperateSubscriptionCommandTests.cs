@@ -337,7 +337,7 @@ public class OperateSubscriptionCommandTests
         var subscription = CreateSubscription(42);
         subscription.Spec.Partition = new(CloudEventPartitionType.BySource, "https://orders.example.com");
         var store = new SubscriptionStore(subscription);
-        store.EventStore.FindOffsetAsync(From, subscription.Spec.Partition, Arg.Any<CancellationToken>()).Returns((ulong?)17);
+        store.EventStore.FindOffsetAsync(Arg.Any<string?>(), From, subscription.Spec.Partition, Arg.Any<CancellationToken>()).Returns((ulong?)17);
 
         // act
         var result = await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));
@@ -352,8 +352,8 @@ public class OperateSubscriptionCommandTests
     {
         // arrange
         var store = new SubscriptionStore(CreateSubscription(StreamPosition.StartOfStream));
-        store.EventStore.FindOffsetAsync(From, null, Arg.Any<CancellationToken>()).Returns((ulong?)null);
-        store.EventStore.GetStreamMetadataAsync(Arg.Any<CancellationToken>()).Returns(new StreamMetadata() { Length = 25 });
+        store.EventStore.FindOffsetAsync(Arg.Any<string?>(), From, null, Arg.Any<CancellationToken>()).Returns((ulong?)null);
+        store.EventStore.GetStreamMetadataAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(new StreamMetadata() { Length = 25 });
 
         // act
         await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));
@@ -367,7 +367,7 @@ public class OperateSubscriptionCommandTests
     {
         // arrange - the broker only reacts to changes of the offset (see #196)
         var store = new SubscriptionStore(CreateSubscription(17));
-        store.EventStore.FindOffsetAsync(From, null, Arg.Any<CancellationToken>()).Returns((ulong?)17);
+        store.EventStore.FindOffsetAsync(Arg.Any<string?>(), From, null, Arg.Any<CancellationToken>()).Returns((ulong?)17);
 
         // act
         await new ReplaySubscriptionCommandHandler(store.Repository, store.EventStore).HandleAsync(new ReplaySubscriptionCommand("orders", From));

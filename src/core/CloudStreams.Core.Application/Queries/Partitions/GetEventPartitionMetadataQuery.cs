@@ -23,9 +23,15 @@ namespace CloudStreams.Core.Application.Queries.Partitions;
 /// Initializes a new <see cref="GetEventPartitionMetadataQuery"/>
 /// </remarks>
 /// <param name="partition">The cloud event partition to get metadata for</param>
-public class GetEventPartitionMetadataQuery(PartitionReference partition)
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
+public class GetEventPartitionMetadataQuery(PartitionReference partition, string? @namespace = null)
     : Query<PartitionMetadata>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the cloud event partition to get metadata for
@@ -45,7 +51,7 @@ public class GetEventStreamMetadataQueryHandler(ICloudEventStore eventStore)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<PartitionMetadata>> HandleAsync(GetEventPartitionMetadataQuery query, CancellationToken cancellationToken)
     {
-        return this.Ok(await eventStore.GetPartitionMetadataAsync(query.Partition, cancellationToken));
+        return this.Ok(await eventStore.GetPartitionMetadataAsync(query.Namespace, query.Partition, cancellationToken));
     }
 
 }

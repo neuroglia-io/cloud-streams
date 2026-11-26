@@ -1,26 +1,33 @@
 Cloud Streams {{ .Values.image.tag | default .Chart.AppVersion }} is deployed.
-{{- if .Values.gateway.enabled }}
+{{- $unsecured := list }}
+{{- range $values := (include "cloud-streams.instances" (dict "root" . "component" "gateway") | fromJson).items }}
+{{- if $values.enabled }}
+{{- $managementPort := toString $values.managementApi.port }}
 
-Gateway '{{ include "cloud-streams.gatewayName" . }}' ({{ .Values.gateway.replicaCount }} replica(s)):
-  kubectl port-forward svc/{{ include "cloud-streams.fullname" . }}-gateway 8080:80
+Gateway '{{ $values.name }}' of the namespace '{{ $values.namespace }}' ({{ $values.replicaCount }} replica(s)), whose events belong to that namespace:
+  kubectl port-forward svc/{{ $values.objectName }} 8080:80
   then publish events to http://localhost:8080/api/events/pub
-{{- if and .Values.gateway.managementApi.enabled (ne (toString .Values.gateway.managementApi.port) "") }}
-  The management API and the dashboard are only served on port {{ .Values.gateway.managementApi.port }}:
-  kubectl port-forward svc/{{ include "cloud-streams.fullname" . }}-gateway 8081:{{ .Values.gateway.managementApi.port }}
+{{- if and $values.managementApi.enabled (ne $managementPort "") }}
+  The management API and the dashboard are only served on port {{ $managementPort }}:
+  kubectl port-forward svc/{{ $values.objectName }} 8081:{{ $managementPort }}
   then open http://localhost:8081
-{{- else if .Values.gateway.managementApi.enabled }}
+{{- else if $values.managementApi.enabled }}
   and open the dashboard at http://localhost:8080
 {{- end }}
-{{- end }}
-{{- if .Values.broker.enabled }}
-
-Broker '{{ include "cloud-streams.brokerName" . }}' ({{ .Values.broker.replicaCount }} replica(s)).
-{{- end }}
 {{- $secured := false }}
-{{- range .Values.gateway.env }}{{ if eq .name "Authentication__Dashboard__Enabled" }}{{ $secured = true }}{{ end }}{{ end }}
-{{- if and .Values.gateway.managementApi.enabled (not $secured) }}
+{{- range $values.env }}{{ if eq .name "Authentication__Dashboard__Enabled" }}{{ $secured = true }}{{ end }}{{ end }}
+{{- if and $values.managementApi.enabled (not $secured) }}{{ $unsecured = append $unsecured $values.name }}{{ end }}
+{{- end }}
+{{- end }}
+{{- range $values := (include "cloud-streams.instances" (dict "root" . "component" "broker") | fromJson).items }}
+{{- if $values.enabled }}
 
-WARNING: the management API is served without authentication. Anyone who can reach it can change and delete
-subscriptions, brokers and gateways. Configure authentication with 'gateway.env' (see the README's 'Authentication'
-section), or keep it off any public network.
+Broker '{{ $values.name }}' of the namespace '{{ $values.namespace }}' ({{ $values.replicaCount }} replica(s)), which delivers the subscriptions of that namespace.
+{{- end }}
+{{- end }}
+{{- if $unsecured }}
+
+WARNING: the management API of the gateway(s) {{ join ", " $unsecured }} is served without authentication. Anyone who can reach it can
+change and delete subscriptions, brokers and gateways of every namespace. Configure authentication with 'gateway.env' (see the README's
+'Authentication' section), or keep it off any public network.
 {{- end }}

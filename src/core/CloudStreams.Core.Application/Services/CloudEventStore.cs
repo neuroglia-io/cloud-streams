@@ -110,11 +110,26 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     public virtual async Task<CloudEventRecord> AppendAsync(CloudEventDescriptor e, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(e);
-        var streamName = Streams.All;
+        var streamName = StreamNameHelper.All;
+        // the namespace is recorded with every cloud event, which the projections partition by (see #215)
+        e.Metadata.ContextAttributes[CloudEventMetadataAttributes.Namespace] = GetNamespace(e.Metadata);
         var descriptor = await this.ParseEventDescriptorAsync(e, cancellationToken).ConfigureAwait(false);
         var offset = await this.EventStore.AppendAsync(streamName, [descriptor], cancellationToken: cancellationToken).ConfigureAwait(false);
         await this.IndexPartitionsAsync(e.Metadata, cancellationToken).ConfigureAwait(false);
         return new(streamName, offset, e.Metadata, e.Data);
+    }
+
+    /// <summary>
+    /// Gets the namespace the cloud event described by the specified metadata belongs to
+    /// </summary>
+    /// <param name="metadata">The metadata of the cloud event</param>
+    /// <returns>The namespace the cloud event belongs to, which is the default namespace if its metadata names none</returns>
+    public static string GetNamespace(CloudEventMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return metadata.ContextAttributes != null && metadata.ContextAttributes.TryGetValue(CloudEventMetadataAttributes.Namespace, out var value) && value?.ToString() is { Length: > 0 } @namespace
+            ? @namespace
+            : Namespace.DefaultNamespaceName;
     }
 
     /// <summary>
@@ -153,7 +168,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         if (partitionIndex == null) return;
         try
         {
-            await partitionIndex.AddAsync(GetPartitions(metadata), cancellationToken).ConfigureAwait(false);
+            await partitionIndex.AddAsync(GetNamespace(metadata), GetPartitions(metadata), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -162,12 +177,29 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     }
 
     /// <inheritdoc/>
-    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<StreamMetadata> GetStreamMetadataAsync(string? @namespace, CancellationToken cancellationToken = default)
     {
         try
         {
-            var firstEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
-            var lastEvent = (await this.EventStore.ReadAsync(Streams.All, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            if (!string.IsNullOrWhiteSpace(@namespace))
+            {
+                // the stream of a namespace links to the events of the cloud event stream, some of which may have expired (see #206)
+                var streamName = StreamNameHelper.ByNamespace(@namespace);
+                var firstLink = await this.ReadStreamAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, null, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                var lastLink = await this.ReadStreamAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, null, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                var namespaceRetention = await this.GetRetentionAsync(cancellationToken).ConfigureAwait(false);
+                if (firstLink == null || lastLink == null) return new() { Retention = namespaceRetention };
+                return new()
+                {
+                    FirstEvent = firstLink.Timestamp,
+                    LastEvent = lastLink.Timestamp,
+                    Length = lastLink.Sequence + 1,
+                    FirstOffset = firstLink.Sequence,
+                    Retention = namespaceRetention
+                };
+            }
+            var firstEvent = (await this.EventStore.ReadAsync(StreamNameHelper.All, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
+            var lastEvent = (await this.EventStore.ReadAsync(StreamNameHelper.All, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, cancellationToken: cancellationToken).ToListAsync(cancellationToken)).SingleOrDefault();
             // a stream that exists but holds no event, e.g. after it has been truncated, is described like a stream that does not exist yet
             var retention = await this.GetRetentionAsync(cancellationToken).ConfigureAwait(false);
             if (firstEvent == null || lastEvent == null) return new() { Retention = retention };
@@ -203,11 +235,11 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     }
 
     /// <inheritdoc/>
-    public virtual async Task<PartitionMetadata> GetPartitionMetadataAsync(PartitionReference partition, CancellationToken cancellationToken = default)
+    public virtual async Task<PartitionMetadata> GetPartitionMetadataAsync(string? @namespace, PartitionReference partition, CancellationToken cancellationToken = default)
     {
         try
         {
-            var streamName = partition.GetStreamName();
+            var streamName = partition.GetStreamName(@namespace);
             var notFound = () => PartitionStreamNotFound(partition.Type, streamName);
             var firstEvent = await this.ReadStreamAsync(streamName, StreamReadDirection.Forwards, StreamPosition.StartOfStream, 1, notFound, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             var lastEvent = await this.ReadStreamAsync(streamName, StreamReadDirection.Backwards, StreamPosition.EndOfStream, 1, notFound, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -228,7 +260,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         }
         catch (StreamNotFoundException)
         {
-            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream '{partition.GetStreamName()}' of the partition of type '{EnumHelper.Stringify(partition.Type)}' with id '{partition.Id}'. Related projection does not exist or has not been properly configured"));
+            throw new ProblemDetailsException(new ProblemDetails(ProblemTypes.NotFound, ProblemTitles.NotFound, (int)HttpStatusCode.NotFound, $"Failed to find the stream '{partition.GetStreamName(@namespace)}' of the partition of type '{EnumHelper.Stringify(partition.Type)}' with id '{partition.Id}'. Related projection does not exist or has not been properly configured"));
         }
     }
 
@@ -236,7 +268,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     public virtual async IAsyncEnumerable<string> ListPartitionIdsAsync(CloudEventPartitionType partitionType, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var typeName = EnumHelper.Stringify(partitionType).Replace('-', '_');
-        var projectionName = Projections.CloudEventPartitionsMetadataPrefix + typeName;
+        var projectionName = ProjectionNameHelper.CloudEventPartitionsMetadataPrefix + typeName;
         List<string>? partitionsIds = null;
         // a missing projection lists no partition, while any other failure is reported rather than being mistaken for an empty list (see #187)
         try
@@ -254,32 +286,22 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     }
 
     /// <inheritdoc/>
-    public virtual async IAsyncEnumerable<CloudEventRecord> ReadAsync(StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public virtual async IAsyncEnumerable<CloudEventRecord> ReadAsync(string? @namespace, StreamReadDirection readDirection, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var streamName = Streams.All;
-        // an empty store has no stream yet: reading it yields nothing
+        var streamName = string.IsNullOrWhiteSpace(@namespace) ? StreamNameHelper.All : StreamNameHelper.ByNamespace(@namespace);
+        // an empty store, or a namespace without events, has no stream yet: reading it yields nothing
         await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, null, cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <inheritdoc/>
-    public virtual IAsyncEnumerable<CloudEventRecord> ReadPartitionAsync(PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
+    public virtual IAsyncEnumerable<CloudEventRecord> ReadPartitionAsync(string? @namespace, PartitionReference partition, StreamReadDirection readDirection, long offset, ulong? length = null, CancellationToken cancellationToken = default)
     {
-        switch (partition.Type)
-        {
-            case CloudEventPartitionType.BySource:
-                if (!Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out var source)) throw new ProblemDetailsException(new ProblemDetails(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, $"The id '{partition.Id}' of a partition of type '{EnumHelper.Stringify(CloudEventPartitionType.BySource)}' must be a valid URI"));
-                return this.ReadBySourceAsync(readDirection, source, offset, length, cancellationToken);
-            case CloudEventPartitionType.BySubject:
-                return this.ReadBySubjectAsync(readDirection, partition.Id, offset, length, cancellationToken);
-            case CloudEventPartitionType.ByType:
-                return this.ReadByTypeAsync(readDirection, partition.Id, offset, length, cancellationToken);
-            case CloudEventPartitionType.ByCorrelationId:
-                return this.ReadByCorrelationIdAsync(readDirection, partition.Id, offset, length, cancellationToken);
-            case CloudEventPartitionType.ByCausationId:
-                return this.ReadByCausationIdAsync(readDirection, partition.Id, offset, length, cancellationToken);
-            default:
-                throw new NotSupportedException($"The specified {nameof(CloudEventPartitionType)} '{partition.Type}' is not supported");
-        }
+        ArgumentNullException.ThrowIfNull(partition);
+        if (string.IsNullOrWhiteSpace(partition.Id)) throw new ArgumentNullException(nameof(partition), "The id of the partition to read is required");
+        if (partition.Type == CloudEventPartitionType.BySource && !Uri.TryCreate(partition.Id, UriKind.RelativeOrAbsolute, out _))
+            throw new ProblemDetailsException(new ProblemDetails(new Uri("https://cloud-streams.io/problems/validation-failed"), "Validation Failed", (int)HttpStatusCode.BadRequest, $"The id '{partition.Id}' of a partition of type '{EnumHelper.Stringify(CloudEventPartitionType.BySource)}' must be a valid URI"));
+        var streamName = partition.GetStreamName(@namespace);
+        return this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(partition.Type, streamName), cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -287,19 +309,19 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// Records are appended in the order they are recorded, so their timestamps never decrease along a stream: the offset is found by a binary search, which reads
     /// a single record per step (see #211)
     /// </remarks>
-    public virtual async Task<ulong?> FindOffsetAsync(DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
+    public virtual async Task<ulong?> FindOffsetAsync(string? @namespace, DateTimeOffset time, PartitionReference? partition = null, CancellationToken cancellationToken = default)
     {
         ulong length, first;
         try
         {
             if (partition == null)
             {
-                var metadata = await this.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false);
+                var metadata = await this.GetStreamMetadataAsync(@namespace, cancellationToken).ConfigureAwait(false);
                 (length, first) = (metadata.Length ?? 0, metadata.FirstOffset ?? 0);
             }
             else
             {
-                var metadata = await this.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false);
+                var metadata = await this.GetPartitionMetadataAsync(@namespace, partition, cancellationToken).ConfigureAwait(false);
                 (length, first) = (metadata.Length, metadata.FirstOffset);
             }
         }
@@ -313,8 +335,8 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         {
             var middle = low + (high - low) / 2;
             var records = partition == null
-                ? this.ReadAsync(StreamReadDirection.Forwards, (long)middle, 1, cancellationToken)
-                : this.ReadPartitionAsync(partition, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken);
+                ? this.ReadAsync(@namespace, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken)
+                : this.ReadPartitionAsync(@namespace, partition, StreamReadDirection.Forwards, (long)middle, 1, cancellationToken);
             var record = await records.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             // a record that cannot be read, or whose timestamp is unknown, is deemed recent, which errs on the side of delivering more
             if (record?.Timestamp == null || record.Timestamp >= time) high = middle;
@@ -338,7 +360,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// </remarks>
     protected virtual IAsyncEnumerable<CloudEventRecord> ReadStreamAsync(string streamName, StreamReadDirection readDirection, long offset, ulong? length, Func<Exception>? notFound, CancellationToken cancellationToken = default)
     {
-        return streamName == Streams.All
+        return streamName == StreamNameHelper.All
             ? this.ReadRecordsAsync(streamName, readDirection, offset, length, notFound, cancellationToken)
             : this.ReadLinksAsync(streamName, readDirection, offset, length, notFound, cancellationToken);
     }
@@ -481,15 +503,28 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
         $"Failed to find the stream '{streamName}' that belongs to the partition of type '{EnumHelper.Stringify(partitionType)}'. Either no event has been published to the partition yet, or the related projection does not exist or has not been properly configured"));
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEventRecord>> ObserveAsync(long offset = -1, CancellationToken cancellationToken = default)
+    public virtual async Task<IObservable<CloudEventRecord>> ObserveAsync(string? @namespace, long offset = -1, CancellationToken cancellationToken = default)
     {
-        return (await this.ObserveStreamAsync(Streams.All, offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
+        if (string.IsNullOrWhiteSpace(@namespace)) return (await this.ObserveStreamAsync(StreamNameHelper.All, offset, cancellationToken).ConfigureAwait(false)).Select(this.ReadRecord);
+        return await this.ObserveLinksAsync(StreamNameHelper.ByNamespace(@namespace), offset, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
-    public virtual async Task<IObservable<CloudEventRecord>> ObservePartitionAsync(PartitionReference partition, long offset = -1, CancellationToken cancellationToken = default)
+    public virtual Task<IObservable<CloudEventRecord>> ObservePartitionAsync(string? @namespace, PartitionReference partition, long offset = -1, CancellationToken cancellationToken = default)
     {
-        var streamName = partition.GetStreamName();
+        ArgumentNullException.ThrowIfNull(partition);
+        return this.ObserveLinksAsync(partition.GetStreamName(@namespace), offset, cancellationToken);
+    }
+
+    /// <summary>
+    /// Observes the specified stream of links to the events of the cloud event stream, such as the stream of a namespace or of a partition
+    /// </summary>
+    /// <param name="streamName">The name of the stream to observe</param>
+    /// <param name="offset">The offset of the first record to observe, or <see cref="StreamPosition.EndOfStream"/> to only observe the records appended from now on</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new <see cref="IObservable{T}"/> used to observe the records of the stream</returns>
+    protected virtual async Task<IObservable<CloudEventRecord>> ObserveLinksAsync(string streamName, long offset, CancellationToken cancellationToken)
+    {
         // observing from an expired link would fail: it starts with the first link whose event is retained (see #206)
         if (offset != StreamPosition.EndOfStream && this._firstRetainedLinks.TryGetValue(streamName, out var first) && (ulong)Math.Max(offset, 0) < first) offset = (long)first;
         else if (offset != StreamPosition.EndOfStream)
@@ -522,7 +557,7 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     }
 
     /// <inheritdoc/>
-    public virtual Task TruncateAsync(ulong beforeVersion, CancellationToken cancellationToken = default) => this.EventStore.TruncateAsync(Streams.All, beforeVersion, cancellationToken);
+    public virtual Task TruncateAsync(ulong beforeVersion, CancellationToken cancellationToken = default) => this.EventStore.TruncateAsync(StreamNameHelper.All, beforeVersion, cancellationToken);
 
     /// <summary>
     /// Gets the definitions of the projections required by Cloud Streams, as the names of the projections and functions that create them
@@ -530,23 +565,43 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
     /// <returns>The definitions of the projections required by Cloud Streams</returns>
     protected virtual IEnumerable<(string Name, Func<CancellationToken, Task> Create)> GetProjectionDefinitions()
     {
-        yield return (Projections.PartitionBySource, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySource,
+        // events stored by earlier versions have no namespace: they belong to the default namespace (see #215). The expressions are converted to JavaScript, which
+        // is why the default namespace is written out, and why a conditional is used rather than a null-coalescing operator, which the conversion does not support
+        yield return (ProjectionNameHelper.PartitionByNamespace, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionByNamespace,
             projection => projection
-                .FromStream(Streams.All)
+                .FromStream(StreamNameHelper.All)
+                .When((state, e) => e.Metadata != null)
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByNamespacePrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default"), e)),
+            cancellationToken: cancellationToken));
+        yield return (ProjectionNameHelper.PartitionBySource, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionBySource,
+            projection => projection
+                .FromStream(StreamNameHelper.All)
                 .When((state, e) => e.Metadata!.Get("source") != null)
-                .Then((state, e) => Projection.LinkEventTo("$by-source-" + e.Metadata!.Get("source"), e)),
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByCloudEventSourcePrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default") + "/" + e.Metadata!.Get("source"), e)),
             cancellationToken: cancellationToken));
-        yield return (Projections.PartitionBySubject, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionBySubject,
+        yield return (ProjectionNameHelper.PartitionBySubject, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionBySubject,
             projection => projection
-                .FromStream(Streams.All)
+                .FromStream(StreamNameHelper.All)
                 .When((state, e) => e.Metadata!.Get("subject") != null)
-                .Then((state, e) => Projection.LinkEventTo("$by-subject-" + e.Metadata!.Get("subject"), e)),
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByCloudEventSubjectPrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default") + "/" + e.Metadata!.Get("subject"), e)),
             cancellationToken: cancellationToken));
-        yield return (Projections.PartitionByCausationId, cancellationToken => this.ProjectionManager.CreateAsync<object>(Projections.PartitionByCausationId,
+        yield return (ProjectionNameHelper.PartitionByType, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionByType,
             projection => projection
-                .FromStream(Streams.All)
+                .FromStream(StreamNameHelper.All)
+                .When((state, e) => e.Metadata!.Get("type") != null)
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByCloudEventTypePrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default") + "/" + e.Metadata!.Get("type"), e)),
+            cancellationToken: cancellationToken));
+        yield return (ProjectionNameHelper.PartitionByCorrelationId, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionByCorrelationId,
+            projection => projection
+                .FromStream(StreamNameHelper.All)
+                .When((state, e) => e.Metadata!.Get("$correlationId") != null)
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByCorrelationIdPrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default") + "/" + e.Metadata!.Get("$correlationId"), e)),
+            cancellationToken: cancellationToken));
+        yield return (ProjectionNameHelper.PartitionByCausationId, cancellationToken => this.ProjectionManager.CreateAsync<object>(ProjectionNameHelper.PartitionByCausationId,
+            projection => projection
+                .FromStream(StreamNameHelper.All)
                 .When((state, e) => e.Metadata!.Get("$causationId") != null)
-                .Then((state, e) => Projection.LinkEventTo("$by-causation-" + e.Metadata!.Get("$causationId"), e)),
+                .Then((state, e) => Projection.LinkEventTo(StreamNameHelper.ByCausationIdPrefix + (e.Metadata!.Get("$namespace") != null ? e.Metadata!.Get("$namespace") : "default") + "/" + e.Metadata!.Get("$causationId"), e)),
             cancellationToken: cancellationToken));
         // the ids of the partitions are no longer listed by projections, whose state grows with every partition, but by the partition index (see #185)
     }
@@ -646,88 +701,6 @@ public class CloudEventStore(IEventStore eventStore, IProjectionManager projecti
                 return;
             }
         }
-    }
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by source
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="source">The source of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadBySourceAsync(StreamReadDirection readDirection, Uri source, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        var streamName = Streams.ByCloudEventSource(source);
-        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.BySource, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
-    }
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by subject
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="subject">The subject of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    /// <inheritdoc/>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadBySubjectAsync(StreamReadDirection readDirection, string subject, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(subject)) throw new ArgumentNullException(nameof(subject));
-        var streamName = Streams.ByCloudEventSubject(subject);
-        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.BySubject, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
-    }
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by type
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="type">The type of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    /// <inheritdoc/>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByTypeAsync(StreamReadDirection readDirection, string type, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(type)) throw new ArgumentNullException(nameof(type));
-        var streamName = Streams.ByCloudEventType(type);
-        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByType, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
-    }
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by correlation id
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="correlationId">The correlation id of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByCorrelationIdAsync(StreamReadDirection readDirection, string correlationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(correlationId)) throw new ArgumentNullException(nameof(correlationId));
-        var streamName = Streams.ByCorrelationId(correlationId);
-        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByCorrelationId, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
-    }
-
-    /// <summary>
-    /// Reads stored <see cref="CloudEvent"/>s by causation id
-    /// </summary>
-    /// <param name="readDirection">The direction in which to read</param>
-    /// <param name="causationId">The causation id of the <see cref="CloudEvent"/>s to read</param>
-    /// <param name="offset">The offset starting from which to read events</param>
-    /// <param name="length">The amount of <see cref="CloudEvent"/>s to read</param>
-    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
-    /// <returns>A new <see cref="IAsyncEnumerable{T}"/> containing the <see cref="CloudEvent"/>s read from the store</returns>
-    protected virtual async IAsyncEnumerable<CloudEventRecord> ReadByCausationIdAsync(StreamReadDirection readDirection, string causationId, long offset, ulong? length = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(causationId)) throw new ArgumentNullException(nameof(causationId));
-        var streamName = Streams.ByCausationId(causationId);
-        await foreach (var record in this.ReadStreamAsync(streamName, readDirection, offset, length, () => PartitionStreamNotFound(CloudEventPartitionType.ByCausationId, streamName), cancellationToken).ConfigureAwait(false)) yield return record;
     }
 
     /// <summary>

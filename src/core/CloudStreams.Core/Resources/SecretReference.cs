@@ -68,6 +68,28 @@ public record SecretReference
     /// <inheritdoc/>
     public override string ToString() => this.Provider == null ? this.Name : $"{this.Provider}:{this.Name}";
 
+    /// <summary>
+    /// Gets the message that describes what a valid secret path is
+    /// </summary>
+    public const string PathRules = "it must be made of letters, digits, dashes, underscores and dots, in segments separated by slashes, none of which is '.' or '..'";
+
+    /// <summary>
+    /// Determines whether or not the specified secret path is valid
+    /// </summary>
+    /// <param name="path">The path to check</param>
+    /// <returns>A boolean indicating whether or not the path is valid</returns>
+    /// <remarks>Paths are resolved within the area of a namespace: segments such as '..' could otherwise designate the secrets of another namespace (see #215)</remarks>
+    public static bool IsValidPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        foreach (var segment in path.Split('/'))
+        {
+            if (segment.Length == 0 || segment == "." || segment == "..") return false;
+            if (!segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')) return false;
+        }
+        return true;
+    }
+
     void IYamlConvertible.Read(IParser parser, Type expectedType, ObjectDeserializer nestedObjectDeserializer)
     {
         if (parser.TryConsume<Scalar>(out var scalar))

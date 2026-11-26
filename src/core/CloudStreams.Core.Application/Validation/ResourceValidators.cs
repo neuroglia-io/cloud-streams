@@ -295,6 +295,27 @@ public class GatewayValidator
                     var duplicate = feeds.Where(f => f?.EffectiveName != null).GroupBy(f => f.EffectiveName).FirstOrDefault(g => g.Count() > 1);
                     if (duplicate != null) context.AddFailure("spec.ingestion.feeds", $"'spec.ingestion.feeds' lists the feed '{duplicate.Key}' more than once: the names of feeds identify them as publishers, and must be unique");
                 }).When(g => g.Spec.Ingestion!.Feeds != null);
+                this.RuleFor(g => g.Spec.Ingestion!.Publishers).Custom((publishers, context) =>
+                {
+                    for (var i = 0; i < publishers!.Count; i++)
+                    {
+                        var publisher = publishers[i];
+                        var path = $"spec.ingestion.publishers[{i}]";
+                        if (publisher == null)
+                        {
+                            context.AddFailure(path, $"'{path}' must be a publisher");
+                            continue;
+                        }
+                        if (string.IsNullOrWhiteSpace(publisher.Name)) context.AddFailure($"{path}.name", $"'{path}.name' is required");
+                        // a publisher identified by nothing would match no request, and one identified by both could be mistaken for either
+                        if ((publisher.ApiKey != null) == publisher.UsesToken) context.AddFailure(path, $"'{path}' must be identified either by an 'apiKey', or by the 'subject' or 'claims' of its bearer tokens");
+                        if (publisher.ApiKey != null && string.IsNullOrWhiteSpace(publisher.ApiKey.Key) && publisher.ApiKey.Use == null) context.AddFailure($"{path}.apiKey", $"'{path}.apiKey' must set its 'key', or the secret that holds it with 'use'");
+                        if (publisher.ApiKey?.Use != null && publisher.ApiKey.Use.Provider != null && !SecretProviders.AsEnumerable().Contains(publisher.ApiKey.Use.Provider)) context.AddFailure($"{path}.apiKey.use", $"'{path}.apiKey.use' must name one of the providers: {string.Join(", ", SecretProviders.AsEnumerable())}");
+                        if (publisher.Sources?.Any(string.IsNullOrWhiteSpace) == true) context.AddFailure($"{path}.sources", $"'{path}.sources' must not contain empty patterns");
+                    }
+                    var duplicate = publishers.Where(p => !string.IsNullOrWhiteSpace(p?.Name)).GroupBy(p => p.Name).FirstOrDefault(g => g.Count() > 1);
+                    if (duplicate != null) context.AddFailure("spec.ingestion.publishers", $"'spec.ingestion.publishers' lists the publisher '{duplicate.Key}' more than once");
+                }).When(g => g.Spec.Ingestion!.Publishers != null);
             });
         });
     }

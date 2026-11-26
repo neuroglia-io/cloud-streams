@@ -29,19 +29,21 @@ public interface IEndpointResolver
     /// Gets the endpoint of the specified sink
     /// </summary>
     /// <param name="sink">The name of the sink</param>
+    /// <param name="namespace">The namespace the sink belongs to</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The endpoint of the sink</returns>
     /// <exception cref="InvalidOperationException">The sink does not exist</exception>
-    Task<Endpoint> GetSinkEndpointAsync(string sink, CancellationToken cancellationToken = default);
+    Task<Endpoint> GetSinkEndpointAsync(string sink, string? @namespace, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the endpoint of the specified feed
     /// </summary>
     /// <param name="feed">The reference to the feed: the name of a feed, or a feed of its own</param>
+    /// <param name="namespace">The namespace of the gateway that consumes the feed, which the feed belongs to</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>The name of the feed and its endpoint</returns>
     /// <exception cref="InvalidOperationException">The feed does not exist</exception>
-    Task<(string Name, Endpoint Endpoint)> GetFeedAsync(FeedReference feed, CancellationToken cancellationToken = default);
+    Task<(string Name, Endpoint Endpoint)> GetFeedAsync(FeedReference feed, string? @namespace, CancellationToken cancellationToken = default);
 
 }
 
@@ -60,26 +62,26 @@ public class EndpointResolver(IServiceProvider serviceProvider, TimeProvider tim
     readonly ConcurrentDictionary<string, (Endpoint Endpoint, DateTimeOffset ExpiresAt)> _cache = new();
 
     /// <inheritdoc/>
-    public virtual Task<Endpoint> GetSinkEndpointAsync(string sink, CancellationToken cancellationToken = default) => this.GetEndpointAsync<Sink>(sink, s => s.Spec?.Endpoint, cancellationToken);
+    public virtual Task<Endpoint> GetSinkEndpointAsync(string sink, string? @namespace, CancellationToken cancellationToken = default) => this.GetEndpointAsync<Sink>(sink, @namespace, s => s.Spec?.Endpoint, cancellationToken);
 
     /// <inheritdoc/>
-    public virtual async Task<(string Name, Endpoint Endpoint)> GetFeedAsync(FeedReference feed, CancellationToken cancellationToken = default)
+    public virtual async Task<(string Name, Endpoint Endpoint)> GetFeedAsync(FeedReference feed, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(feed);
         if (feed.Feed == null) return (feed.Name ?? throw new InvalidOperationException("A feed of a gateway's own must have a name"), feed.Endpoint ?? throw new InvalidOperationException($"The feed '{feed.Name}' has no endpoint"));
-        return (feed.Feed, await this.GetEndpointAsync<Feed>(feed.Feed, f => f.Spec?.Endpoint, cancellationToken).ConfigureAwait(false));
+        return (feed.Feed, await this.GetEndpointAsync<Feed>(feed.Feed, @namespace, f => f.Spec?.Endpoint, cancellationToken).ConfigureAwait(false));
     }
 
-    async Task<Endpoint> GetEndpointAsync<TResource>(string name, Func<TResource, Endpoint?> getEndpoint, CancellationToken cancellationToken)
+    async Task<Endpoint> GetEndpointAsync<TResource>(string name, string? @namespace, Func<TResource, Endpoint?> getEndpoint, CancellationToken cancellationToken)
         where TResource : class, IResource, new()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var kind = new TResource().Definition.Kind.ToLowerInvariant();
-        var key = $"{kind}/{name}";
+        var key = $"{kind}/{@namespace}/{name}";
         var now = timeProvider.GetUtcNow();
         if (this._cache.TryGetValue(key, out var cached) && cached.ExpiresAt > now) return cached.Endpoint;
         var repository = serviceProvider.GetService<IResourceRepository>() ?? throw new InvalidOperationException($"The {kind} '{name}' cannot be resolved without a resource repository");
-        var resource = await repository.GetAsync<TResource>(name, null, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException($"The {kind} '{name}' does not exist");
+        var resource = await repository.GetAsync<TResource>(name, @namespace, cancellationToken).ConfigureAwait(false) ?? throw new InvalidOperationException(@namespace == null ? $"The {kind} '{name}' does not exist" : $"The {kind} '{name}' does not exist in the namespace '{@namespace}'");
         var endpoint = getEndpoint(resource) ?? throw new InvalidOperationException($"The {kind} '{name}' has no endpoint");
         this._cache[key] = (endpoint, now + CacheDuration);
         return endpoint;

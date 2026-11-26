@@ -4,6 +4,7 @@
 @inject CommonJsInterop JsInterop
 @inject ICloudStreamsCoreApiClient ApiClient
 @inject UserAccess UserAccess
+@inject NamespaceContext NamespaceContext
 @inject IJsonSerializer Serializer
 
 <div class="container-fluid">
@@ -165,10 +166,11 @@
             this.message = null;
         }
         if (this.readOnly != this.ReadOnly) this.readOnly = this.ReadOnly;
-        if (this.Offset.HasValue && !this.canRedeliver && await this.UserAccess.CanOperateAsync())
+        // offsets are those of the stream of a namespace: an event of the whole stream cannot be redelivered to a subscription, which reads the stream of its namespace (see #215)
+        if (this.Offset.HasValue && !this.canRedeliver && this.NamespaceContext.Current != null && await this.UserAccess.CanOperateAsync(this.NamespaceContext.Current))
         {
             this.canRedeliver = true;
-            try { this.subscriptions = [.. (await (await this.ApiClient.Resources.Subscriptions.ListAsync()).ToListAsync()).Select(s => s.GetName()).Order()]; }
+            try { this.subscriptions = [.. (await (await this.ApiClient.Resources.Subscriptions.ListAsync(this.NamespaceContext.Current)).ToListAsync()).Select(s => s.GetName()).Order()]; }
             catch (Exception ex) { this.message = $"Failed to list the subscriptions: {ex.Message}"; }
         }
         await base.OnParametersSetAsync();
@@ -201,7 +203,7 @@
         this.redelivering = true;
         try
         {
-            var redelivery = await this.ApiClient.Resources.Subscriptions.RedeliverAsync(this.selectedSubscription, new() { Partition = this.Partition, Offset = this.Offset.Value });
+            var redelivery = await this.ApiClient.Resources.Subscriptions.RedeliverAsync(this.selectedSubscription, new() { Partition = this.Partition, Offset = this.Offset.Value }, this.NamespaceContext.Current);
             this.redeliverySucceeded = true;
             this.redeliveryResult = $"Redelivered to '{this.selectedSubscription}': the subscriber responded {redelivery.Status}.";
         }

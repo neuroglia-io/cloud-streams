@@ -3,6 +3,7 @@
 @using CloudStreams.Dashboard.Components.ResourceForms
 @using System.Text.RegularExpressions
 @inherits ResourceFormBase<Subscription>
+@inject NamespaceContext NamespaceContext
 
 @* A guided form to create and edit subscriptions (see #261) *@
 
@@ -15,6 +16,7 @@
                 <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="Lower-case letters, digits and dashes, e.g. orders-audit. It cannot change later." Error="@ErrorOf("name")">
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
+                <NamespaceInput Id="@FieldId("namespace")" Value="@Model.Metadata.Namespace" ValueChanged="@(value => Model.Metadata.Namespace = value)" />
             }
             <FormField Id="@FieldId("target")" Label="Subscriber" Required="true">
                 <ChildContent>
@@ -277,7 +279,7 @@
     {
         await base.OnInitializedAsync();
         // the sinks subscriptions can deliver to, which a reader may not be allowed to list
-        try { sinks = await (await Api.Resources.Sinks.ListAsync()).ToListAsync(); }
+        try { sinks = await (await Api.Resources.Sinks.ListAsync(this.GetNamespace())).ToListAsync(); }
         catch (Exception) { sinks = []; }
     }
 
@@ -485,7 +487,7 @@
                 Mutation = Model.Spec.Mutation?.Type == CloudEventMutationType.Expression ? Model.Spec.Mutation : null,
                 Length = 20
             };
-            preview = await Api.Resources.Subscriptions.TestAsync(request);
+            preview = await Api.Resources.Subscriptions.TestAsync(request, this.GetNamespace());
             previewSummary = preview.Items.Count == 0 ? "There is no event to preview yet." : $"{preview.Items.Count(i => i.Matched)} of the {preview.Items.Count} latest events would be delivered.";
         }
         catch (Exception ex)

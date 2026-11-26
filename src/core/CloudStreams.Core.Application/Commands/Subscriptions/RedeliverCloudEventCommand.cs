@@ -24,10 +24,16 @@ namespace CloudStreams.Core.Application.Commands.Subscriptions;
 /// Represents the command used to deliver a recorded cloud event to the subscriber of a <see cref="Subscription"/> again, once (see #222)
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to redeliver the cloud event to</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="request">An object that describes the cloud event to redeliver</param>
-public class RedeliverCloudEventCommand(string name, CloudEventRedeliveryRequest request)
+public class RedeliverCloudEventCommand(string name, CloudEventRedeliveryRequest request, string? @namespace = null)
     : Command<CloudEventRedelivery>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to redeliver the cloud event to
@@ -68,12 +74,12 @@ public class RedeliverCloudEventCommandHandler(IResourceRepository resources, IC
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<CloudEventRedelivery>> HandleAsync(RedeliverCloudEventCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         var partition = command.Request.Partition;
         var records = partition == null
-            ? eventStore.ReadAsync(StreamReadDirection.Forwards, (long)command.Request.Offset, 1, cancellationToken)
-            : eventStore.ReadPartitionAsync(partition, StreamReadDirection.Forwards, (long)command.Request.Offset, 1, cancellationToken);
+            ? eventStore.ReadAsync(subscription.GetNamespace(), StreamReadDirection.Forwards, (long)command.Request.Offset, 1, cancellationToken)
+            : eventStore.ReadPartitionAsync(subscription.GetNamespace(), partition, StreamReadDirection.Forwards, (long)command.Request.Offset, 1, cancellationToken);
         var record = await records.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (record == null || record.Sequence != command.Request.Offset)
             return new OperationResult<CloudEventRedelivery>((int)HttpStatusCode.NotFound, errors: [new Error(ProblemTypes.NotFound, "Not Found", (int)HttpStatusCode.NotFound, $"There is no cloud event at offset '{command.Request.Offset}' of the {(partition == null ? "stream" : $"partition '{partition.Id}'")}")]);
@@ -87,7 +93,7 @@ public class RedeliverCloudEventCommandHandler(IResourceRepository resources, IC
         {
             e = await pipeline.MutateAsync(subscription, e, timeout.Token).ConfigureAwait(false);
             KeyValuePair<string, string>[] headers = [new(CloudStreamsHeaders.Subscription, subscription.GetName()), new(CloudStreamsHeaders.Offset, record.Sequence.ToString(CultureInfo.InvariantCulture))];
-            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber), e, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
+            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber, subscription.GetNamespace()), e, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
         }
         catch (HttpRequestException ex) when (ex.StatusCode.HasValue)
         {

@@ -15,6 +15,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using Neuroglia.Data.PatchModel.Services;
 using Neuroglia.Serialization;
+using System.Text.RegularExpressions;
 
 namespace CloudStreams.Core.Application.Validation;
 
@@ -27,21 +28,39 @@ namespace CloudStreams.Core.Application.Validation;
 /// Status updates are not validated: they are made by Cloud Streams itself, and validating them could prevent a broker from recording the state of a subscription
 /// whose spec has become invalid (see #170)
 /// </remarks>
-public class CloudStreamsResourceValidator(IJsonSerializer serializer, IEnumerable<IPatchHandler> patchHandlers)
+public partial class CloudStreamsResourceValidator(IJsonSerializer serializer, IEnumerable<IPatchHandler> patchHandlers)
     : IResourceValidator
 {
 
+    const string NamespacesPlural = "namespaces";
+
     /// <inheritdoc/>
     public virtual bool AppliesTo(Operation operation, string group, string version, string plural, string? @namespace = null) =>
-        operation is Operation.Create or Operation.Replace or Operation.Patch
-        && group == CloudStreamsDefaults.ResourceGroup
-        && plural is "subscriptions" or "brokers" or "gateways" or "schemas" or "sinks" or "feeds";
+        (operation is Operation.Create && plural == NamespacesPlural)
+        || (operation is Operation.Create or Operation.Replace or Operation.Patch
+            && group == CloudStreamsDefaults.ResourceGroup
+            && plural is "subscriptions" or "brokers" or "gateways" or "schemas" or "sinks" or "feeds");
+
+    /// <summary>
+    /// Determines whether or not the specified name is a valid namespace name, that is a DNS label, as the names of Kubernetes namespaces are
+    /// </summary>
+    /// <param name="name">The name to check</param>
+    /// <returns>A boolean indicating whether or not the specified name is a valid namespace name</returns>
+    /// <remarks>The name of a namespace is part of the names of streams, keys, secret paths and environment variables, and of the roles that grant access to it (see #215)</remarks>
+    public static bool IsValidNamespaceName(string? name) => !string.IsNullOrEmpty(name) && name.Length <= 63 && NamespaceNamePattern().IsMatch(name);
 
     /// <inheritdoc/>
     public virtual async Task<AdmissionReviewResponse> ValidateAsync(AdmissionReviewRequest context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!string.IsNullOrWhiteSpace(context.SubResource)) return new(context.Uid, true);
+        if (context.Resource.Definition.Plural == NamespacesPlural)
+        {
+            if (IsValidNamespaceName(context.Resource.Name)) return new(context.Uid, true);
+            var message = $"'{context.Resource.Name}' is not a valid namespace name: it must be at most 63 lowercase letters, digits and dashes, and start and end with a letter or a digit";
+            return new(context.Uid, false, null, new ProblemDetails(ProblemTypes.AdmissionFailed, "Admission Failed", (int)HttpStatusCode.BadRequest, message, null,
+                new Dictionary<string, string[]>() { { "metadata.name", [message] } }));
+        }
         var state = await this.GetUpdatedStateAsync(context, cancellationToken).ConfigureAwait(false);
         if (state == null) return new(context.Uid, true);
         var result = context.Resource.Definition.Plural switch
@@ -87,5 +106,8 @@ public class CloudStreamsResourceValidator(IJsonSerializer serializer, IEnumerab
     protected virtual TResource Convert<TResource>(object resource)
         where TResource : class, IResource
         => resource as TResource ?? serializer.Deserialize<TResource>(serializer.SerializeToText(resource))!;
+
+    [GeneratedRegex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")]
+    private static partial Regex NamespaceNamePattern();
 
 }

@@ -23,9 +23,15 @@ namespace CloudStreams.Core.Application.Queries.Streams;
 /// Represents the query used to search the cloud event stream, or a partition (see #223)
 /// </summary>
 /// <param name="options">The options of the search</param>
-public class SearchCloudEventsQuery(CloudEventSearchOptions options)
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
+public class SearchCloudEventsQuery(CloudEventSearchOptions options, string? @namespace = null)
     : Query<CloudEventSearchResult>
 {
+
+    /// <summary>
+    /// Gets the namespace to read the cloud events of, or null to read the whole stream
+    /// </summary>
+    public virtual string? Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? null : @namespace;
 
     /// <summary>
     /// Gets the options of the search
@@ -74,7 +80,7 @@ public class SearchCloudEventsQueryHandler(ICloudEventStore eventStore, IExpress
         if (options.Offset.HasValue) offset = options.Offset.Value;
         else if (options.From.HasValue)
         {
-            var found = await eventStore.FindOffsetAsync(options.From.Value, partition, cancellationToken).ConfigureAwait(false);
+            var found = await eventStore.FindOffsetAsync(query.Namespace, options.From.Value, partition, cancellationToken).ConfigureAwait(false);
             if (!found.HasValue) return this.Ok(result);
             offset = found.Value;
         }
@@ -82,8 +88,8 @@ public class SearchCloudEventsQueryHandler(ICloudEventStore eventStore, IExpress
         while (true)
         {
             var records = partition == null
-                ? eventStore.ReadAsync(StreamReadDirection.Forwards, (long)offset, PageSize, cancellationToken)
-                : eventStore.ReadPartitionAsync(partition, StreamReadDirection.Forwards, (long)offset, PageSize, cancellationToken);
+                ? eventStore.ReadAsync(query.Namespace, StreamReadDirection.Forwards, (long)offset, PageSize, cancellationToken)
+                : eventStore.ReadPartitionAsync(query.Namespace, partition, StreamReadDirection.Forwards, (long)offset, PageSize, cancellationToken);
             var read = 0;
             await foreach (var record in records.ConfigureAwait(false))
             {

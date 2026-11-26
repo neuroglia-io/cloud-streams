@@ -100,6 +100,8 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
                 using var streamReader = new StreamReader(stream);
                 var text = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
                 var gateway = serializer.Deserialize<Core.Resources.Gateway>(text)!;
+                // resources of earlier versions name no namespace: they belong to the default namespace (see #215)
+                if (string.IsNullOrWhiteSpace(gateway.Metadata.Namespace)) gateway.Metadata.Namespace = Namespace.DefaultNamespaceName;
                 await resources.AddAsync(gateway, false, cancellationToken).ConfigureAwait(false);
                 this.Logger.LogInformation("Successfully imported gateway '{subscription}' from file '{file}'", $"{gateway.Metadata.Name}", file.FullName);
                 count++;
@@ -151,6 +153,8 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
                 using var streamReader = new StreamReader(stream);
                 var text = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
                 var broker = serializer.Deserialize<Broker>(text)!;
+                // resources of earlier versions name no namespace: they belong to the default namespace (see #215)
+                if (string.IsNullOrWhiteSpace(broker.Metadata.Namespace)) broker.Metadata.Namespace = Namespace.DefaultNamespaceName;
                 await resources.AddAsync(broker, false, cancellationToken).ConfigureAwait(false);
                 this.Logger.LogInformation("Successfully imported broker '{subscription}' from file '{file}'", $"{broker.Metadata.Name}", file.FullName);
                 count++;
@@ -202,6 +206,8 @@ public class DatabaseProvisioner(IServiceProvider serviceProvider, ILogger<Datab
                 using var streamReader = new StreamReader(stream);
                 var text = await streamReader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
                 var subscription = serializer.Deserialize<Subscription>(text)!;
+                // resources of earlier versions name no namespace: they belong to the default namespace (see #215)
+                if (string.IsNullOrWhiteSpace(subscription.Metadata.Namespace)) subscription.Metadata.Namespace = Namespace.DefaultNamespaceName;
                 await resources.AddAsync(subscription, false, cancellationToken).ConfigureAwait(false);
                 this.Logger.LogInformation("Successfully imported subscription '{subscription}' from file '{file}'", $"{subscription.Metadata.Name}", file.FullName);
                 count++;

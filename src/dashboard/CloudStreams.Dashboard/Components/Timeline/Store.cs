@@ -22,7 +22,8 @@ namespace CloudStreams.Dashboard.Components.TimelineStateManagement;
 /// Initializes a new <see cref="TimelineStore"/>
 /// </remarks>
 /// <param name="cloudStreamsApi">The service used to interact with a Cloud Streams gateway's API</param>
-public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
+/// <param name="namespaceContext">The service that holds the namespace whose cloud events to read</param>
+public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi, NamespaceContext namespaceContext)
     : ComponentStore<TimelineState>(new())
 {
 
@@ -201,7 +202,7 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                 }
                 if (readOptions.Length <= StreamReadOptions.MaxLength)
                 {
-                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
+                    var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, namespaceContext.Current, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
                     data.AddRange(cloudEvents!);
                 }
                 else
@@ -213,7 +214,7 @@ public class TimelineStore(ICloudStreamsCoreApiClient cloudStreamsApi)
                     {
                         readOptions.Offset = offset;
                         readOptions.Length = length;
-                        var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
+                        var cloudEvents = await (await cloudStreamsApi.CloudEvents.Stream.ReadStreamAsync(readOptions, namespaceContext.Current, cancellationToken).ConfigureAwait(false)).ToListAsync(cancellationToken).ConfigureAwait(false);
                         data.AddRange(cloudEvents!);
                         var lastSequence = cloudEvents.LastOrDefault()?.GetSequence();
                         length = Math.Min(options.Length - (ulong)data.Count, StreamReadOptions.MaxLength);

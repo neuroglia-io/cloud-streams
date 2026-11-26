@@ -83,6 +83,11 @@
                     </NavLink>
                 </li>
                 <li class="nav-item">
+                    <NavLink class="nav-link" href="namespaces" Match="NavLinkMatch.All">
+                        <span class="btn-label">Namespaces</span>
+                    </NavLink>
+                </li>
+                <li class="nav-item">
                     <NavLink class="nav-link" href="about" Match="NavLinkMatch.All">
                         <span class="btn-label">About</span>
                     </NavLink>
@@ -101,6 +106,7 @@
                     <i class="bi bi-wifi-off" aria-hidden="true"></i> Offline
                 </span>
             }
+            <NamespaceSelector />
             <div class="dropdown me-3">
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="@($"Color theme: {ThemeLabel(ThemeService.Preference)}")" title="Color theme">
                     <i class="bi @ThemeIcon(ThemeService.Theme)" aria-hidden="true"></i>
@@ -128,7 +134,10 @@
     <main id="main-content" class="content flex-grow d-flex flex-column p-3">
         @* every page has a heading, which is focused on navigation so that screen readers announce the new page (see #198) *@
         <h1 class="visually-hidden" tabindex="-1">@(Layout.Title?.ChildContent ?? (RenderFragment)(b => b.AddContent(0, "Cloud Streams")))</h1>
-        @Body
+        @* pages are created anew when another namespace is selected, so that every page shows the data of the selected namespace (see #215) *@
+        <CascadingValue Name="SelectedNamespace" Value="selectedNamespace" @key="selectedNamespace">
+            @Body
+        </CascadingValue>
     </main>
 </div>
 <Toasts class="p-3" AutoHide="true" Delay="6000" Placement="ToastsPlacement.TopRight" />
@@ -137,14 +146,24 @@
 
     [Inject] ResourceWatchEventHubClient ResourceEventHub { get; set; } = null!;
 
+    [Inject] NamespaceContext NamespaceContext { get; set; } = null!;
+
     Microsoft.AspNetCore.SignalR.Client.HubConnectionState connectionState;
     bool wasConnected;
     IDisposable? connectionStateSubscription;
+    IDisposable? namespaceSubscription;
+    string? selectedNamespace;
 
     /// <inheritdoc/>
     protected override void OnInitialized()
     {
         base.OnInitialized();
+        namespaceSubscription = NamespaceContext.Selected.Subscribe(@namespace =>
+        {
+            if (@namespace == selectedNamespace) return;
+            selectedNamespace = @namespace;
+            InvokeAsync(StateHasChanged);
+        });
         // tells users when the data they see may be stale (see #192)
         connectionStateSubscription = ResourceEventHub.ConnectionState.Subscribe(state =>
         {
@@ -175,6 +194,7 @@
     public void Dispose()
     {
         connectionStateSubscription?.Dispose();
+        namespaceSubscription?.Dispose();
         ThemeService.Changed -= OnThemeChanged;
         Layout.PropertyChanged -= OnLayoutChanged;
     }

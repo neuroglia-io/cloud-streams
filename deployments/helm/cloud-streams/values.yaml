@@ -42,12 +42,16 @@ telemetry:
 secrets:
   # the providers secrets are read from, in the order a secret named without a provider is looked for: env, file, kubernetes and vault
   providers: [ env, file ]
+  # the Cloud Streams namespaces that may read shared secrets, i.e. those that belong to no namespace, besides their own (see the README's 'Namespaces'
+  # section). Defaults to [ default ]; [ "*" ] shares them with every namespace
+  sharedWith: []
   # Kubernetes secrets mounted as files, which the 'file' provider reads: each key of a secret is the file /var/run/secrets/cloud-streams/<name>/<key>
   # e.g. [ { name: orders-kafka, secretName: kafka-credentials } ]
   files: []
   kubernetes:
     # creates a role that lets the service account get the secrets of the release's namespace, which the 'kubernetes' provider reads. Only secrets labelled
     # 'cloud-streams.io/secret=true' are read: the role cannot restrict secrets by label, so restrict it further with resourceNames if needed
+    # A secret labelled 'cloud-streams.io/namespace=<namespace>' belongs to that Cloud Streams namespace: only its resources may read it
     rbac: false
     resourceNames: []
   vault:
@@ -81,10 +85,27 @@ securityContext:
   capabilities:
     drop: [ALL]
 
+# The gateways to deploy, each serving one gateway resource of a namespace, whose events belong to that namespace (see the README's 'Namespaces'
+# section). Each item names its gateway and namespace, and overrides any setting of 'gateway', e.g.
+#   gateways:
+#     - name: orders
+#       namespace: tenant-a
+#       replicaCount: 3
+#       ingress: { enabled: true, hosts: [ { host: orders.example.com, paths: [ { path: /, pathType: Prefix } ] } ] }
+#     - name: billing
+#       namespace: tenant-b
+#       managementApi: { enabled: false }
+# Their objects are named '<fullname>-gateway-<namespace>-<name>', unless an item sets 'fullnameOverride'. When the list is empty, a single gateway
+# is deployed with the settings of 'gateway'
+gateways: []
+
+# The settings of the gateways, which the items of 'gateways' override
 gateway:
   enabled: true
-  # the name of the gateway resource, shared by its replicas. Defaults to '<fullname>-gateway'
+  # the name of the gateway resource, shared by its replicas, when 'gateways' is empty. Defaults to '<fullname>-gateway'
   name: ""
+  # the namespace of the gateway resource, which the events it ingests belong to, when 'gateways' is empty
+  namespace: default
   replicaCount: 2
   port: 8080
   # serve the management API (resources, dashboard, hubs and MCP) on a dedicated port, kept off the public ingress (see the README's 'Exposure' section)
@@ -130,10 +151,25 @@ gateway:
     enabled: true
     maxUnavailable: 1
 
+# The brokers to deploy, each serving one broker resource of a namespace, which delivers the subscriptions of that namespace only. Each item names
+# its broker and namespace, and overrides any setting of 'broker', e.g.
+#   brokers:
+#     - name: orders
+#       namespace: tenant-a
+#     - name: billing
+#       namespace: tenant-b
+#       replicaCount: 1
+# Their objects are named '<fullname>-broker-<namespace>-<name>', unless an item sets 'fullnameOverride'. When the list is empty, a single broker is
+# deployed with the settings of 'broker'
+brokers: []
+
+# The settings of the brokers, which the items of 'brokers' override
 broker:
   enabled: true
-  # the name of the broker resource, shared by its replicas, which split its subscriptions with leases. Defaults to '<fullname>-broker'
+  # the name of the broker resource, shared by its replicas, which split its subscriptions with leases, when 'brokers' is empty. Defaults to '<fullname>-broker'
   name: ""
+  # the namespace of the broker resource, whose subscriptions it delivers, when 'brokers' is empty
+  namespace: default
   replicaCount: 2
   port: 8080
   service:

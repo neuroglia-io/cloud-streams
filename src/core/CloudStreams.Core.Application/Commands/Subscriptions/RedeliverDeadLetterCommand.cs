@@ -21,10 +21,16 @@ namespace CloudStreams.Core.Application.Commands.Subscriptions;
 /// Represents the command used to deliver a dead letter of a <see cref="Subscription"/> to its subscriber again, once (see #207)
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> the dead letter belongs to</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="offset">The offset of the dead letter in the subscription's dead-letter stream</param>
-public class RedeliverDeadLetterCommand(string name, ulong offset)
+public class RedeliverDeadLetterCommand(string name, ulong offset, string? @namespace = null)
     : Command<DeadLetterRedelivery>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> the dead letter belongs to
@@ -65,7 +71,7 @@ public class RedeliverDeadLetterCommandHandler(IResourceRepository resources, ID
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<DeadLetterRedelivery>> HandleAsync(RedeliverDeadLetterCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         var deadLetter = await deadLetters.ReadAsync(subscription.GetQualifiedName(), StreamReadDirection.Forwards, (long)command.Offset, 1, cancellationToken).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (deadLetter == null || deadLetter.Offset != command.Offset)
@@ -76,7 +82,7 @@ public class RedeliverDeadLetterCommandHandler(IResourceRepository resources, ID
         try
         {
             KeyValuePair<string, string>[] headers = [new(CloudStreamsHeaders.Subscription, subscription.GetName()), new(CloudStreamsHeaders.Offset, deadLetter.EventOffset.ToString(CultureInfo.InvariantCulture))];
-            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber), deadLetter.Event, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
+            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber, subscription.GetNamespace()), deadLetter.Event, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
         }
         catch (HttpRequestException ex) when (ex.StatusCode.HasValue)
         {

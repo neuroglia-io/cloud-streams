@@ -30,7 +30,8 @@ namespace CloudStreams.Dashboard.Components.ResourceManagement;
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="resourceManagementApi">The service used to interact with the Cloud Streams Resource management API</param>
 /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
-public class ResourceManagementComponentStore<TState, TResource>(ILogger<ResourceManagementComponentStore<TState, TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
+/// <param name="namespaceContext">The service that holds the namespace the dashboard shows the resources of</param>
+public class ResourceManagementComponentStore<TState, TResource>(ILogger<ResourceManagementComponentStore<TState, TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub, NamespaceContext namespaceContext)
      : ComponentStore<TState>(new())
     where TResource : Resource, new()
     where TState : ResourceManagementComponentState<TResource>, new()
@@ -49,6 +50,21 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// Gets the <see cref="IResourceEventWatchHub"/> websocket service client
     /// </summary>
     protected ResourceWatchEventHubClient ResourceEventHub { get; } = resourceEventHub;
+
+    /// <summary>
+    /// Gets the service that holds the namespace the dashboard shows the resources of
+    /// </summary>
+    protected NamespaceContext NamespaceContext { get; } = namespaceContext;
+
+    /// <summary>
+    /// Gets a boolean indicating whether or not the managed resources belong to namespaces (see #215)
+    /// </summary>
+    protected static bool IsNamespaced { get; } = CloudStreamsDefaults.Resources.Definitions.AsEnumerable().Any(d => d.Spec.Names.Kind == new TResource().Definition.Kind && d.Spec.Scope == ResourceScope.Namespaced);
+
+    /// <summary>
+    /// Gets the namespace to list the resources of, if any
+    /// </summary>
+    protected string? ListedNamespace => IsNamespaced ? this.NamespaceContext.Current : null;
 
     /// <summary>
     /// Gets the service used to monitor resources of the specified type
@@ -143,8 +159,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// <summary>
     /// Gets an <see cref="IObservable{T}"/> used to observe the <see cref="ResourcesFilter"/>
     /// </summary>
-    protected virtual IObservable<ResourcesFilter> Filter => LabelSelectors
-        .Select(labelSelectors => new ResourcesFilter() { LabelSelectors = labelSelectors })
+    protected virtual IObservable<ResourcesFilter> Filter => Observable.CombineLatest(LabelSelectors, this.NamespaceContext.Selected, (labelSelectors, @namespace) => new ResourcesFilter() { LabelSelectors = labelSelectors, Namespace = IsNamespaced ? @namespace : null })
         .DistinctUntilChanged();
 
     /// <summary>
@@ -158,9 +173,20 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public virtual IObservable<TResource?> ActiveResource => Observable.CombineLatest(
         Resources.Where(resources => resources != null),
         ActiveResourceName.Where(name => !string.IsNullOrWhiteSpace(name)),
-        (resources, name) => resources!.FirstOrDefault(r => r.GetName() == name)
+        (resources, name) => resources!.FirstOrDefault(r => IsActive(r, name))
     )
         .DistinctUntilChanged();
+    /// <summary>
+    /// Determines whether or not the specified resource is the active one
+    /// </summary>
+    /// <param name="resource">The resource to check</param>
+    /// <param name="key">The key of the active resource: its name, or its namespace and name separated by a slash</param>
+    /// <returns>A boolean indicating whether or not the resource is the active one</returns>
+    protected static bool IsActive(TResource resource, string key)
+    {
+        var separator = key.IndexOf('/');
+        return separator < 0 ? resource.GetName() == key : resource.GetNamespace() == key[..separator] && resource.GetName() == key[(separator + 1)..];
+    }
     #endregion
 
     #region Setters
@@ -272,7 +298,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
                 }
                 return state with
                 {
-                    SelectedResourceNames = [.. state.Resources?.Select(resource => resource.GetName()) ?? []]
+                    SelectedResourceNames = [.. state.Resources?.Select(resource => resource.GetQualifiedName()) ?? []]
                 };
             }
             if (state.SelectedResourceNames.Contains(name))
@@ -315,7 +341,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         }
         // whatever changed while the connection was down is fetched again once it is re-established
         ResourceEventHub.Reconnected.SubscribeAsync(
-            onNextAsync: _ => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors })),
+            onNextAsync: _ => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors, Namespace = this.ListedNamespace })),
             onErrorAsync: _ => Task.CompletedTask,
             onCompletedAsync: () => Task.CompletedTask,
             cancellationToken: CancellationTokenSource.Token
@@ -337,7 +363,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public virtual async Task DeleteResourceAsync(TResource resource)
     {
         await ResourceManagementApi.Manage<TResource>().DeleteAsync(resource.GetName(), resource.GetNamespace()).ConfigureAwait(false);
-        // only the deleted resource is removed: resources are cluster-scoped, so filtering out its namespace would remove all of them (see #190)
+        // only the deleted resource is removed, which is identified by both its name and its namespace (see #190)
         var resources = new EquatableList<TResource>(Get().Resources.Where(r => !(r.GetName() == resource.GetName() && r.GetNamespace() == resource.GetNamespace())));
         Reduce(s => s with
         {
@@ -352,7 +378,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     public async Task DeleteSelectedResourcesAsync()
     {
         var selectedResourcesNames = Get(state => state.SelectedResourceNames);
-        var resources = (Get(state => state.Resources) ?? []).Where(resource => selectedResourcesNames.Contains(resource.GetName()));
+        var resources = (Get(state => state.Resources) ?? []).Where(resource => selectedResourcesNames.Contains(resource.GetQualifiedName()));
         foreach (var resource in resources)
         {
             await DeleteResourceAsync(resource);
@@ -402,8 +428,9 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
                 if (!string.IsNullOrWhiteSpace(kind) && !kind.Equals(expectedKind, StringComparison.OrdinalIgnoreCase)) throw new FormatException($"it is a {kind}, not a {expectedKind.ToLowerInvariant()}");
                 if (string.IsNullOrWhiteSpace(name)) throw new FormatException("it has no 'metadata.name'");
                 var resource = serializer.Deserialize<TResource>(document.ToJsonString()) ?? throw new FormatException("it is empty");
+                if (IsNamespaced && string.IsNullOrWhiteSpace(resource.GetNamespace())) resource.Metadata.Namespace = this.NamespaceContext.ForNewResources;
                 TResource? existing;
-                try { existing = await api.GetAsync(name, null, cancellationToken).ConfigureAwait(false); }
+                try { existing = await api.GetAsync(name, resource.GetNamespace(), cancellationToken).ConfigureAwait(false); }
                 catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.NotFound) { existing = null; }
                 if (existing == null)
                 {
@@ -420,7 +447,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
                     result.Unchanged.Add(name);
                     continue;
                 }
-                await api.PatchAsync(new Patch(PatchType.JsonPatch, patch), name, null, cancellationToken).ConfigureAwait(false);
+                await api.PatchAsync(new Patch(PatchType.JsonPatch, patch), name, resource.GetNamespace(), cancellationToken).ConfigureAwait(false);
                 result.Updated.Add(name);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -436,7 +463,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// Lists the resources again, filtered as they currently are
     /// </summary>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    public virtual Task RefreshAsync() => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors }));
+    public virtual Task RefreshAsync() => ListResourcesAsync(Get(state => new ResourcesFilter() { LabelSelectors = state.LabelSelectors, Namespace = this.ListedNamespace }));
 
     /// <summary>
     /// Lists all the resources managed by CloudStreams
@@ -451,7 +478,7 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
         {
             Loading = true
         });
-        var resources = new EquatableList<TResource>(await (await ResourceManagementApi.Manage<TResource>().ListAsync(null, filter?.LabelSelectors).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
+        var resources = new EquatableList<TResource>(await (await ResourceManagementApi.Manage<TResource>().ListAsync(filter?.Namespace, filter?.LabelSelectors).ConfigureAwait(false)).ToListAsync().ConfigureAwait(false));
         Reduce(s => s with
         {
             Resources = resources,
@@ -475,6 +502,8 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
     /// <returns>A new awaitable <see cref="Task"/></returns>
     protected virtual Task OnResourceWatchEventAsync(IResourceWatchEvent<TResource> e)
     {
+        // the watch spans every namespace the user may read: only the changes of the shown namespace are applied
+        if (this.ListedNamespace != null && e.Resource?.GetNamespace() != this.ListedNamespace) return Task.CompletedTask;
         var labelSelectors = Get(state => state.LabelSelectors);
         if (labelSelectors != null && labelSelectors.Count > 0 && !labelSelectors.All(selector => {
             if (e.Resource?.Metadata?.Labels == null || e.Resource.Metadata.Labels.Count == 0 || !e.Resource.Metadata.Labels.TryGetValue(selector.Key, out string? value))
@@ -594,8 +623,9 @@ public class ResourceManagementComponentStore<TState, TResource>(ILogger<Resourc
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="resourceManagementApi">The service used to interact with the CloudStreams API</param>
 /// <param name="resourceEventHub">The <see cref="IResourceEventWatchHub"/> websocket service client</param>
-public class ResourceManagementComponentStore<TResource>(ILogger<ResourceManagementComponentStore<TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub)
-     : ResourceManagementComponentStore<ResourceManagementComponentState<TResource>, TResource>(logger, resourceManagementApi, resourceEventHub)
+/// <param name="namespaceContext">The service that holds the namespace the dashboard shows the resources of</param>
+public class ResourceManagementComponentStore<TResource>(ILogger<ResourceManagementComponentStore<TResource>> logger, ICloudStreamsCoreApiClient resourceManagementApi, ResourceWatchEventHubClient resourceEventHub, NamespaceContext namespaceContext)
+     : ResourceManagementComponentStore<ResourceManagementComponentState<TResource>, TResource>(logger, resourceManagementApi, resourceEventHub, namespaceContext)
     where TResource : Resource, new()
 {
 

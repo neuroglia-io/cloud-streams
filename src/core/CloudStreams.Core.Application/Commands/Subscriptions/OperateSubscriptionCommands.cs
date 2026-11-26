@@ -23,12 +23,18 @@ namespace CloudStreams.Core.Application.Commands.Subscriptions;
 /// Represents the command used to suspend a <see cref="Subscription"/>: the broker stops delivering, and keeps its offset, until it is resumed
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to suspend</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <remarks>
 /// A dedicated command rather than a patch, so that users allowed to operate subscriptions can suspend them without being allowed to edit them (see #214)
 /// </remarks>
-public class SuspendSubscriptionCommand(string name)
+public class SuspendSubscriptionCommand(string name, string? @namespace = null)
     : Command<Subscription>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to suspend
@@ -48,11 +54,11 @@ public class SuspendSubscriptionCommandHandler(IResourceRepository resources)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(SuspendSubscriptionCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         // suspending a subscription that is already suspended is not an error
         if (subscription.Spec.Suspended) return this.Ok(subscription);
-        subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(true)))), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+        subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(true)))), command.Name, command.Namespace, null, false, cancellationToken).ConfigureAwait(false);
         return this.Ok(subscription);
     }
 
@@ -63,12 +69,18 @@ public class SuspendSubscriptionCommandHandler(IResourceRepository resources)
 /// cleared, so that the cloud event that caused it is retried
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to resume</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <remarks>
 /// A dedicated command rather than a patch, so that users allowed to operate subscriptions can resume them without being allowed to edit them or patch their status (see #147)
 /// </remarks>
-public class ResumeSubscriptionCommand(string name)
+public class ResumeSubscriptionCommand(string name, string? @namespace = null)
     : Command<Subscription>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to resume
@@ -88,9 +100,9 @@ public class ResumeSubscriptionCommandHandler(IResourceRepository resources)
     /// <inheritdoc/>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(ResumeSubscriptionCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
-        if (subscription.Spec.Suspended) subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(false)))), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+        if (subscription.Spec.Suspended) subscription = await resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(PatchOperation.Add(JsonPointer.Parse("/spec/suspended"), JsonValue.Create(false)))), command.Name, command.Namespace, null, false, cancellationToken).ConfigureAwait(false);
         // resuming a subscription that is neither suspended nor faulted, for example because it has been resumed concurrently, is not an error
         if (subscription.Status?.Stream?.Fault == null) return this.Ok(subscription);
         try
@@ -98,12 +110,12 @@ public class ResumeSubscriptionCommandHandler(IResourceRepository resources)
             // the offset of the cloud event that caused the fault goes with it (see #224)
             List<PatchOperation> operations = [PatchOperation.Remove(JsonPointer.Parse("/status/stream/fault"))];
             if (subscription.Status.Stream.FaultedOffset.HasValue) operations.Add(PatchOperation.Remove(JsonPointer.Parse("/status/stream/faultedOffset")));
-            subscription = await resources.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), command.Name, null, null, false, cancellationToken).ConfigureAwait(false);
+            subscription = await resources.PatchStatusAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operations)), command.Name, command.Namespace, null, false, cancellationToken).ConfigureAwait(false);
         }
         catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict)
         {
             // the fault has been cleared in the meantime
-            subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+            subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
             if (subscription == null) return this.NotFound();
         }
         return this.Ok(subscription);
@@ -117,13 +129,19 @@ public class ResumeSubscriptionCommandHandler(IResourceRepository resources)
 /// specified time
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to replay</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="from">The time from which to replay the <see cref="Subscription"/>, if any. If not set, the <see cref="Subscription"/> is replayed from the beginning of the stream</param>
 /// <remarks>
 /// A dedicated command rather than a patch, so that users allowed to operate subscriptions can replay them without being allowed to change their spec (see #147)
 /// </remarks>
-public class ReplaySubscriptionCommand(string name, DateTimeOffset? from = null)
+public class ReplaySubscriptionCommand(string name, DateTimeOffset? from = null, string? @namespace = null)
     : Command<Subscription>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to replay
@@ -159,7 +177,7 @@ public class ReplaySubscriptionCommandHandler(IResourceRepository resources, ICl
     /// </remarks>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(ReplaySubscriptionCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         var offset = command.From.HasValue ? await this.ResolveOffsetAsync(subscription, command.From.Value, cancellationToken).ConfigureAwait(false) : StreamPosition.StartOfStream;
         return this.Ok(await SubscriptionOffsets.MoveAsync(resources, subscription, offset, cancellationToken).ConfigureAwait(false));
@@ -175,13 +193,13 @@ public class ReplaySubscriptionCommandHandler(IResourceRepository resources, ICl
     protected virtual async Task<long> ResolveOffsetAsync(Subscription subscription, DateTimeOffset time, CancellationToken cancellationToken)
     {
         var partition = subscription.Spec.Partition;
-        var found = await eventStore.FindOffsetAsync(time, partition, cancellationToken).ConfigureAwait(false);
+        var found = await eventStore.FindOffsetAsync(subscription.GetNamespace(), time, partition, cancellationToken).ConfigureAwait(false);
         if (found.HasValue) return (long)found.Value;
         try
         {
             return (long)(partition == null
-                ? (await eventStore.GetStreamMetadataAsync(cancellationToken).ConfigureAwait(false)).Length ?? 0
-                : (await eventStore.GetPartitionMetadataAsync(partition, cancellationToken).ConfigureAwait(false)).Length);
+                ? (await eventStore.GetStreamMetadataAsync(subscription.GetNamespace(), cancellationToken).ConfigureAwait(false)).Length ?? 0
+                : (await eventStore.GetPartitionMetadataAsync(subscription.GetNamespace(), partition, cancellationToken).ConfigureAwait(false)).Length);
         }
         catch (Exception ex) when (ex is StreamNotFoundException || (ex is ProblemDetailsException notFound && notFound.Problem.Status == (int)HttpStatusCode.NotFound))
         {
@@ -196,12 +214,18 @@ public class ReplaySubscriptionCommandHandler(IResourceRepository resources, ICl
 /// Represents the command used to skip the cloud event that faulted a <see cref="Subscription"/>: delivery resumes with the cloud event that follows it (see #224)
 /// </summary>
 /// <param name="name">The name of the <see cref="Subscription"/> to skip the faulted cloud event of</param>
+/// <param name="namespace">The namespace the resource belongs to, if any</param>
 /// <param name="offset">The offset of the cloud event to skip, which must be the one that faulted the subscription, so that a subscription faulted again in the meantime by
 /// another cloud event does not skip that one unseen</param>
 /// <remarks>Like replaying, a dedicated command rather than a patch, so that users allowed to operate subscriptions can skip a cloud event without being allowed to change their spec</remarks>
-public class SkipSubscriptionEventCommand(string name, ulong offset)
+public class SkipSubscriptionEventCommand(string name, ulong offset, string? @namespace = null)
     : Command<Subscription>
 {
+
+    /// <summary>
+    /// Gets the namespace the resource belongs to
+    /// </summary>
+    public virtual string Namespace { get; } = string.IsNullOrWhiteSpace(@namespace) ? Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName : @namespace;
 
     /// <summary>
     /// Gets the name of the <see cref="Subscription"/> to skip the faulted cloud event of
@@ -232,7 +256,7 @@ public class SkipSubscriptionEventCommandHandler(IResourceRepository resources)
     /// <remarks>The offset is moved past the faulted cloud event, which the broker answers by clearing the fault and resuming delivery from there</remarks>
     public virtual async Task<IOperationResult<Subscription>> HandleAsync(SkipSubscriptionEventCommand command, CancellationToken cancellationToken = default)
     {
-        var subscription = await resources.GetAsync<Subscription>(command.Name, null, cancellationToken).ConfigureAwait(false);
+        var subscription = await resources.GetAsync<Subscription>(command.Name, command.Namespace, cancellationToken).ConfigureAwait(false);
         if (subscription == null) return this.NotFound();
         var stream = subscription.Status?.Stream;
         if (stream?.Fault == null) return Conflict($"The subscription '{command.Name}' is not faulted: there is no cloud event to skip");
@@ -284,7 +308,7 @@ static class SubscriptionOffsets
         var operation = subscription.Spec.Stream == null
             ? PatchOperation.Add(JsonPointer.Parse("/spec/stream"), new JsonObject() { ["offset"] = offset })
             : PatchOperation.Add(JsonPointer.Parse("/spec/stream/offset"), JsonValue.Create(offset));
-        return resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operation)), subscription.GetName(), null, null, false, cancellationToken);
+        return resources.PatchAsync<Subscription>(new Patch(PatchType.JsonPatch, new JsonPatch(operation)), subscription.GetName(), subscription.GetNamespace(), null, false, cancellationToken);
     }
 
 }

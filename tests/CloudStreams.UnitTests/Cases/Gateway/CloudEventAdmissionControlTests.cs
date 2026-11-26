@@ -29,9 +29,7 @@ public class CloudEventAdmissionControlTests
     static TestAdmissionControl Create(SplitHorizonPolicy splitHorizon, IGatewayMetrics? metrics = null)
     {
         var gateway = new global::CloudStreams.Core.Resources.Gateway(new ResourceMetadata(GatewayName), new GatewaySpec() { SplitHorizon = splitHorizon });
-        var monitor = Substitute.For<IResourceMonitor<global::CloudStreams.Core.Resources.Gateway>>();
-        monitor.Resource.Returns(gateway);
-        return new TestAdmissionControl(metrics ?? Substitute.For<IGatewayMetrics>(), monitor);
+        return new TestAdmissionControl(metrics ?? Substitute.For<IGatewayMetrics>(), gateway);
     }
 
     static CloudEvent CreateEvent(string origins) => new()
@@ -275,12 +273,16 @@ public class CloudEventAdmissionControlTests
         : CloudEventAdmissionControl
     {
 
-        public TestAdmissionControl(IGatewayMetrics metrics, IResourceMonitor<global::CloudStreams.Core.Resources.Gateway> configuration)
-            : base(Substitute.For<IServiceProvider>(), NullLogger<CloudEventAdmissionControl>.Instance, Options.Create(new GatewayOptions() { Name = GatewayName }), Neuroglia.Serialization.Json.JsonSerializer.Default,
+        public TestAdmissionControl(IGatewayMetrics metrics, global::CloudStreams.Core.Resources.Gateway gateway)
+            : base(Substitute.For<IServiceProvider>(), NullLogger<CloudEventAdmissionControl>.Instance, Neuroglia.Serialization.Json.JsonSerializer.Default,
                   metrics, new CloudEventAuthorizationManager(Neuroglia.Serialization.Json.JsonSerializer.Default), Substitute.For<IJsonSchemaGenerator>(), Substitute.For<IJsonSchemaRegistry>(), Substitute.For<IExpressionEvaluator>(), Array.Empty<IValidator<CloudEvent>>())
         {
-            this.Configuration = configuration;
+            this.Gateway = gateway;
         }
+
+        public global::CloudStreams.Core.Resources.Gateway Gateway { get; }
+
+        public Task<OperationResult<CloudEventDescriptor>> EvaluateAsync(CloudEvent e, IReadOnlyCollection<string>? allowedSources = null) => this.EvaluateAsync(e, this.Gateway, allowedSources);
 
     }
 
