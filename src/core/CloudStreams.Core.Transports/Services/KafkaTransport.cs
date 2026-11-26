@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports.Authentication;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -25,15 +26,14 @@ namespace CloudStreams.Core.Transports.Services;
 /// Delivers cloud events to, and consumes cloud events from, Kafka topics, following the CloudEvents Kafka protocol binding (see #218)
 /// </summary>
 /// <param name="logger">The service used to perform logging</param>
-/// <param name="options">The service used to access the current <see cref="TransportOptions"/></param>
 /// <param name="serializer">The service used to serialize cloud events</param>
 /// <remarks>
 /// Producers wait for every in-sync replica to acknowledge a cloud event, and are idempotent, so that retries never reorder nor duplicate cloud events. Cloud events
 /// are keyed by their <c>partitionkey</c>, or their subject, so that those with the same key stay in order. Consumers commit an offset once its cloud event has been
 /// handled, and retry it until then, which keeps the cloud events of a partition in order
 /// </remarks>
-public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonitor<TransportOptions> options, IJsonSerializer serializer)
-    : ICloudEventSink, ICloudEventChannelConsumer, IDisposable
+public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IJsonSerializer serializer)
+    : ICloudEventSink, ICloudEventFeedConsumer, IDisposable
 {
 
     static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
@@ -44,12 +44,12 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
     public IReadOnlyList<string> Schemes { get; } = [TransportSchemes.Kafka];
 
     /// <inheritdoc/>
-    public async Task SendAsync(TransportAddress address, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
+    public async Task SendAsync(TransportAddress address, TransportCredentials? credentials, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(headers);
-        var producer = this.GetProducer(address);
+        var producer = this.GetProducer(address, credentials);
         var deliveries = new List<Task<DeliveryResult<string?, byte[]>>>(events.Count);
         foreach (var e in events)
         {
@@ -63,12 +63,12 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
     }
 
     /// <inheritdoc/>
-    public Task ConsumeAsync(TransportAddress address, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
+    public Task ConsumeAsync(TransportAddress address, TransportCredentials? credentials, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentException.ThrowIfNullOrWhiteSpace(group);
         ArgumentNullException.ThrowIfNull(handler);
-        var configuration = new ConsumerConfig(this.CreateConfiguration(address))
+        var configuration = new ConsumerConfig(CreateConfiguration(address, credentials))
         {
             GroupId = address.GetParameter("group") ?? group,
             EnableAutoCommit = false,
@@ -79,6 +79,7 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
         {
             using var consumer = new ConsumerBuilder<string?, byte[]>(configuration)
                 .SetErrorHandler((_, error) => logger.LogWarning("The Kafka consumer of '{address}' reported an error: {reason}", address.Uri, error.Reason))
+                .SetOAuthBearerTokenRefreshHandler((client, _) => RefreshToken(client, credentials))
                 .Build();
             consumer.Subscribe(address.Path);
             try
@@ -126,15 +127,16 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
         return new(contentType, headers, result.Message.Value ?? [], $"the message at offset {result.Offset.Value} of partition {result.Partition.Value} of topic '{result.Topic}'");
     }
 
-    IProducer<string?, byte[]> GetProducer(TransportAddress address)
+    IProducer<string?, byte[]> GetProducer(TransportAddress address, TransportCredentials? credentials)
     {
-        var key = $"{address.Server}|{address.GetParameter("servers")}|{address.Tls}|{address.GetParameter("mechanism")}|{address.Credentials}";
-        var producer = this._producers.GetOrAdd(key, _ => new(() => new ProducerBuilder<string?, byte[]>(new ProducerConfig(this.CreateConfiguration(address))
+        var key = $"{address.Server}|{address.GetParameter("servers")}|{address.Tls}|{address.GetParameter("mechanism")}|{credentials?.Fingerprint}";
+        var producer = this._producers.GetOrAdd(key, _ => new(() => new ProducerBuilder<string?, byte[]>(new ProducerConfig(CreateConfiguration(address, credentials))
         {
             Acks = Acks.All,
             EnableIdempotence = true,
             ClientId = "cloud-streams"
-        }).SetErrorHandler((_, error) => logger.LogWarning("The Kafka producer of '{servers}' reported an error: {reason}", address.Server, error.Reason)).Build()));
+        }).SetErrorHandler((_, error) => logger.LogWarning("The Kafka producer of '{servers}' reported an error: {reason}", address.Server, error.Reason))
+            .SetOAuthBearerTokenRefreshHandler((client, _) => RefreshToken(client, credentials)).Build()));
         try { return producer.Value; }
         catch
         {
@@ -143,9 +145,8 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
         }
     }
 
-    ClientConfig CreateConfiguration(TransportAddress address)
+    static ClientConfig CreateConfiguration(TransportAddress address, TransportCredentials? credentials)
     {
-        var credentials = options.CurrentValue.GetCredentials(address);
         var servers = new List<string>() { address.Server };
         if (address.GetParameter("servers") is { } additional) servers.AddRange(additional.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         var configuration = new ClientConfig()
@@ -159,7 +160,8 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
                 _ => SecurityProtocol.Plaintext
             }
         };
-        if (credentials != null)
+        if (credentials?.IsToken == true) configuration.SaslMechanism = SaslMechanism.OAuthBearer;
+        else if (credentials != null)
         {
             configuration.SaslMechanism = address.GetParameter("mechanism")?.ToLowerInvariant() switch
             {
@@ -171,6 +173,24 @@ public sealed class KafkaTransport(ILogger<KafkaTransport> logger, IOptionsMonit
             configuration.SaslPassword = credentials.Password;
         }
         return configuration;
+    }
+
+    /// <summary>
+    /// Sets the OAUTHBEARER token of the specified client, which Kafka asks for before the previous one expires
+    /// </summary>
+    static void RefreshToken(IClient client, TransportCredentials? credentials)
+    {
+        if (credentials?.IsToken != true) return;
+        try
+        {
+            var token = credentials.GetTokenAsync().GetAwaiter().GetResult();
+            var expiresAt = token.ExpiresAt == DateTimeOffset.MaxValue ? DateTimeOffset.UtcNow.AddHours(1) : token.ExpiresAt;
+            client.OAuthBearerSetToken(token.Value, expiresAt.ToUnixTimeMilliseconds(), "cloud-streams");
+        }
+        catch (Exception ex)
+        {
+            client.OAuthBearerSetTokenFailure(ex.Message);
+        }
     }
 
     /// <inheritdoc/>

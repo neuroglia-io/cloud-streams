@@ -30,6 +30,8 @@
     <EmbeddedResource Include="Resources\Broker.yaml" />
     <EmbeddedResource Include="Resources\Gateway.yaml" />
     <EmbeddedResource Include="Resources\Schema.yaml" />
+    <EmbeddedResource Include="Resources\Sink.yaml" />
+    <EmbeddedResource Include="Resources\Feed.yaml" />
   </ItemGroup>
 
   <ItemGroup>

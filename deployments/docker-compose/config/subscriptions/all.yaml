@@ -4,7 +4,7 @@ metadata:
   name: all
 spec:
   subscriber:
-    uri: https://events.k.ccie.cisco.com/events/pub
+    endpoint: https://events.k.ccie.cisco.com/events/pub
     retryPolicy:
       statusCodes: [ 503 ]
       backoffDuration:

@@ -40,7 +40,7 @@ public class McpToolsetTests
         return authorization;
     }
 
-    static readonly Subscription Subscription = new() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Uri = new("http://localhost") } } };
+    static readonly Subscription Subscription = new() { Metadata = new() { Name = "orders" }, Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost") } } };
 
     [Fact]
     public void Every_Tool_Should_Be_Discoverable()

@@ -104,7 +104,7 @@ public class SubscriptionHandlerDeadLetterTests
         await using var context = await BrokerTestContext.CreateAsync(RefusesOffset("41", HttpStatusCode.BadRequest), configureSubscription: s =>
         {
             s.Spec.Subscriber.RetryPolicy = Policy(0);
-            s.Spec.DeadLetter = new() { Uri = SinkUri };
+            s.Spec.DeadLetter = new() { Endpoint = SinkUri };
         });
 
         // act

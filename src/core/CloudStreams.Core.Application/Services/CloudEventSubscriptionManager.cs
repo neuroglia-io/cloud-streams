@@ -89,7 +89,7 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
         var resource = new Subscription()
         {
             Metadata = new() { Name = $"ce-{Guid.NewGuid():N}"[..19] },
-            Spec = new() { Subscriber = new() { Uri = null! } }
+            Spec = new() { Subscriber = new() }
         };
         this.Apply(subscription, resource);
         resource = await resources.AddAsync(resource, false, cancellationToken).ConfigureAwait(false);
@@ -174,7 +174,8 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
         }
         var filter = CloudEventSubscriptionFilter.Compile(subscription);
         var submitted = subscription with { Id = null, SinkCredential = null };
-        resource.Spec.Subscriber.Uri = sink;
+        resource.Spec.Subscriber.Endpoint = sink;
+        resource.Spec.Subscriber.Sink = null;
         resource.Spec.Filter = filter;
         if (offset.HasValue || resource.Spec.Stream == null) resource.Spec.Stream = new() { Offset = offset ?? StreamPosition.EndOfStream };
         resource.Metadata.Annotations ??= new Dictionary<string, string>();
@@ -196,7 +197,7 @@ public class CloudEventSubscriptionManager(IResourceRepository resources, IJsonS
             catch (Exception) { /* an annotation edited by hand is ignored */ }
         }
         described ??= CloudEventSubscriptionFilter.Describe(resource);
-        return described with { Id = resource.GetName(), Sink = resource.Spec.Subscriber.Uri.OriginalString, Protocol = CloudEventSubscription.HttpProtocol };
+        return described with { Id = resource.GetName(), Sink = resource.Spec.Subscriber.Endpoint?.Uri.OriginalString ?? $"sink:{resource.Spec.Subscriber.Sink}", Protocol = CloudEventSubscription.HttpProtocol };
     }
 
     static ProblemDetailsException Invalid(string detail) => new(new(InvalidSubscriptionProblemType, "Bad Request", (int)HttpStatusCode.BadRequest, detail));

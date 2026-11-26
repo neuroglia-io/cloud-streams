@@ -16,14 +16,15 @@
                     <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
                 </FormField>
             }
-            <FormField Id="@FieldId("uri")" Label="Subscriber" Required="true" Error="@ErrorOf("uri")">
+            <FormField Id="@FieldId("target")" Label="Subscriber" Required="true">
                 <ChildContent>
-                    <input id="@FieldId("uri")" type="text" inputmode="url" autocomplete="off" spellcheck="false" class="form-control form-control-sm @Invalid("uri")" placeholder="https://orders.example.com/events" value="@subscriberUri" @onchange="OnSubscriberUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("uri"))" />
+                    <DeliveryTargetInput Id="@FieldId("target")" Label="Subscriber" Endpoint="Model.Spec.Subscriber.Endpoint" EndpointChanged="e => Model.Spec.Subscriber.Endpoint = e"
+                                         Sink="@Model.Spec.Subscriber.Sink" SinkChanged="s => Model.Spec.Subscriber.Sink = s" Sinks="sinks" Error="@ErrorOf("target")" />
                 </ChildContent>
                 <HelpContent>
-                    Where events are delivered: an HTTP or HTTPS address, which receives a POST of each event, a Kafka topic (<code>kafka://kafka:9092/orders</code>), a NATS subject
-                    (<code>nats://nats:4222/orders?jetstream=true</code>), an AMQP exchange (<code>amqp://rabbitmq/?exchange=orders</code>) or another Cloud Streams gateway
-                    (<code>cloudstreams://gateway.example.com</code>). Credentials are named with <code>credentials=</code>, and configured on the broker.
+                    Where events are delivered. An endpoint is an HTTP or HTTPS address, which receives a POST of each event, a Kafka topic (<code>kafka://kafka:9092/orders</code>), a NATS
+                    subject (<code>nats://nats:4222/orders?jetstream=true</code>), an AMQP exchange (<code>amqp://rabbitmq/?exchange=orders</code>) or another Cloud Streams gateway
+                    (<code>cloudstreams://gateway.example.com</code>), with how to authenticate to it. A sink holds an endpoint and its credentials, managed by administrators.
                 </HelpContent>
             </FormField>
             <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional. Brokers select the subscriptions they handle by label, and lists can be filtered by them.">
@@ -72,7 +73,7 @@
                             </FormField>
                         </div>
                     }
-                    @if (!TransportAddress.IsTransport(Model.Spec.Subscriber.Uri))
+                    @if (!TransportAddress.IsTransport(Model.Spec.Subscriber.Endpoint?.Uri))
                     {
                         @* only HTTP subscribers can defer their acknowledgement, by answering '202 Accepted' *@
                         <FormField Id="@FieldId("ack-timeout")" Label="Deferred acknowledgement timeout" Help="How long the subscriber may take to acknowledge an event it accepted with 202 Accepted. The broker's default by default.">
@@ -203,13 +204,14 @@
                 <div id="@FieldId("dead-letters")" role="radiogroup" aria-describedby="@FormField.DescribedBy(FieldId("dead-letters"))">
                     @Radio("dead-letters", "fault", "Stop, until someone retries or skips it", deadLetterMode == "fault", () => SetDeadLetters("fault"))
                     @Radio("dead-letters", "store", "Set it aside as a dead letter, which can be redelivered later, and carry on", deadLetterMode == "store", () => SetDeadLetters("store"))
-                    @Radio("dead-letters", "send", "Send it to another address, and carry on", deadLetterMode == "send", () => SetDeadLetters("send"))
+                    @Radio("dead-letters", "send", "Send it to another endpoint or sink, and carry on", deadLetterMode == "send", () => SetDeadLetters("send"))
                 </div>
             </FormField>
             @if (deadLetterMode == "send")
             {
-                <FormField Id="@FieldId("dead-letter-uri")" Label="Address" Required="true" Help="An HTTP or HTTPS address, or the address of a Kafka topic, a NATS subject, an AMQP exchange or another gateway, like the subscriber's." Error="@ErrorOf("dead-letter-uri")" CssClass="ps-3">
-                    <input id="@FieldId("dead-letter-uri")" type="text" inputmode="url" autocomplete="off" spellcheck="false" class="form-control form-control-sm @Invalid("dead-letter-uri")" value="@deadLetterUri" @onchange="OnDeadLetterUriChanged" aria-describedby="@FormField.DescribedBy(FieldId("dead-letter-uri"))" />
+                <FormField Id="@FieldId("dead-letter-target")" Label="Send it to" Required="true" Help="An endpoint, or a sink, like the subscriber." CssClass="ps-3">
+                    <DeliveryTargetInput Id="@FieldId("dead-letter-target")" Label="Dead-letter service" Endpoint="Model.Spec.DeadLetter?.Endpoint" EndpointChanged="e => (Model.Spec.DeadLetter ??= new()).Endpoint = e"
+                                         Sink="@Model.Spec.DeadLetter?.Sink" SinkChanged="s => (Model.Spec.DeadLetter ??= new()).Sink = s" Sinks="sinks" Error="@ErrorOf("dead-letter-target")" Placeholder="https://dead-letters.example.com/events" />
                 </FormField>
             }
             <div class="form-check">
@@ -224,9 +226,8 @@
 
     static readonly string[] KnownAttributes = ["type", "source", "subject", "datacontenttype", "dataschema", "id"];
 
-    string? subscriberUri;
+    IReadOnlyList<Sink> sinks = [];
     string? webhookUri;
-    string? deadLetterUri;
     string deliveryMode = "one";
     string filterMode = "all";
     string startMode = "new";
@@ -247,7 +248,8 @@
     protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
     {
         ["metadata.name"] = ("name", 0),
-        ["spec.subscriber.uri"] = ("uri", 0),
+        ["spec.subscriber.endpoint"] = ("target", 0),
+        ["spec.subscriber.sink"] = ("target", 0),
         ["spec.subscriber.rateLimit"] = ("rate-limit", 0),
         ["spec.subscriber.batch.maxSize"] = ("batch-size", 0),
         ["spec.subscriber.ordering.key"] = ("ordering-key", 0),
@@ -259,7 +261,7 @@
         ["spec.filter.expression"] = ("expression", 1),
         ["spec.mutation.expression"] = ("mutation-expression", 2),
         ["spec.mutation.webhook.serviceUri"] = ("webhook", 2),
-        ["spec.deadLetter.uri"] = ("dead-letter-uri", 3)
+        ["spec.deadLetter"] = ("dead-letter-target", 3)
     };
 
     /// <inheritdoc/>
@@ -267,21 +269,28 @@
     {
         Metadata = new() { Name = string.Empty },
         // tracking an offset from now on is the safe default: nothing published before is delivered, and nothing is lost after an interruption
-        Spec = new() { Subscriber = new() { Uri = null! }, Stream = new() { Offset = StreamPosition.EndOfStream } }
+        Spec = new() { Subscriber = new(), Stream = new() { Offset = StreamPosition.EndOfStream } }
     };
+
+    /// <inheritdoc/>
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        // the sinks subscriptions can deliver to, which a reader may not be allowed to list
+        try { sinks = await (await Api.Resources.Sinks.ListAsync()).ToListAsync(); }
+        catch (Exception) { sinks = []; }
+    }
 
     /// <inheritdoc/>
     protected override void OnModelReplaced()
     {
         var spec = Model.Spec;
-        spec.Subscriber ??= new() { Uri = null! };
-        subscriberUri = spec.Subscriber.Uri?.OriginalString;
+        spec.Subscriber ??= new();
         webhookUri = spec.Mutation?.Webhook?.ServiceUri?.OriginalString;
-        deadLetterUri = spec.DeadLetter?.Uri?.OriginalString;
         deliveryMode = spec.Subscriber.Batch != null ? "batch" : spec.Subscriber.Ordering != null ? "parallel" : "one";
         filterMode = spec.Filter == null ? "all" : spec.Filter.Type == CloudEventFilterType.Expression ? "expression" : "attributes";
         startMode = spec.Stream == null ? "live" : spec.Stream.Offset switch { null or StreamPosition.EndOfStream => "new", 0 => "beginning", _ => "offset" };
-        deadLetterMode = spec.DeadLetter == null ? "fault" : spec.DeadLetter.Uri == null ? "store" : "send";
+        deadLetterMode = spec.DeadLetter == null ? "fault" : spec.DeadLetter.IsForwarded ? "send" : "store";
         advancedSubscriber = spec.Subscriber.RateLimit != null || spec.Subscriber.Timeout != null || spec.Subscriber.RetryPolicy != null || deliveryMode != "one" || spec.Subscriber.Ack != null;
         if (originalStartMode == null)
         {
@@ -302,7 +311,7 @@
                     if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
                     else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
                 }
-                if (InvalidAddress(subscriberUri) is { } subscriberError) errors["uri"] = subscriberError;
+                if (InvalidTarget(spec.Subscriber.Endpoint, spec.Subscriber.Sink) is { } subscriberError) errors["target"] = subscriberError;
                 if (spec.Subscriber.RateLimit is <= 0) errors["rate-limit"] = "Enter a positive number, or leave empty for no limit";
                 if (spec.Subscriber.Batch is { MaxSize: < 1 }) errors["batch-size"] = "Enter at least 1";
                 if (spec.Subscriber.Ordering != null && !Regex.IsMatch(spec.Subscriber.Ordering.Key ?? string.Empty, "^[a-z0-9]+$")) errors["ordering-key"] = "Enter the name of a context attribute, made of lower-case letters and digits, e.g. subject";
@@ -324,7 +333,7 @@
                 break;
             case 3:
                 if (startMode == "offset" && spec.Stream?.Offset is not >= 0) errors["offset"] = "Enter an offset, 0 or more";
-                if (deadLetterMode == "send" && InvalidAddress(deadLetterUri) is { } deadLetterError) errors["dead-letter-uri"] = deadLetterError;
+                if (deadLetterMode == "send" && InvalidTarget(spec.DeadLetter?.Endpoint, spec.DeadLetter?.Sink) is { } deadLetterError) errors["dead-letter-target"] = deadLetterError;
                 break;
         }
     }
@@ -358,11 +367,11 @@
             }
             @(spec.Partition == null ? " of the stream" : $" of the {PartitionInput.Describe(spec.Partition.Type).ToLowerInvariant()} partition '{spec.Partition.Id}'"),
             @(startMode switch { "live" => "while it is active", "beginning" => "from the beginning", "offset" => $"from offset {spec.Stream?.Offset}", _ => "from now on" }),
-            to <code>@subscriberUri</code>@(spec.Mutation == null ? "" : spec.Mutation.Type == CloudEventMutationType.Webhook ? ", transformed by a webhook" : ", transformed by an expression").
+            to @(spec.Subscriber.Sink != null ? $"the sink '{spec.Subscriber.Sink}'" : spec.Subscriber.Endpoint?.ToString())@(spec.Subscriber.Endpoint?.Authentication?.Scheme is { } scheme ? $", authenticated with {scheme}" : "")@(spec.Mutation == null ? "" : spec.Mutation.Type == CloudEventMutationType.Webhook ? ", transformed by a webhook" : ", transformed by an expression").
         </p>
         <ul class="small text-secondary mb-0">
             <li>@(spec.Subscriber.RetryPolicy == null ? "Failed deliveries are retried as its broker retries them." : $"Failed deliveries are retried {(spec.Subscriber.RetryPolicy.MaxAttempts < 0 ? "forever" : $"{spec.Subscriber.RetryPolicy.MaxAttempts ?? RetryPolicy.DefaultMaxAttempts} times")}.")</li>
-            <li>@(spec.DeadLetter == null ? "An event that cannot be delivered stops the subscription, until someone retries or skips it." : spec.DeadLetter.Uri == null ? "An event that cannot be delivered is set aside as a dead letter." : $"An event that cannot be delivered is sent to {spec.DeadLetter.Uri}.")</li>
+            <li>@(spec.DeadLetter == null ? "An event that cannot be delivered stops the subscription, until someone retries or skips it." : !spec.DeadLetter.IsForwarded ? "An event that cannot be delivered is set aside as a dead letter." : $"An event that cannot be delivered is sent to {(spec.DeadLetter.Sink != null ? $"the sink '{spec.DeadLetter.Sink}'" : spec.DeadLetter.Endpoint?.ToString())}.")</li>
             @if (spec.Suspended)
             {
                 <li>It is suspended: nothing is delivered until it is resumed.</li>
@@ -380,22 +389,10 @@
 
     string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
 
-    void OnSubscriberUriChanged(ChangeEventArgs e)
-    {
-        subscriberUri = e.Value?.ToString()?.Trim();
-        Model.Spec.Subscriber.Uri = Uri.TryCreate(subscriberUri, UriKind.Absolute, out var uri) ? uri : null!;
-    }
-
     void OnWebhookChanged(ChangeEventArgs e)
     {
         webhookUri = e.Value?.ToString()?.Trim();
         if (Model.Spec.Mutation != null) Model.Spec.Mutation.Webhook = Uri.TryCreate(webhookUri, UriKind.Absolute, out var uri) ? new() { ServiceUri = uri } : null;
-    }
-
-    void OnDeadLetterUriChanged(ChangeEventArgs e)
-    {
-        deadLetterUri = e.Value?.ToString()?.Trim();
-        Model.Spec.DeadLetter = new() { Uri = Uri.TryCreate(deadLetterUri, UriKind.Absolute, out var uri) ? uri : null };
     }
 
     void SetDeliveryMode(string mode)
@@ -467,7 +464,7 @@
         Model.Spec.DeadLetter = mode switch
         {
             "store" => new(),
-            "send" => new() { Uri = Uri.TryCreate(deadLetterUri, UriKind.Absolute, out var uri) ? uri : null },
+            "send" => Model.Spec.DeadLetter?.IsForwarded == true ? Model.Spec.DeadLetter : new(),
             _ => null
         };
     }
@@ -503,14 +500,13 @@
     }
 
     /// <summary>
-    /// Validates the specified address that events are delivered to, over HTTP or over another transport (see #218)
+    /// Validates where events are delivered: an endpoint, over HTTP or over another transport, or a sink (see #218)
     /// </summary>
-    /// <returns>Why the address is not valid, or null if it is</returns>
-    static string? InvalidAddress(string? value)
+    /// <returns>Why the target is not valid, or null if it is</returns>
+    static string? InvalidTarget(Endpoint? endpoint, string? sink)
     {
-        if (string.IsNullOrWhiteSpace(value)) return "Enter the address events are delivered to";
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)) return "Enter an absolute address, e.g. https://orders.example.com/events or kafka://kafka:9092/orders";
-        return TransportAddress.IsValidSink(uri, out var error) ? null : error;
+        if (sink != null) return endpoint == null ? null : "Deliver either to an endpoint or to a sink";
+        return EndpointInput.Validate(endpoint, false);
     }
 
     static bool IsHttpUri(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);

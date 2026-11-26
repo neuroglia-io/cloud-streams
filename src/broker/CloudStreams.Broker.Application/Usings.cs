@@ -30,3 +30,4 @@ global using Neuroglia.Serialization;
 global using System.Net;
 global using System.Net.Mime;
 global using System.Reactive.Linq;
+global using CloudStreams.Core.Transports.Services;

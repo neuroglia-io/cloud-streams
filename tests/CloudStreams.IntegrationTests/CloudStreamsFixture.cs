@@ -46,11 +46,17 @@ public sealed class CloudStreamsFixture
     const string KafkaImage = "confluentinc/cp-kafka:7.9.2";
     const string RabbitMqImage = "rabbitmq:4.1-alpine";
     const string NatsImage = "nats:2.11-alpine";
+    const string VaultImage = "hashicorp/vault:1.18";
 
     /// <summary>
-    /// Gets the name of the credentials of RabbitMQ, which the gateway and the broker are configured with
+    /// Gets the root token of Vault, which runs in development mode
     /// </summary>
-    public const string RabbitMqCredentials = "rabbit";
+    public const string VaultToken = "e2e-root-token";
+
+    /// <summary>
+    /// Gets the name of the secret that holds the credentials of RabbitMQ, which the gateway and the broker read from their environment
+    /// </summary>
+    public const string RabbitMqSecret = "rabbit";
     const string RabbitMqUser = "cloud-streams";
     const string RabbitMqPassword = "e2e-secret";
 
@@ -66,6 +72,13 @@ public sealed class CloudStreamsFixture
     // the transports other than HTTP that cloud events are delivered over and consumed from (see #218)
     readonly KafkaContainer _kafka = new KafkaBuilder().WithImage(KafkaImage).Build();
     readonly RabbitMqContainer _rabbitMq = new RabbitMqBuilder().WithImage(RabbitMqImage).WithUsername(RabbitMqUser).WithPassword(RabbitMqPassword).Build();
+    readonly IContainer _vault = new ContainerBuilder()
+        .WithImage(VaultImage)
+        .WithEnvironment("VAULT_DEV_ROOT_TOKEN_ID", VaultToken)
+        .WithEnvironment("SKIP_SETCAP", "true")
+        .WithPortBinding(8200, true)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(request => request.ForPort(8200).ForPath("/v1/sys/health")))
+        .Build();
     readonly IContainer _nats = new ContainerBuilder()
         .WithImage(NatsImage)
         .WithCommand("--jetstream")
@@ -114,12 +127,18 @@ public sealed class CloudStreamsFixture
     /// </summary>
     public string RabbitMqConnectionString => this._rabbitMq.GetConnectionString();
 
+    /// <summary>
+    /// Gets the address of Vault, which runs in development mode, with its KV version 2 engine mounted at <c>secret</c>
+    /// </summary>
+    public Uri VaultUri { get; private set; } = null!;
+
     /// <inheritdoc/>
     public async Task InitializeAsync()
     {
         // a container that never becomes ready fails the run, rather than hanging it
         using var startup = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        await Task.WhenAll(this._redis.StartAsync(startup.Token), this._eventStore.StartAsync(startup.Token), this._kafka.StartAsync(startup.Token), this._rabbitMq.StartAsync(startup.Token), this._nats.StartAsync(startup.Token), this.Subscriber.StartAsync());
+        await Task.WhenAll(this._redis.StartAsync(startup.Token), this._eventStore.StartAsync(startup.Token), this._kafka.StartAsync(startup.Token), this._rabbitMq.StartAsync(startup.Token), this._nats.StartAsync(startup.Token), this._vault.StartAsync(startup.Token), this.Subscriber.StartAsync());
+        this.VaultUri = new($"http://{this._vault.Hostname}:{this._vault.GetMappedPublicPort(8200)}/");
         var bootstrapAddress = this._kafka.GetBootstrapAddress();
         this.KafkaServer = new Uri(bootstrapAddress.Contains("://") ? bootstrapAddress : $"kafka://{bootstrapAddress}").Authority;
         this.NatsServer = $"{this._nats.Hostname}:{this._nats.GetMappedPublicPort(4222)}";
@@ -129,8 +148,13 @@ public sealed class CloudStreamsFixture
             ["ASPNETCORE_ENVIRONMENT"] = "Development",
             ["ConnectionStrings__eventstore"] = $"esdb://{this._eventStore.Hostname}:{this._eventStore.GetMappedPublicPort(2113)}?tls=false",
             ["ConnectionStrings__redis"] = this._redis.GetConnectionString(),
-            [$"CloudStreams__Transports__Credentials__{RabbitMqCredentials}__Username"] = RabbitMqUser,
-            [$"CloudStreams__Transports__Credentials__{RabbitMqCredentials}__Password"] = RabbitMqPassword
+            // secrets are read from the environment, and from Vault (see #218)
+            [$"CLOUDSTREAMS_SECRETS__{RabbitMqSecret.ToUpperInvariant()}__USERNAME"] = RabbitMqUser,
+            [$"CLOUDSTREAMS_SECRETS__{RabbitMqSecret.ToUpperInvariant()}__PASSWORD"] = RabbitMqPassword,
+            ["CloudStreams__Secrets__Providers__0"] = "env",
+            ["CloudStreams__Secrets__Providers__1"] = "vault",
+            ["CloudStreams__Secrets__Vault__Address"] = this.VaultUri.ToString(),
+            ["CloudStreams__Secrets__Vault__Authentication__Token"] = VaultToken
         };
         // both ports are reserved at once: a port released before the process that is to listen on it has started could otherwise be handed out again, and the
         // broker could take the gateway's port, answering its health checks while the gateway fails to start
@@ -154,7 +178,7 @@ public sealed class CloudStreamsFixture
         foreach (var process in this._processes) process.Dispose();
         this.Gateway?.Dispose();
         await this.Subscriber.DisposeAsync();
-        await Task.WhenAll(this._redis.DisposeAsync().AsTask(), this._eventStore.DisposeAsync().AsTask(), this._kafka.DisposeAsync().AsTask(), this._rabbitMq.DisposeAsync().AsTask(), this._nats.DisposeAsync().AsTask());
+        await Task.WhenAll(this._redis.DisposeAsync().AsTask(), this._eventStore.DisposeAsync().AsTask(), this._kafka.DisposeAsync().AsTask(), this._rabbitMq.DisposeAsync().AsTask(), this._nats.DisposeAsync().AsTask(), this._vault.DisposeAsync().AsTask());
     }
 
     /// <summary>

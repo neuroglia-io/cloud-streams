@@ -34,7 +34,7 @@ public sealed class DryRunTests(CloudStreamsFixture fixture)
     static Subscription Subscription(string name, string uri = "https://dry-run.example.com/events") => new()
     {
         Metadata = new() { Name = name },
-        Spec = new() { Subscriber = new() { Uri = new(uri) } }
+        Spec = new() { Subscriber = new() { Endpoint = new Uri(uri) } }
     };
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class DryRunTests(CloudStreamsFixture fixture)
 
         // assert
         Assert.Equal((int)HttpStatusCode.BadRequest, refused.Problem.Status);
-        Assert.Contains("spec.subscriber.uri", refused.Problem.Errors!.Keys);
+        Assert.Contains("spec.subscriber.endpoint", refused.Problem.Errors!.Keys);
         Assert.Contains("spec.subscriber.rateLimit", refused.Problem.Errors.Keys);
     }
 

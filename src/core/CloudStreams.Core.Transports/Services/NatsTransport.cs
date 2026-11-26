@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core.Transports.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NATS.Client.Core;
@@ -26,15 +27,14 @@ namespace CloudStreams.Core.Transports.Services;
 /// Delivers cloud events to, and consumes cloud events from, NATS subjects, following the CloudEvents NATS protocol binding (see #218)
 /// </summary>
 /// <param name="logger">The service used to perform logging</param>
-/// <param name="options">The service used to access the current <see cref="TransportOptions"/></param>
 /// <param name="serializer">The service used to serialize cloud events</param>
 /// <remarks>
 /// <para>Core NATS delivers at most once: a cloud event published while no one listens is lost, and one a gateway fails to store cannot be consumed again. With
 /// <c>jetstream=true</c>, publishing waits for JetStream to store the cloud event, and gateways consume it with a durable consumer, which redelivers it until it is
 /// stored.</para>
 /// </remarks>
-public sealed class NatsTransport(ILogger<NatsTransport> logger, IOptionsMonitor<TransportOptions> options, IJsonSerializer serializer)
-    : ICloudEventSink, ICloudEventChannelConsumer, IAsyncDisposable
+public sealed class NatsTransport(ILogger<NatsTransport> logger, IJsonSerializer serializer)
+    : ICloudEventSink, ICloudEventFeedConsumer, IAsyncDisposable
 {
 
     readonly ConcurrentDictionary<string, Lazy<NatsConnection>> _connections = new();
@@ -45,12 +45,12 @@ public sealed class NatsTransport(ILogger<NatsTransport> logger, IOptionsMonitor
     static bool UsesJetStream(TransportAddress address) => string.Equals(address.GetParameter("jetstream"), "true", StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
-    public async Task SendAsync(TransportAddress address, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
+    public async Task SendAsync(TransportAddress address, TransportCredentials? credentials, IReadOnlyList<CloudEvent> events, IReadOnlyList<KeyValuePair<string, string>> headers, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentNullException.ThrowIfNull(events);
         ArgumentNullException.ThrowIfNull(headers);
-        var connection = this.GetConnection(address);
+        var connection = await this.GetConnectionAsync(address, credentials, cancellationToken).ConfigureAwait(false);
         var jetStream = UsesJetStream(address) ? new NatsJSContext(connection) : null;
         foreach (var e in events)
         {
@@ -65,13 +65,13 @@ public sealed class NatsTransport(ILogger<NatsTransport> logger, IOptionsMonitor
     }
 
     /// <inheritdoc/>
-    public async Task ConsumeAsync(TransportAddress address, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
+    public async Task ConsumeAsync(TransportAddress address, TransportCredentials? credentials, string group, string name, Func<TransportMessage, CancellationToken, Task<bool>> handler, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(address);
         ArgumentException.ThrowIfNullOrWhiteSpace(group);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(handler);
-        var connection = this.GetConnection(address);
+        var connection = await this.GetConnectionAsync(address, credentials, cancellationToken).ConfigureAwait(false);
         try
         {
             if (!UsesJetStream(address))
@@ -125,12 +125,12 @@ public sealed class NatsTransport(ILogger<NatsTransport> logger, IOptionsMonitor
         return new(contentType, normalized, data ?? [], description);
     }
 
-    NatsConnection GetConnection(TransportAddress address)
+    async Task<NatsConnection> GetConnectionAsync(TransportAddress address, TransportCredentials? credentials, CancellationToken cancellationToken)
     {
-        var key = $"{address.Server}|{address.Tls}|{address.Credentials}";
+        var token = credentials?.IsToken == true ? (await credentials.GetTokenAsync(cancellationToken).ConfigureAwait(false)).Value : null;
+        var key = $"{address.Server}|{address.Tls}|{credentials?.Fingerprint}";
         var connection = this._connections.GetOrAdd(key, _ => new(() =>
         {
-            var credentials = options.CurrentValue.GetCredentials(address);
             return new NatsConnection(NatsOpts.Default with
             {
                 Url = $"{(address.Tls ? "tls" : "nats")}://{address.Server}",
@@ -139,8 +139,7 @@ public sealed class NatsTransport(ILogger<NatsTransport> logger, IOptionsMonitor
                 {
                     Username = credentials.Username,
                     Password = credentials.Password,
-                    Token = credentials.Token,
-                    CredsFile = credentials.CredentialsFile
+                    Token = token
                 },
                 TlsOpts = address.Tls ? NatsTlsOpts.Default with { Mode = TlsMode.Require } : NatsTlsOpts.Default
             });

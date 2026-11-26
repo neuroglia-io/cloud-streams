@@ -46,38 +46,16 @@ public record CloudEventIngestionPolicy
     public virtual List<CloudEventRateLimit>? RateLimits { get; set; }
 
     /// <summary>
-    /// Gets/sets the channels, such as Kafka topics, NATS subjects or AMQP queues, the gateway consumes cloud events from, in addition to its HTTP endpoint (see #218)
+    /// Gets/sets the feeds, such as Kafka topics, NATS subjects or AMQP queues, the gateway consumes cloud events from, in addition to its HTTP endpoint: the names
+    /// of <see cref="Feed"/> resources, or feeds of the gateway's own (see #218)
     /// </summary>
-    [DataMember(Order = 5, Name = "channels"), JsonPropertyOrder(5), JsonPropertyName("channels"), YamlMember(Order = 5, Alias = "channels")]
-    public virtual List<CloudEventIngestionChannel>? Channels { get; set; }
-
-}
-
-/// <summary>
-/// Represents a channel, such as a Kafka topic, a NATS subject or an AMQP queue, that a gateway consumes cloud events from (see #218)
-/// </summary>
-/// <remarks>
-/// Consumed cloud events are admitted like published ones: they are authorized, validated, deduplicated and rate limited, the channel being their publisher. A
-/// message is acknowledged once its cloud event has been stored, ignored or refused, and consumed again otherwise, e.g. while the event store is unavailable.
-/// Replicas of a gateway share the consumption of a channel, as a Kafka consumer group, a NATS queue group or competing AMQP consumers
-/// </remarks>
-[DataContract]
-public record CloudEventIngestionChannel
-{
-
-    /// <summary>
-    /// Gets/sets the name of the channel, which identifies it as the publisher of the cloud events it carries
-    /// </summary>
-    [Required, JsonRequired]
-    [DataMember(Order = 1, Name = "name", IsRequired = true), JsonPropertyOrder(1), JsonPropertyName("name"), YamlMember(Order = 1, Alias = "name")]
-    public virtual string Name { get; set; } = null!;
-
-    /// <summary>
-    /// Gets/sets the address of the channel. See <see cref="TransportAddress"/>
-    /// </summary>
-    [Required, JsonRequired]
-    [DataMember(Order = 2, Name = "uri", IsRequired = true), JsonPropertyOrder(2), JsonPropertyName("uri"), YamlMember(Order = 2, Alias = "uri")]
-    public virtual Uri Uri { get; set; } = null!;
+    /// <remarks>
+    /// Consumed cloud events are admitted like published ones: they are authorized, validated, deduplicated and rate limited, the feed being their publisher. A
+    /// message is acknowledged once its cloud event has been stored, ignored or refused, and consumed again otherwise, e.g. while the event store is unavailable.
+    /// Replicas of a gateway share the consumption of a feed, as a Kafka consumer group, a NATS queue group or competing AMQP consumers
+    /// </remarks>
+    [DataMember(Order = 5, Name = "feeds"), JsonPropertyOrder(5), JsonPropertyName("feeds"), YamlMember(Order = 5, Alias = "feeds")]
+    public virtual List<FeedReference>? Feeds { get; set; }
 
 }
 

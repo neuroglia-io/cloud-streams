@@ -1,0 +1,247 @@
+@namespace CloudStreams.Dashboard.Components.ResourceForms
+@using CloudStreams.Core
+@using CloudStreams.Core.Resources
+
+@* An endpoint: an address, whose scheme selects the transport, and how to authenticate to it, with values of its own or read from a secret (see #218) *@
+
+<fieldset id="@Id" aria-describedby="@FormField.DescribedBy(Id)">
+    <input id="@(Id)-uri" type="text" inputmode="url" autocomplete="off" spellcheck="false" class="form-control form-control-sm font-monospace @(UriError != null ? "is-invalid" : "")"
+           placeholder="@Placeholder" value="@uri" @onchange="OnUriChangedAsync" aria-label="@($"{Label} address")" aria-describedby="@(Id)-uri-error @FormField.DescribedBy(Id)" aria-invalid="@(UriError != null ? "true" : "false")" />
+    <div id="@(Id)-uri-error" class="invalid-feedback small @(UriError != null ? "d-block" : "")">@UriError</div>
+    <div class="row g-2 mt-1 align-items-end">
+        <div class="col-sm-5">
+            <label for="@(Id)-scheme" class="form-label small mb-1">Authentication</label>
+            <select id="@(Id)-scheme" class="form-select form-select-sm" value="@(Value?.Authentication?.Scheme ?? "")" @onchange="e => SetSchemeAsync(e.Value?.ToString())">
+                <option value="">none</option>
+                @foreach (var scheme in SupportedSchemes)
+                {
+                    <option value="@scheme">@SchemeLabel(scheme)</option>
+                }
+            </select>
+        </div>
+        @if (Policy != null)
+        {
+            <div class="col-sm-4">
+                <label for="@(Id)-secret" class="form-label small mb-1">Read values from the secret</label>
+                <input id="@(Id)-secret" type="text" class="form-control form-control-sm" placeholder="none" value="@Policy.Use?.Name" @onchange="e => SetSecretAsync(e.Value?.ToString(), Policy.Use?.Provider)" />
+            </div>
+            <div class="col-sm-3">
+                <label for="@(Id)-provider" class="form-label small mb-1">From</label>
+                <select id="@(Id)-provider" class="form-select form-select-sm" value="@(Policy.Use?.Provider ?? "")" disabled="@(Policy.Use == null)" @onchange="e => SetSecretAsync(Policy.Use?.Name, e.Value?.ToString())">
+                    <option value="">any provider</option>
+                    @foreach (var provider in SecretProviders.AsEnumerable())
+                    {
+                        <option value="@provider">@provider</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+    @if (Policy != null)
+    {
+        var secret = Policy.Use != null;
+        <div class="row g-2 mt-1 ps-3 border-start">
+            @switch (Policy)
+            {
+                case BasicAuthenticationPolicy basic:
+                    @Text("username", "User name", basic.Username, v => basic.Username = v, false)
+                    @if (!secret) @Text("password", "Password", basic.Password, v => basic.Password = v, true)
+                    break;
+                case BearerAuthenticationPolicy bearer:
+                    @if (!secret) @Text("token", "Token", bearer.Token, v => bearer.Token = v, true, "col-12")
+                    break;
+                case ApiKeyAuthenticationPolicy apiKey:
+                    @Text("header", "Header", apiKey.Header, v => apiKey.Header = v, false, placeholder: ApiKeyAuthenticationPolicy.DefaultHeader)
+                    @if (!secret) @Text("key", "Key", apiKey.Key, v => apiKey.Key = v, true)
+                    break;
+                case OAuth2AuthenticationPolicyBase oauth2:
+                    @Text("authority", "Authority", oauth2.Authority?.OriginalString, v => oauth2.Authority = Uri.TryCreate(v, UriKind.Absolute, out var authority) ? authority : null, false, "col-sm-8", "https://login.example.com/realms/cloud-streams")
+                    <div class="col-sm-4">
+                        <label for="@(Id)-grant" class="form-label small mb-1">Grant</label>
+                        <select id="@(Id)-grant" class="form-select form-select-sm" value="@(oauth2.Grant ?? OAuth2GrantType.ClientCredentials)" @onchange="e => UpdateAsync(() => oauth2.Grant = e.Value?.ToString() == OAuth2GrantType.ClientCredentials ? null : e.Value?.ToString())">
+                            <option value="@OAuth2GrantType.ClientCredentials">client credentials</option>
+                            <option value="@OAuth2GrantType.Password">password</option>
+                        </select>
+                    </div>
+                    @Text("client-id", "Client id", oauth2.Client?.Id, v => (oauth2.Client ??= new()).Id = v, false)
+                    @if (!secret) @Text("client-secret", "Client secret", oauth2.Client?.Secret, v => (oauth2.Client ??= new()).Secret = v, true)
+                    @Text("scopes", "Scopes", oauth2.Scopes == null ? null : string.Join(' ', oauth2.Scopes), v => oauth2.Scopes = Split(v), false, placeholder: "space-separated")
+                    @Text("audiences", "Audiences", oauth2.Audiences == null ? null : string.Join(' ', oauth2.Audiences), v => oauth2.Audiences = Split(v), false, placeholder: "space-separated")
+                    @if (oauth2.Grant == OAuth2GrantType.Password)
+                    {
+                        @Text("oauth2-username", "User name", oauth2.Username, v => oauth2.Username = v, false)
+                        @if (!secret) @Text("oauth2-password", "Password", oauth2.Password, v => oauth2.Password = v, true)
+                    }
+                    @if (oauth2 is OAuth2AuthenticationPolicy plain)
+                    {
+                        @Text("token-endpoint", "Token endpoint", plain.Endpoints?.Token, v => plain.Endpoints = v == null ? null : new() { Token = v }, false, placeholder: OAuth2Endpoints.DefaultToken)
+                    }
+                    break;
+            }
+            <div class="col-12 small text-secondary">
+                @if (secret)
+                {
+                    <span>Secret values are read from <code>@Policy.Use</code>, by the broker or the gateway, when it connects. Its keys are the names of the fields, e.g. <code>password</code> or <code>client.secret</code>, and take precedence over the values above.</span>
+                }
+                else
+                {
+                    <span><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Secret values written here can be seen by anyone allowed to read the resource. Prefer reading them from a secret.</span>
+                }
+            </div>
+        </div>
+    }
+</fieldset>
+
+@code {
+
+    string? uri;
+    Endpoint? lastValue;
+
+    /// <summary>
+    /// Gets/sets the id of the group of inputs
+    /// </summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets/sets a label that describes the endpoint, used by screen readers
+    /// </summary>
+    [Parameter] public string Label { get; set; } = "Endpoint";
+
+    /// <summary>
+    /// Gets/sets the endpoint, if any
+    /// </summary>
+    [Parameter] public Endpoint? Value { get; set; }
+
+    /// <summary>
+    /// Gets/sets the callback invoked when the endpoint changes
+    /// </summary>
+    [Parameter] public EventCallback<Endpoint?> ValueChanged { get; set; }
+
+    /// <summary>
+    /// Gets/sets the placeholder of the address
+    /// </summary>
+    [Parameter] public string Placeholder { get; set; } = "https://orders.example.com/events";
+
+    /// <summary>
+    /// Gets/sets the error of the address, if any
+    /// </summary>
+    [Parameter] public string? UriError { get; set; }
+
+    SecretBasedAuthenticationPolicy? Policy => this.Value?.Authentication?.Policy;
+
+    /// <summary>
+    /// Validates the specified endpoint, as the server does, so that forms report problems before saving
+    /// </summary>
+    /// <param name="endpoint">The endpoint to validate</param>
+    /// <param name="consume">A boolean indicating whether cloud events are consumed from the endpoint, rather than delivered to it</param>
+    /// <returns>Why the endpoint is not valid, or null if it is</returns>
+    public static string? Validate(Endpoint? endpoint, bool consume)
+    {
+        if (endpoint?.Uri == null) return consume
+            ? "Enter the absolute address events are consumed from, e.g. kafka://kafka:9092/orders"
+            : "Enter the absolute address events are delivered to, e.g. https://orders.example.com/events or kafka://kafka:9092/orders";
+        string? error;
+        if (consume ? !TransportAddress.TryParse(endpoint.Uri, true, out _, out error) : !TransportAddress.IsValidSink(endpoint.Uri, out error)) return error;
+        if (endpoint.Authentication == null) return null;
+        var policy = endpoint.Authentication.Policy;
+        if (policy == null) return "Pick how to authenticate";
+        var supported = TransportSchemes.GetAuthenticationSchemes(endpoint.Uri.Scheme);
+        if (supported.Count > 0 && !supported.Contains(endpoint.Authentication.Scheme!)) return $"The '{endpoint.Uri.Scheme}' transport does not support the '{endpoint.Authentication.Scheme}' authentication";
+        if (policy.Use != null) return null;
+        return policy switch
+        {
+            BasicAuthenticationPolicy basic when string.IsNullOrWhiteSpace(basic.Username) || basic.Password == null => "Enter the user name and the password, or read them from a secret",
+            BearerAuthenticationPolicy bearer when string.IsNullOrWhiteSpace(bearer.Token) => "Enter the token, or read it from a secret",
+            ApiKeyAuthenticationPolicy apiKey when string.IsNullOrWhiteSpace(apiKey.Key) => "Enter the API key, or read it from a secret",
+            OAuth2AuthenticationPolicyBase oauth2 when oauth2.Authority == null || string.IsNullOrWhiteSpace(oauth2.Client?.Id) => "Enter the authority and the client id, or read them from a secret",
+            _ => null
+        };
+    }
+
+    IReadOnlyList<string> SupportedSchemes => TransportSchemes.GetAuthenticationSchemes(Uri.TryCreate(this.uri, UriKind.Absolute, out var parsed) ? parsed.Scheme : TransportSchemes.Https) is { Count: > 0 } schemes ? schemes : TransportSchemes.GetAuthenticationSchemes(TransportSchemes.Https);
+
+    /// <inheritdoc/>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        if (ReferenceEquals(this.Value, this.lastValue)) return;
+        this.lastValue = this.Value;
+        this.uri = this.Value?.Uri?.OriginalString;
+    }
+
+    RenderFragment Text(string field, string label, string? value, Action<string?> set, bool secret, string css = "col-sm-6", string? placeholder = null) => __builder =>
+    {
+        <div class="@css">
+            <label for="@($"{Id}-{field}")" class="form-label small mb-1">@label</label>
+            <input id="@($"{Id}-{field}")" type="@(secret ? "password" : "text")" autocomplete="@(secret ? "new-password" : "off")" class="form-control form-control-sm" placeholder="@placeholder" value="@value"
+                   @onchange="e => UpdateAsync(() => set(string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString()))" />
+        </div>
+    };
+
+    static string SchemeLabel(string scheme) => scheme switch
+    {
+        AuthenticationScheme.Basic => "basic (user name and password)",
+        AuthenticationScheme.Bearer => "bearer token",
+        AuthenticationScheme.ApiKey => "API key",
+        AuthenticationScheme.OAuth2 => "OAuth2",
+        AuthenticationScheme.Oidc => "OpenID Connect",
+        _ => scheme
+    };
+
+    static List<string>? Split(string? value)
+    {
+        var values = (value ?? string.Empty).Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        return values.Count == 0 ? null : values;
+    }
+
+    async Task OnUriChangedAsync(ChangeEventArgs e)
+    {
+        this.uri = e.Value?.ToString()?.Trim();
+        if (string.IsNullOrEmpty(this.uri) && this.Value?.Authentication == null)
+        {
+            await this.NotifyAsync(null);
+            return;
+        }
+        var endpoint = this.Value ?? new Endpoint();
+        endpoint.Uri = Uri.TryCreate(this.uri, UriKind.Absolute, out var parsed) ? parsed : null!;
+        await this.NotifyAsync(endpoint);
+    }
+
+    async Task SetSchemeAsync(string? scheme)
+    {
+        var endpoint = this.Value ?? new Endpoint() { Uri = Uri.TryCreate(this.uri, UriKind.Absolute, out var parsed) ? parsed : null! };
+        var secret = this.Policy?.Use;
+        endpoint.Authentication = scheme switch
+        {
+            AuthenticationScheme.Basic => new() { Basic = new() { Use = secret } },
+            AuthenticationScheme.Bearer => new() { Bearer = new() { Use = secret } },
+            AuthenticationScheme.ApiKey => new() { ApiKey = new() { Use = secret } },
+            AuthenticationScheme.OAuth2 => new() { OAuth2 = new() { Use = secret } },
+            AuthenticationScheme.Oidc => new() { Oidc = new() { Use = secret } },
+            _ => null
+        };
+        await this.NotifyAsync(endpoint);
+    }
+
+    async Task SetSecretAsync(string? name, string? provider)
+    {
+        if (this.Policy == null) return;
+        name = name?.Trim();
+        this.Policy.Use = string.IsNullOrEmpty(name) ? null : string.IsNullOrEmpty(provider) ? new SecretReference(name) : new SecretReference(provider, name);
+        await this.NotifyAsync(this.Value);
+    }
+
+    async Task UpdateAsync(Action update)
+    {
+        update();
+        await this.NotifyAsync(this.Value);
+    }
+
+    async Task NotifyAsync(Endpoint? endpoint)
+    {
+        this.lastValue = endpoint;
+        this.Value = endpoint;
+        await this.ValueChanged.InvokeAsync(endpoint);
+    }
+
+}

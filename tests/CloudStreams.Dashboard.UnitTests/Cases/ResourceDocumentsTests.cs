@@ -36,7 +36,7 @@ public class ResourceDocumentsTests
             ResourceVersion = "42",
             CreationTimestamp = DateTimeOffset.UtcNow
         },
-        Spec = new() { Subscriber = new() { Uri = new($"https://{name}.example.com/events"), RateLimit = 5 } },
+        Spec = new() { Subscriber = new() { Endpoint = new Uri($"https://{name}.example.com/events"), RateLimit = 5 } },
         Status = new() { Phase = SubscriptionStatusPhase.Active }
     };
 

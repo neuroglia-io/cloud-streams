@@ -105,10 +105,21 @@ spec:
                 subscriber:
                   type: object
                   properties:
-                    uri:
-                      type: string
-                      format: uri
-                      description: Where cloud events are delivered, over HTTP or HTTPS, or to a Kafka topic (kafka://), a NATS subject (nats://), an AMQP exchange (amqp://, amqps://) or another Cloud Streams gateway (cloudstreams://)
+                    endpoint:
+                      description: Where cloud events are delivered, if not to a sink. Either an address, whose scheme selects the transport (http, https, kafka, nats, amqp, amqps or cloudstreams), or an object with an address and how to authenticate to it
+                      x-kubernetes-preserve-unknown-fields: true
+                      oneOf:
+                        - type: string
+                          format: uri
+                        - type: object
+                          properties:
+                            uri:
+                              type: string
+                              format: uri
+                            authentication:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                          required: [ uri ]
                     rateLimit:
                       type: number
                       exclusiveMinimum: 0
@@ -210,16 +221,31 @@ spec:
                           minimum: 1
                           description: The maximum amount of keys whose cloud events are delivered concurrently. Defaults to 8
                       required: [ key ]
-                  required:
-                    - uri
+                    sink:
+                      type: string
+                      description: The name of the sink to deliver cloud events to. Exactly one of endpoint and sink must be set
                 deadLetter:
                   type: object
                   description: Sets aside the cloud events the subscription fails to deliver, rather than faulting the subscription or dropping them
                   properties:
-                    uri:
+                    endpoint:
+                      description: Where dead-lettered cloud events are sent, if not to a sink. If neither is set, they are stored in the subscription's dead-letter stream. Either an address, whose scheme selects the transport (http, https, kafka, nats, amqp, amqps or cloudstreams), or an object with an address and how to authenticate to it
+                      x-kubernetes-preserve-unknown-fields: true
+                      oneOf:
+                        - type: string
+                          format: uri
+                        - type: object
+                          properties:
+                            uri:
+                              type: string
+                              format: uri
+                            authentication:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                          required: [ uri ]
+                    sink:
                       type: string
-                      format: uri
-                      description: The uri of the service to send dead-lettered cloud events to. If not set, they are stored in the subscription's dead-letter stream
+                      description: The name of the sink to send dead-lettered cloud events to. It cannot be combined with endpoint
                 suspended:
                   type: boolean
                   description: Whether or not the subscription is suspended. While it is, nothing is delivered, and its offset is kept, so that delivery resumes where it stopped

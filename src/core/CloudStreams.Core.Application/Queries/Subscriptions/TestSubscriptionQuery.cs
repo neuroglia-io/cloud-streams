@@ -75,7 +75,7 @@ public class TestSubscriptionQueryHandler(ICloudEventStore eventStore, IExpressi
             Metadata = new() { Name = "test" },
             Spec = new()
             {
-                Subscriber = new() { Uri = new("http://localhost") },
+                Subscriber = new() { Endpoint = new Uri("http://localhost") },
                 Filter = request.Filter,
                 Mutation = webhook ? null : request.Mutation
             }

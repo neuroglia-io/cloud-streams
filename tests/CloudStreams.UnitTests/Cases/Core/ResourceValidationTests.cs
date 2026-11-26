@@ -31,7 +31,7 @@ public class ResourceValidationTests
             Metadata = new() { Name = "orders" },
             Spec = new()
             {
-                Subscriber = new() { Uri = new("https://subscriber.example.com/events"), RateLimit = 10 },
+                Subscriber = new() { Endpoint = new Uri("https://subscriber.example.com/events"), RateLimit = 10 },
                 Partition = new(CloudEventPartitionType.BySource, "https://orders.example.com"),
                 Filter = new() { Type = CloudEventFilterType.Attributes, Attributes = new Dictionary<string, string>() { { "type", "^order\\." }, { "subject", "${ . != null }" } } },
                 Stream = new() { Offset = 0 }
@@ -49,7 +49,7 @@ public class ResourceValidationTests
 
     public static TheoryData<string, Action<SubscriptionSpec>> InvalidSubscriptions => new()
     {
-        { "spec.subscriber.uri", s => s.Subscriber.Uri = new("ftp://subscriber.example.com") },
+        { "spec.subscriber.endpoint", s => s.Subscriber.Endpoint = new Uri("ftp://subscriber.example.com") },
         { "spec.subscriber.rateLimit", s => s.Subscriber.RateLimit = 0 },
         { "spec.subscriber.retryPolicy", s => s.Subscriber.RetryPolicy = new() { BackoffDuration = new() { Type = RetryBackoffDurationType.Exponential, Period = Duration.FromSeconds(1) } } },
         { "spec.subscriber.retryPolicy", s => s.Subscriber.RetryPolicy = new() { BackoffDuration = RetryBackoffDuration.Constant(Duration.FromSeconds(1)), MaxAttempts = -2 } },
@@ -59,7 +59,7 @@ public class ResourceValidationTests
         { "spec.mutation.webhook", s => s.Mutation = new() { Type = CloudEventMutationType.Webhook } },
         { "spec.partition.id", s => s.Partition = new() { Type = CloudEventPartitionType.ByType, Id = "" } },
         { "spec.stream.offset", s => s.Stream = new() { Offset = -2 } },
-        { "spec.deadLetter.uri", s => s.DeadLetter = new() { Uri = new("ftp://dead-letters.example.com") } },
+        { "spec.deadLetter.endpoint", s => s.DeadLetter = new() { Endpoint = new Uri("ftp://dead-letters.example.com") } },
         { "spec.subscriber.batch.maxSize", s => s.Subscriber.Batch = new() { MaxSize = 0 } },
         { "spec.subscriber.ordering.key", s => s.Subscriber.Ordering = new() { Key = "Subject" } },
         { "spec.subscriber.ordering.maxConcurrency", s => s.Subscriber.Ordering = new() { Key = "subject", MaxConcurrency = 0 } },

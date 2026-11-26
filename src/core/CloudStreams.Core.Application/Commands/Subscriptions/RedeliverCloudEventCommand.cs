@@ -48,14 +48,15 @@ public class RedeliverCloudEventCommand(string name, CloudEventRedeliveryRequest
 /// <param name="eventStore">The service used to read the cloud event to redeliver</param>
 /// <param name="expressionEvaluator">The service used to evaluate the subscription's mutation, if any</param>
 /// <param name="validators">The services used to validate mutated cloud events</param>
-/// <param name="httpClientFactory">The service used to create the <see cref="HttpClient"/> that redelivers the cloud event</param>
+/// <param name="httpClientFactory">The service used to create the <see cref="HttpClient"/> that calls mutation webhooks</param>
+/// <param name="delivery">The service used to deliver the cloud event to the subscriber's endpoint or sink, over any transport (see #218)</param>
 /// <param name="serializer">The service used to read the cloud events mutation webhooks respond with</param>
 /// <remarks>
-/// The cloud event is read from the stream, or from the partition its offset refers to, mutated as the subscription mutates cloud events, and posted to the subscriber
+/// The cloud event is read from the stream, or from the partition its offset refers to, mutated as the subscription mutates cloud events, and delivered to the subscriber
 /// once, without an acknowledgement token: it neither goes through the subscription's filter nor moves its offset
 /// </remarks>
 public class RedeliverCloudEventCommandHandler(IResourceRepository resources, ICloudEventStore eventStore, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> validators,
-    IHttpClientFactory httpClientFactory, IJsonSerializer serializer)
+    IHttpClientFactory httpClientFactory, IJsonSerializer serializer, CloudEventDeliveryClient delivery)
     : ICommandHandler<RedeliverCloudEventCommand, CloudEventRedelivery>
 {
 
@@ -82,28 +83,20 @@ public class RedeliverCloudEventCommandHandler(IResourceRepository resources, IC
         var pipeline = new SubscriptionEventPipeline(expressionEvaluator, validators, client, serializer);
         var e = record.ToCloudEvent(default);
         HttpStatusCode status;
-        string? content;
         try
         {
             e = await pipeline.MutateAsync(subscription, e, timeout.Token).ConfigureAwait(false);
-            using var requestContent = e.ToHttpContent();
-            using var request = new HttpRequestMessage(HttpMethod.Post, subscription.Spec.Subscriber.Uri) { Content = requestContent };
-            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Subscription, subscription.GetName());
-            request.Headers.TryAddWithoutValidation(CloudStreamsHeaders.Offset, record.Sequence.ToString(CultureInfo.InvariantCulture));
-            using var response = await client.SendAsync(request, timeout.Token).ConfigureAwait(false);
-            status = response.StatusCode;
-            content = response.IsSuccessStatusCode ? null : await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            KeyValuePair<string, string>[] headers = [new(CloudStreamsHeaders.Subscription, subscription.GetName()), new(CloudStreamsHeaders.Offset, record.Sequence.ToString(CultureInfo.InvariantCulture))];
+            status = await delivery.SendAsync(DeliveryTarget.Of(subscription.Spec.Subscriber), e, headers, "The subscriber", timeout.Token).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode.HasValue)
+        {
+            return new OperationResult<CloudEventRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliverDeadLetterCommandHandler.RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, $"The redelivery of the cloud event at offset '{record.Sequence}' failed: {ex.Message}")]);
         }
         catch (Exception ex) when (ex is HttpRequestException or FormatException || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
             var reason = ex is OperationCanceledException ? $"the subscriber did not respond within {Timeout}" : ex.Message;
             return new OperationResult<CloudEventRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliverDeadLetterCommandHandler.RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, $"Failed to redeliver the cloud event at offset '{record.Sequence}': {reason}")]);
-        }
-        if ((int)status is < 200 or >= 300)
-        {
-            var detail = $"The subscriber responded to the redelivery of the cloud event at offset '{record.Sequence}' with a non-success status code '{(int)status}'";
-            if (!string.IsNullOrWhiteSpace(content)) detail = $"{detail}: {content}";
-            return new OperationResult<CloudEventRedelivery>((int)HttpStatusCode.BadGateway, errors: [new Error(RedeliverDeadLetterCommandHandler.RedeliveryFailedProblemType, "Bad Gateway", (int)HttpStatusCode.BadGateway, detail)]);
         }
         return this.Ok(new CloudEventRedelivery() { Id = e.Id, Status = (int)status });
     }

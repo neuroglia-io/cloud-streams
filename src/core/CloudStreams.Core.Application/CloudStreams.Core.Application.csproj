@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CloudStreams.Core\CloudStreams.Core.csproj" />
+    <ProjectReference Include="..\CloudStreams.Core.Transports\CloudStreams.Core.Transports.csproj" />
   </ItemGroup>
 
 </Project>

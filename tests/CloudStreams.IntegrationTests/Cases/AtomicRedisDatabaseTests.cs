@@ -64,7 +64,7 @@ public sealed class AtomicRedisDatabaseTests
 
     async Task<Subscription> CreateSubscriptionAsync([CallerMemberName] string name = "")
     {
-        var subscription = new Subscription(new() { Name = name.ToLowerInvariant().Replace('_', '-'), Labels = new Dictionary<string, string>() }, new() { Subscriber = new() { Uri = new("http://localhost/events") } }, new()
+        var subscription = new Subscription(new() { Name = name.ToLowerInvariant().Replace('_', '-'), Labels = new Dictionary<string, string>() }, new() { Subscriber = new() { Endpoint = new Uri("http://localhost/events") } }, new()
         {
             Phase = SubscriptionStatusPhase.Active,
             Stream = new() { AckedOffset = 0 },
@@ -189,12 +189,12 @@ public sealed class AtomicRedisDatabaseTests
         // act
         await this.PatchStatusAsync(subscription, null,
             PatchOperation.Replace(JsonPointer.Parse("/status/phase"), JsonValue.Create("inactive")),
-            PatchOperation.Replace(JsonPointer.Parse("/spec/subscriber/uri"), JsonValue.Create("http://elsewhere/events")));
+            PatchOperation.Replace(JsonPointer.Parse("/spec/subscriber/endpoint"), JsonValue.Create("http://elsewhere/events")));
 
         // assert
         var current = await this.GetAsync(subscription);
         Assert.Equal(SubscriptionStatusPhase.Inactive, current.Status!.Phase);
-        Assert.Equal(new Uri("http://localhost/events"), current.Spec.Subscriber.Uri);
+        Assert.Equal(new Uri("http://localhost/events"), current.Spec.Subscriber.Endpoint!.Uri);
         Assert.Equal(subscription.Metadata.Generation, current.Metadata.Generation);
     }
 

@@ -1,0 +1,47 @@
+@namespace CloudStreams.Dashboard.Components
+@using CloudStreams.Core.Resources
+
+@* Where a subscription delivers: a sink, by name, or an endpoint, linked if it is an HTTP one, with how it authenticates (see #218) *@
+
+@if (Sink != null)
+{
+    <span><i class="bi bi-box-arrow-right" aria-hidden="true"></i> sink <a href="sinks/@Sink" title="@($"The sink '{Sink}'")">@Sink</a></span>
+}
+else if (Endpoint?.Uri is { IsAbsoluteUri: true } uri && uri.Scheme is "http" or "https")
+{
+    <a href="@uri" target="_blank" rel="noopener">@uri.OriginalString</a>
+}
+else if (Endpoint?.Uri != null)
+{
+    <code class="text-break">@Endpoint.Uri.OriginalString</code>
+}
+else
+{
+    <span class="text-secondary">-</span>
+}
+@if (Sink == null && Endpoint?.Authentication?.Scheme is { } scheme)
+{
+    <span class="badge text-bg-light border ms-1" title="@($"Authenticated with {scheme}{(Endpoint.Authentication.Policy?.Use is { } secret ? $", read from the secret '{secret}'" : string.Empty)}")"><i class="bi bi-key" aria-hidden="true"></i> @scheme</span>
+}
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the endpoint, if any
+    /// </summary>
+    [Parameter] public Endpoint? Endpoint { get; set; }
+
+    /// <summary>
+    /// Gets/sets the name of the sink, if any
+    /// </summary>
+    [Parameter] public string? Sink { get; set; }
+
+    /// <summary>
+    /// Describes the specified target as text
+    /// </summary>
+    /// <param name="endpoint">The endpoint, if any</param>
+    /// <param name="sink">The name of the sink, if any</param>
+    /// <returns>A description of the target</returns>
+    public static string Describe(Endpoint? endpoint, string? sink) => sink != null ? $"the sink '{sink}'" : endpoint?.Uri?.OriginalString ?? "-";
+
+}

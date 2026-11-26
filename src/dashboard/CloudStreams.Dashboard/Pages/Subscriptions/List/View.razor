@@ -80,7 +80,7 @@
                             }
                         </td>
                         <td class="text-center">
-                            <a href="@resource.Spec.Subscriber.Uri" target="_blank">@resource.Spec.Subscriber.Uri</a>
+                            <DeliveryTargetDisplay Endpoint="resource.Spec.Subscriber.Endpoint" Sink="@resource.Spec.Subscriber.Sink" />
                         </td>
                         <td class="text-center">
                             <span class="badge @GetSubscriberStatusClass(resource)">

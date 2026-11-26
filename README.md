@@ -117,6 +117,7 @@ helm install cloud-streams oci://ghcr.io/neuroglia-io/charts/cloud-streams --ver
 - **Management API:** `gateway.managementApi.port` serves the management API and the dashboard on a port of their own. `gateway.ingress` then exposes only the public endpoints, and `gateway.managementIngress` exposes the management port, e.g. on an internal ingress class.
 - **Retention:** `retention.maxAge` and `retention.maxCount` set the policy described under [Retention](#retention).
 - **Other settings**, such as authentication, are environment variables, set with `gateway.env` and `broker.env`, e.g. `{ name: Authentication__Dashboard__Enabled, value: "true" }`.
+- **Secrets** of authenticated endpoints are read by the providers `secrets.providers` lists (see [Transports](#transports)). `secrets.files` mounts Kubernetes secrets for the `file` provider. `secrets.kubernetes.rbac` lets the `kubernetes` provider read the release namespace's secrets. `secrets.vault` configures the `vault` provider. Pods only mount their service account token when a provider needs it.
 
 See [values.yaml](deployments/helm/cloud-streams/values.yaml) for every setting.
 
@@ -153,7 +154,7 @@ curl -X 'POST' \
   },
   "spec": {
     "subscriber": {
-      "uri": "https://webhook.site/00000000-0000-0000-0000-000000000000"
+      "endpoint": "https://webhook.site/00000000-0000-0000-0000-000000000000"
     },
 	"stream":{
 	  "offset": 0
@@ -176,14 +177,14 @@ The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhos
 
 ### Delivery and retries
 
-The broker delivers each event with a `POST` to `spec.subscriber.uri`, or over the transport its scheme selects (see [Transports](#transports)). Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
+The broker delivers each event with a `POST` to the subscriber's endpoint (`spec.subscriber.endpoint`, or that of the sink `spec.subscriber.sink` names), or over the transport its scheme selects (see [Transports](#transports)). Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.
 
 A delivery fails when the subscriber cannot be reached, responds with a non-success status code, or does not respond within the dispatch timeout. A subscription's mutation is applied by every delivery attempt: a mutation webhook shares the attempt's timeout, and its failures are retried like the subscriber's. Failed deliveries are retried according to `spec.subscriber.retryPolicy`. If the subscription has none, the broker's `spec.dispatch.retryPolicy` applies:
 
 ```yaml
 spec:
   subscriber:
-    uri: https://subscriber.example.com/events
+    endpoint: https://subscriber.example.com/events   # or an endpoint with authentication, or a sink: see Transports
     timeout: PT30S                # per attempt; defaults to the broker's spec.dispatch.timeout, or PT100S
     rateLimit: 10                 # optional maximum number of deliveries per second; must be strictly positive
     retryPolicy:
@@ -209,7 +210,7 @@ A subscription with a dead-letter policy sets aside the events it fails to deliv
 spec:
   deadLetter: {}                                   # dead letters are stored in the subscription's dead-letter stream
   # deadLetter:
-  #   uri: https://dead-letters.example.com        # or sent there, as structured cloud events
+  #   endpoint: https://dead-letters.example.com   # or sent there, as structured cloud events, or to a sink
 ```
 
 - **Dead-letter stream:** each dead letter records:
@@ -228,7 +229,7 @@ GET  /api/resources/v1/subscriptions/{name}/dead-letters?offset=&length=&directi
 POST /api/resources/v1/subscriptions/{name}/dead-letters/{offset}/redeliver           # requires the operator role
 ```
 
-A redelivery posts the dead letter to the subscriber once, without an acknowledgement token. It answers `502 Bad Gateway` with the subscriber's response if the subscriber refuses it again. The dead-letter stream is a log: redelivering a dead letter doesn't remove it.
+A redelivery delivers the dead letter to the subscriber once, without an acknowledgement token, over its transport and authenticated as its endpoint or sink configures. It answers `502 Bad Gateway` with the subscriber's response if the subscriber refuses it again. The dead-letter stream is a log: redelivering a dead letter doesn't remove it.
 
 #### Replay
 
@@ -249,7 +250,7 @@ By default, a subscription delivers one event at a time, in the order of its str
 ```yaml
 spec:
   subscriber:
-    uri: https://subscriber.example.com
+    endpoint: https://subscriber.example.com
     batch:                    # delivers events in batches, as application/cloudevents-batch+json
       maxSize: 100
       linger: PT0.5S          # how long a partial batch waits to fill once the subscription has caught up. Defaults to none
@@ -494,7 +495,7 @@ Duplicates are counted by the `cloud_streams_gateway_events_duplicate_count` met
 
 ### Transports
 
-Besides HTTP, subscribers and dead-letter services can be Kafka topics, NATS subjects, AMQP exchanges or other Cloud Streams gateways. Gateways can also consume events from Kafka topics, NATS subjects and AMQP queues. The scheme of an address selects its transport:
+Besides HTTP, subscribers and dead-letter services can be Kafka topics, NATS subjects, AMQP exchanges or other Cloud Streams gateways. Gateways can also consume events from Kafka topics, NATS subjects and AMQP queues, called feeds. The scheme of an address selects its transport:
 
 | Transport | Address | Delivers | Consumes |
 |---|---|---|---|
@@ -504,27 +505,111 @@ Besides HTTP, subscribers and dead-letter services can be Kafka topics, NATS sub
 | AMQP 0-9-1 (RabbitMQ) | `amqp://rabbitmq/?exchange=orders`, `amqps://` over TLS | to an exchange | from a queue: `amqp://rabbitmq/?queue=orders` |
 | Cloud Streams | `cloudstreams://gateway.example.com` | to another gateway | - |
 
+**Endpoints.** A subscriber, a dead-letter service or a feed is an endpoint: either an address, or an object with an address and how to authenticate to it, after the endpoints of the Serverless Workflow specification.
+
 ```yaml
-# a subscription that delivers to a Kafka topic
 spec:
   subscriber:
-    uri: kafka://kafka:9092/orders?credentials=orders
+    endpoint: https://orders.example.com/events          # an address
 ---
-# a gateway that also consumes a NATS subject and a RabbitMQ queue
 spec:
-  ingestion:
-    channels:
-      - name: payments
-        uri: nats://nats:4222/payments.>?jetstream=true
-      - name: legacy-orders
-        uri: amqp://rabbitmq/?queue=orders&credentials=rabbit
+  subscriber:
+    endpoint:
+      uri: kafka://kafka:9092/orders
+      authentication:
+        basic:
+          use: orders-kafka                              # the secret that holds the user name and the password
 ```
 
+**Sinks and feeds.** An endpoint can also be kept in a resource of its own, which administrators manage. Subscriptions, dead-letter policies and gateways then refer to it by name, so that whoever edits them can deliver to the endpoint, or consume it, but can neither read its credentials nor send them elsewhere. A `Sink` is delivered to, and a `Feed` consumed by gateways:
+
+```yaml
+apiVersion: cloud-streams.io/v1
+kind: Sink
+metadata:
+  name: orders-kafka
+spec:
+  endpoint:
+    uri: kafka://kafka:9092/orders
+    authentication:
+      oauth2:
+        authority: https://login.example.com/realms/cloud-streams
+        use: orders-kafka-client                         # client.id and client.secret
+---
+kind: Subscription
+spec:
+  subscriber:
+    sink: orders-kafka                                   # instead of an endpoint
+  deadLetter:
+    sink: orders-dead-letters
+---
+kind: Gateway
+spec:
+  ingestion:
+    feeds:
+      - legacy-orders                                    # a Feed resource
+      - name: payments                                   # a feed of the gateway's own
+        endpoint: nats://nats:4222/payments.>?jetstream=true
+```
+
+Deleting a sink or a feed in use is allowed. What refers to it then fails to deliver or to consume, visibly: deliveries are retried, dead-lettered or fault the subscription, as with an unreachable endpoint, and the gateway logs that it cannot resolve the feed. A subscription may refer to a sink that does not exist yet, so that resources can be applied in any order.
+
+**Authentication** follows the authentication policies of the Serverless Workflow specification, plus API keys. A policy holds its values, or names the secret that holds them with `use`:
+
+| Policy | Values | Transports |
+|---|---|---|
+| `basic` | `username`, `password` | HTTP (`Basic` authorization), Kafka (SASL `PLAIN`, or the `mechanism` of the address), NATS, AMQP |
+| `bearer` | `token` | HTTP, Cloud Streams, Kafka (SASL `OAUTHBEARER`), NATS (token), AMQP (as the password, with RabbitMQ's OAuth2 plugin) |
+| `apiKey` | `key`, `header` (`X-Api-Key` by default) | HTTP, Cloud Streams |
+| `oauth2` | `authority`, `grant` (`client_credentials` or `password`), `client.id`, `client.secret`, `client.authentication`, `scopes`, `audiences`, `username`, `password`, `endpoints.token` (`/oauth2/token` by default) | HTTP, Cloud Streams, Kafka, AMQP |
+| `oidc` | as `oauth2`, whose token endpoint is discovered from the authority's `.well-known/openid-configuration` | HTTP, Cloud Streams, Kafka, AMQP |
+
+OAuth2 and OpenID Connect tokens are obtained by the broker or the gateway, cached, and renewed before they expire.
+
+**Secrets.** A secret is a set of values, whose keys are the names of a policy's properties, e.g. `username` and `password`, or `client.id` and `client.secret`. The values a secret holds take precedence over those of the policy, which may hold the others, such as an OAuth2 authority. Values written in the policy itself are allowed, but not recommended: anyone allowed to read the resource can see them.
+
+```yaml
+use: orders-kafka                                  # the first configured provider that has it
+use: { vault: cloud-streams/orders-kafka }         # an explicit provider, and its path
+```
+
+Secrets are read by the broker (to deliver) or the gateway (to consume), from the providers it is configured with, in order, and cached for a minute, so that rotated secrets are picked up:
+
+| Provider | Reads | What it can read |
+|---|---|---|
+| `env` | environment variables `CLOUDSTREAMS_SECRETS__{NAME}__{KEY}`, e.g. `CLOUDSTREAMS_SECRETS__ORDERS_KAFKA__PASSWORD` | variables with that prefix |
+| `file` | files `{directory}/{name}/{key}`, as Kubernetes mounts secrets; `/var/run/secrets/cloud-streams` by default | files under the directory |
+| `kubernetes` | Kubernetes secrets, through the API, with the pod's service account | secrets of its namespace labelled `cloud-streams.io/secret=true` |
+| `vault` | the KV secrets engine of HashiCorp Vault, version 1 or 2, authenticated with a token, Kubernetes or an AppRole | what its Vault policy allows |
+
+Names and keys are matched regardless of case, dashes, dots and underscores, which environment variables and file names cannot all contain. By default, only `env` and `file` are enabled:
+
+```yaml
+CloudStreams:
+  Secrets:
+    Providers: [ env, file, kubernetes, vault ]    # the order in which a secret named without a provider is looked for
+    CacheDuration: 00:01:00
+    File:
+      Directory: /var/run/secrets/cloud-streams
+    Kubernetes:
+      Namespace: cloud-streams                     # the pod's by default
+      LabelSelector: cloud-streams.io/secret=true  # empty to read any secret the service account may
+    Vault:
+      Address: https://vault:8200
+      Mount: secret
+      KvVersion: 2
+      Prefix: cloud-streams                        # prepended to the paths of secrets
+      Authentication:
+        Method: kubernetes                         # token (VAULT_TOKEN by default), kubernetes or approle
+        Role: cloud-streams
+```
+
+Whoever can edit a subscription can make the broker send the secrets it can read to an endpoint of their choice. Only grant Cloud Streams the secrets its subscriptions need, or keep endpoints with credentials in sinks, which only administrators manage.
+
 **Parameters,** in the query string of an address:
-- **Every transport:** `credentials` names the credentials to connect with.
 - **Kafka:**
   - `servers` lists more bootstrap servers, comma-separated.
-  - `tls=true` enables TLS. With credentials, SASL is enabled too, with the `mechanism` `plain` (default), `scram-sha-256` or `scram-sha-512`.
+  - `tls=true` enables TLS. With `basic` authentication, the SASL `mechanism` is `plain` (default), `scram-sha-256` or `scram-sha-512`.
   - For consumption: `group` sets the consumer group (the gateway's name by default), and `offset=latest` skips the events published before the group's first consumption.
 - **NATS:**
   - `jetstream=true` waits for JetStream to store each delivered event. Consumption then goes through a durable consumer of the stream that captures the subject, which must exist.
@@ -535,22 +620,9 @@ spec:
   - `queue` names the queue to consume.
 - **Cloud Streams:** the path is that of the other gateway, if it is served under one, and `tls=false` connects over HTTP.
 
-**Credentials** never appear in resources, which anyone allowed to read them could see. An address with credentials in it, such as `amqp://user:password@rabbitmq`, is refused. Instead, `credentials=orders` names credentials that the broker (to deliver) or the gateway (to consume) reads from its configuration, under `CloudStreams:Transports:Credentials:orders`:
-- `Username` and `Password`: SASL with Kafka, and user name and password with NATS and AMQP.
-- `Token`: the token of NATS, or a bearer token for another gateway.
-- `ApiKey`: the API key of another gateway, sent in the `X-Api-Key` header, or in the header that `ApiKeyHeader` names.
-- `CredentialsFile`: a NATS credentials file.
+Addresses never carry credentials: one such as `amqp://user:password@rabbitmq` is refused.
 
-Names are made of letters, digits and underscores, so that environment variables can set them, e.g. from a Kubernetes secret with the Helm chart:
-
-```yaml
-broker:
-  env:
-    - name: CLOUDSTREAMS__TRANSPORTS__CREDENTIALS__ORDERS__USERNAME
-      value: cloud-streams
-    - name: CLOUDSTREAMS__TRANSPORTS__CREDENTIALS__ORDERS__PASSWORD
-      valueFrom: { secretKeyRef: { name: kafka-credentials, key: password } }
-```
+**Breaking changes:** `spec.subscriber.uri` is now `spec.subscriber.endpoint`, and `spec.deadLetter.uri` is now `spec.deadLetter.endpoint`: both accept an address as before. The `channels` of a gateway's ingestion policy are now its `feeds`, whose publisher is `feed:{name}`. The `credentials` query parameter of addresses, and the `CloudStreams:Transports:Credentials` configuration, are replaced by authentication policies and secrets. Subscriptions stored by a previous version must be updated, e.g. by renaming `uri` to `endpoint` and applying them again: until they are, their deliveries fail, and are retried, as they have no endpoint.
 
 **Delivery:**
 - **Encoding:** events are sent in the structured content mode of each transport's CloudEvents binding, as `application/cloudevents+json`, with the `cloudstreams-subscription` and `cloudstreams-offset` headers. Kafka messages are keyed by the event's `partitionkey`, or else its subject, so that events with the same key stay in order.
@@ -558,21 +630,21 @@ broker:
   - Kafka producers wait for every in-sync replica, and are idempotent.
   - AMQP uses publisher confirms, and publishes persistent, mandatory messages, so that an event no queue receives fails rather than vanishing.
   - NATS with JetStream waits for JetStream's acknowledgement. Core NATS confirms nothing, and loses events no one listens to.
-- **Failures:** a transport that cannot be reached, or that refuses an event, fails the delivery like an unreachable HTTP subscriber. Retry policies, circuit breakers and dead letters therefore apply unchanged.
+- **Failures:** a transport that cannot be reached, or that refuses an event, fails the delivery like an unreachable HTTP subscriber. So does a sink that does not exist, a secret that cannot be read, or a token that cannot be obtained, since an operator may fix them. Retry policies, circuit breakers and dead letters therefore apply unchanged.
 - **Batches:** batches are sent as one message per event, except to another gateway, which receives them as `application/cloudevents-batch+json`.
 - **Not supported:** deferred acknowledgements (`202 Accepted`) are HTTP only.
 
-**Bridging gateways:** `cloudstreams://` delivers to another gateway's `POST /api/events/pub`, authenticated with the API key or the token of its credentials.
+**Bridging gateways:** `cloudstreams://` delivers to another gateway's `POST /api/events/pub`, authenticated with an API key, a bearer token, or a token obtained with OAuth2 or OpenID Connect.
 - **Loops:** the other gateway's split-horizon policy recognizes events that come back, so two instances can forward events to each other.
 - **Refused events in a batch:** if the other gateway refuses one event of a batch, the whole batch is delivered again. Enable deduplication on the other gateway, so that the events it already stored are not stored twice.
 
-**Consumption:** a gateway reconciles the channels it consumes with its resource every few seconds.
-- **Admission:** consumed events go through admission like published ones. The channel's name is their publisher, as `channel:{name}`, which `publisher` rate limits apply to.
+**Consumption:** a gateway reconciles the feeds it consumes with its resource, and with the `Feed` resources it refers to, every few seconds. Credentials are read anew whenever the consumption of a feed starts.
+- **Admission:** consumed events go through admission like published ones. The feed's name is their publisher, as `feed:{name}`, which `publisher` rate limits apply to.
 - **Decoding:** messages may carry an event in either content mode, or a batch. Attribute headers use each binding's prefix: `ce_` with Kafka, `cloudEvents:` or `cloudEvents_` with AMQP, `ce-` with NATS.
 - **Acknowledgement:** a message is acknowledged once its events have been stored, ignored or refused. A refused event is logged.
 - **Retries:** a message whose event could not be stored for now is consumed again, with a growing delay, so that no event is lost. That happens when the event is rate limited, or when the event store is unavailable. Kafka retries the message in place, which keeps its partition in order. JetStream and AMQP redeliver it.
-- **Shared consumption:** replicas of a gateway share a channel, as a Kafka consumer group, a NATS queue group or a durable JetStream consumer, or competing AMQP consumers.
-- **Failed consumption:** a channel whose consumption fails, e.g. because its server is unreachable, is consumed again after a delay that grows up to a minute.
+- **Shared consumption:** replicas of a gateway share a feed, as a Kafka consumer group, a NATS queue group or a durable JetStream consumer, or competing AMQP consumers.
+- **Failed consumption:** a feed whose consumption fails, e.g. because its server is unreachable, is consumed again after a delay that grows up to a minute.
 
 ### Admission
 
@@ -647,7 +719,7 @@ Events whose data is invalid are refused with `400 Bad Request`, which names the
 Subscriptions, brokers and gateways are validated when they are created, replaced or patched, and rejected with `400 Bad Request` if their spec could only fail at runtime. The response names each invalid field, e.g. *"'spec.subscriber.rateLimit' must be greater than '0'"*. The checks cover:
 
 - **Regular expressions** that don't compile: attribute filters (unless they are runtime expressions), authorization rules, and gateway event patterns.
-- **URIs:** webhook, acknowledgement callback and service URIs must be absolute HTTP(S) URIs. Subscriber and dead-letter URIs may also be the address of another transport, without credentials in it (see [Transports](#transports)), and so must gateway channels.
+- **URIs:** webhook, acknowledgement callback and service URIs must be absolute HTTP(S) URIs. The endpoints of subscribers, dead-letter services, sinks and feeds may also be the address of another transport, without credentials in it, and their authentication must suit their transport (see [Transports](#transports)).
 - **Retry policies:** a backoff is required, an exponential backoff needs a positive exponent, `maxAttempts` must be positive or `-1`, and `statusCodes` must be HTTP status codes.
 - **Required fields:** a filter's expression, a mutation's expression or webhook, a partition's id, an attribute sequencing strategy's attribute name, a payload rule's maximum size, and the bounds of time-based rules (with `from` not after `to`).
 - **Numbers:** positive rate limits and split-horizon chain lengths, and stream offsets of at least `-1`.
@@ -656,7 +728,7 @@ Status updates are never validated, so a broker can still record the state of a 
 
 `?dryRun=true` on `POST`, `PUT` and `PATCH` validates a resource without saving it, which is how the dashboard's forms check what they are about to save:
 - **Validated:** `200 OK`.
-- **Refused:** `400 Bad Request`, with the errors keyed by the path of each invalid field, e.g. `{ "errors": { "spec.subscriber.uri": [ "..." ] } }`.
+- **Refused:** `400 Bad Request`, with the errors keyed by the path of each invalid field, e.g. `{ "errors": { "spec.subscriber.endpoint": [ "..." ] } }`.
 - **Creating a resource that already exists:** `409 Conflict`.
 
 A dry-run creation used to save the resource anyway.
@@ -719,7 +791,7 @@ The details of an event show its data as indented JSON, as text, or, for binary 
   - filtered by name, or by labels with the same selectors as the API (`env=prod,tier!=db`, `tier in (edge,core)`).
 - **Details.** Selecting a row, or pressing Enter on it, opens the resource's read-only details, from which administrators edit it.
 - **Saving changes.** Before an edit is saved, the editor shows the changes it makes to the specification, labels and annotations, which are all it saves.
-- **Forms.** Subscriptions, brokers, gateways and schemas are created and edited with guided forms, in a modal.
+- **Forms.** Subscriptions, brokers, gateways, schemas, sinks and feeds are created and edited with guided forms, in a modal. Endpoints are edited with their authentication, whose secret values can be read from a secret.
   - **Steps:** the subscription form asks for the subscriber, the events (a partition, attribute patterns or a jq condition, with a preview on the latest events), a transformation, and where delivery starts and what happens to failures. The broker form asks for its health check, the subscriptions it handles, with a live count, and their delivery defaults. The gateway form asks for its health check, authorization rules, validation, ingestion limits, event configurations bound to registered schemas, and split-horizon policy. The schema form asks for the compatibility rule and a version, pasted, uploaded or generated from the data of the latest event of a type.
   - **Form or YAML:** the YAML tab shows the same resource, and edits in either show in the other. *Open in the advanced editor* carries what has been filled in to the editor.
   - **Validation:** each step is checked before the next. The server then validates the resource without saving it, and its errors are shown next to the fields they concern.

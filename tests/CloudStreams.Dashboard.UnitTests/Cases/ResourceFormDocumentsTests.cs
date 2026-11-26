@@ -31,7 +31,7 @@ public class ResourceFormDocumentsTests
     static Subscription Subscription() => new()
     {
         Metadata = new() { Name = "orders", Generation = 3, ResourceVersion = "42", Labels = new Dictionary<string, string>() { ["team"] = "orders" } },
-        Spec = new() { Subscriber = new() { Uri = new("https://orders.example.com/events") }, Stream = new() { Offset = -1 } },
+        Spec = new() { Subscriber = new() { Endpoint = new Uri("https://orders.example.com/events") }, Stream = new() { Offset = -1 } },
         Status = new() { Phase = SubscriptionStatusPhase.Active }
     };
 
@@ -58,14 +58,14 @@ public class ResourceFormDocumentsTests
         var resource = Subscription();
         var yaml = ResourceFormDocuments.ToYaml(resource, JsonSerializer.Default, YamlSerializer.Default)
             .Replace("team: orders", "team: billing")
-            .Replace("uri: https://orders.example.com/events", "uri: https://billing.example.com/events\n    rateLimit: 10");
+            .Replace("endpoint: https://orders.example.com/events", "endpoint: https://billing.example.com/events\n    rateLimit: 10");
 
         // act
         var applied = ResourceFormDocuments.Apply(resource, yaml, false, JsonSerializer.Default, YamlSerializer.Default);
 
         // assert
         Assert.Equal("billing", applied.Metadata.Labels!["team"]);
-        Assert.Equal("https://billing.example.com/events", applied.Spec.Subscriber.Uri.OriginalString);
+        Assert.Equal("https://billing.example.com/events", applied.Spec.Subscriber.Endpoint!.Uri.OriginalString);
         Assert.Equal(10, applied.Spec.Subscriber.RateLimit);
         Assert.Equal(3ul, applied.Metadata.Generation);
         Assert.Equal("42", applied.Metadata.ResourceVersion);

@@ -92,13 +92,13 @@ public class SubscriptionHandler
     /// <param name="deadLetters">The service used to store the cloud events the subscription fails to deliver</param>
     /// <param name="options">The service used to access the current <see cref="BrokerOptions"/></param>
     /// <param name="subscription">The <see cref="Core.Resources.Subscription"/> to dispatch <see cref="CloudEvent"/>s to</param>
-    /// <param name="sinks">The transports, other than HTTP, cloud events can be delivered over (see #218)</param>
+    /// <param name="delivery">The service used to deliver cloud events to endpoints and sinks, over any transport, authenticated as configured (see #218). A client that only delivers to unauthenticated HTTP endpoints is used if not set</param>
     public SubscriptionHandler(ILoggerFactory loggerFactory, IHostApplicationLifetime hostApplicationLifetime, IJsonSerializer serializer, ICloudEventStore cloudEventStore, IResourceRepository resourceRepository, IResourceController<Subscription> subscriptionController,
-        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IDeadLetterStore deadLetters, IOptions<BrokerOptions> options, Subscription subscription, IEnumerable<CloudStreams.Core.Transports.Services.ICloudEventSink>? sinks = null)
+        IResourceMonitor<Core.Resources.Broker> broker, IExpressionEvaluator expressionEvaluator, IEnumerable<IValidator<CloudEvent>> cloudEventValidators, HttpClient httpClient, IBrokerMetrics metrics, IDeadLetterStore deadLetters, IOptions<BrokerOptions> options, Subscription subscription, CloudEventDeliveryClient? delivery = null)
     {
         this.DeadLetters = deadLetters;
         this.Pipeline = new(expressionEvaluator, cloudEventValidators, httpClient, serializer);
-        this.Client = new(httpClient, sinks);
+        this.Client = delivery ?? new(httpClient);
         this.Acknowledgements = new(delta => this.Metrics.AddPendingAcknowledgements(this.Subscription.GetQualifiedName(), this.GetStreamName(), delta), this.OnAcknowledgementTimeoutAsync);
         this.Logger = loggerFactory.CreateLogger(this.GetType());
         this.HostApplicationLifetime = hostApplicationLifetime;
@@ -198,7 +198,7 @@ public class SubscriptionHandler
     /// <summary>
     /// Gets the service used to post cloud events to the subscriber and to the dead-letter service
     /// </summary>
-    protected SubscriberClient Client { get; }
+    protected CloudEventDeliveryClient Client { get; }
 
     /// <summary>
     /// Gets the service used to report the subscription's status
@@ -700,7 +700,7 @@ public class SubscriptionHandler
                 var ackUri = this.GetAcknowledgementUri();
                 if (ackUri != null) headers.Add(new(CloudStreamsHeaders.AckUri, ackUri.OriginalString));
             }
-            var status = await this.Client.SendAsync(this.Subscription.Spec.Subscriber.Uri, e, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            var status = await this.Client.SendAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber), e, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             // per RFC 9110, '202 Accepted' means that the request has been accepted for processing, but that the processing has not been completed (see #133)
             deferred = ackToken != null && status == HttpStatusCode.Accepted;
             outcome = deferred ? DeliveryOutcome.Deferred : DeliveryOutcome.Delivered;
@@ -782,7 +782,7 @@ public class SubscriptionHandler
         activity?.SetTag("catchup", catchUpWhenAvailable);
         activity?.SetTag("reason", initialFailure.Message);
         var streamName = this.GetStreamName();
-        var subscriberUri = this.Subscription.Spec.Subscriber.Uri.ToString();
+        var subscriberUri = DeliveryTarget.Of(this.Subscription.Spec.Subscriber).ToString();
         var schedule = new DeliveryRetrySchedule(this.Subscription.Spec.Subscriber.RetryPolicy ?? this.DefaultRetryPolicy);
         var lastFailure = initialFailure;
         try
@@ -867,8 +867,8 @@ public class SubscriptionHandler
             Reason = reason.ToProblemDetails(),
             DeadLetteredAt = DateTimeOffset.UtcNow
         };
-        if (policy.Uri == null) await this.DeadLetters.AppendAsync(this.Subscription.GetQualifiedName(), deadLetter, this.CancellationTokenSource.Token).ConfigureAwait(false);
-        else await this.SendDeadLetterAsync(policy.Uri, deadLetter).ConfigureAwait(false);
+        if (!policy.IsForwarded) await this.DeadLetters.AppendAsync(this.Subscription.GetQualifiedName(), deadLetter, this.CancellationTokenSource.Token).ConfigureAwait(false);
+        else await this.SendDeadLetterAsync(DeliveryTarget.Of(policy), deadLetter).ConfigureAwait(false);
         this.Metrics.IncrementTotalDeadLetters(this.Subscription.GetQualifiedName(), this.GetStreamName());
         this.Logger.LogWarning("Dead-lettered the cloud event at offset '{offset}' of subscription '{subscription}': {reason}", offset, this.Subscription.GetQualifiedName(), reason.Message);
     }
@@ -881,11 +881,11 @@ public class SubscriptionHandler
     /// <summary>
     /// Sends the specified dead letter to the specified dead-letter service, as a structured cloud event, retrying a few times if it fails
     /// </summary>
-    /// <param name="uri">The uri of the dead-letter service</param>
+    /// <param name="target">Where to send the dead letter: an endpoint or a sink</param>
     /// <param name="deadLetter">The dead letter to send</param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
     /// <exception cref="HttpRequestException">The dead-letter service could not be reached, or did not accept the dead letter</exception>
-    protected virtual async Task SendDeadLetterAsync(Uri uri, DeadLetter deadLetter)
+    protected virtual async Task SendDeadLetterAsync(DeliveryTarget target, DeadLetter deadLetter)
     {
         var reason = deadLetter.Reason.Detail ?? deadLetter.Reason.Title;
         if (reason.Length > 1024) reason = reason[..1024];
@@ -902,16 +902,16 @@ public class SubscriptionHandler
                     new(CloudStreamsHeaders.Offset, deadLetter.EventOffset.ToString(CultureInfo.InvariantCulture)),
                     new(CloudStreamsHeaders.DeadLetterReason, Uri.EscapeDataString(reason))
                 ];
-                await this.Client.SendAsync(uri, deadLetter.Event, headers, $"The dead-letter service '{uri}'", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+                await this.Client.SendAsync(target, deadLetter.Event, headers, "The dead-letter service", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
                 return;
             }
             catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested && attempt >= MaxDeadLetterAttempts)
             {
-                throw new HttpRequestException($"The dead-letter service '{uri}' did not respond within the configured timeout of {timeout}", ex);
+                throw new HttpRequestException($"The dead-letter service at {target} did not respond within the configured timeout of {timeout}", ex);
             }
             catch (Exception ex) when (attempt < MaxDeadLetterAttempts && (ex is HttpRequestException || (ex is OperationCanceledException && !this.CancellationTokenSource.IsCancellationRequested)))
             {
-                this.Logger.LogWarning("Failed to send a dead letter of subscription '{subscription}' to '{uri}' (attempt {attempt}/{maxAttempts}): {reason}", this.Subscription.GetQualifiedName(), uri, attempt, MaxDeadLetterAttempts, ex.Message);
+                this.Logger.LogWarning("Failed to send a dead letter of subscription '{subscription}' to {target} (attempt {attempt}/{maxAttempts}): {reason}", this.Subscription.GetQualifiedName(), target, attempt, MaxDeadLetterAttempts, ex.Message);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), this.CancellationTokenSource.Token).ConfigureAwait(false);
             }
         }
@@ -1248,7 +1248,7 @@ public class SubscriptionHandler
                 new(CloudStreamsHeaders.Subscription, this.Subscription.GetName()),
                 new(CloudStreamsHeaders.Offset, records[0].Sequence.ToString(CultureInfo.InvariantCulture))
             ];
-            await this.Client.SendBatchAsync(this.Subscription.Spec.Subscriber.Uri, events, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            await this.Client.SendBatchAsync(DeliveryTarget.Of(this.Subscription.Spec.Subscriber), events, headers, "The server", timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             outcome = DeliveryOutcome.Delivered;
         }
         catch (OperationCanceledException ex) when (!this.CancellationTokenSource.IsCancellationRequested)

@@ -127,7 +127,7 @@ public class SubscriptionHandlerRobustnessTests
         await context.Handler.DispatchRecordAsync(BrokerTestContext.CreateRecord(41));
 
         // assert
-        Assert.Equal([WebhookUri, context.Subscription.Spec.Subscriber.Uri], context.Http.Attempts.Select(a => a.RequestUri));
+        Assert.Equal([WebhookUri, context.Subscription.Spec.Subscriber.Endpoint!.Uri], context.Http.Attempts.Select(a => a.RequestUri));
         Assert.Contains(42ul, context.Patches.OffsetsWrittenTo());
     }
 

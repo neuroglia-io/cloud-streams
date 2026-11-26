@@ -168,27 +168,51 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.RateLimits ??= []).Add(new() { Limit = 100, Partition = CloudEventRateLimitPartitioning.Publisher, Period = Duration.FromSeconds(1) })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a rate limit</button>
                 </div>
             </FormField>
-            <FormField Id="@FieldId("channels")" Label="Also consume events from" Error="@ErrorOf("channels")">
+            <FormField Id="@FieldId("feeds")" Label="Also consume events from" Error="@ErrorOf("feeds")">
                 <ChildContent>
-                    <div id="@FieldId("channels")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("channels"))">
-                        @for (var i = 0; i < (Model.Spec.Ingestion?.Channels?.Count ?? 0); i++)
+                    <div id="@FieldId("feeds")" role="group" aria-describedby="@FormField.DescribedBy(FieldId("feeds"))">
+                        @for (var i = 0; i < (Model.Spec.Ingestion?.Feeds?.Count ?? 0); i++)
                         {
                             var index = i;
-                            var channel = Model.Spec.Ingestion!.Channels![index];
-                            <div class="input-group input-group-sm mb-1">
-                                <input type="text" class="form-control" style="max-width: 12rem" placeholder="name" aria-label="@($"Name of channel {index + 1}")" @bind="channel.Name" />
-                                <input type="text" inputmode="url" spellcheck="false" class="form-control font-monospace" placeholder="kafka://kafka:9092/orders" aria-label="@($"Address of channel {index + 1}")"
-                                       value="@channel.Uri?.OriginalString" @onchange="e => channel.Uri = Uri.TryCreate(e.Value?.ToString()?.Trim(), UriKind.Absolute, out var uri) ? uri : null!" />
-                                <button type="button" class="btn btn-outline-secondary" aria-label="@($"Remove channel {index + 1}")" @onclick="() => Model.Spec.Ingestion!.Channels!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                            var feed = Model.Spec.Ingestion!.Feeds![index];
+                            <div class="border rounded p-2 mb-2">
+                                <div class="d-flex gap-2 align-items-center mb-1">
+                                    <select class="form-select form-select-sm w-auto" aria-label="@($"Kind of feed {index + 1}")" value="@FeedKind(feed)" @onchange="e => SetFeedKind(index, e.Value?.ToString())">
+                                        <option value="resource">a feed</option>
+                                        <option value="own">a feed of its own</option>
+                                    </select>
+                                    @if (feed.Feed != null)
+                                    {
+                                        <select class="form-select form-select-sm" aria-label="@($"Feed {index + 1}")" value="@feed.Feed" @onchange="e => feed.Feed = e.Value?.ToString()">
+                                            @foreach (var resource in feeds)
+                                            {
+                                                <option value="@resource.GetName()">@resource.GetName() · @resource.Spec.Endpoint</option>
+                                            }
+                                            @if (feeds.All(f => f.GetName() != feed.Feed))
+                                            {
+                                                <option value="@feed.Feed">@(string.IsNullOrEmpty(feed.Feed) ? "pick a feed" : $"{feed.Feed} (does not exist)")</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input type="text" class="form-control form-control-sm" style="max-width: 14rem" placeholder="name" aria-label="@($"Name of feed {index + 1}")" @bind="feed.Name" />
+                                    }
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" aria-label="@($"Remove feed {index + 1}")" @onclick="() => Model.Spec.Ingestion!.Feeds!.RemoveAt(index)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                                </div>
+                                @if (feed.Feed == null)
+                                {
+                                    <EndpointInput Id="@FieldId($"feed-{index}-endpoint")" Label="@($"Feed {index + 1}")" Value="feed.Endpoint" ValueChanged="e => feed.Endpoint = e" Placeholder="kafka://kafka:9092/orders" />
+                                }
                             </div>
                         }
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.Channels ??= []).Add(new() { Name = string.Empty, Uri = null! })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a channel</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => (Ingestion.Feeds ??= []).Add(feeds.Count > 0 ? new FeedReference() { Feed = feeds[0].GetName() } : new FeedReference() { Name = string.Empty })"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a feed</button>
                     </div>
                 </ChildContent>
                 <HelpContent>
                     Kafka topics (<code>kafka://kafka:9092/orders</code>), NATS subjects (<code>nats://nats:4222/orders.&gt;?jetstream=true</code>) or AMQP queues
-                    (<code>amqp://rabbitmq/?queue=orders</code>). Their events are admitted like published ones, the channel's name being their publisher, and replicas share
-                    their consumption. Credentials are named with <code>credentials=</code>, and configured on the gateway.
+                    (<code>amqp://rabbitmq/?queue=orders</code>): feeds managed on the Feeds page, or feeds of the gateway's own. Their events are admitted like published ones,
+                    the feed's name being their publisher, and replicas share their consumption.
                 </HelpContent>
             </FormField>
             break;
@@ -348,6 +372,7 @@
     static readonly string[] KnownAttributes = ["source", "type", "subject", "id", "datacontenttype", "dataschema"];
 
     List<Schema>? schemas;
+    List<Feed> feeds = [];
     string testEvent = string.Empty;
     string? testError;
     bool testing;
@@ -372,7 +397,7 @@
         ["spec.ingestion.maxBatchSize"] = ("max-batch", 2),
         ["spec.ingestion.deduplication"] = ("deduplication", 2),
         ["spec.ingestion.rateLimits"] = ("rate-limits", 2),
-        ["spec.ingestion.channels"] = ("channels", 2),
+        ["spec.ingestion.feeds"] = ("feeds", 2),
         ["spec.events"] = ("events", 3),
         ["spec.splitHorizon.originAttribute"] = ("origin-attribute", 4),
         ["spec.splitHorizon.maxChainLength"] = ("max-chain", 4)
@@ -397,6 +422,8 @@
         })!);
         try { schemas = await (await Api.Resources.Schemas.ListAsync()).ToListAsync(); }
         catch (Exception) { schemas = []; }
+        try { feeds = await (await Api.Resources.Feeds.ListAsync()).ToListAsync(); }
+        catch (Exception) { feeds = []; }
     }
 
     /// <inheritdoc/>
@@ -437,15 +464,17 @@
                 if (Model.Spec.Ingestion?.MaxBatchSize is <= 0) errors["max-batch"] = "Enter a positive size, or leave empty";
                 if (Model.Spec.Ingestion?.Deduplication?.Window.ToTimeSpan() <= TimeSpan.Zero) errors["deduplication"] = "Enter a positive duration, or leave empty";
                 if (Model.Spec.Ingestion?.RateLimits?.Any(l => l.Limit < 1 || l.Period.ToTimeSpan() <= TimeSpan.Zero) == true) errors["rate-limits"] = "Every rate limit needs a positive number of events and a positive period";
-                for (var i = 0; i < (Model.Spec.Ingestion?.Channels?.Count ?? 0); i++)
+                for (var i = 0; i < (Model.Spec.Ingestion?.Feeds?.Count ?? 0); i++)
                 {
-                    var channel = Model.Spec.Ingestion!.Channels![i];
-                    string? channelError = null;
-                    if (!ResourceNames.IsValid(channel.Name)) channelError = "name it with lower-case letters, digits and dashes";
-                    else if (Model.Spec.Ingestion.Channels.Take(i).Any(c => c.Name == channel.Name)) channelError = $"the name '{channel.Name}' is already taken";
-                    else if (!TransportAddress.TryParse(channel.Uri, true, out _, out var addressError)) channelError = channel.Uri == null ? "enter its address" : addressError;
-                    if (channelError == null) continue;
-                    errors["channels"] = $"Channel {i + 1}: {channelError}";
+                    var feed = Model.Spec.Ingestion!.Feeds![i];
+                    string? feedError = null;
+                    if (feed.Feed != null) feedError = string.IsNullOrEmpty(feed.Feed) ? "pick a feed" : null;
+                    else if (!ResourceNames.IsValid(feed.Name)) feedError = "name it with lower-case letters, digits and dashes";
+                    else if (feed.Endpoint?.Uri == null) feedError = "enter its address";
+                    else if (!TransportAddress.TryParse(feed.Endpoint.Uri, true, out _, out var addressError)) feedError = addressError;
+                    if (feedError == null && Model.Spec.Ingestion.Feeds.Take(i).Any(f => f.EffectiveName == feed.EffectiveName)) feedError = $"'{feed.EffectiveName}' is listed twice";
+                    if (feedError == null) continue;
+                    errors["feeds"] = $"Feed {i + 1}: {feedError}";
                     break;
                 }
                 break;
@@ -468,8 +497,8 @@
         if (spec.Ingestion != null)
         {
             if (spec.Ingestion.RateLimits?.Count == 0) spec.Ingestion.RateLimits = null;
-            if (spec.Ingestion.Channels?.Count == 0) spec.Ingestion.Channels = null;
-            if (spec.Ingestion.MaxRequestBodySize == null && spec.Ingestion.MaxBatchSize == null && spec.Ingestion.Deduplication == null && spec.Ingestion.RateLimits == null && spec.Ingestion.Channels == null) spec.Ingestion = null;
+            if (spec.Ingestion.Feeds?.Count == 0) spec.Ingestion.Feeds = null;
+            if (spec.Ingestion.MaxRequestBodySize == null && spec.Ingestion.MaxBatchSize == null && spec.Ingestion.Deduplication == null && spec.Ingestion.RateLimits == null && spec.Ingestion.Feeds == null) spec.Ingestion = null;
         }
         if (spec.Validation?.DataSchema is { Required: false, AutoGenerate: false }) spec.Validation.DataSchema = null;
         if (spec.Validation is { SkipValidation: false, DataSchema: null } && spec.Validation.ValidationStrategy == CloudEventValidationStrategy.Fail) spec.Validation = null;
@@ -493,9 +522,9 @@
             {
                 <li>At most @limit.Limit events per @limit.Partition every @limit.Period.</li>
             }
-            @foreach (var channel in spec.Ingestion?.Channels ?? [])
+            @foreach (var feed in spec.Ingestion?.Feeds ?? [])
             {
-                <li>Events are also consumed from <code>@channel.Uri</code>, as '@channel.Name'.</li>
+                <li>Events are also consumed from @(feed.Feed != null ? $"the feed '{feed.Feed}'" : $"'{feed.Endpoint}', as '{feed.Name}'").</li>
             }
             @if (spec.Events?.Count > 0)
             {
@@ -525,6 +554,15 @@
     }
 
     string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+    static string FeedKind(FeedReference feed) => feed.Feed != null ? "resource" : "own";
+
+    /// <summary>
+    /// Makes the specified feed a reference to a feed resource, or a feed of the gateway's own
+    /// </summary>
+    void SetFeedKind(int index, string? kind) => Model.Spec.Ingestion!.Feeds![index] = kind == "resource"
+        ? new FeedReference() { Feed = feeds.FirstOrDefault()?.GetName() ?? string.Empty }
+        : new FeedReference() { Name = string.Empty };
 
     void SetValidationMode(string? mode)
     {

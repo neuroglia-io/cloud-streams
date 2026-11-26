@@ -78,7 +78,7 @@ public sealed class IngestionTests(CloudStreamsFixture fixture, ITestOutputHelpe
     async Task<Subscription> SubscribeAsync(string name, Uri source, TestSubscriber.Endpoint endpoint) => await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription()
     {
         Metadata = new() { Name = name },
-        Spec = new() { Partition = new(CloudEventPartitionType.BySource, source.OriginalString), Subscriber = new() { Uri = endpoint.Uri }, Stream = new() { Offset = 0 } }
+        Spec = new() { Partition = new(CloudEventPartitionType.BySource, source.OriginalString), Subscriber = new() { Endpoint = endpoint.Uri }, Stream = new() { Offset = 0 } }
     });
 
     /// <summary>

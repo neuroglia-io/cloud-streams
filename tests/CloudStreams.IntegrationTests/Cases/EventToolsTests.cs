@@ -83,7 +83,7 @@ public sealed class EventToolsTests(CloudStreamsFixture fixture, ITestOutputHelp
         await fixture.Api.Resources.Subscriptions.CreateAsync(new Subscription()
         {
             Metadata = new() { Name = Name() },
-            Spec = new() { Partition = new(CloudEventPartitionType.BySource, Source().OriginalString), Subscriber = new() { Uri = endpoint.Uri }, Stream = new() { Offset = 0 } }
+            Spec = new() { Partition = new(CloudEventPartitionType.BySource, Source().OriginalString), Subscriber = new() { Endpoint = endpoint.Uri }, Stream = new() { Offset = 0 } }
         });
 
         // act - publish

@@ -76,7 +76,7 @@ public class OperateSubscriptionCommandTests
     static Subscription CreateSubscription(long? offset, bool faulted = false, ulong? faultedOffset = null) => new()
     {
         Metadata = new() { Name = "orders", Generation = 1 },
-        Spec = new() { Subscriber = new() { Uri = new("http://localhost:8888/events") }, Stream = offset.HasValue ? new() { Offset = offset } : null },
+        Spec = new() { Subscriber = new() { Endpoint = new Uri("http://localhost:8888/events") }, Stream = offset.HasValue ? new() { Offset = offset } : null },
         Status = new() { Stream = faulted ? new() { AckedOffset = 3, Fault = new(new("https://cloud-streams.io/problems/test"), "Boom", 500), FaultedOffset = faultedOffset } : null }
     };
 

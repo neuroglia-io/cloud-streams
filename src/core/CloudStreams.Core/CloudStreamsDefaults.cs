@@ -60,6 +60,16 @@ public static class CloudStreamsDefaults
             public static ResourceDefinition Schema { get; } = new SchemaResourceDefinition();
 
             /// <summary>
+            /// Gets the definition of Sink resources
+            /// </summary>
+            public static ResourceDefinition Sink { get; } = new SinkResourceDefinition();
+
+            /// <summary>
+            /// Gets the definition of Feed resources
+            /// </summary>
+            public static ResourceDefinition Feed { get; } = new FeedResourceDefinition();
+
+            /// <summary>
             /// Gets a new <see cref="IEnumerable{T}"/> containing Cloud Streams default resource definitions
             /// </summary>
             /// <returns></returns>
@@ -69,6 +79,8 @@ public static class CloudStreamsDefaults
                 yield return Gateway;
                 yield return Subscription;
                 yield return Schema;
+                yield return Sink;
+                yield return Feed;
             }
 
         }

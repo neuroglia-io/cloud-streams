@@ -1,0 +1,76 @@
+@namespace CloudStreams.Dashboard.Pages.Feeds.Form
+@using CloudStreams.Core.Resources
+@using CloudStreams.Dashboard.Components.ResourceForms
+@inherits ResourceFormBase<Feed>
+
+@* A form to create and edit feeds: endpoints, with the means to authenticate to them, that gateways consume by name (see #218) *@
+
+<ResourceFormLayout Form="this">
+    @switch (CurrentStep)
+    {
+        case 0:
+            @if (IsNew)
+            {
+                <FormField Id="@FieldId("name")" Label="Name" Required="true" Help="The name gateways refer to the feed by, which identifies it as the publisher of the events it carries, e.g. legacy-orders. It cannot change later." Error="@ErrorOf("name")">
+                    <input id="@FieldId("name")" type="text" class="form-control form-control-sm @Invalid("name")" @bind="Model.Metadata.Name" aria-describedby="@FormField.DescribedBy(FieldId("name"))" autocomplete="off" />
+                </FormField>
+            }
+            <FormField Id="@FieldId("endpoint")" Label="Endpoint" Required="true">
+                <ChildContent>
+                    <EndpointInput Id="@FieldId("endpoint")" Label="Feed" Value="Model.Spec.Endpoint" ValueChanged="e => Model.Spec.Endpoint = e!" UriError="@ErrorOf("endpoint")" Placeholder="kafka://kafka:9092/orders" />
+                </ChildContent>
+                <HelpContent>
+                    Where events are consumed from: a Kafka topic (<code>kafka://kafka:9092/orders</code>), a NATS subject (<code>nats://nats:4222/orders.&gt;?jetstream=true</code>) or an
+                    AMQP queue (<code>amqp://rabbitmq/?queue=orders</code>). Replicas of a gateway share its consumption.
+                </HelpContent>
+            </FormField>
+            <FormField Id="@FieldId("labels")" Label="Labels" Help="Optional.">
+                <KeyValueInput Id="@FieldId("labels")" @bind-Value="Model.Metadata.Labels" KeyLabel="Label" AddText="Add a label" />
+            </FormField>
+            break;
+    }
+</ResourceFormLayout>
+
+@code {
+
+    /// <inheritdoc/>
+    protected override IReadOnlyList<string> FormSteps { get; } = ["Feed"];
+
+    /// <inheritdoc/>
+    protected override IReadOnlyDictionary<string, (string Field, int Step)> ServerFields { get; } = new Dictionary<string, (string Field, int Step)>()
+    {
+        ["metadata.name"] = ("name", 0),
+        ["spec.endpoint"] = ("endpoint", 0)
+    };
+
+    /// <inheritdoc/>
+    protected override Feed CreateDefault() => new(new() { Name = string.Empty }, new() { Endpoint = null! });
+
+    /// <inheritdoc/>
+    protected override void Validate(int step, IDictionary<string, string> errors)
+    {
+        if (IsNew)
+        {
+            if (string.IsNullOrWhiteSpace(Model.Metadata.Name)) errors["name"] = "Enter a name";
+            else if (!ResourceNames.IsValid(Model.Metadata.Name)) errors["name"] = "Use lower-case letters, digits and dashes, starting and ending with a letter or a digit, up to 63 characters";
+        }
+        if (EndpointInput.Validate(Model.Spec.Endpoint, true) is { } error) errors["endpoint"] = error;
+    }
+
+    /// <inheritdoc/>
+    protected override void Normalize(Feed resource)
+    {
+        if (resource.Metadata.Labels?.Count == 0) resource.Metadata.Labels = null;
+    }
+
+    /// <inheritdoc/>
+    public override RenderFragment Summary => __builder =>
+    {
+        <p class="mb-0">
+            Gateways that consume <strong>@Model.GetName()</strong> consume <code>@Model.Spec.Endpoint</code>@(Model.Spec.Endpoint?.Authentication?.Scheme is { } scheme ? $", authenticated with {scheme}" : ", without authentication")@(Model.Spec.Endpoint?.Authentication?.Policy?.Use is { } secret ? $", whose secret values are read from '{secret}'" : "").
+        </p>
+    };
+
+    string Invalid(string field) => ErrorOf(field) != null ? "is-invalid" : string.Empty;
+
+}

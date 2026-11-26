@@ -27,6 +27,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "cloud-streams.serviceAccountName" . }}
+      automountServiceAccountToken: {{ include "cloud-streams.needsServiceAccountToken" . }}
       # the variables Kubernetes would inject for every service of the namespace are not used, and some applications mistake them for their own settings
       enableServiceLinks: false
       {{- with .Values.imagePullSecrets }}
@@ -37,6 +38,10 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       # a broker that stops gracefully releases its subscriptions, so that the other replicas take them over at once
       terminationGracePeriodSeconds: 30
+      {{- with .Values.secrets.files }}
+      volumes:
+        {{- include "cloud-streams.secretVolumes" $ | nindent 8 }}
+      {{- end }}
       containers:
         - name: broker
           image: {{ include "cloud-streams.image" $component }}
@@ -52,12 +57,17 @@ spec:
             - name: CLOUDSTREAMS_BROKER_NAME
               value: {{ include "cloud-streams.brokerName" . | quote }}
             {{- include "cloud-streams.commonEnv" . | nindent 12 }}
+            {{- include "cloud-streams.secretsEnv" . | nindent 12 }}
             {{- with .Values.broker.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- with .Values.broker.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.secrets.files }}
+          volumeMounts:
+            {{- include "cloud-streams.secretVolumeMounts" $ | nindent 12 }}
           {{- end }}
           {{- include "cloud-streams.probes" (dict "root" . "port" "http") | nindent 10 }}
           {{- with .Values.broker.resources }}

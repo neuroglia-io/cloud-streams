@@ -29,6 +29,12 @@ public partial class CloudStreamsCoreApiClient
     public IResourceManagementApi<Broker> Brokers { get; private set; } = null!;
 
     /// <inheritdoc/>
+    public IResourceManagementApi<Sink> Sinks { get; private set; } = null!;
+
+    /// <inheritdoc/>
+    public IResourceManagementApi<Feed> Feeds { get; private set; } = null!;
+
+    /// <inheritdoc/>
     public ISubscriptionManagementApi Subscriptions { get; private set; } = null!;
 
     /// <inheritdoc/>

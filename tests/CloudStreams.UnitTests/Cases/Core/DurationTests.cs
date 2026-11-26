@@ -43,7 +43,7 @@ public class DurationTests
     public void Durations_Should_Be_Serialized_As_ISO_8601_Durations()
     {
         // arrange
-        var subscriber = new Subscriber() { Uri = new("http://localhost"), Timeout = Duration.FromSeconds(30) };
+        var subscriber = new Subscriber() { Endpoint = new Uri("http://localhost"), Timeout = Duration.FromSeconds(30) };
 
         // act
         var json = JsonSerializer.Default.SerializeToText(subscriber);
