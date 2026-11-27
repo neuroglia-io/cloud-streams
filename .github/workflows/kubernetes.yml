@@ -139,7 +139,7 @@ jobs:
               endpoint: http://echo.tenant-a.svc/events
               sink: orders
           EOF
-          )
+          ) && { echo "the invalid subscription should have been refused"; exit 1; }
           echo "$output"
           grep -q 'denied the request' <<< "$output"
 
