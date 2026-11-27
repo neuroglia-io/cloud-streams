@@ -219,7 +219,7 @@ public sealed class CloudStreamsFixture
 
     ApplicationProcess Start(string name, string projectDirectory, string assemblyName, int port, Dictionary<string, string> environment)
     {
-        var assembly = Path.Combine(FindRepositoryRoot(), projectDirectory, "bin", GetConfiguration(), "net9.0", assemblyName + ".dll");
+        var assembly = Path.Combine(FindRepositoryRoot(), projectDirectory, "bin", GetConfiguration(), GetTargetFramework(), assemblyName + ".dll");
         if (!File.Exists(assembly)) throw new FileNotFoundException($"The {name} has not been built: '{assembly}' does not exist", assembly);
         var process = new ApplicationProcess(name, assembly, new(environment) { ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}" });
         this._processes.Add(process);
@@ -250,8 +250,10 @@ public sealed class CloudStreamsFixture
         return directory?.FullName ?? throw new DirectoryNotFoundException("Failed to find the root of the repository");
     }
 
-    // the tests are built in the same configuration as the applications: bin/{configuration}/net9.0
+    // the tests are built in the same configuration, and for the same framework, as the applications: bin/{configuration}/{framework}
     static string GetConfiguration() => new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Parent!.Name;
+
+    static string GetTargetFramework() => new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Name;
 
     /// <summary>
     /// Represents a Cloud Streams application running in a child process
