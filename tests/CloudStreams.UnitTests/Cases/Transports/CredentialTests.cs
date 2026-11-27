@@ -288,6 +288,33 @@ public sealed class CredentialTests
         Assert.Contains("cloud-streams.io/secret=true", ex.Message);
     }
 
+    [Fact]
+    public async Task In_Kubernetes_Mode_The_Secrets_Of_A_Namespace_Should_Be_Those_Of_Its_Kubernetes_Namespace()
+    {
+        // arrange: every secret is labelled for Cloud Streams, and none for a namespace (see #281)
+        var serviceAccount = Directory.CreateDirectory(Path.Combine(this._directory, "tenant-serviceaccount")).FullName;
+        File.WriteAllText(Path.Combine(serviceAccount, "token"), "service-account-token");
+        File.WriteAllText(Path.Combine(serviceAccount, "namespace"), "tenant-a");
+        var handler = new StubHandler(request => Task.FromResult(Json(new JsonObject()
+        {
+            ["metadata"] = new JsonObject() { ["labels"] = new JsonObject() { ["cloud-streams.io/secret"] = "true" } },
+            ["data"] = new JsonObject() { ["password"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(request.RequestUri!.AbsolutePath)) }
+        }.ToJsonString())));
+        var options = Options(o => o.Kubernetes = new() { Server = new("https://kubernetes:6443/"), ServiceAccountDirectory = serviceAccount, NamespacedSecrets = true, Namespace = "cloud-streams", DefaultNamespace = "cloud-streams" });
+        var provider = new KubernetesSecretProvider(Factory(handler), options);
+
+        // act
+        var own = await provider.GetAsync("billing", "tenant-a");
+        var shared = await provider.GetAsync("billing", null);
+        var ofTheDefaultNamespace = await provider.GetAsync("billing", "default");
+
+        // assert: a namespace reads its own Kubernetes namespace without any namespace label, and shared secrets come from the release's namespace
+        Assert.Equal("/api/v1/namespaces/tenant-a/secrets/billing", own!.Get("password"));
+        Assert.Equal("/api/v1/namespaces/cloud-streams/secrets/billing", shared!.Get("password"));
+        // the default namespace's Kubernetes namespace is also that of the shared secrets: there, the namespace label still tells them apart
+        Assert.Null(ofTheDefaultNamespace);
+    }
+
     static Task<TransportCredentials?> Resolve(ICredentialResolver resolver, AuthenticationPolicy policy) => resolver.ResolveAsync(policy, null);
 
 }

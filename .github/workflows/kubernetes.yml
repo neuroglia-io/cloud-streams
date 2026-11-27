@@ -70,7 +70,9 @@ jobs:
             --set operator.workloads.gateway.replicaCount=1 \
             --set operator.workloads.broker.replicaCount=1 \
             --set gateways[0].name=orders,gateways[0].namespace=tenant-a \
-            --set brokers[0].name=orders,brokers[0].namespace=tenant-a
+            --set brokers[0].name=orders,brokers[0].namespace=tenant-a \
+            --set secrets.providers[0]=kubernetes \
+            --set secrets.sharedWith[0]=tenant-a
 
       - name: Wait for the declared gateway and broker
         run: |
@@ -124,6 +126,36 @@ jobs:
           # the Ready condition of the previous generation may still hold for a moment: the available replicas tell when the change is rolled out
           timeout 300 bash -c 'until [ "$(kubectl get gateway orders -n tenant-a -o jsonpath={.status.availableReplicas})" = "2" ]; do sleep 2; done'
           kubectl wait --for=condition=Ready gateway/orders -n tenant-a --timeout=1m
+
+      - name: Check that deliveries authenticate with the secrets of their namespace, and the shared ones
+        run: |
+          set -euo pipefail
+          # a secret of the namespace, and a shared secret of the release's namespace, which 'secrets.sharedWith' shares with it
+          kubectl create secret generic echo-basic -n tenant-a --from-literal=username=e2e --from-literal=password=s3cr3t
+          kubectl label secret echo-basic -n tenant-a cloud-streams.io/secret=true
+          kubectl create secret generic shared-basic -n $NAMESPACE --from-literal=username=shared --from-literal=password=s3cr3t
+          kubectl label secret shared-basic -n $NAMESPACE cloud-streams.io/secret=true
+          for secret in echo-basic shared-basic; do
+          kubectl apply -f - <<EOF
+          apiVersion: cloud-streams.io/v1
+          kind: Subscription
+          metadata:
+            name: $secret
+            namespace: tenant-a
+          spec:
+            subscriber:
+              endpoint:
+                uri: http://echo.tenant-a.svc/$secret
+                authentication:
+                  basic:
+                    use: $secret
+            stream:
+              offset: 0
+          EOF
+          done
+          # the echo server logs the headers it receives: base64 of 'e2e:s3cr3t' and of 'shared:s3cr3t'
+          timeout 180 bash -c 'until kubectl logs -n tenant-a deployment/echo | grep -q "Basic ZTJlOnMzY3IzdA=="; do sleep 3; done'
+          timeout 180 bash -c 'until kubectl logs -n tenant-a deployment/echo | grep -q "Basic c2hhcmVkOnMzY3IzdA=="; do sleep 3; done'
 
       - name: Check that the webhook refuses an invalid resource
         run: |

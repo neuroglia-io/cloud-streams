@@ -34,18 +34,20 @@ public interface IHealthMonitorLeaseManager
     /// Acquires the specified lease, or renews it if the current process already holds it
     /// </summary>
     /// <param name="key">The key of the lease to acquire</param>
+    /// <param name="namespace">The namespace of the monitored resource, if any, which a store of leases may keep the lease in</param>
     /// <param name="duration">How long the lease is held, unless it is renewed</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A boolean indicating whether or not the current process holds the lease</returns>
-    Task<bool> TryAcquireAsync(string key, TimeSpan duration, CancellationToken cancellationToken = default);
+    Task<bool> TryAcquireAsync(string key, string? @namespace, TimeSpan duration, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Releases the specified lease, if the current process holds it
     /// </summary>
     /// <param name="key">The key of the lease to release</param>
+    /// <param name="namespace">The namespace of the monitored resource, if any</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
     /// <returns>A new awaitable <see cref="Task"/></returns>
-    Task ReleaseAsync(string key, CancellationToken cancellationToken = default);
+    Task ReleaseAsync(string key, string? @namespace, CancellationToken cancellationToken = default);
 
 }
 
@@ -86,7 +88,7 @@ public class RedisHealthMonitorLeaseManager(IConnectionMultiplexer redis)
     public string OwnerId { get; } = $"{Environment.MachineName}/{Guid.NewGuid():N}";
 
     /// <inheritdoc/>
-    public virtual async Task<bool> TryAcquireAsync(string key, TimeSpan duration, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> TryAcquireAsync(string key, string? @namespace, TimeSpan duration, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         var result = await redis.GetDatabase().ScriptEvaluateAsync(AcquireScript, [KeyPrefix + key], [this.OwnerId, (long)Math.Max(1, duration.TotalMilliseconds)]).WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -94,7 +96,7 @@ public class RedisHealthMonitorLeaseManager(IConnectionMultiplexer redis)
     }
 
     /// <inheritdoc/>
-    public virtual async Task ReleaseAsync(string key, CancellationToken cancellationToken = default)
+    public virtual async Task ReleaseAsync(string key, string? @namespace, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         await redis.GetDatabase().ScriptEvaluateAsync(ReleaseScript, [KeyPrefix + key], [this.OwnerId]).WaitAsync(cancellationToken).ConfigureAwait(false);

@@ -143,6 +143,18 @@ public class KubernetesSecretProviderOptions
     /// </summary>
     public virtual string ServiceAccountDirectory { get; set; } = "/var/run/secrets/kubernetes.io/serviceaccount";
 
+    /// <summary>
+    /// Gets/sets a boolean indicating whether or not the secrets of a namespace of Cloud Streams are those of its Kubernetes namespace, as in Kubernetes mode (see #281).
+    /// Shared secrets are then those of <see cref="Namespace"/>, or of the pod's namespace. Defaults to false: every secret is read from that namespace, and a secret
+    /// belongs to the namespace of Cloud Streams its <c>cloud-streams.io/namespace</c> label names
+    /// </summary>
+    public virtual bool NamespacedSecrets { get; set; }
+
+    /// <summary>
+    /// Gets/sets the Kubernetes namespace of the 'default' namespace of Cloud Streams, when <see cref="NamespacedSecrets"/> is set. Defaults to 'default'
+    /// </summary>
+    public virtual string DefaultNamespace { get; set; } = "default";
+
 }
 
 /// <summary>

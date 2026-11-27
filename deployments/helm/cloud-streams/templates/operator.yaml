@@ -47,6 +47,10 @@
     "DeclaredResourcesPath" "/etc/cloud-streams/operator/resources.json"
     "Gateway" $workloads.gateway
     "Broker" $workloads.broker
+    "SharedSecrets" (dict
+      "Enabled" (has "kubernetes" .Values.secrets.providers)
+      "RoleBinding" (printf "%s-shared-secrets" $fullname)
+      "SharedWith" (.Values.secrets.sharedWith | default list))
     "Webhook" (dict
       "Port" .Values.operator.webhook.port
       "ServiceName" $operator

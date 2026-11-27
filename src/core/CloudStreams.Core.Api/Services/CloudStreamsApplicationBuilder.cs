@@ -122,6 +122,10 @@ public class CloudStreamsApplicationBuilder
             this.Services.TryAddSingleton<k8s.IKubernetes>(_ => new k8s.Kubernetes(KubernetesClientConfigurationFactory.Create(resourceStore.Kubernetes)));
             this.Services.AddSingleton<KubernetesResourceDatabase>();
             this.Services.AddSingleton<Neuroglia.Data.Infrastructure.ResourceOriented.Services.IDatabase>(provider => provider.GetRequiredService<KubernetesResourceDatabase>());
+            // coordination uses Kubernetes too: the health monitors' leases, and the data-protection keys of the dashboard's cookies (see #280)
+            this.Services.TryAddSingleton(TimeProvider.System);
+            this.Services.TryAddSingleton<IHealthMonitorLeaseManager, KubernetesHealthMonitorLeaseManager>();
+            this.Services.TryAddSingleton<Microsoft.AspNetCore.DataProtection.Repositories.IXmlRepository, KubernetesXmlRepository>();
         }
         else
         {

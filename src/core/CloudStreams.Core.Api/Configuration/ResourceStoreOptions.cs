@@ -127,4 +127,27 @@ public class KubernetesResourceStoreOptions
     /// </summary>
     public virtual TimeSpan? WatchTimeout { get; set; }
 
+    /// <summary>
+    /// Gets the Kubernetes namespace of the specified namespace of Cloud Streams
+    /// </summary>
+    /// <param name="namespace">The namespace of Cloud Streams, if any</param>
+    /// <returns>The Kubernetes namespace of the namespace, or the process' own Kubernetes namespace if none is specified</returns>
+    public virtual string GetKubernetesNamespace(string? @namespace) => string.IsNullOrWhiteSpace(@namespace)
+        ? this.GetCurrentNamespace()
+        : @namespace == Neuroglia.Data.Infrastructure.ResourceOriented.Namespace.DefaultNamespaceName ? this.DefaultNamespace : @namespace;
+
+    /// <summary>
+    /// Gets the Kubernetes namespace the process runs in: the 'POD_NAMESPACE' environment variable, or the namespace of the pod's service account, or else the
+    /// <see cref="DefaultNamespace"/>, e.g. outside of a cluster
+    /// </summary>
+    /// <returns>The Kubernetes namespace the process runs in</returns>
+    public virtual string GetCurrentNamespace()
+    {
+        var @namespace = Environment.GetEnvironmentVariable("POD_NAMESPACE");
+        if (!string.IsNullOrWhiteSpace(@namespace)) return @namespace.Trim();
+        const string serviceAccountNamespace = "/var/run/secrets/kubernetes.io/serviceaccount/namespace";
+        if (File.Exists(serviceAccountNamespace) && File.ReadAllText(serviceAccountNamespace).Trim() is { Length: > 0 } current) return current;
+        return this.DefaultNamespace;
+    }
+
 }

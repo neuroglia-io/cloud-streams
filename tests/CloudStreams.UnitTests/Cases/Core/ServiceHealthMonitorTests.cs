@@ -190,7 +190,7 @@ public class ServiceHealthMonitorTests
             lock (this._leases) return this._leases.TryGetValue(key, out var lease) && lease.Owner == owner && lease.ExpiresAt > DateTimeOffset.UtcNow;
         }
 
-        public Task<bool> TryAcquireAsync(string key, TimeSpan duration, CancellationToken cancellationToken = default)
+        public Task<bool> TryAcquireAsync(string key, string? @namespace, TimeSpan duration, CancellationToken cancellationToken = default)
         {
             lock (this._leases)
             {
@@ -200,7 +200,7 @@ public class ServiceHealthMonitorTests
             }
         }
 
-        public Task ReleaseAsync(string key, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(string key, string? @namespace, CancellationToken cancellationToken = default)
         {
             lock (this._leases) if (this._leases.TryGetValue(key, out var lease) && lease.Owner == this.OwnerId) this._leases.Remove(key);
             return Task.CompletedTask;

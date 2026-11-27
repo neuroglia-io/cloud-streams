@@ -264,7 +264,14 @@ public class WorkloadFactory(OperatorOptions options, KubernetesResourceStoreOpt
             new("CloudStreams__Resources__Store", ResourceStoreType.Kubernetes),
             new("CloudStreams__Resources__Kubernetes__DefaultNamespace", store.DefaultNamespace),
             new("CloudStreams__Resources__Kubernetes__Namespaces__0", @namespace),
-            new("CloudStreams__Resources__Kubernetes__CreateNamespaces", "false")
+            new("CloudStreams__Resources__Kubernetes__CreateNamespaces", "false"),
+            // the 'kubernetes' secret provider reads the secrets of the workload's namespace, and the shared ones from the operator's namespace (see #281)
+            new("CloudStreams__Secrets__Kubernetes__NamespacedSecrets", "true"),
+            new("CloudStreams__Secrets__Kubernetes__DefaultNamespace", store.DefaultNamespace),
+            new("CloudStreams__Secrets__Kubernetes__Namespace", options.Namespace),
+            // the namespace of the leases and of the data-protection keys, and the identity of the replica (see #280)
+            new("POD_NAMESPACE", valueFrom: new() { FieldRef = new("metadata.namespace") }),
+            new("POD_NAME", valueFrom: new() { FieldRef = new("metadata.name") })
         };
         if (resource.Kind == WorkloadKind.Gateway) env.Add(new("ManagementApi__Enabled", managementApi ? "true" : "false"));
         var reserved = env.Select(e => e.Name).ToHashSet();
