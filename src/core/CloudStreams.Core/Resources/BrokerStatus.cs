@@ -44,4 +44,16 @@ public record BrokerStatus
     [DataMember(Order = 4, Name = "stream"), JsonPropertyOrder(4), JsonPropertyName("stream"), YamlMember(Order = 4, Alias = "stream")]
     public virtual CloudEventStreamStatus? Stream { get; set; }
 
+    /// <summary>
+    /// Gets/sets the conditions of the broker's workload, which the operator reports in Kubernetes mode, if any (see #279). See <see cref="ResourceConditionType"/>
+    /// </summary>
+    [DataMember(Order = 5, Name = "conditions"), JsonPropertyOrder(5), JsonPropertyName("conditions"), YamlMember(Order = 5, Alias = "conditions")]
+    public virtual EquatableList<ResourceCondition>? Conditions { get; set; }
+
+    /// <summary>
+    /// Gets/sets the number of available replicas of the broker's workload, which the operator reports in Kubernetes mode, if any
+    /// </summary>
+    [DataMember(Order = 6, Name = "availableReplicas"), JsonPropertyOrder(6), JsonPropertyName("availableReplicas"), YamlMember(Order = 6, Alias = "availableReplicas")]
+    public virtual int? AvailableReplicas { get; set; }
+
 }

@@ -11,7 +11,7 @@
 - [Documentation](#documentation)
 	+ [Fundamentals](#fundamentals)
 	+ [Getting started](#getting-started)
-	+ [Kubernetes-native resources](#kubernetes-native-resources)
+	+ [Kubernetes-native mode](#kubernetes-native-mode)
 	+ [Delivery and retries](#delivery-and-retries)
 	+ [Namespaces](#namespaces)
 	+ [Authentication](#authentication)
@@ -114,6 +114,7 @@ helm install cloud-streams oci://ghcr.io/neuroglia-io/charts/cloud-streams --ver
   --set gateway.managementApi.port=8081
 ```
 
+- **Kubernetes mode:** with `resources.store=kubernetes`, resources are Kubernetes custom resources, and an operator deploys gateways and brokers from them (see [Kubernetes-native mode](#kubernetes-native-mode)). The settings below describe the default, Redis mode.
 - **Defaults:** 2 replicas of each, non-root containers listening on 8080, pod disruption budgets, and probes on `/healthz/live` and `/healthz`.
 - **Namespaces:** by default, one gateway and one broker serve the `default` namespace. `gateways` and `brokers` list instead the gateways and brokers to deploy, each with its `name` and `namespace`, and any setting of `gateway` or `broker` to override, e.g. `gateways: [ { name: orders, namespace: tenant-a, replicaCount: 3 } ]` (see [Namespaces](#namespaces)). Each gets its own deployment, service and pod disruption budget, named `<release>-cloud-streams-gateway-<namespace>-<name>`.
 - **Connection strings:** they are kept in a secret. Pass `eventstore.existingSecret` and `redis.existingSecret` to use secrets of your own instead.
@@ -178,9 +179,37 @@ The `Dashboard UI` is served by the `gateway` and is reachable at [http://localh
 
 The `Swagger UI`, also served by the `gateway`, is reachable at [http://localhost:8080/api/doc](http://localhost:8080/api/doc).
 
-### Kubernetes-native resources
+### Kubernetes-native mode
 
-Resources are stored in Redis by default, which lets Cloud Streams run anywhere. On Kubernetes, they can be Kubernetes custom resources instead, managed with `kubectl`, GitOps tools and Kubernetes RBAC, as well as with the API and the dashboard (see #274):
+Resources are stored in Redis by default, which lets Cloud Streams run anywhere. On Kubernetes, they can be Kubernetes custom resources instead, managed with `kubectl`, GitOps tools and Kubernetes RBAC, as well as with the API and the dashboard (see #274).
+
+**Architecture.**
+
+| Component | Deployed by | Role |
+|---|---|---|
+| CustomResourceDefinitions | the chart's `crds/` | the kinds of Cloud Streams: gateways, brokers, subscriptions, sinks, feeds and schemas |
+| Operator (`cloud-streams-operator` image) | the chart, 2 replicas | deploys a gateway or a broker from its resource, reports its conditions, and validates resources with an admission webhook. One replica, elected with a `Lease`, reconciles; every replica serves the webhook |
+| API | the chart | a gateway that serves the management API and the dashboard, for every namespace or for those of `api.namespaces` |
+| Gateways and brokers | the operator, from their resources | each runs in the Kubernetes namespace of its resource, with rights in that namespace only |
+| EventStoreDB and Redis | you | Redis still holds the partition index, the deduplication keys, the rate limits and the leases (#280) |
+
+**Installation.** Kubernetes 1.30 or later is required.
+
+```shell
+helm install cloud-streams oci://ghcr.io/neuroglia-io/charts/cloud-streams --version <release> -n cloud-streams --create-namespace \
+  --set resources.store=kubernetes \
+  --set eventstore.connectionString='esdb://eventstore:2113?tls=false' \
+  --set redis.connectionString='redis:6379' \
+  --set gateways[0].name=orders,gateways[0].namespace=tenant-a \
+  --set brokers[0].name=orders,brokers[0].namespace=tenant-a
+```
+
+- **Declared gateways and brokers:** `gateways` and `brokers` declare resources, which the operator creates once, with their namespaces, when they're missing. It never updates nor deletes them, so that they may be changed with `kubectl` or the dashboard. One deleted with `kubectl` isn't created again, unless its declaration changes: the operator records the declarations it created in the `<release>-operator-declarations` ConfigMap. An item's `replicaCount`, `resources`, scheduling settings, `managementApi.enabled` and `ingress` become the `workload` of its spec, and its `spec` is the rest of it.
+- **Certificates of the webhook:** by default, the operator issues them with a CA of its own, stores them in the `<release>-operator-tls` secret, sets the webhook's CA bundle, and rotates them before they expire, without downtime. With `operator.webhook.certManager.enabled`, cert-manager issues them instead, with `operator.webhook.certManager.issuerRef` or a self-signed issuer, and its CA injector sets the bundle. GitOps tools should ignore the `caBundle` of the `ValidatingWebhookConfiguration`, which the chart doesn't set.
+- **Defaults of the workloads:** `operator.workloads.gateway` and `operator.workloads.broker` set the replicas, resources, ingress class and environment variables of the workloads the operator deploys, e.g. to configure authentication.
+- **Not supported in this mode:** `secrets.files`, and the `env`, `envFrom` and `fullnameOverride` of the items of `gateways` and `brokers`. The chart refuses them.
+
+**Without the chart,** the processes choose the store with their configuration:
 
 ```yaml
 CloudStreams:
@@ -189,35 +218,92 @@ CloudStreams:
     Kubernetes:
       DefaultNamespace: cloud-streams  # the Kubernetes namespace of the 'default' namespace of Cloud Streams; 'default' by default
       CreateNamespaces: true           # whether creating a namespace of Cloud Streams creates its Kubernetes namespace, or only labels an existing one
+      Namespaces: []                   # the namespaces the process serves, by default all of them (see 'Restricted processes' below)
       Context: docker-desktop          # outside of a cluster only: the kubeconfig context, or KubeConfigPath. In a cluster, the pod's service account is used
 ```
 
-Redis is still required in this mode, for the partition index, deduplication and rate limits.
+**Workloads.** The operator deploys a gateway or a broker in the Kubernetes namespace of its resource, with objects named `<name>-gateway` or `<name>-broker`:
+- **Objects:** a deployment, a service, a pod disruption budget, an ingress for gateways that ask for one, a service account and its role binding, and a copy of the connection strings. They're owned by the resource: deleting the resource deletes them.
+- **`spec.workload`:** sets the replicas, the resources, the node selector, tolerations, affinity and topology spread constraints, and the pods' labels and annotations. For gateways, `managementApi: true` serves the management API and the dashboard for the gateway's namespace, and `ingress: { className, hosts, tlsSecretName }` exposes it. The image, the command, the environment and the service account can't be set there: whoever may edit a gateway could otherwise run any code with its rights.
+- **Status:** the operator reports `Ready`, `Progressing` and `Degraded` conditions, and the available replicas, which `kubectl get gateways` and the dashboard show, e.g. `kubectl wait --for=condition=Ready gateway/orders -n tenant-a`.
+- **External workloads:** a gateway or a broker that creates its own resource annotates it `cloud-streams.io/workload: external`, and the operator doesn't deploy it. The chart's API is one.
 
-**CustomResourceDefinitions.**
-- **Source:** they're generated from the definitions of Cloud Streams, and shipped in the chart's `crds/` directory. A test fails if they drift from the definitions. `CLOUDSTREAMS_UPDATE_CRDS=true dotnet test --filter CustomResourceDefinitionTests` regenerates them.
-- **Installation:** `helm install` installs them. On a cluster where you may not create CRDs, use `--skip-crds` in Redis mode, or have an administrator run `kubectl apply -f deployments/helm/cloud-streams/crds`.
-- **Startup check:** the applications never create nor update them, and fail at startup if they aren't installed.
-- **Schemas:** Kubernetes only accepts structural schemas. Fields that can be an address or an object, such as endpoints and feeds, are kept as they are by Kubernetes, and checked by the validators of Cloud Streams. The API and the dashboard keep serving the richer definitions.
+```yaml
+apiVersion: cloud-streams.io/v1
+kind: Gateway
+metadata:
+  name: orders
+  namespace: tenant-a
+spec:
+  workload:
+    replicas: 3
+    resources: { requests: { cpu: 250m, memory: 256Mi } }
+    ingress: { hosts: [ orders.example.com ], tlsSecretName: orders-tls }
+```
+
+**Admission webhook.** Resources written to Kubernetes directly, e.g. with `kubectl`, are validated by the validators of the API, and refused with the same errors:
+
+```text
+Error from server: admission webhook "resources.cloud-streams.io" denied the request: The subscription 'orders' is invalid: Exactly one of 'spec.subscriber.endpoint' and 'spec.subscriber.sink' must be set
+```
+
+- **Namespaces:** resources may only be created in a namespace of Cloud Streams.
+- **Availability:** its `failurePolicy` is `Fail` by default, so that no invalid resource is admitted while it's down. The API and the operator validate in process, and aren't intercepted.
 
 **Namespaces.** A namespace of Cloud Streams is a Kubernetes namespace labelled `cloud-streams.io/enabled=true`:
 - **Creating** a namespace labels its Kubernetes namespace, or creates it.
 - **Deleting** one removes the label, and keeps the Kubernetes namespace.
-- **Gateways and brokers** label, or create, the namespace they serve.
+- **Default namespace:** `resources.kubernetes.defaultNamespace`, by default the release's namespace, is the `default` namespace of Cloud Streams.
+- **Restricted processes:** `CloudStreams:Resources:Kubernetes:Namespaces`, e.g. `[ tenant-a, tenant-b ]`, restricts a process to those namespaces, by default all of them. Its API, dashboard, hubs and MCP tools then only show and change their resources, and refuse the others with `403 Forbidden`. The chart's `api.namespaces` sets it for the API, and the operator sets it for the workloads it deploys.
+  - **Rights:** the process lists and watches each namespace on its own, never the whole cluster, so it only needs rights in those Kubernetes namespaces, e.g. from a RoleBinding in each. It still reads the CRDs, the schemas and the namespaces it serves.
+  - **Default namespace:** it only labels or creates the default namespace if it serves it.
+
+**Kubernetes RBAC.** The chart's ClusterRoles match the roles of Cloud Streams (see [Roles](#roles)). They're aggregated to Kubernetes' own, and bound with a RoleBinding, they grant access to one namespace, as `Namespaced` roles do:
+
+| Role of Cloud Streams | ClusterRole | Aggregated to | Rights on the kinds of Cloud Streams |
+|---|---|---|---|
+| reader | `<release>-reader` | `view` | get, list and watch |
+| operator | `<release>-operator` | `edit` | the reader's, and editing subscriptions, e.g. to suspend or resume them |
+| admin | `<release>-admin` | `admin` | every verb |
+
+- **Operations that need the API:** skipping an event, replaying from an offset or a time, and resuming a faulted subscription aren't plain verbs. They're API calls, which the API authorizes with the roles of Cloud Streams.
+- **Field-level rights:** Kubernetes RBAC can't restrict the fields a user edits: the `operator` ClusterRole may edit subscriptions as a whole, whereas the API only lets an operator suspend, resume, replay and skip.
+- **Components:** each one has only the rights it needs. The API manages the resources of the namespaces it serves. A gateway reads and writes those of its own namespace, and a broker reads its subscriptions and writes their status. Both read the CRDs, the schemas and the namespaces across the cluster. The operator manages the workloads' objects, and may write, but not read, the secrets of other namespaces, since it copies the connection strings there.
+
+**Secrets.** With the `kubernetes` secret provider, a gateway or a broker the operator deploys reads the secrets labelled `cloud-streams.io/secret=true` of its own Kubernetes namespace, and nothing else (see [Transports](#transports)).
 
 **Usage.**
 
 ```shell
+kubectl get gateways,brokers -A               # with their readiness and available replicas
 kubectl get subscriptions -A                  # with their phase, subscriber state and acknowledged offset
 kubectl apply -f subscription.yaml            # the same YAML as the dashboard and the API
 kubectl -n orders patch subscription billing --type merge -p '{"spec":{"suspended":true}}'
 ```
 
-**Not covered yet:**
-- **Validation:** resources applied with `kubectl` aren't validated beyond their schema until the admission webhooks (#278) are in place.
-- **Deployment:** gateways and brokers are still deployed by the chart, until the operator (#279).
-- **Coordination:** leases and data-protection keys still use Redis (#280).
+**CustomResourceDefinitions.**
+- **Source:** they're generated from the definitions of Cloud Streams, and shipped in the chart's `crds/` directory. A test fails if they drift from the definitions. `CLOUDSTREAMS_UPDATE_CRDS=true dotnet test --filter CustomResourceDefinitionTests` regenerates them.
+- **Installation:** `helm install` installs them, but `helm upgrade` doesn't update them: run `kubectl apply --server-side -f deployments/helm/cloud-streams/crds` when you upgrade. On a cluster where you may not create CRDs, use `--skip-crds` in Redis mode, or have an administrator apply them.
+- **Startup check:** the applications never create nor update them, and fail at startup if they aren't installed.
+- **Schemas:** Kubernetes only accepts structural schemas. Fields that can be an address or an object, such as endpoints and feeds, are kept as they are by Kubernetes, and checked by the validators of Cloud Streams. The API and the dashboard keep serving the richer definitions.
 
+**From the Redis mode.** The operator's image copies the namespaces and the resources of Redis into Kubernetes, with their status, so that subscriptions resume from their offsets:
+1. Install the CRDs: `kubectl apply --server-side -f deployments/helm/cloud-streams/crds`.
+2. Scale the brokers to 0, so that no offset moves during the copy.
+3. Copy the resources, with a kubeconfig whose user may create namespaces and the resources of Cloud Streams. `--dry-run` only tells what would be copied, and resources that already exist are skipped, so the copy may be run again:
+
+   ```shell
+   docker run --rm -v ~/.kube:/home/app/.kube:ro ghcr.io/neuroglia-io/cloud-streams-operator:<release> \
+     migrate --redis redis.example.com:6379 --context my-cluster --default-namespace cloud-streams
+   ```
+
+   The resources of the `default` namespace go to `--default-namespace`, which must be the chart's `resources.kubernetes.defaultNamespace`, by default the release's namespace.
+4. Upgrade the release with `resources.store=kubernetes`. The operator then deploys the gateways and brokers of the copied resources: the chart no longer does.
+
+**Limits.**
+- **Coordination:** leases and data-protection keys still use Redis (#280).
+- **Secrets:** the secrets of other namespaces, shared by the release's namespace, aren't readable yet by the workloads the operator deploys (#281).
+- **Management port:** the gateways the operator deploys serve the management API on their single port, when it's enabled.
 ### Delivery and retries
 
 The broker delivers each event with a `POST` to the subscriber's endpoint (`spec.subscriber.endpoint`, or that of the sink `spec.subscriber.sink` names), or over the transport its scheme selects (see [Transports](#transports)). Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.

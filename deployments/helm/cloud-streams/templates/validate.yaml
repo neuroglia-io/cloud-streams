@@ -1,0 +1,21 @@
+{{- /* Validates the values: renders nothing, and fails the installation on a mistake */}}
+{{- $store := .Values.resources.store | default "redis" }}
+{{- if not (has $store (list "redis" "kubernetes")) }}
+{{- fail (printf "resources.store must be 'redis' or 'kubernetes', not '%s'" $store) }}
+{{- end }}
+{{- if include "cloud-streams.kubernetesMode" . }}
+{{- if not (semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version) }}
+{{- fail (printf "the Kubernetes mode requires Kubernetes 1.30 or later, for the match conditions of its admission webhook, not %s" .Capabilities.KubeVersion.Version) }}
+{{- end }}
+{{- if not (has .Values.operator.webhook.failurePolicy (list "Fail" "Ignore")) }}
+{{- fail "operator.webhook.failurePolicy must be 'Fail' or 'Ignore'" }}
+{{- end }}
+{{- if .Values.secrets.files }}
+{{- fail "secrets.files is not supported in Kubernetes mode, since the secrets of the release's namespace can't be mounted by the gateways and brokers of other namespaces: use the 'kubernetes' secret provider, which reads the secrets of each gateway's and broker's own namespace" }}
+{{- end }}
+{{- range $index, $item := concat (.Values.gateways | default list) (.Values.brokers | default list) }}
+{{- if or $item.env $item.envFrom $item.fullnameOverride }}
+{{- fail (printf "'%s': env, envFrom and fullnameOverride are not supported by the items of 'gateways' and 'brokers' in Kubernetes mode, where the operator deploys them: set operator.workloads.gateway.env or operator.workloads.broker.env" $item.name) }}
+{{- end }}
+{{- end }}
+{{- end }}

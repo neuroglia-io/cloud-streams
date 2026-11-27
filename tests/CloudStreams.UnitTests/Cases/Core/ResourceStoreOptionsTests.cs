@@ -49,6 +49,52 @@ public class ResourceStoreOptionsTests
         Assert.Throws<InvalidOperationException>(options.Validate);
     }
 
+    [Fact]
+    public void Invalid_Served_Namespaces_Should_Fail_Fast()
+    {
+        var options = new ResourceStoreOptions() { Store = ResourceStoreType.Kubernetes, Kubernetes = new() { Namespaces = ["tenant-a", "Not_A_Namespace"] } };
+        var exception = Assert.Throws<InvalidOperationException>(options.Validate);
+        Assert.Contains("'Not_A_Namespace'", exception.Message);
+        new ResourceStoreOptions() { Store = ResourceStoreType.Kubernetes, Kubernetes = new() { Namespaces = ["tenant-a", "default"] } }.Validate();
+    }
+
+    static KubernetesResourceDatabase NewRestrictedDatabase(k8s.IKubernetes kubernetes) => new(NullLogger<Neuroglia.Data.Infrastructure.ResourceOriented.Services.KubernetesDatabase>.Instance, kubernetes,
+        Neuroglia.Serialization.Json.JsonSerializer.Default, [], new KubernetesResourceStoreOptions() { DefaultNamespace = "cloud-streams", Namespaces = ["tenant-a", "cloud-streams"] });
+
+    [Fact]
+    public void The_Served_Namespaces_Should_Be_Those_Configured()
+    {
+        // arrange - the default namespace may be listed by the name of its Kubernetes namespace
+        var database = NewRestrictedDatabase(Substitute.For<k8s.IKubernetes>());
+
+        // assert
+        Assert.Equal(["tenant-a", "default"], database.ServedNamespaces);
+        Assert.True(database.IsServed("default"));
+        Assert.False(database.IsServed("tenant-b"));
+        Assert.Null(new KubernetesResourceDatabase(NullLogger<Neuroglia.Data.Infrastructure.ResourceOriented.Services.KubernetesDatabase>.Instance, Substitute.For<k8s.IKubernetes>(),
+            Neuroglia.Serialization.Json.JsonSerializer.Default, [], new KubernetesResourceStoreOptions()).ServedNamespaces);
+    }
+
+    [Fact]
+    public async Task Resources_Of_Unserved_Namespaces_Should_Be_Refused_Without_Calling_The_API_Server()
+    {
+        // arrange
+        var kubernetes = Substitute.For<k8s.IKubernetes>();
+        var database = NewRestrictedDatabase(kubernetes);
+        var group = CloudStreamsDefaults.Resources.Definitions.Subscription.Spec.Group;
+        var plural = CloudStreamsDefaults.Resources.Definitions.Subscription.Spec.Names.Plural;
+
+        // act
+        var read = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.GetResourceAsync(group, "v1", plural, "orders", "tenant-b"));
+        var deleted = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.DeleteResourceAsync(group, "v1", plural, "orders", "tenant-b"));
+        var watched = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.WatchResourcesAsync(group, "v1", plural, "tenant-b"));
+
+        // assert - the problem names the option that restricts the process
+        Assert.All([read, deleted, watched], ex => Assert.Equal((int)HttpStatusCode.Forbidden, ex.Problem.Status));
+        Assert.Contains("CloudStreams:Resources:Kubernetes:Namespaces", read.Problem.Detail);
+        Assert.Empty(kubernetes.ReceivedCalls());
+    }
+
     [Theory]
     [InlineData("default", "cloud-streams")]
     [InlineData("tenant-a", "tenant-a")]

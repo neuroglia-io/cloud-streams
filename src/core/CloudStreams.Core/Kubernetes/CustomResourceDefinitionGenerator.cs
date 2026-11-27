@@ -52,8 +52,21 @@ public static class CustomResourceDefinitionGenerator
             Column("Suspended", "boolean", ".spec.suspended"),
             Column("Age", "date", ".metadata.creationTimestamp")
         ],
-        ["Gateway"] = [Column("Health", "string", ".status.healthStatus"), Column("Age", "date", ".metadata.creationTimestamp")],
-        ["Broker"] = [Column("Health", "string", ".status.healthStatus"), Column("Age", "date", ".metadata.creationTimestamp")],
+        // the readiness and the replicas of the workloads the operator deploys (see #279)
+        ["Gateway"] =
+        [
+            Column("Ready", "string", ".status.conditions[?(@.type==\"Ready\")].status", "Whether the gateway's workload is ready, when the operator deploys it"),
+            Column("Available", "integer", ".status.availableReplicas", "The available replicas of the gateway's workload, when the operator deploys it"),
+            Column("Health", "string", ".status.healthStatus"),
+            Column("Age", "date", ".metadata.creationTimestamp")
+        ],
+        ["Broker"] =
+        [
+            Column("Ready", "string", ".status.conditions[?(@.type==\"Ready\")].status", "Whether the broker's workload is ready, when the operator deploys it"),
+            Column("Available", "integer", ".status.availableReplicas", "The available replicas of the broker's workload, when the operator deploys it"),
+            Column("Health", "string", ".status.healthStatus"),
+            Column("Age", "date", ".metadata.creationTimestamp")
+        ],
         ["Sink"] = [Column("Endpoint", "string", ".spec.endpoint"), Column("Age", "date", ".metadata.creationTimestamp")],
         ["Feed"] = [Column("Endpoint", "string", ".spec.endpoint"), Column("Age", "date", ".metadata.creationTimestamp")],
         ["Schema"] = [Column("Compatibility", "string", ".spec.compatibility"), Column("Age", "date", ".metadata.creationTimestamp")]

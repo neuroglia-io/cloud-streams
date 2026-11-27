@@ -1,0 +1,315 @@
+{{- if include "cloud-streams.kubernetesMode" . }}
+{{- $fullname := include "cloud-streams.fullname" . }}
+{{- $operator := printf "%s-operator" $fullname | trunc 63 | trimSuffix "-" }}
+{{- $kinds := include "cloud-streams.kinds" . | fromYamlArray }}
+{{- $namespaced := without $kinds "schemas" }}
+{{- $statuses := list }}
+{{- range $kinds }}{{ $statuses = append $statuses (printf "%s/status" .) }}{{ end }}
+{{- $crds := list }}
+{{- range $kinds }}{{ $crds = append $crds (printf "%s.cloud-streams.io" .) }}{{ end }}
+# The roles of Cloud Streams, as Kubernetes ClusterRoles (see the README's 'Kubernetes RBAC' section). They're aggregated to the 'view', 'edit' and 'admin'
+# ClusterRoles, and grant access to one namespace when bound with a RoleBinding, as the 'Namespaced' roles of Cloud Streams do
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-reader
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson (concat $kinds $statuses) }}
+    verbs: [ get, list, watch ]
+---
+# an operator suspends and resumes subscriptions, which edits their spec: Kubernetes RBAC can't restrict the fields a user edits, so this role may edit
+# subscriptions as a whole. Skipping an event or replaying from a time aren't plain verbs: they're API calls, which the API authorizes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-operator
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson (concat $kinds $statuses) }}
+    verbs: [ get, list, watch ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ subscriptions, subscriptions/status ]
+    verbs: [ patch, update ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-admin
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson (concat $kinds $statuses) }}
+    verbs: [ get, list, watch, create, update, patch, delete, deletecollection ]
+---
+# The rights of the gateways the operator deploys, in their own namespace only, which the operator binds them to
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-gateway
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  # the gateway reads its own resource, and the feeds and schemas it uses. With the management API, it manages the resources of its namespace
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson $namespaced }}
+    verbs: [ get, list, watch, create, update, patch, delete ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson (without $statuses "schemas/status") }}
+    verbs: [ get, update, patch ]
+  {{- if has "kubernetes" .Values.secrets.providers }}
+  # the 'kubernetes' secret provider reads the secrets labelled 'cloud-streams.io/secret=true' of the gateway's namespace
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get, list ]
+  {{- end }}
+---
+# The rights of the brokers the operator deploys, in their own namespace only, which the operator binds them to
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-broker
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  # the broker reads its subscriptions and writes their status, e.g. their offsets
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ subscriptions, sinks, feeds ]
+    verbs: [ get, list, watch ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ subscriptions, subscriptions/status ]
+    verbs: [ patch, update ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ brokers ]
+    verbs: [ get, list, watch, create, update, patch ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ brokers/status ]
+    verbs: [ get, update, patch ]
+  {{- if has "kubernetes" .Values.secrets.providers }}
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get, list ]
+  {{- end }}
+---
+# The cluster-wide reads the gateways and brokers the operator deploys need: the definitions, the schemas, which belong to no namespace, and the namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-workload
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ apiextensions.k8s.io ]
+    resources: [ customresourcedefinitions ]
+    resourceNames: {{ toJson $crds }}
+    verbs: [ get ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ schemas ]
+    verbs: [ get, list, watch ]
+  - apiGroups: [ "" ]
+    resources: [ namespaces ]
+    verbs: [ get, list, watch ]
+---
+# the operator adds the service account of each workload it deploys to the subjects of this binding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-workload
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+# its subjects are managed by the operator: the chart never sets them, so upgrades keep them
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-workload
+---
+# The rights of the API, which serves the management API and the dashboard: every namespace, or those of 'api.namespaces'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ cloud-streams.io ]
+    resources: {{ toJson (concat $kinds $statuses) }}
+    verbs: [ get, list, watch, create, update, patch, delete ]
+  # a namespace of Cloud Streams is a labelled Kubernetes namespace, which the API labels or creates
+  - apiGroups: [ "" ]
+    resources: [ namespaces ]
+    verbs: [ get, list, watch, create, update, patch ]
+  - apiGroups: [ apiextensions.k8s.io ]
+    resources: [ customresourcedefinitions ]
+    resourceNames: {{ toJson $crds }}
+    verbs: [ get ]
+  {{- if has "kubernetes" .Values.secrets.providers }}
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get, list ]
+  {{- end }}
+{{- if .Values.api.namespaces }}
+{{- range $namespace := .Values.api.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-api
+  namespace: {{ include "cloud-streams.kubernetesNamespace" (dict "root" $ "namespace" $namespace) }}
+  labels:
+    {{- include "cloud-streams.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-api
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cloud-streams.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+---
+# the API reads the definitions, the schemas and the namespaces across the cluster
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-workload
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cloud-streams.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- else }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-api
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cloud-streams.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+---
+# The rights of the operator process, named apart from the operator role of users
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-controller
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ gateways, brokers ]
+    verbs: [ get, list, watch, create ]
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ gateways/status, brokers/status ]
+    verbs: [ get, patch, update ]
+  # owner references that block the deletion of their owner require the right to update its finalizers
+  - apiGroups: [ cloud-streams.io ]
+    resources: [ gateways/finalizers, brokers/finalizers ]
+    verbs: [ update ]
+  # the webhook checks that resources are created in a namespace of Cloud Streams, and the operator labels the namespaces of the resources it declares
+  - apiGroups: [ "" ]
+    resources: [ namespaces ]
+    verbs: [ get, list, watch, create, patch ]
+  # the objects of the workloads, in the namespaces of their resources. The operator writes, but can't read, the secrets of other namespaces: it copies
+  # the connection strings into each workload's namespace
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ create, patch, update ]
+  - apiGroups: [ "" ]
+    resources: [ serviceaccounts, services ]
+    verbs: [ get, create, patch, update, delete ]
+  - apiGroups: [ apps ]
+    resources: [ deployments ]
+    verbs: [ get, list, watch, create, patch, update, delete ]
+  - apiGroups: [ policy ]
+    resources: [ poddisruptionbudgets ]
+    verbs: [ get, create, patch, update, delete ]
+  - apiGroups: [ networking.k8s.io ]
+    resources: [ ingresses ]
+    verbs: [ get, create, patch, update, delete ]
+  - apiGroups: [ rbac.authorization.k8s.io ]
+    resources: [ rolebindings ]
+    verbs: [ get, create, patch, update, delete ]
+  # the operator binds the workloads to their roles only
+  - apiGroups: [ rbac.authorization.k8s.io ]
+    resources: [ clusterroles ]
+    resourceNames: [ {{ $fullname }}-gateway, {{ $fullname }}-broker, {{ $fullname }}-workload ]
+    verbs: [ bind ]
+  - apiGroups: [ rbac.authorization.k8s.io ]
+    resources: [ clusterrolebindings ]
+    resourceNames: [ {{ $fullname }}-workload ]
+    verbs: [ get, update, patch ]
+  - apiGroups: [ admissionregistration.k8s.io ]
+    resources: [ validatingwebhookconfigurations ]
+    resourceNames: [ {{ $fullname }} ]
+    verbs: [ get, update, patch ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-controller
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ $operator }}
+    namespace: {{ .Release.Namespace }}
+---
+# the operator's lease, its certificate and the connection strings it copies, in the release's namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ coordination.k8s.io ]
+    resources: [ leases ]
+    verbs: [ get, create, update ]
+  # the record of the declared gateways and brokers it created
+  - apiGroups: [ "" ]
+    resources: [ configmaps ]
+    verbs: [ get, create, update ]
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $operator }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $operator }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -156,6 +156,58 @@ spec:
                         pattern: "^P([0-9]+(?:[,\\.][0-9]+)?Y)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?D)?(?:T([0-9]+(?:[,\\.][0-9]+)?H)?([0-9]+(?:[,\\.][0-9]+)?M)?([0-9]+(?:[,\\.][0-9]+)?S)?)?$"
                     required: [request]
                 required: [uri]
+              workload:
+                type: object
+                description: The workload that runs the resource, which the operator deploys in Kubernetes mode. Ignored otherwise. The image, command, environment and service account are set by the operator's configuration only
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    description: The number of replicas to run. Defaults to the operator's configuration
+                  resources:
+                    type: object
+                    description: The compute resources each replica requests and is limited to, as Kubernetes quantities
+                    properties:
+                      requests:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      limits:
+                        type: object
+                        additionalProperties:
+                          type: string
+                  nodeSelector:
+                    type: object
+                    description: The labels of the nodes the replicas must run on
+                    additionalProperties:
+                      type: string
+                  tolerations:
+                    type: array
+                    description: The Kubernetes tolerations of the replicas
+                    items:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  affinity:
+                    type: object
+                    description: The Kubernetes affinity of the replicas
+                    x-kubernetes-preserve-unknown-fields: true
+                  topologySpreadConstraints:
+                    type: array
+                    description: The Kubernetes topology spread constraints of the replicas
+                    items:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  podLabels:
+                    type: object
+                    description: The labels added to the replicas, which can't override the ones the operator selects them by
+                    additionalProperties:
+                      type: string
+                  podAnnotations:
+                    type: object
+                    description: The annotations added to the replicas
+                    additionalProperties:
+                      type: string
           status:
             type: object
             properties:
@@ -169,10 +221,42 @@ spec:
               stream:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              conditions:
+                type: array
+                description: The conditions of the workload, which the operator reports in Kubernetes mode
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                      enum: ["True", "False", Unknown]
+                    reason:
+                      type: string
+                    message:
+                      type: string
+                    observedGeneration:
+                      type: integer
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                  required: [type, status]
+              availableReplicas:
+                type: integer
+                description: The number of available replicas of the workload, which the operator reports in Kubernetes mode
         required: [spec]
     subresources:
       status: {}
     additionalPrinterColumns:
+    - name: Ready
+      type: string
+      jsonPath: ".status.conditions[?(@.type==\"Ready\")].status"
+      description: Whether the broker's workload is ready, when the operator deploys it
+    - name: Available
+      type: integer
+      jsonPath: ".status.availableReplicas"
+      description: The available replicas of the broker's workload, when the operator deploys it
     - name: Health
       type: string
       jsonPath: ".status.healthStatus"

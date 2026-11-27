@@ -1,5 +1,30 @@
 Cloud Streams {{ .Values.image.tag | default .Chart.AppVersion }} is deployed.
 {{- $unsecured := list }}
+{{- if include "cloud-streams.kubernetesMode" . }}
+{{- $api := (include "cloud-streams.deployedInstances" (dict "root" . "component" "gateway") | fromJson).items | first }}
+
+Resources are Kubernetes custom resources (Kubernetes mode). The operator deploys the gateways and brokers of their resources, in their own namespaces,
+and validates the resources written with kubectl:
+  kubectl get gateways,brokers,subscriptions -A
+
+The API serves the management API and the dashboard{{ if .Values.api.namespaces }} of the namespaces {{ join ", " .Values.api.namespaces }}{{ else }} of every namespace{{ end }}:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ $api.objectName }} 8080:80
+  then open http://localhost:8080
+{{- $secured := false }}
+{{- range concat ($api.env | default list) (.Values.operator.workloads.gateway.env | default list) }}{{ if eq .name "Authentication__Dashboard__Enabled" }}{{ $secured = true }}{{ end }}{{ end }}
+{{- if not $secured }}{{ $unsecured = append $unsecured $api.name }}{{ end }}
+{{- $declared := concat (.Values.gateways | default list) (.Values.brokers | default list) }}
+{{- if $declared }}
+
+The operator creates the declared gateways and brokers, then deploys them:
+{{- range .Values.gateways }}
+  gateway '{{ .name }}' of the namespace '{{ .namespace | default "default" }}'
+{{- end }}
+{{- range .Values.brokers }}
+  broker '{{ .name }}' of the namespace '{{ .namespace | default "default" }}'
+{{- end }}
+{{- end }}
+{{- else }}
 {{- range $values := (include "cloud-streams.instances" (dict "root" . "component" "gateway") | fromJson).items }}
 {{- if $values.enabled }}
 {{- $managementPort := toString $values.managementApi.port }}
@@ -23,6 +48,7 @@ Gateway '{{ $values.name }}' of the namespace '{{ $values.namespace }}' ({{ $val
 {{- if $values.enabled }}
 
 Broker '{{ $values.name }}' of the namespace '{{ $values.namespace }}' ({{ $values.replicaCount }} replica(s)), which delivers the subscriptions of that namespace.
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if $unsecured }}

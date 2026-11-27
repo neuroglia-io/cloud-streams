@@ -53,4 +53,11 @@ public record BrokerSpec
     [DataMember(Order = 3, Name = "service"), JsonPropertyOrder(3), JsonPropertyName("service"), YamlMember(Order = 3, Alias = "service")]
     public virtual ServiceConfiguration? Service { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure the workload that runs the broker, which the operator deploys in Kubernetes mode, if any (see #279).
+    /// Ignored otherwise
+    /// </summary>
+    [DataMember(Order = 4, Name = "workload"), JsonPropertyOrder(4), JsonPropertyName("workload"), YamlMember(Order = 4, Alias = "workload")]
+    public virtual WorkloadConfiguration? Workload { get; set; }
+
 }

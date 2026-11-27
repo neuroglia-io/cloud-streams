@@ -89,7 +89,12 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
         {
             if (broker == null)
             {
-                broker = new Core.Resources.Broker(new ResourceMetadata(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace()), new BrokerSpec()
+                // a broker that creates its own resource is not deployed by the operator, which must therefore not deploy it again (see #279)
+                var metadata = new ResourceMetadata(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace())
+                {
+                    Annotations = new Dictionary<string, string>() { { CloudStreamsDefaults.Resources.WorkloadAnnotation, CloudStreamsDefaults.Resources.ExternalWorkload } }
+                };
+                broker = new Core.Resources.Broker(metadata, new BrokerSpec()
                 {
                     Dispatch = new()
                     {
@@ -99,7 +104,7 @@ public class SubscriptionManager(IServiceProvider serviceProvider, ILoggerFactor
                 await this.Repository.EnsureNamespaceAsync(this.BrokerOptions.GetNamespace(), cancellationToken).ConfigureAwait(false);
                 // another replica may have created the broker in the meantime
                 try { broker = await this.Repository.AddAsync(broker, false, cancellationToken).ConfigureAwait(false); }
-                catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { }
+                catch (ProblemDetailsException ex) when (ex.Problem.IsConflict()) { }
             }
             this.Broker = await this.Repository.MonitorAsync<Core.Resources.Broker>(this.BrokerOptions.GetName(), this.BrokerOptions.GetNamespace(), false, cancellationToken).ConfigureAwait(false);
         }

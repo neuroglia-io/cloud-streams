@@ -32,4 +32,16 @@ public record GatewayStatus
     [DataMember(Order = 2, Name = "lastHealthCheckAt"), JsonPropertyOrder(2), JsonPropertyName("lastHealthCheckAt"), YamlMember(Order = 2, Alias = "lastHealthCheckAt")]
     public virtual DateTimeOffset? LastHealthCheckAt { get; set; }
 
+    /// <summary>
+    /// Gets/sets the conditions of the gateway's workload, which the operator reports in Kubernetes mode, if any (see #279). See <see cref="ResourceConditionType"/>
+    /// </summary>
+    [DataMember(Order = 3, Name = "conditions"), JsonPropertyOrder(3), JsonPropertyName("conditions"), YamlMember(Order = 3, Alias = "conditions")]
+    public virtual EquatableList<ResourceCondition>? Conditions { get; set; }
+
+    /// <summary>
+    /// Gets/sets the number of available replicas of the gateway's workload, which the operator reports in Kubernetes mode, if any
+    /// </summary>
+    [DataMember(Order = 4, Name = "availableReplicas"), JsonPropertyOrder(4), JsonPropertyName("availableReplicas"), YamlMember(Order = 4, Alias = "availableReplicas")]
+    public virtual int? AvailableReplicas { get; set; }
+
 }

@@ -26,6 +26,74 @@ redis:
   existingSecret: ""
   existingSecretKey: redis
 
+# Where the resources of Cloud Streams are stored (see the README's 'Kubernetes-native mode' section)
+resources:
+  # 'redis', the default: the chart deploys the gateways and brokers of the 'gateways' and 'brokers' lists, which store their resources in Redis.
+  # 'kubernetes': resources are Kubernetes custom resources, which kubectl and GitOps tools manage too. The chart deploys the operator, which validates
+  # resources with an admission webhook and deploys the gateways and brokers from their resources, and the API, which serves the management API and the
+  # dashboard. The 'gateways' and 'brokers' lists declare resources, which the operator creates when they're missing. Redis still stores the partition
+  # index, the deduplication keys, the rate limits and the leases. Requires Kubernetes 1.30 or later
+  store: redis
+  kubernetes:
+    # the Kubernetes namespace of the 'default' namespace of Cloud Streams. Defaults to the release's namespace
+    defaultNamespace: ""
+
+# The operator, deployed in Kubernetes mode only: it validates the resources written to Kubernetes, and deploys gateways and brokers from their resources
+operator:
+  replicaCount: 2
+  port: 8080
+  # the defaults of the workloads the operator deploys, which the 'workload' of a gateway's or a broker's spec overrides, except the image, the environment
+  # and the security contexts, which only these values set
+  workloads:
+    gateway:
+      replicaCount: 2
+      resources: {}
+      # the default class and the annotations of the ingresses of the gateways that ask for one. Only these values set annotations, since some ingress
+      # controllers read configuration snippets from them
+      ingressClassName: ""
+      ingressAnnotations: {}
+      # extra environment variables, e.g. to configure authentication. Every gateway gets them
+      env: []
+      podDisruptionBudget:
+        enabled: true
+        maxUnavailable: 1
+    broker:
+      replicaCount: 2
+      resources: {}
+      env: []
+      podDisruptionBudget:
+        enabled: true
+        maxUnavailable: 1
+  webhook:
+    port: 8443
+    # 'Fail' admits no resource while the webhook is down. The API and the operator, which validate in process, are not intercepted
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    # by default, the operator issues and rotates the webhook's certificates with a CA of its own. With cert-manager, they're issued by the issuer below,
+    # or by a self-signed issuer the chart creates, and cert-manager's CA injector sets the CA bundle
+    certManager:
+      enabled: false
+      # e.g. { name: my-ca, kind: ClusterIssuer }
+      issuerRef: {}
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+# The API, deployed in Kubernetes mode only: a gateway that serves the management API and the dashboard, with the settings of 'gateway' this overrides.
+# Its own gateway resource, which it creates, is annotated so that the operator doesn't deploy it again
+api:
+  # the name of its gateway resource. Defaults to '<fullname>-api'
+  name: ""
+  namespace: default
+  # the namespaces of Cloud Streams it serves, e.g. [ tenant-a, tenant-b ]: it is then only granted rights in those. Empty: every namespace
+  namespaces: []
+  replicaCount: 1
+
 # The retention policy of the cloud event stream, which gateways apply at startup (see the README's 'Retention' section).
 # Leave both empty to keep events forever and leave any policy set otherwise as it is; set both to 0 to remove a policy.
 retention:

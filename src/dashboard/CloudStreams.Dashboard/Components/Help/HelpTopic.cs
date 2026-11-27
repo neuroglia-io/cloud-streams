@@ -58,13 +58,13 @@ public static class HelpTopicCatalog
     /// Gets the topic that explains gateways
     /// </summary>
     public static readonly HelpTopic Gateways = new("gateways", "Gateways",
-        "A gateway receives cloud events, over HTTP or from feeds, and decides which ones are admitted: who may publish what, whether their data matches their schema, and which metadata is extracted from them. Admitted events are recorded in the stream of its namespace.");
+        "A gateway receives cloud events, over HTTP or from feeds, and decides which ones are admitted: who may publish what, whether their data matches their schema, and which metadata is extracted from them. Admitted events are recorded in the stream of its namespace. On Kubernetes, the operator may deploy it from its resource: its Workload column then tells whether its replicas are ready.");
 
     /// <summary>
     /// Gets the topic that explains brokers
     /// </summary>
     public static readonly HelpTopic Brokers = new("brokers", "Brokers",
-        "A broker delivers the events of the stream to the subscribers of the subscriptions of its namespace. It retries failed deliveries, and records how far each subscription got.");
+        "A broker delivers the events of the stream to the subscribers of the subscriptions of its namespace. It retries failed deliveries, and records how far each subscription got. On Kubernetes, the operator may deploy it from its resource: its Workload column then tells whether its replicas are ready.");
 
     /// <summary>
     /// Gets the topic that explains subscriptions

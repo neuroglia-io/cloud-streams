@@ -394,6 +394,75 @@ spec:
                             items:
                               type: string
                         required: [ name ]
+                workload:
+                  type: object
+                  description: The workload that runs the resource, which the operator deploys in Kubernetes mode. Ignored otherwise. The image, command, environment and service account are set by the operator's configuration only
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                      description: The number of replicas to run. Defaults to the operator's configuration
+                    resources:
+                      type: object
+                      description: The compute resources each replica requests and is limited to, as Kubernetes quantities
+                      properties:
+                        requests:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        limits:
+                          type: object
+                          additionalProperties:
+                            type: string
+                    nodeSelector:
+                      type: object
+                      description: The labels of the nodes the replicas must run on
+                      additionalProperties:
+                        type: string
+                    tolerations:
+                      type: array
+                      description: The Kubernetes tolerations of the replicas
+                      items:
+                        type: object
+                    affinity:
+                      type: object
+                      description: The Kubernetes affinity of the replicas
+                    topologySpreadConstraints:
+                      type: array
+                      description: The Kubernetes topology spread constraints of the replicas
+                      items:
+                        type: object
+                    podLabels:
+                      type: object
+                      description: The labels added to the replicas, which can't override the ones the operator selects them by
+                      additionalProperties:
+                        type: string
+                    podAnnotations:
+                      type: object
+                      description: The annotations added to the replicas
+                      additionalProperties:
+                        type: string
+                    managementApi:
+                      type: boolean
+                      description: Whether or not the gateway serves the management API and the dashboard, for the resources of its own namespace only. Defaults to false
+                    ingress:
+                      type: object
+                      description: The ingress that exposes the gateway's public endpoints, if any. Its annotations are set by the operator's configuration only
+                      properties:
+                        className:
+                          type: string
+                          description: The ingress class to use. Defaults to the operator's configuration, or to the cluster's default class
+                        hosts:
+                          type: array
+                          minItems: 1
+                          description: The hosts the gateway is exposed on, whose every path routes to it
+                          items:
+                            type: string
+                        tlsSecretName:
+                          type: string
+                          description: The secret, in the gateway's namespace, that holds the TLS certificate of the hosts, if any
+                      required: [ hosts ]
             status:
               type: object
               properties:
@@ -402,6 +471,30 @@ spec:
                 lastHealthCheckAt:
                   type: string
                   format: date-time
+                conditions:
+                  type: array
+                  description: The conditions of the workload, which the operator reports in Kubernetes mode
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: [ 'True', 'False', Unknown ]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                    required: [ type, status ]
+                availableReplicas:
+                  type: integer
+                  description: The number of available replicas of the workload, which the operator reports in Kubernetes mode
           required:
             - spec
       subresources:

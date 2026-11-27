@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using CloudStreams.Core;
 using CloudStreams.Core.Application;
 using CloudStreams.Gateway.Application.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,8 +79,10 @@ public class GatewayConfiguration(IServiceProvider serviceProvider, ILogger<Gate
                 if (gateway == null)
                 {
                     await resources.EnsureNamespaceAsync(@namespace, stoppingToken).ConfigureAwait(false);
-                    try { await resources.AddAsync(new Core.Resources.Gateway(new ResourceMetadata(name, @namespace), new Core.Resources.GatewaySpec()), false, stoppingToken).ConfigureAwait(false); }
-                    catch (ProblemDetailsException ex) when (ex.Problem.Status == (int)HttpStatusCode.Conflict) { /* created by another replica in the meantime */ }
+                    // a gateway that creates its own resource is not deployed by the operator, which must therefore not deploy it again (see #279)
+                    var metadata = new ResourceMetadata(name, @namespace) { Annotations = new Dictionary<string, string>() { { CloudStreamsDefaults.Resources.WorkloadAnnotation, CloudStreamsDefaults.Resources.ExternalWorkload } } };
+                    try { await resources.AddAsync(new Core.Resources.Gateway(metadata, new Core.Resources.GatewaySpec()), false, stoppingToken).ConfigureAwait(false); }
+                    catch (ProblemDetailsException ex) when (ex.Problem.IsConflict()) { /* created by another replica in the meantime */ }
                 }
                 this._monitor = await resources.MonitorAsync<Core.Resources.Gateway>(name, @namespace, false, stoppingToken).ConfigureAwait(false);
                 logger.LogInformation("The configuration of the gateway '{gateway}' of the namespace '{namespace}' has been loaded: admitting cloud events", name, @namespace);

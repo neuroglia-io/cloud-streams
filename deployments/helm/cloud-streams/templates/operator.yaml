@@ -1,0 +1,232 @@
+{{- if include "cloud-streams.kubernetesMode" . }}
+{{- $fullname := include "cloud-streams.fullname" . }}
+{{- $operator := printf "%s-operator" $fullname | trunc 63 | trimSuffix "-" }}
+{{- $selector := dict "root" . "component" "operator" "instance" (dict) }}
+{{- $connections := include "cloud-streams.secretName" . }}
+{{- /* the environment the operator gives the gateways and brokers it deploys: the connection strings and the resource store are set by the operator itself */}}
+{{- $workloadEnv := list }}
+{{- with .Values.telemetry.otlpEndpoint }}
+{{- $workloadEnv = append $workloadEnv (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" .) }}
+{{- end }}
+{{- with .Values.retention.maxAge }}
+{{- $workloadEnv = append $workloadEnv (dict "name" "Retention__MaxAge" "value" .) }}
+{{- end }}
+{{- if ne (toString .Values.retention.maxCount) "" }}
+{{- $workloadEnv = append $workloadEnv (dict "name" "Retention__MaxCount" "value" (toString .Values.retention.maxCount)) }}
+{{- end }}
+{{- $workloadEnv = concat $workloadEnv (include "cloud-streams.secretsEnv" . | fromYamlArray) }}
+{{- $pullSecrets := list }}
+{{- range .Values.imagePullSecrets }}{{ $pullSecrets = append $pullSecrets .name }}{{ end }}
+{{- $workloads := dict }}
+{{- range $component := list "gateway" "broker" }}
+{{- $values := index $.Values.operator.workloads $component }}
+{{- $workload := dict
+  "Image" (include "cloud-streams.image" (dict "root" $ "component" $component))
+  "ImagePullPolicy" $.Values.image.pullPolicy
+  "ImagePullSecrets" $pullSecrets
+  "Replicas" $values.replicaCount
+  "Port" 8080
+  "Env" (concat $workloadEnv ($values.env | default list))
+  "PodSecurityContext" $.Values.podSecurityContext
+  "SecurityContext" $.Values.securityContext
+  "PodDisruptionBudget" $values.podDisruptionBudget.enabled
+  "MaxUnavailable" $values.podDisruptionBudget.maxUnavailable }}
+{{- with $values.resources }}{{ $_ := set $workload "Resources" (dict "Requests" (.requests | default dict) "Limits" (.limits | default dict)) }}{{ end }}
+{{- if eq $component "gateway" }}
+{{- $_ := set $workload "IngressClassName" $values.ingressClassName }}
+{{- $_ := set $workload "IngressAnnotations" $values.ingressAnnotations }}
+{{- end }}
+{{- $_ := set $workloads $component $workload }}
+{{- end }}
+{{- $settings := dict
+  "Operator" (dict
+    "Instance" $fullname
+    "Namespace" .Release.Namespace
+    "EventStore" (dict "Name" (.Values.eventstore.existingSecret | default $connections) "Key" (ternary .Values.eventstore.existingSecretKey "eventstore" (ne .Values.eventstore.existingSecret "")))
+    "Redis" (dict "Name" (.Values.redis.existingSecret | default $connections) "Key" (ternary .Values.redis.existingSecretKey "redis" (ne .Values.redis.existingSecret "")))
+    "DeclaredResourcesPath" "/etc/cloud-streams/operator/resources.json"
+    "Gateway" $workloads.gateway
+    "Broker" $workloads.broker
+    "Webhook" (dict
+      "Port" .Values.operator.webhook.port
+      "ServiceName" $operator
+      "ConfigurationName" $fullname
+      "CertificateSecret" (printf "%s-tls" $operator)
+      "ManageCertificates" (not .Values.operator.webhook.certManager.enabled))
+    "LeaderElection" (dict "LeaseName" $operator))
+  "CloudStreams" (dict "Resources" (dict "Store" "kubernetes" "Kubernetes" (dict "DefaultNamespace" (include "cloud-streams.defaultNamespace" .)))) }}
+{{- /* the gateways and brokers of the 'gateways' and 'brokers' lists, which the operator creates when they're missing, but never updates nor deletes */}}
+{{- $declared := list }}
+{{- range $component := list "gateway" "broker" }}
+{{- $items := index $.Values (printf "%ss" $component) | default list }}
+{{- if and (not $items) (index $.Values $component).enabled }}
+{{- $items = list (dict "name" ((index $.Values $component).name | default (printf "%s-%s" $fullname $component)) "namespace" (index $.Values $component).namespace) }}
+{{- end }}
+{{- range $index, $item := $items }}
+{{- $name := required (printf "%ss[%d].name is required" $component $index) $item.name }}
+{{- $workload := dict }}
+{{- with $item.replicaCount }}{{ $_ := set $workload "replicas" . }}{{ end }}
+{{- range $key := list "resources" "nodeSelector" "tolerations" "affinity" "topologySpreadConstraints" "podLabels" "podAnnotations" }}
+{{- with index $item $key }}{{ $_ := set $workload $key . }}{{ end }}
+{{- end }}
+{{- if eq $component "gateway" }}
+{{- with $item.managementApi }}{{ if hasKey . "enabled" }}{{ $_ := set $workload "managementApi" .enabled }}{{ end }}{{ end }}
+{{- with $item.ingress }}
+{{- if .enabled }}
+{{- $hosts := list }}
+{{- range .hosts }}{{ $hosts = append $hosts .host }}{{ end }}
+{{- $ingress := dict "hosts" $hosts }}
+{{- with .className }}{{ $_ := set $ingress "className" . }}{{ end }}
+{{- with .tls }}{{ with first . }}{{ with .secretName }}{{ $_ := set $ingress "tlsSecretName" . }}{{ end }}{{ end }}{{ end }}
+{{- $_ := set $workload "ingress" $ingress }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $spec := deepCopy ($item.spec | default dict) }}
+{{- if $workload }}{{ $_ := set $spec "workload" (mergeOverwrite ($spec.workload | default dict) $workload) }}{{ end }}
+{{- $declared = append $declared (dict
+  "apiVersion" "cloud-streams.io/v1"
+  "kind" (title $component)
+  "metadata" (dict "name" $name "namespace" (include "cloud-streams.kubernetesNamespace" (dict "root" $ "namespace" ($item.namespace | default "default"))))
+  "spec" $spec) }}
+{{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+data:
+  settings.json: {{ toJson $settings | quote }}
+  resources.json: {{ toJson $declared | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  replicas: {{ .Values.operator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $selector | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloud-streams.selectorLabels" $selector | nindent 8 }}
+      annotations:
+        # the replicas restart when their settings change
+        checksum/settings: {{ printf "%s|%s" (toJson $settings) (toJson $declared) | sha256sum }}
+        {{- with .Values.operator.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ $operator }}
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        - name: settings
+          configMap:
+            name: {{ $operator }}
+      containers:
+        - name: operator
+          image: {{ include "cloud-streams.image" (dict "root" . "component" "operator") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.operator.port }}
+            - name: webhook
+              containerPort: {{ .Values.operator.webhook.port }}
+          env:
+            - name: CLOUDSTREAMS_OPERATOR_SETTINGS
+              value: /etc/cloud-streams/operator/settings.json
+            - name: Operator__Port
+              value: {{ .Values.operator.port | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- with .Values.telemetry.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/cloud-streams/operator
+              readOnly: true
+          {{- include "cloud-streams.probes" (dict "root" . "port" "http") | nindent 10 }}
+          {{- with .Values.operator.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cloud-streams.selectorLabels" $selector | nindent 4 }}
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: webhook
+    - name: http
+      port: 80
+      targetPort: http
+{{- if .Values.operator.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  maxUnavailable: {{ .Values.operator.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "cloud-streams.selectorLabels" $selector | nindent 6 }}
+{{- end }}
+{{- end }}

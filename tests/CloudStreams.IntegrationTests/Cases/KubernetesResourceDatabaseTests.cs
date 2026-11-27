@@ -15,6 +15,7 @@ using CloudStreams.Core;
 using CloudStreams.Core.Api.Configuration;
 using CloudStreams.Core.Api.Services;
 using CloudStreams.Core.Resources;
+using CloudStreams.Operator.Services;
 using Json.Patch;
 using Json.Pointer;
 using k8s;
@@ -30,7 +31,9 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Nodes;
+using StackExchange.Redis;
 using Testcontainers.K3s;
+using Testcontainers.Redis;
 using Xunit;
 
 namespace CloudStreams.IntegrationTests.Cases;
@@ -71,6 +74,19 @@ public sealed class KubernetesResourceDatabaseTests(KubernetesResourceDatabaseTe
             {
                 if (DateTime.UtcNow > deadline) throw new TimeoutException("The CustomResourceDefinitions were not established");
                 await Task.Delay(250);
+            }
+            // an established CRD may still answer '429 Too Many Requests' while its storage initializes
+            foreach (var definition in CloudStreamsDefaults.Resources.Definitions.AsEnumerable())
+            {
+                while (true)
+                {
+                    try
+                    {
+                        await this.Kubernetes.CustomObjects.ListClusterCustomObjectAsync(definition.Spec.Group, definition.Spec.Versions.First().Name, definition.Spec.Names.Plural, limit: 1);
+                        break;
+                    }
+                    catch (k8s.Autorest.HttpOperationException ex) when ((int)ex.Response.StatusCode == 429 && DateTime.UtcNow < deadline) { await Task.Delay(250); }
+                }
             }
             await this.Kubernetes.CoreV1.CreateNamespaceAsync(new V1Namespace() { Metadata = new() { Name = KubernetesDefaultNamespace } });
             this.Database = new KubernetesResourceDatabase(NullLogger<KubernetesDatabase>.Instance, this.Kubernetes, JsonSerializer.Default, [new JsonPatchHandler(), new JsonMergePatchHandler()],
@@ -288,6 +304,84 @@ public sealed class KubernetesResourceDatabaseTests(KubernetesResourceDatabaseTe
         Assert.Null(await this._database.GetResourceAsync<Namespace>("tenant-a"));
     }
 
+    /// <summary>
+    /// Creates the namespaces 'served-a', 'served-b' and 'unserved-c', and a database that only serves the first two, as a gateway restricted to them does
+    /// </summary>
+    async Task<KubernetesResourceDatabase> CreateRestrictedDatabaseAsync()
+    {
+        foreach (var name in new[] { "served-a", "served-b", "unserved-c" })
+        {
+            try { await this._database.CreateNamespaceAsync(name); }
+            catch (ProblemDetailsException ex) when (ex.Problem.IsConflict()) { }
+        }
+        var database = new KubernetesResourceDatabase(NullLogger<KubernetesDatabase>.Instance, this._kubernetes, JsonSerializer.Default, [new JsonPatchHandler(), new JsonMergePatchHandler()],
+            new KubernetesResourceStoreOptions() { DefaultNamespace = KubernetesDefaultNamespace, PageSize = 2, Namespaces = ["served-a", "served-b"] });
+        await database.InitializeAsync();
+        return database;
+    }
+
+    [Fact]
+    public async Task Restricted_Processes_Should_Only_List_And_Access_Their_Namespaces()
+    {
+        // arrange
+        await using var database = await this.CreateRestrictedDatabaseAsync();
+        var labels = new Dictionary<string, string>() { ["restricted"] = "true" };
+        await this.CreateAsync("listed-a1", "served-a", labels);
+        await this.CreateAsync("listed-a2", "served-a", labels);
+        await this.CreateAsync("listed-b1", "served-b", labels);
+        var unserved = await this.CreateAsync("hidden-c1", "unserved-c", labels);
+        LabelSelector[] selector = [new LabelSelector("restricted", LabelSelectionOperator.Equals, "true")];
+
+        // act - pages hold 2 resources, and span namespaces
+        var all = await database.GetResourcesAsync(Group, Version, Plural, null, selector).ToListAsync();
+        var firstPage = await database.ListResourcesAsync(Group, Version, Plural, null, selector, 2);
+        var secondPage = await database.ListResourcesAsync(Group, Version, Plural, null, selector, 2, firstPage.Metadata.Continue);
+        var namespaces = await database.GetResourcesAsync(NamespaceDefinition.ResourceGroup, NamespaceDefinition.ResourceVersion, NamespaceDefinition.ResourcePlural).Select(n => n.GetName()).ToListAsync();
+        var read = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.GetResourceAsync(Group, Version, Plural, unserved.GetName(), unserved.GetNamespace()));
+        var created = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.CreateResourceAsync(NewSubscription("refused", "unserved-c"), Group, Version, Plural, "unserved-c"));
+        var deleted = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.DeleteResourceAsync(Group, Version, Plural, unserved.GetName(), unserved.GetNamespace()));
+        var namespaceCreated = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.CreateNamespaceAsync("unserved-d"));
+        var listed = await Assert.ThrowsAsync<ProblemDetailsException>(() => database.ListResourcesAsync(Group, Version, Plural, "unserved-c"));
+
+        // assert
+        Assert.Equal(["listed-a1", "listed-a2", "listed-b1"], all.Select(r => r.GetName()).Order());
+        Assert.Equal(2, firstPage.Items!.Count);
+        Assert.False(string.IsNullOrWhiteSpace(firstPage.Metadata.Continue));
+        Assert.Single(secondPage.Items!);
+        Assert.True(string.IsNullOrWhiteSpace(secondPage.Metadata.Continue));
+        Assert.Equal(["listed-a1", "listed-a2", "listed-b1"], firstPage.Items!.Concat(secondPage.Items!).OfType<IResource>().Select(r => r.GetName()).Order());
+        Assert.Equal(["served-a", "served-b"], namespaces.Order());
+        Assert.All([read, created, deleted, namespaceCreated, listed], ex => Assert.Equal((int)HttpStatusCode.Forbidden, ex.Problem.Status));
+        Assert.Null(await database.GetResourceAsync<Namespace>("unserved-c"));
+        Assert.NotNull(await this.GetAsync(unserved));
+    }
+
+    [Fact]
+    public async Task Restricted_Processes_Should_Watch_The_Changes_Of_Their_Namespaces_Only()
+    {
+        // arrange
+        await using var database = await this.CreateRestrictedDatabaseAsync();
+        var events = new List<IResourceWatchEvent>();
+        await using var watch = await database.WatchResourcesAsync(Group, Version, Plural, null, [new LabelSelector("merged", LabelSelectionOperator.Equals, "true")]);
+        using var subscription = watch.Subscribe(e => { lock (events) events.Add(e); });
+        var labels = new Dictionary<string, string>() { ["merged"] = "true" };
+
+        // act
+        await this.CreateAsync("merged-a", "served-a", labels);
+        await this.CreateAsync("merged-c", "unserved-c", labels);
+        await this.CreateAsync("merged-b", "served-b", labels);
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline) { lock (events) if (events.Count >= 2) break; await Task.Delay(100); }
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        // assert - the changes of both served namespaces are merged, and none of the other is emitted
+        lock (events)
+        {
+            Assert.Equal([("merged-a", "served-a"), ("merged-b", "served-b")], events.Select(e => (e.Resource.GetName(), e.Resource.GetNamespace()!)).Order());
+            Assert.All(events, e => Assert.Equal(ResourceWatchEventType.Created, e.Type));
+        }
+    }
+
     [Fact]
     public async Task Definitions_Should_Be_Read_From_The_Installed_Custom_Resource_Definitions()
     {
@@ -302,6 +396,48 @@ public sealed class KubernetesResourceDatabaseTests(KubernetesResourceDatabaseTe
         Assert.False(string.IsNullOrWhiteSpace(definition.Metadata.ResourceVersion));
         Assert.Null(unknown);
         Assert.Equal((int)HttpStatusCode.MethodNotAllowed, readOnly.Problem.Status);
+    }
+
+    [Fact]
+    public async Task The_Resources_Of_Redis_Should_Be_Migrated_With_Their_Status()
+    {
+        // arrange: a Redis store with a namespace, a sink and subscriptions, one of which has delivered up to an offset (see #283)
+        await using var container = new RedisBuilder("redis:7.4-alpine").Build();
+        await container.StartAsync();
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(container.GetConnectionString());
+        await using var redis = new AtomicRedisDatabase(NullLoggerFactory.Instance, connection, JsonSerializer.Default, [new JsonPatchHandler(), new JsonMergePatchHandler()]);
+        // as the applications initialize it, with the default namespace
+        await redis.InitializeAsync();
+        foreach (var definition in CloudStreamsDefaults.Resources.Definitions.AsEnumerable()) await redis.CreateResourceAsync(definition);
+        await redis.CreateNamespaceAsync("migrated");
+        var sink = new Sink(new() { Name = "archive", Namespace = "migrated" }, new() { Endpoint = new Uri("https://archive.example.com/events") });
+        await redis.CreateResourceAsync(sink, Sink.ResourceDefinition.Group, Sink.ResourceDefinition.Version, Sink.ResourceDefinition.Plural, "migrated");
+        var delivered = new Subscription(new() { Name = "delivered", Namespace = "migrated", Labels = new Dictionary<string, string>() { ["team"] = "orders" } },
+            new() { Subscriber = new() { Endpoint = new Uri("https://subscriber.example.com/events") }, Stream = new() { Offset = 0 } },
+            new() { Phase = SubscriptionStatusPhase.Active, Stream = new() { AckedOffset = 42 } });
+        await redis.CreateResourceAsync(delivered, Group, Version, Plural, "migrated");
+        await redis.CreateResourceAsync(NewSubscription("of-the-default-namespace"), Group, Version, Plural, Namespace.DefaultNamespaceName);
+        var migration = new RedisMigration(NullLogger<RedisMigration>.Instance, redis, this._database, JsonSerializer.Default);
+
+        // act
+        var dryRun = await migration.RunAsync(true);
+        var first = await migration.RunAsync(false);
+        var second = await migration.RunAsync(false);
+
+        // assert
+        var migrated = (await this._database.GetResourceAsync(Group, Version, Plural, "delivered", "migrated"))!.ConvertTo<Subscription>()!;
+        Assert.Equal(42ul, migrated.Status?.Stream?.AckedOffset);
+        Assert.Equal("orders", migrated.Metadata.Labels!["team"]);
+        Assert.NotNull(await this._database.GetResourceAsync(Sink.ResourceDefinition.Group, Sink.ResourceDefinition.Version, Sink.ResourceDefinition.Plural, "archive", "migrated"));
+        // the resources of the 'default' namespace go to the Kubernetes namespace it maps to
+        Assert.NotNull(await this._kubernetes.CustomObjects.GetNamespacedCustomObjectAsync(Group, Version, KubernetesDefaultNamespace, Plural, "of-the-default-namespace"));
+        var labelled = await this._kubernetes.CoreV1.ReadNamespaceAsync("migrated");
+        Assert.Equal("true", labelled.Metadata.Labels["cloud-streams.io/enabled"]);
+        // a dry run copies nothing, and a migration may be run again: what was copied is skipped
+        Assert.Equal(first.Copied, dryRun.Copied);
+        Assert.Equal(4, first.Copied);
+        Assert.Equal(0, second.Copied);
+        Assert.Equal(first.Copied + first.Existing, second.Existing);
     }
 
 }

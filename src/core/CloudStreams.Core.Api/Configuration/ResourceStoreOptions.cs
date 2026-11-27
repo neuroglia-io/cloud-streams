@@ -50,6 +50,9 @@ public class ResourceStoreOptions
             throw new InvalidOperationException($"'{ConfigurationSection}:Store' must be '{ResourceStoreType.Redis}' or '{ResourceStoreType.Kubernetes}', not '{this.Store}'");
         if (this.UsesKubernetes && !Neuroglia.Data.Infrastructure.ResourceOriented.ObjectNamingConvention.Current.IsValidResourceName(this.Kubernetes.DefaultNamespace ?? string.Empty))
             throw new InvalidOperationException($"'{ConfigurationSection}:Kubernetes:DefaultNamespace' must be the name of a Kubernetes namespace, not '{this.Kubernetes.DefaultNamespace}'");
+        var invalid = this.Kubernetes.Namespaces?.Where(n => !Application.Validation.CloudStreamsResourceValidator.IsValidNamespaceName(n?.Trim())).ToList();
+        if (this.UsesKubernetes && invalid?.Count > 0)
+            throw new InvalidOperationException($"'{ConfigurationSection}:Kubernetes:Namespaces' must only list namespace names, which {string.Join(", ", invalid.Select(n => $"'{n}'"))} are not");
     }
 
 }
@@ -94,6 +97,15 @@ public class KubernetesResourceStoreOptions
     /// create namespaces. Otherwise, only existing Kubernetes namespaces can be labelled. Defaults to <see langword="true"/>
     /// </summary>
     public virtual bool CreateNamespaces { get; set; } = true;
+
+    /// <summary>
+    /// Gets/sets the namespaces of Cloud Streams the process serves, if not all of them. Defaults to every namespace
+    /// </summary>
+    /// <remarks>
+    /// The process then only reads and writes the resources of those namespaces, and refuses the others with a <c>403 Forbidden</c>. It lists and watches them one
+    /// namespace at a time, so that it only needs rights in those Kubernetes namespaces, e.g. those of a RoleBinding in each
+    /// </remarks>
+    public virtual List<string>? Namespaces { get; set; }
 
     /// <summary>
     /// Gets/sets the path of the kubeconfig file used outside of a cluster, if any. In a cluster, the pod's service account is used

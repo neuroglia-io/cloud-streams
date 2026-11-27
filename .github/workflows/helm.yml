@@ -44,3 +44,16 @@ jobs:
           if helm template cs "$chart" $connections --set gateways[0].name=orders,gateways[1].name=orders > /dev/null 2>&1; then echo "listing a gateway twice should fail"; exit 1; fi
           # the connection strings are required
           if helm template cs "$chart" > /dev/null 2>&1; then echo "rendering without connection strings should fail"; exit 1; fi
+          # the Kubernetes mode deploys the operator, its webhook and the API, and declares the gateways and brokers, which the operator deploys
+          kubernetes="--kube-version 1.31.0 --set resources.store=kubernetes"
+          rendered=$(helm template cs "$chart" $connections $instances $kubernetes)
+          test "$(grep -c '^kind: Deployment' <<< "$rendered")" -eq 2
+          grep -q '^kind: ValidatingWebhookConfiguration' <<< "$rendered"
+          grep -q 'rbac.authorization.k8s.io/aggregate-to-view: "true"' <<< "$rendered"
+          grep -q '\\"kind\\":\\"Gateway\\",\\"metadata\\":{\\"name\\":\\"billing\\",\\"namespace\\":\\"tenant-b\\"}' <<< "$rendered"
+          # with cert-manager, and an API restricted to some namespaces
+          helm template cs "$chart" $connections $kubernetes --set operator.webhook.certManager.enabled=true --set api.namespaces[0]=tenant-a > /dev/null
+          # the Kubernetes mode requires Kubernetes 1.30, and refuses the settings it can't honour
+          if helm template cs "$chart" $connections --kube-version 1.29.0 --set resources.store=kubernetes > /dev/null 2>&1; then echo "the Kubernetes mode should require Kubernetes 1.30"; exit 1; fi
+          if helm template cs "$chart" $connections $kubernetes --set gateways[0].name=orders,gateways[0].env[0].name=X > /dev/null 2>&1; then echo "per-item env should be refused in Kubernetes mode"; exit 1; fi
+          if helm template cs "$chart" $connections --set resources.store=etcd > /dev/null 2>&1; then echo "an unknown store should be refused"; exit 1; fi

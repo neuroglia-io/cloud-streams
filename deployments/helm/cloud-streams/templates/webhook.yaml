@@ -1,0 +1,76 @@
+{{- if include "cloud-streams.kubernetesMode" . }}
+{{- $fullname := include "cloud-streams.fullname" . }}
+{{- $operator := printf "%s-operator" $fullname | trunc 63 | trimSuffix "-" }}
+{{- $certManager := .Values.operator.webhook.certManager }}
+# validates the resources written to Kubernetes directly, e.g. with kubectl, with the validators of the API (see the README's 'Kubernetes-native mode' section).
+# The operator sets the CA bundle, unless cert-manager's CA injector does
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+  {{- if $certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ printf "%s/%s-tls" .Release.Namespace $operator }}
+  {{- end }}
+webhooks:
+  - name: resources.cloud-streams.io
+    admissionReviewVersions: [ v1 ]
+    sideEffects: None
+    failurePolicy: {{ .Values.operator.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.operator.webhook.timeoutSeconds }}
+    clientConfig:
+      service:
+        name: {{ $operator }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate
+        port: 443
+    rules:
+      - apiGroups: [ cloud-streams.io ]
+        apiVersions: [ v1 ]
+        operations: [ CREATE, UPDATE ]
+        resources: {{ include "cloud-streams.kinds" . }}
+        scope: "*"
+    # the API and the operator validate the resources they write in process: they don't depend on the webhook
+    matchConditions:
+      - name: not-validated-in-process
+        expression: {{ printf "!(request.userInfo.username in ['system:serviceaccount:%s:%s', 'system:serviceaccount:%s:%s'])" .Release.Namespace $operator .Release.Namespace (include "cloud-streams.serviceAccountName" .) | quote }}
+{{- if $certManager.enabled }}
+{{- if not $certManager.issuerRef }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $operator }}
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  selfSigned: {}
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $operator }}-tls
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  secretName: {{ $operator }}-tls
+  dnsNames:
+    - {{ $operator }}
+    - {{ $operator }}.{{ .Release.Namespace }}
+    - {{ $operator }}.{{ .Release.Namespace }}.svc
+    - {{ $operator }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    {{- if $certManager.issuerRef }}
+    {{- toYaml $certManager.issuerRef | nindent 4 }}
+    {{- else }}
+    name: {{ $operator }}
+    kind: Issuer
+    {{- end }}
+{{- end }}
+{{- end }}

@@ -32,6 +32,7 @@
                 <th class="sticky-header text-center">Skip Validation</th>
                 <th class="sticky-header text-center">Schema Required</th>
                 <th class="sticky-header text-center">Auto-Generate Schema</th>
+                <SortableHeader Column="workload" Title="Workload" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <SortableHeader Column="health" Title="Health" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header"><span class="visually-hidden">Actions</span></th>
                 <th class="sticky-header text-center align-middle">
@@ -56,6 +57,7 @@
                         <td class="text-center">@(resource.Spec?.Validation?.SkipValidation.ToString() ?? "-")</td>
                         <td class="text-center">@(resource.Spec?.Validation?.DataSchema?.Required.ToString() ?? "-")</td>
                         <td class="text-center">@(resource.Spec?.Validation?.DataSchema?.AutoGenerate.ToString() ?? "-")</td>
+                        <td class="text-center"><WorkloadBadge Conditions="@resource.Status?.Conditions" AvailableReplicas="@resource.Status?.AvailableReplicas" /></td>
                         <td class="text-center"><HealthBadge Status="@resource.Status?.HealthStatus" /></td>
                         <td class="text-end">
                             <div class="dropdown">
@@ -105,6 +107,10 @@
     protected override Task? ShowFormAsync(Gateway? resource) => ShowFormAsync<CloudStreams.Dashboard.Pages.Gateways.Form.GatewayForm>(resource);
 
     /// <inheritdoc/>
-    protected override void ConfigureSortKeys(IDictionary<string, Func<Gateway, IComparable?>> sortKeys) => sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);
+    protected override void ConfigureSortKeys(IDictionary<string, Func<Gateway, IComparable?>> sortKeys)
+    {
+        sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);
+        sortKeys["workload"] = g => WorkloadBadge.Order(g.Status?.Conditions);
+    }
 
 }
