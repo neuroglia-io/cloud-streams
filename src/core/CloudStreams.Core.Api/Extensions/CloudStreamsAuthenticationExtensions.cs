@@ -257,10 +257,10 @@ public static class CloudStreamsAuthenticationExtensions
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             foreach (var proxy in section.GetSection("KnownProxies").Get<string[]>() ?? []) options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
-            foreach (var network in section.GetSection("KnownNetworks").Get<string[]>() ?? []) options.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(network));
+            foreach (var network in section.GetSection("KnownNetworks").Get<string[]>() ?? []) options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
             if (section.GetValue<bool>("TrustAllProxies"))
             {
-                options.KnownNetworks.Clear();
+                options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             }
         });
