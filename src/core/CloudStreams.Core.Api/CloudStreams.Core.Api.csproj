@@ -37,11 +37,14 @@
 	<PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="9.0.21" />
 	<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.2" />
 	<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
-	<PackageReference Include="Neuroglia.Data.Infrastructure.EventSourcing.EventStore" Version="4.23.1" />
-	<PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented.Redis" Version="4.23.1" />
-	<PackageReference Include="Neuroglia.Mediation.AspNetCore" Version="4.23.1" />
-	<PackageReference Include="Neuroglia.Data.Expressions.JQ" Version="4.23.1" />
-	<PackageReference Include="Neuroglia.Security.AspNetCore" Version="4.23.1" />
+	<PackageReference Include="Neuroglia.Data.Infrastructure.EventSourcing.EventStore" Version="4.24.0" />
+	<!-- pinned above the version Neuroglia references, which accepts certificates from any CA (GHSA-w7r3-mgwf-4mqq) -->
+	<PackageReference Include="KubernetesClient" Version="17.0.14" />
+	<PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented.Kubernetes" Version="4.24.0" />
+	<PackageReference Include="Neuroglia.Data.Infrastructure.ResourceOriented.Redis" Version="4.24.0" />
+	<PackageReference Include="Neuroglia.Mediation.AspNetCore" Version="4.24.0" />
+	<PackageReference Include="Neuroglia.Data.Expressions.JQ" Version="4.24.0" />
+	<PackageReference Include="Neuroglia.Security.AspNetCore" Version="4.24.0" />
 	<PackageReference Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.12.0-beta.1" />
 	<PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="9.0.1" />
 	<PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="9.0.1" />

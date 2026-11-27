@@ -49,6 +49,23 @@ public class EnsureNamespaceTests
         await repository.EnsureNamespaceAsync("tenant-a");
     }
 
+    /// <summary>
+    /// The resource databases of Neuroglia report a resource that already exists with a '400 Bad Request' status, whose title is 'Conflict': a gateway and a broker
+    /// that created the same namespace at once failed to start (see #275)
+    /// </summary>
+    [Fact]
+    public async Task A_Namespace_Reported_As_Already_Existing_By_The_Database_Should_Be_Accepted()
+    {
+        // arrange
+        var repository = Substitute.For<IResourceRepository>();
+        repository.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns<IResource?>(_ => throw Problem(HttpStatusCode.NotFound));
+        repository.AddAsync(Arg.Any<IResource>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns<IResource>(_ => throw new ProblemDetailsException(ResourceProblemDetails.ResourceAlreadyExists(new ResourceReference(new(NamespaceDefinition.ResourceGroup, NamespaceDefinition.ResourceVersion, NamespaceDefinition.ResourcePlural), "tenant-a"))));
+
+        // act & assert
+        await repository.EnsureNamespaceAsync("tenant-a");
+    }
+
     [Fact]
     public async Task An_Invalid_Namespace_Name_Should_Be_Refused()
     {

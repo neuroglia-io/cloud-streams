@@ -81,7 +81,7 @@ spec:
                       properties:
                         serviceUri:
                           type: string
-                          format: url
+                          format: uri
                   oneOf:
                     - properties:
                         type:
@@ -272,7 +272,7 @@ spec:
                       properties:
                         type:
                           type: string
-                          format: url
+                          format: uri
                         title:
                           type: string
                         status:
@@ -281,7 +281,7 @@ spec:
                           type: string
                         instance:
                           type: string
-                          format: url
+                          format: uri
                         errors:
                           type: array
                           items:

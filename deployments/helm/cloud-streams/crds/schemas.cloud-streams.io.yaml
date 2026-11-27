@@ -1,0 +1,52 @@
+# Generated from the definitions of src/core/CloudStreams.Core/Resources by CustomResourceDefinitionGenerator. Do not edit: see #276
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: schemas.cloud-streams.io
+spec:
+  scope: Cluster
+  group: cloud-streams.io
+  names:
+    plural: schemas
+    singular: schema
+    kind: Schema
+    shortNames: [sch]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              compatibility:
+                type: string
+                enum: [backward, forward, full, none]
+                description: How each version must be compatible with the previous one. Defaults to backward
+              versions:
+                type: array
+                description: The versions of the schema, from the oldest to the latest. Versions can be added, but neither changed nor removed
+                minItems: 1
+                items:
+                  type: object
+                  properties:
+                    version:
+                      type: integer
+                      minimum: 1
+                    schema:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                      description: The JSON schema of the version
+                  required: [version, schema]
+            required: [versions]
+        required: [spec]
+    additionalPrinterColumns:
+    - name: Compatibility
+      type: string
+      jsonPath: ".spec.compatibility"
+    - name: Age
+      type: date
+      jsonPath: ".metadata.creationTimestamp"

@@ -147,9 +147,6 @@ public class DatabaseInitializer(ILoggerFactory loggerFactory, IServiceProvider 
         }
     }
 
-    static bool IsConflict(ProblemDetailsException ex) =>
-        ex.Problem.Status == (int)HttpStatusCode.Conflict
-        || string.Equals(ex.Problem.Title, "Conflict", StringComparison.OrdinalIgnoreCase)
-        || ex.Problem.Detail?.Contains("already exists", StringComparison.OrdinalIgnoreCase) == true;
+    static bool IsConflict(ProblemDetailsException ex) => ex.Problem.IsConflict();
 
 }

@@ -26,6 +26,20 @@ public static class ProblemDetailsExtensions
 {
 
     /// <summary>
+    /// Determines whether the <see cref="ProblemDetails"/> describe a conflict, such as a resource that already exists, or that changed concurrently
+    /// </summary>
+    /// <param name="problem">The <see cref="ProblemDetails"/> to check</param>
+    /// <returns>A boolean indicating whether the problem is a conflict</returns>
+    /// <remarks>The resource databases of Neuroglia report a resource that already exists with a '400 Bad Request' status, whose title is 'Conflict'</remarks>
+    public static bool IsConflict(this ProblemDetails problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        return problem.Status == (int)HttpStatusCode.Conflict
+            || string.Equals(problem.Title, "Conflict", StringComparison.OrdinalIgnoreCase)
+            || problem.Detail?.Contains("already exists", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    /// <summary>
     /// Normalizes the <see cref="ProblemDetails"/>, so that its status describes the problem
     /// </summary>
     /// <param name="problem">The <see cref="ProblemDetails"/> to normalize</param>
