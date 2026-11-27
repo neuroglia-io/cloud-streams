@@ -184,7 +184,7 @@ readinessProbe:
 
 {{/* Whether pods need the token of their service account: to read Kubernetes secrets, or to authenticate to Vault with Kubernetes */}}
 {{- define "cloud-streams.needsServiceAccountToken" -}}
-{{- if or (has "kubernetes" .Values.secrets.providers) (and (has "vault" .Values.secrets.providers) (eq .Values.secrets.vault.authentication.method "kubernetes")) }}true{{ else }}false{{ end }}
+{{- if or (include "cloud-streams.kubernetesMode" .) (has "kubernetes" .Values.secrets.providers) (and (has "vault" .Values.secrets.providers) (eq .Values.secrets.vault.authentication.method "kubernetes")) }}true{{ else }}false{{ end }}
 {{- end }}
 
 {{/* The volumes of the Kubernetes secrets the 'file' provider reads */}}
@@ -203,4 +203,62 @@ readinessProbe:
   mountPath: /var/run/secrets/cloud-streams/{{ .name }}
   readOnly: true
 {{- end }}
+{{- end }}
+
+{{/* Whether resources are Kubernetes custom resources, which the operator deploys gateways and brokers from (see the README's 'Kubernetes-native mode' section) */}}
+{{- define "cloud-streams.kubernetesMode" -}}
+{{- if eq (.Values.resources.store | default "redis") "kubernetes" }}true{{ end }}
+{{- end }}
+
+{{/* The Kubernetes namespace of the 'default' namespace of Cloud Streams */}}
+{{- define "cloud-streams.defaultNamespace" -}}
+{{- .Values.resources.kubernetes.defaultNamespace | default .Release.Namespace }}
+{{- end }}
+
+{{/* The Kubernetes namespace of a namespace of Cloud Streams: pass a dict with the root context and the namespace */}}
+{{- define "cloud-streams.kubernetesNamespace" -}}
+{{- if eq .namespace "default" }}{{ include "cloud-streams.defaultNamespace" .root }}{{ else }}{{ .namespace }}{{ end }}
+{{- end }}
+
+{{/*
+The instances of a component the chart deploys itself: those of 'cloud-streams.instances', except in Kubernetes mode, where the operator deploys gateways
+and brokers, and the chart only deploys the API, a gateway with the settings of 'gateway' that 'api' overrides
+*/}}
+{{- define "cloud-streams.deployedInstances" -}}
+{{- if include "cloud-streams.kubernetesMode" .root }}
+{{- $instances := list }}
+{{- if eq .component "gateway" }}
+{{- $values := mergeOverwrite (deepCopy .root.Values.gateway) (omit (deepCopy .root.Values.api) "namespaces") }}
+{{- $fullname := include "cloud-streams.fullname" .root }}
+{{- $_ := set $values "enabled" true }}
+{{- $_ := set $values "name" (.root.Values.api.name | default (printf "%s-api" $fullname)) }}
+{{- $_ := set $values "namespace" (.root.Values.api.namespace | default "default") }}
+{{- $_ := set $values "objectName" (printf "%s-api" $fullname | trunc 63 | trimSuffix "-") }}
+{{- $_ := set $values "instanceLabel" "api" }}
+{{- $_ := set $values "managementApi" (dict "enabled" true "port" "") }}
+{{- $instances = append $instances $values }}
+{{- end }}
+{{- toJson (dict "items" $instances) }}
+{{- else }}
+{{- include "cloud-streams.instances" . }}
+{{- end }}
+{{- end }}
+
+{{/* The environment variables of the processes the chart deploys in Kubernetes mode, which store resources as custom resources */}}
+{{- define "cloud-streams.kubernetesEnv" -}}
+{{- if include "cloud-streams.kubernetesMode" . }}
+- name: CloudStreams__Resources__Store
+  value: kubernetes
+- name: CloudStreams__Resources__Kubernetes__DefaultNamespace
+  value: {{ include "cloud-streams.defaultNamespace" . | quote }}
+{{- range $index, $namespace := .Values.api.namespaces }}
+- name: CloudStreams__Resources__Kubernetes__Namespaces__{{ $index }}
+  value: {{ $namespace | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/* The plural names of the kinds of Cloud Streams */}}
+{{- define "cloud-streams.kinds" -}}
+[ brokers, feeds, gateways, schemas, sinks, subscriptions ]
 {{- end }}

@@ -1,4 +1,4 @@
-{{- range $values := (include "cloud-streams.instances" (dict "root" . "component" "broker") | fromJson).items }}
+{{- range $values := (include "cloud-streams.deployedInstances" (dict "root" . "component" "broker") | fromJson).items }}
 {{- if $values.enabled }}
 {{- $selector := dict "root" $ "component" "broker" "instance" $values }}
 {{- $fullname := $values.objectName }}

@@ -1,0 +1,64 @@
+@namespace CloudStreams.Dashboard.Components
+
+@* Shows whether the workload the operator deploys for a gateway or a broker is ready, in Kubernetes mode (see #279), with an icon and a word, never by color alone *@
+@if (Ready == null)
+{
+    <span class="text-secondary" title="The workload is not deployed by the operator">-</span>
+}
+else
+{
+    <span class="text-nowrap @ColorClass" title="@Detail">
+        <i class="bi @IconClass me-1" aria-hidden="true"></i>@Label
+    </span>
+}
+
+@code {
+
+    /// <summary>
+    /// Gets/sets the conditions the operator reports, if any
+    /// </summary>
+    [Parameter] public IEnumerable<ResourceCondition>? Conditions { get; set; }
+
+    /// <summary>
+    /// Gets/sets the number of available replicas the operator reports, if any
+    /// </summary>
+    [Parameter] public int? AvailableReplicas { get; set; }
+
+    /// <summary>
+    /// Orders workloads from the worst to the best, so that sorting brings degraded workloads first, and those the operator doesn't deploy last
+    /// </summary>
+    /// <param name="conditions">The conditions of the workload, if any</param>
+    /// <returns>The rank of the workload</returns>
+    public static int Order(IEnumerable<ResourceCondition>? conditions)
+    {
+        var ready = conditions?.FirstOrDefault(c => c.Type == ResourceConditionType.Ready);
+        if (ready == null) return 4;
+        if (IsTrue(conditions, ResourceConditionType.Degraded)) return 0;
+        return ready.Status == ResourceConditionStatus.True ? 3 : IsTrue(conditions, ResourceConditionType.Progressing) ? 2 : 1;
+    }
+
+    ResourceCondition? Ready => Conditions?.FirstOrDefault(c => c.Type == ResourceConditionType.Ready);
+
+    bool Degraded => IsTrue(Conditions, ResourceConditionType.Degraded);
+
+    bool Progressing => IsTrue(Conditions, ResourceConditionType.Progressing);
+
+    string Label => Degraded ? "degraded" : Ready?.Status == ResourceConditionStatus.True ? "ready" : Progressing ? "rolling out" : "not ready";
+
+    string? Detail
+    {
+        get
+        {
+            var condition = Degraded ? Conditions!.First(c => c.Type == ResourceConditionType.Degraded) : Ready;
+            var replicas = AvailableReplicas == null ? null : $"{AvailableReplicas} available";
+            return string.Join(" · ", new[] { condition?.Message, replicas }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        }
+    }
+
+    string IconClass => Degraded ? "bi-x-octagon-fill" : Ready?.Status == ResourceConditionStatus.True ? "bi-check-circle-fill" : Progressing ? "bi-arrow-repeat" : "bi-exclamation-triangle-fill";
+
+    string ColorClass => Degraded ? "text-danger" : Ready?.Status == ResourceConditionStatus.True ? "text-success" : "text-warning";
+
+    static bool IsTrue(IEnumerable<ResourceCondition>? conditions, string type) => conditions?.Any(c => c.Type == type && c.Status == ResourceConditionStatus.True) == true;
+
+}

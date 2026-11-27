@@ -1,0 +1,159 @@
+name: Kubernetes mode
+
+# Installs the chart in Kubernetes mode on a kind cluster, with the images of the commit, then deploys a gateway, a broker and a subscription with kubectl,
+# publishes events and checks that they are delivered, and that the admission webhook refuses an invalid resource (see #283)
+on:
+  pull_request:
+    paths:
+      - 'deployments/helm/**'
+      - 'deployments/kind/**'
+      - 'src/operator/**'
+      - 'src/core/CloudStreams.Core/Resources/**'
+      - 'src/core/CloudStreams.Core.Api/Configuration/ResourceStoreOptions.cs'
+      - 'src/core/CloudStreams.Core.Api/Services/Kubernetes*'
+      - '.github/workflows/kubernetes.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  end-to-end:
+    name: End to end on kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TAG: e2e
+      RELEASE: cs
+      NAMESPACE: cloud-streams
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the images
+        run: |
+          set -euo pipefail
+          docker build -q -f src/gateway/CloudStreams.Gateway.Api/Dockerfile -t ghcr.io/neuroglia-io/cloud-streams-gateway:$TAG .
+          docker build -q -f src/broker/CloudStreams.Broker.Api/Dockerfile -t ghcr.io/neuroglia-io/cloud-streams-broker:$TAG .
+          docker build -q -f src/operator/CloudStreams.Operator/Dockerfile -t ghcr.io/neuroglia-io/cloud-streams-operator:$TAG .
+
+      - name: Create the cluster
+        uses: helm/kind-action@v1
+        with:
+          node_image: kindest/node:v1.31.4
+          cluster_name: cloud-streams
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Load the images
+        run: |
+          for component in gateway broker operator; do kind load docker-image ghcr.io/neuroglia-io/cloud-streams-$component:$TAG --name cloud-streams; done
+
+      - name: Install EventStoreDB and Redis
+        run: |
+          kubectl create namespace $NAMESPACE
+          kubectl apply -n $NAMESPACE -f deployments/kind/dependencies.yaml
+          kubectl rollout status -n $NAMESPACE deployment/eventstore --timeout=5m
+          kubectl rollout status -n $NAMESPACE deployment/redis --timeout=5m
+
+      - name: Install the chart in Kubernetes mode
+        run: |
+          helm install $RELEASE deployments/helm/cloud-streams -n $NAMESPACE --wait --timeout 10m \
+            --set image.tag=$TAG \
+            --set resources.store=kubernetes \
+            --set eventstore.connectionString="esdb://eventstore.$NAMESPACE.svc:2113?tls=false" \
+            --set redis.connectionString="redis.$NAMESPACE.svc:6379" \
+            --set operator.replicaCount=2 \
+            --set api.replicaCount=1 \
+            --set operator.workloads.gateway.replicaCount=1 \
+            --set operator.workloads.broker.replicaCount=1 \
+            --set gateways[0].name=orders,gateways[0].namespace=tenant-a \
+            --set brokers[0].name=orders,brokers[0].namespace=tenant-a
+
+      - name: Wait for the declared gateway and broker
+        run: |
+          set -euo pipefail
+          # the operator creates the declared resources, then deploys them
+          for kind in gateway broker; do
+            timeout 300 bash -c "until kubectl get $kind orders -n tenant-a > /dev/null 2>&1; do sleep 2; done"
+            kubectl wait --for=condition=Ready $kind/orders -n tenant-a --timeout=5m
+          done
+          kubectl get gateways,brokers -A
+          kubectl get deployments,services,poddisruptionbudgets -n tenant-a
+
+      - name: Deploy a subscriber and a subscription with kubectl
+        run: |
+          set -euo pipefail
+          kubectl create deployment echo -n tenant-a --image=mendhak/http-https-echo:35 --port=8080
+          kubectl expose deployment echo -n tenant-a --port=80 --target-port=8080
+          kubectl rollout status deployment/echo -n tenant-a --timeout=3m
+          kubectl apply -f - <<EOF
+          apiVersion: cloud-streams.io/v1
+          kind: Subscription
+          metadata:
+            name: orders
+            namespace: tenant-a
+          spec:
+            subscriber:
+              endpoint: http://echo.tenant-a.svc/events
+            # tracks its offset, which the broker writes to the subscription's status
+            stream:
+              offset: 0
+          EOF
+
+      - name: Publish events and check that they're delivered
+        run: |
+          set -euo pipefail
+          kubectl port-forward -n tenant-a service/orders-gateway 8080:80 > /dev/null 2>&1 &
+          timeout 60 bash -c 'until curl -sf http://localhost:8080/healthz > /dev/null; do sleep 2; done'
+          for i in 1 2 3; do
+            curl -sf -X POST http://localhost:8080/api/events/pub -H 'Content-Type: application/cloudevents+json' \
+              -d "{\"specversion\":\"1.0\",\"id\":\"e2e-$i\",\"source\":\"https://e2e.cloud-streams.io\",\"type\":\"io.cloud-streams.e2e.v1\",\"data\":{\"index\":$i}}"
+          done
+          timeout 180 bash -c 'until [ "$(kubectl logs -n tenant-a deployment/echo | grep -o "e2e-[123]" | sort -u | wc -l)" -ge 3 ]; do sleep 3; done'
+          timeout 60 bash -c 'until [ "$(kubectl get subscription orders -n tenant-a -o jsonpath={.status.stream.ackedOffset})" = "3" ]; do sleep 2; done'
+          kubectl get subscriptions -n tenant-a
+
+      - name: Check that a change of the workload is rolled out
+        run: |
+          set -euo pipefail
+          kubectl patch gateway orders -n tenant-a --type merge -p '{"spec":{"workload":{"replicas":2}}}'
+          timeout 120 bash -c 'until [ "$(kubectl get deployment orders-gateway -n tenant-a -o jsonpath={.spec.replicas})" = "2" ]; do sleep 2; done'
+          # the Ready condition of the previous generation may still hold for a moment: the available replicas tell when the change is rolled out
+          timeout 300 bash -c 'until [ "$(kubectl get gateway orders -n tenant-a -o jsonpath={.status.availableReplicas})" = "2" ]; do sleep 2; done'
+          kubectl wait --for=condition=Ready gateway/orders -n tenant-a --timeout=1m
+
+      - name: Check that the webhook refuses an invalid resource
+        run: |
+          set -uo pipefail
+          output=$(kubectl apply -f - 2>&1 <<EOF
+          apiVersion: cloud-streams.io/v1
+          kind: Subscription
+          metadata:
+            name: invalid
+            namespace: tenant-a
+          spec:
+            subscriber:
+              endpoint: http://echo.tenant-a.svc/events
+              sink: orders
+          EOF
+          )
+          echo "$output"
+          grep -q 'denied the request' <<< "$output"
+
+      - name: Check that deleting a gateway deletes its workload
+        run: |
+          set -euo pipefail
+          kubectl delete gateway orders -n tenant-a --wait
+          timeout 120 bash -c 'until ! kubectl get deployment orders-gateway -n tenant-a > /dev/null 2>&1; do sleep 2; done'
+
+      - name: Dump the state of the cluster
+        if: failure()
+        run: |
+          kubectl get all,gateways,brokers,subscriptions -A || true
+          kubectl describe gateways,brokers -A || true
+          for selector in app.kubernetes.io/component=operator app.kubernetes.io/component=gateway app.kubernetes.io/component=broker; do
+            kubectl logs -A -l $selector --tail=300 --prefix || true
+          done

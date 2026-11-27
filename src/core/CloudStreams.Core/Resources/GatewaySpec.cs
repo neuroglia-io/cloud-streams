@@ -62,4 +62,11 @@ public record GatewaySpec
     [DataMember(Order = 7, Name = "ingestion"), JsonPropertyOrder(7), JsonPropertyName("ingestion"), YamlMember(Order = 7, Alias = "ingestion")]
     public virtual CloudEventIngestionPolicy? Ingestion { get; set; }
 
+    /// <summary>
+    /// Gets/sets an object used to configure the workload that runs the gateway, which the operator deploys in Kubernetes mode, if any (see #279).
+    /// Ignored otherwise
+    /// </summary>
+    [DataMember(Order = 8, Name = "workload"), JsonPropertyOrder(8), JsonPropertyName("workload"), YamlMember(Order = 8, Alias = "workload")]
+    public virtual GatewayWorkloadConfiguration? Workload { get; set; }
+
 }

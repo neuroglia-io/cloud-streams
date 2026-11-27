@@ -42,6 +42,10 @@ namespace CloudStreams.Core.Api.Services;
 /// that are installed. Namespaces are the Kubernetes namespaces labelled with <see cref="KubernetesResourceStoreOptions.NamespaceLabel"/>, and the default namespace
 /// of Cloud Streams is <see cref="KubernetesResourceStoreOptions.DefaultNamespace"/> (see #277)
 /// </para>
+/// <para>
+/// A process restricted to some namespaces by <see cref="KubernetesResourceStoreOptions.Namespaces"/> refuses the resources of the others, and lists and watches
+/// those it serves one namespace at a time, so that it only needs rights in their Kubernetes namespaces
+/// </para>
 /// </remarks>
 /// <param name="logger">The service used to perform logging</param>
 /// <param name="kubernetes">The service used to interact with the Kubernetes API</param>
@@ -92,15 +96,69 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
     /// <returns>The namespace of Cloud Streams, if any</returns>
     public virtual string? FromKubernetesNamespace(string? @namespace) => string.IsNullOrWhiteSpace(@namespace) ? null : @namespace == this.Options.DefaultNamespace ? Namespace.DefaultNamespaceName : @namespace;
 
+    IReadOnlyList<string>? _servedNamespaces;
+    bool _servedNamespacesResolved;
+
+    /// <summary>
+    /// Gets the namespaces of Cloud Streams the process serves, if not all of them, as <see cref="KubernetesResourceStoreOptions.Namespaces"/> configures them
+    /// </summary>
+    /// <remarks>The Kubernetes namespace of the default namespace may be listed by either of its names</remarks>
+    public virtual IReadOnlyList<string>? ServedNamespaces
+    {
+        get
+        {
+            if (this._servedNamespacesResolved) return this._servedNamespaces;
+            var served = this.Options.Namespaces?.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => this.FromKubernetesNamespace(n.Trim())!).Distinct(StringComparer.Ordinal).ToList();
+            this._servedNamespaces = served?.Count > 0 ? served : null;
+            this._servedNamespacesResolved = true;
+            return this._servedNamespaces;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the process serves the specified namespace of Cloud Streams
+    /// </summary>
+    /// <param name="namespace">The namespace of Cloud Streams to check</param>
+    /// <returns>A boolean indicating whether the process serves the specified namespace</returns>
+    public virtual bool IsServed(string? @namespace) => this.ServedNamespaces == null || string.IsNullOrWhiteSpace(@namespace) || this.ServedNamespaces.Contains(@namespace);
+
+    /// <summary>
+    /// Determines whether the resources of the specified kind are scoped by the cluster rather than by a namespace
+    /// </summary>
+    static bool IsClusterScoped(string group, string plural) => IsDefinition(group, plural) || IsNamespace(group, plural)
+        || CloudStreamsDefaults.Resources.Definitions.AsEnumerable().Any(d => d.Spec.Group == group && d.Spec.Names.Plural == plural && d.Spec.Scope == ResourceScope.Cluster);
+
+    /// <summary>
+    /// Ensures that the process serves the namespace of the specified operation: that of the resource, or the namespace itself for namespaces
+    /// </summary>
+    void EnsureServed(string group, string plural, string? name, string? @namespace)
+    {
+        if (this.ServedNamespaces == null || IsDefinition(group, plural)) return;
+        var served = IsNamespace(group, plural) ? name : @namespace;
+        if (!this.IsServed(served)) throw new ProblemDetailsException(this.NamespaceNotServed(served!));
+    }
+
+    Neuroglia.ProblemDetails NamespaceNotServed(string @namespace) => new(new Uri("https://cloud-streams.io/problems/namespace-not-served"), "Forbidden", (int)HttpStatusCode.Forbidden,
+        $"The namespace '{@namespace}' is not served by this process, which only serves the namespaces of '{ResourceStoreOptions.ConfigurationSection}:Kubernetes:Namespaces': {string.Join(", ", this.ServedNamespaces!.Select(n => $"'{n}'"))}");
+
+    /// <summary>
+    /// Determines whether a list or a watch of the specified resources spans the served namespaces, one at a time, rather than the whole cluster
+    /// </summary>
+    bool SpansServedNamespaces(string group, string plural, string? @namespace) => this.ServedNamespaces != null && string.IsNullOrWhiteSpace(@namespace) && !IsClusterScoped(group, plural);
+
     #endregion
 
     #region IDatabase
 
     /// <inheritdoc/>
-    /// <remarks>Checks that the API server can be reached. The CustomResourceDefinitions are installed by the Helm chart, never by the application (see #276)</remarks>
+    /// <remarks>
+    /// Checks that the API server can be reached, by reading the first served namespace if the process only serves some, since it may not list the others. The
+    /// CustomResourceDefinitions are installed by the Helm chart, never by the application (see #276)
+    /// </remarks>
     public override async Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await this.RunAsync(() => this.Kubernetes.CoreV1.ListNamespaceAsync(limit: 1, cancellationToken: cancellationToken), null).ConfigureAwait(false);
+        if (this.ServedNamespaces == null) await this.RunAsync(() => this.Kubernetes.CoreV1.ListNamespaceAsync(limit: 1, cancellationToken: cancellationToken), null).ConfigureAwait(false);
+        else await this.ReadKubernetesNamespaceAsync(this.ToKubernetesNamespace(this.ServedNamespaces[0])!, cancellationToken).ConfigureAwait(false);
         return true;
     }
 
@@ -111,6 +169,7 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
         if (IsDefinition(group, plural)) throw new ProblemDetailsException(DefinitionsAreReadOnly(resource.GetName()));
         if (resource.Metadata.Name?.Trim().EndsWith('-') == true) resource.Metadata.Name = $"{resource.Metadata.Name}{Guid.NewGuid().ToString("N")[..15].ToLowerInvariant()}";
         var reference = new ResourceReference(new(group, version, plural), resource.GetName(), @namespace ?? resource.GetNamespace());
+        this.EnsureServed(group, plural, reference.Name, reference.Namespace);
         if (IsNamespace(group, plural)) return await this.CreateNamespaceAsync(resource, reference, dryRun, cancellationToken).ConfigureAwait(false);
         var body = this.ToKubernetes(resource, group, version);
         var kubernetesNamespace = this.ToKubernetesNamespace(reference.Namespace);
@@ -125,7 +184,9 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (IsDefinition(group, plural)) return await this.GetDefinitionAsync(name, cancellationToken).ConfigureAwait(false);
-        if (IsNamespace(group, plural)) return await this.GetNamespaceAsync(name, cancellationToken).ConfigureAwait(false);
+        // a namespace the process does not serve does not exist for it
+        if (IsNamespace(group, plural)) return this.IsServed(name) ? await this.GetNamespaceAsync(name, cancellationToken).ConfigureAwait(false) : null;
+        this.EnsureServed(group, plural, name, @namespace);
         var node = await this.GetCustomObjectAsync(group, version, plural, name, @namespace, cancellationToken).ConfigureAwait(false);
         return node == null ? null : this.ToResource(node);
     }
@@ -155,16 +216,25 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
     /// <inheritdoc/>
     /// <remarks>
     /// The watch starts with the current version of the resources, so that it only emits the changes made afterwards, as the Redis database does. It resumes where it
-    /// stopped when the API server closes it, and starts over from the current version if that version expired
+    /// stopped when the API server closes it, and starts over from the current version if that version expired. A process that only serves some namespaces watches
+    /// each of them, and merges their changes
     /// </remarks>
     public override async Task<IResourceWatch> WatchResourcesAsync(string group, string version, string plural, string? @namespace = null, IEnumerable<LabelSelector>? labelSelectors = null, CancellationToken cancellationToken = default)
     {
         var selectors = labelSelectors?.ToList();
-        var initial = await this.ListPageAsync(group, version, plural, @namespace, selectors, 1, null, cancellationToken).ConfigureAwait(false);
+        if (!IsNamespace(group, plural)) this.EnsureServed(group, plural, null, @namespace);
+        // the namespaces watched one at a time, with the version each starts from
+        var watched = new List<(string? Namespace, string? ResourceVersion)>();
+        foreach (var watchedNamespace in this.SpansServedNamespaces(group, plural, @namespace) ? this.ServedNamespaces!.Cast<string?>() : [@namespace])
+        {
+            watched.Add((watchedNamespace, await this.GetCurrentVersionAsync(group, version, plural, watchedNamespace, selectors, cancellationToken).ConfigureAwait(false)));
+        }
         var observable = Observable.Create<IResourceWatchEvent>(observer =>
         {
             var cancellation = new CancellationTokenSource();
-            _ = this.PumpWatchAsync(group, version, plural, @namespace, selectors, initial.ResourceVersion, observer, cancellation.Token);
+            // the watches of several namespaces emit concurrently, which an observer does not support
+            var synchronized = watched.Count > 1 ? System.Reactive.Observer.Synchronize(observer) : observer;
+            foreach (var (watchedNamespace, resourceVersion) in watched) _ = this.PumpWatchAsync(group, version, plural, watchedNamespace, selectors, resourceVersion, synchronized, cancellation.Token);
             return Disposable.Create(() =>
             {
                 cancellation.Cancel();
@@ -212,6 +282,7 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var reference = new ResourceReference(new(group, version, plural), name, @namespace);
         if (IsDefinition(group, plural)) throw new ProblemDetailsException(DefinitionsAreReadOnly(name));
+        this.EnsureServed(group, plural, name, @namespace);
         var resource = await this.GetResourceAsync(group, version, plural, name, @namespace, cancellationToken).ConfigureAwait(false) ?? throw new ProblemDetailsException(ResourceProblemDetails.ResourceNotFound(reference));
         if (IsNamespace(group, plural))
         {
@@ -253,6 +324,7 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
     {
         var reference = new ResourceReference(new(group, version, plural), name, @namespace);
         if (IsDefinition(group, plural)) throw new ProblemDetailsException(DefinitionsAreReadOnly(name));
+        this.EnsureServed(group, plural, name, @namespace);
         for (var attempt = 1; ; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -334,7 +406,13 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
         var labelSelector = labelSelectors == null ? null : string.Join(',', labelSelectors.Select(s => s.ToString()));
         if (string.IsNullOrWhiteSpace(labelSelector)) labelSelector = null;
         if (IsDefinition(group, plural)) return await this.ListDefinitionsAsync(cancellationToken).ConfigureAwait(false);
-        if (IsNamespace(group, plural)) return await this.ListNamespacesAsync(labelSelector, limit, continuationToken, cancellationToken).ConfigureAwait(false);
+        if (IsNamespace(group, plural))
+        {
+            if (this.ServedNamespaces != null) return await this.ListServedNamespacesAsync(labelSelectors, cancellationToken).ConfigureAwait(false);
+            return await this.ListNamespacesAsync(labelSelector, limit, continuationToken, cancellationToken).ConfigureAwait(false);
+        }
+        this.EnsureServed(group, plural, null, @namespace);
+        if (this.SpansServedNamespaces(group, plural, @namespace)) return await this.ListServedNamespacesPageAsync(group, version, plural, labelSelectors, limit, continuationToken, cancellationToken).ConfigureAwait(false);
         var reference = new ResourceReference(new(group, version, plural), "*", @namespace);
         var kubernetesNamespace = this.ToKubernetesNamespace(@namespace);
         var result = await this.RunAsync(() => kubernetesNamespace == null
@@ -344,6 +422,50 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
         var items = list["items"]?.AsArray().OfType<JsonObject>().Select(this.ToResource).ToList() ?? [];
         var next = list["metadata"]?["continue"]?.GetValue<string>();
         return new(items, string.IsNullOrWhiteSpace(next) ? null : next, list["metadata"]?["resourceVersion"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Lists a page of the specified resources across the served namespaces, one namespace at a time, since the process may not list them cluster-wide
+    /// </summary>
+    /// <remarks>The continuation token is the index of the namespace the next page starts in, followed by a colon and the continuation token of that namespace, if any</remarks>
+    async Task<ResourcePage> ListServedNamespacesPageAsync(string group, string version, string plural, IEnumerable<LabelSelector>? labelSelectors, int? limit, string? continuationToken, CancellationToken cancellationToken)
+    {
+        var served = this.ServedNamespaces!;
+        var index = 0;
+        string? token = null;
+        if (!string.IsNullOrWhiteSpace(continuationToken))
+        {
+            var separator = continuationToken.IndexOf(':');
+            if (separator < 1 || !int.TryParse(continuationToken[..separator], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out index) || index >= served.Count)
+                throw new ProblemDetailsException(new(new Uri("https://cloud-streams.io/problems/invalid-continuation-token"), "Bad Request", (int)HttpStatusCode.BadRequest, $"The continuation token '{continuationToken}' is invalid"));
+            token = separator == continuationToken.Length - 1 ? null : continuationToken[(separator + 1)..];
+        }
+        var items = new List<Resource>();
+        string? resourceVersion = null;
+        while (index < served.Count && (limit == null || items.Count < limit))
+        {
+            var page = await this.ListPageAsync(group, version, plural, served[index], labelSelectors, limit == null ? null : limit - items.Count, token, cancellationToken).ConfigureAwait(false);
+            items.AddRange(page.Items);
+            resourceVersion = page.ResourceVersion ?? resourceVersion;
+            if (page.Continue != null) token = page.Continue;
+            else
+            {
+                index++;
+                token = null;
+            }
+        }
+        return new(items, index < served.Count ? $"{index}:{token}" : null, resourceVersion);
+    }
+
+    /// <summary>
+    /// Gets the current version of the specified resources, which a watch starts from so that it only emits the changes made afterwards
+    /// </summary>
+    async Task<string?> GetCurrentVersionAsync(string group, string version, string plural, string? @namespace, IEnumerable<LabelSelector>? labelSelectors, CancellationToken cancellationToken)
+    {
+        // the served namespaces are read one by one, which gives no version: that of the list of Kubernetes namespaces is used
+        if (IsNamespace(group, plural) && this.ServedNamespaces != null)
+            return (await this.RunAsync(() => this.Kubernetes.CoreV1.ListNamespaceAsync(labelSelector: $"{this.Options.NamespaceLabel}=true", limit: 1, cancellationToken: cancellationToken), null).ConfigureAwait(false)).Metadata?.ResourceVersion;
+        return (await this.ListPageAsync(group, version, plural, @namespace, labelSelectors, 1, null, cancellationToken).ConfigureAwait(false)).ResourceVersion;
     }
 
     async Task<JsonObject?> GetCustomObjectAsync(string group, string version, string plural, string name, string? @namespace, CancellationToken cancellationToken)
@@ -382,7 +504,10 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
                     {
                         resourceVersion = value.Metadata?.ResourceVersion ?? resourceVersion;
                         if (type is WatchEventType.Bookmark or WatchEventType.Error) continue;
-                        observer.OnNext(new ResourceWatchEvent(ToWatchEventType(type), this.ToNamespace(value)));
+                        var changed = this.ToNamespace(value);
+                        // the namespaces the process does not serve do not exist for it
+                        if (!this.IsServed(changed.GetName())) continue;
+                        observer.OnNext(new ResourceWatchEvent(ToWatchEventType(type), changed));
                         failures = 0;
                     }
                 }
@@ -425,7 +550,7 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
             // a watch that starts over from no version would emit every existing resource as added: it starts from the current version instead
             if (resourceVersion == null && !cancellationToken.IsCancellationRequested)
             {
-                try { resourceVersion = (await this.ListPageAsync(group, version, plural, @namespace, labelSelectors, 1, null, cancellationToken).ConfigureAwait(false)).ResourceVersion; }
+                try { resourceVersion = await this.GetCurrentVersionAsync(group, version, plural, @namespace, labelSelectors, cancellationToken).ConfigureAwait(false); }
                 catch (Exception ex) when (ex is not OperationCanceledException) { this.Logger.LogWarning(ex, "Failed to read the current version of the resources '{plural}.{group}'", plural, group); }
             }
         }
@@ -512,6 +637,25 @@ public class KubernetesResourceDatabase(ILogger<KubernetesDatabase> logger, IKub
         var selector = string.IsNullOrWhiteSpace(labelSelector) ? $"{this.Options.NamespaceLabel}=true" : $"{this.Options.NamespaceLabel}=true,{labelSelector}";
         var list = await this.RunAsync(() => this.Kubernetes.CoreV1.ListNamespaceAsync(continueParameter: continuationToken, labelSelector: selector, limit: limit, cancellationToken: cancellationToken), null).ConfigureAwait(false);
         return new([.. list.Items.Select(this.ToNamespace)], string.IsNullOrWhiteSpace(list.Metadata?.ContinueProperty) ? null : list.Metadata.ContinueProperty, list.Metadata?.ResourceVersion);
+    }
+
+    /// <summary>
+    /// Lists the served namespaces, read one by one, since the process may not list the Kubernetes namespaces
+    /// </summary>
+    async Task<ResourcePage> ListServedNamespacesAsync(IEnumerable<LabelSelector>? labelSelectors, CancellationToken cancellationToken)
+    {
+        var selectors = labelSelectors?.ToList();
+        var namespaces = new List<Resource>();
+        foreach (var name in this.ServedNamespaces!)
+        {
+            var kubernetesNamespace = await this.ReadKubernetesNamespaceAsync(this.ToKubernetesNamespace(name)!, cancellationToken).ConfigureAwait(false);
+            if (kubernetesNamespace == null || !this.IsEnabled(kubernetesNamespace)) continue;
+            // selectors apply to the labels of the Kubernetes namespace, as they do when the Kubernetes namespaces are listed
+            var labelled = new Namespace() { Metadata = new() { Name = name, Labels = kubernetesNamespace.Metadata.Labels == null ? null : new Dictionary<string, string>(kubernetesNamespace.Metadata.Labels) } };
+            if (selectors?.All(s => s.Selects(labelled)) == false) continue;
+            namespaces.Add(this.ToNamespace(kubernetesNamespace));
+        }
+        return new(namespaces, null, null);
     }
 
     /// <summary>

@@ -29,6 +29,7 @@
                 <SortableHeader Column="@ResourceSortColumns.Generation" Title="Generation" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header text-center">Retry Policy</th>
                 <th class="sticky-header text-center">Circuit Breaker</th>
+                <SortableHeader Column="workload" Title="Workload" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <SortableHeader Column="health" Title="Health" SortColumn="@SortColumn" Descending="SortDescending" OnSort="OnSort" CssClass="text-center" />
                 <th class="sticky-header"><span class="visually-hidden">Actions</span></th>
                 <th class="sticky-header text-center align-middle">
@@ -50,6 +51,7 @@
                         <td class="text-center">@resource.Metadata.Generation</td>
                         <td class="text-center">@(resource.Spec?.Dispatch?.RetryPolicy == null ? "no" : "yes")</td>
                         <td class="text-center">@(resource.Spec?.Dispatch?.RetryPolicy?.CircuitBreaker == null ? "no" : "yes")</td>
+                        <td class="text-center"><WorkloadBadge Conditions="@resource.Status?.Conditions" AvailableReplicas="@resource.Status?.AvailableReplicas" /></td>
                         <td class="text-center"><HealthBadge Status="@resource.Status?.HealthStatus" /></td>
                         <td class="text-end">
                             <div class="dropdown">
@@ -99,6 +101,10 @@
     protected override Task? ShowFormAsync(Broker? resource) => ShowFormAsync<CloudStreams.Dashboard.Pages.Brokers.Form.BrokerForm>(resource);
 
     /// <inheritdoc/>
-    protected override void ConfigureSortKeys(IDictionary<string, Func<Broker, IComparable?>> sortKeys) => sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);
+    protected override void ConfigureSortKeys(IDictionary<string, Func<Broker, IComparable?>> sortKeys)
+    {
+        sortKeys["health"] = g => HealthBadge.Order(g.Status?.HealthStatus);
+        sortKeys["workload"] = g => WorkloadBadge.Order(g.Status?.Conditions);
+    }
 
 }

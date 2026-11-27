@@ -34,6 +34,17 @@ public static class CloudStreamsDefaults
     {
 
         /// <summary>
+        /// Gets the annotation that tells the operator who runs the workload of a gateway or a broker, in Kubernetes mode (see #279)
+        /// </summary>
+        public const string WorkloadAnnotation = "cloud-streams.io/workload";
+
+        /// <summary>
+        /// Gets the value of the <see cref="WorkloadAnnotation"/> of the gateways and brokers whose workload is not deployed by the operator, e.g. by the Helm chart
+        /// or by hand. The gateways and brokers that create their own resource annotate it so
+        /// </summary>
+        public const string ExternalWorkload = "external";
+
+        /// <summary>
         /// Exposes Cloud Streams resource definitions
         /// </summary>
         public static class Definitions

@@ -39,6 +39,8 @@ public class KubernetesDatabaseInitializer(ILoggerFactory loggerFactory, IServic
         }
         if (missing.Count > 0) throw new InvalidOperationException($"The CustomResourceDefinitions {string.Join(", ", missing.Select(m => $"'{m}'"))} are not installed. "
             + "Install the Helm chart of Cloud Streams, or apply the CRDs of its 'crds' directory with 'kubectl apply -f', before starting Cloud Streams with the Kubernetes store");
+        // a process that only serves some namespaces leaves the default one alone, unless it serves it
+        if (database is KubernetesResourceDatabase kubernetes && !kubernetes.IsServed(Namespace.DefaultNamespaceName)) return;
         await this.EnsureDefaultNamespaceAsync(database, cancellationToken).ConfigureAwait(false);
     }
 
