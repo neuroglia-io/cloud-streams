@@ -97,6 +97,7 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
             try
             {
                 var subjects = new List<Rbacv1Subject>();
+                var sharedSecretReaders = new List<Rbacv1Subject>();
                 foreach (var kind in WorkloadKind.All)
                 {
                     var list = ToNode(await kubernetes.CustomObjects.ListClusterCustomObjectAsync(CloudStreamsDefaults.ResourceGroup, Version, kind.Plural, cancellationToken: cancellationToken).ConfigureAwait(false));
@@ -105,10 +106,12 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
                         var resource = ManagedResource.FromCustomObject(kind, item, serializer);
                         if (resource.IsExternal) continue;
                         subjects.Add(new("ServiceAccount", WorkloadFactory.GetObjectName(kind, resource.Name), namespaceProperty: resource.Namespace));
+                        if (this.Options.SharedSecrets.IsSharedWith(factory.GetCloudStreamsNamespace(resource.Namespace))) sharedSecretReaders.Add(subjects[^1]);
                         this.Enqueue(kind, resource.Namespace, resource.Name);
                     }
                 }
                 await this.SyncClusterRoleBindingAsync(subjects, true, cancellationToken).ConfigureAwait(false);
+                await this.SyncSharedSecretsRoleBindingAsync(sharedSecretReaders, true, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
             catch (Exception ex) { this.Logger.LogError(ex, "Failed to list the gateways and brokers to reconcile"); }
@@ -242,6 +245,7 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
         await kubernetes.CoreV1.PatchNamespacedServiceAccountAsync(Apply(workload.ServiceAccount), workload.Name, ns, fieldManager: OperatorOptions.FieldManager, force: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         await kubernetes.RbacAuthorizationV1.PatchNamespacedRoleBindingAsync(Apply(workload.RoleBinding), workload.Name, ns, fieldManager: OperatorOptions.FieldManager, force: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         await this.SyncClusterRoleBindingAsync([new("ServiceAccount", workload.Name, namespaceProperty: ns)], false, cancellationToken).ConfigureAwait(false);
+        if (this.Options.SharedSecrets.IsSharedWith(factory.GetCloudStreamsNamespace(ns))) await this.SyncSharedSecretsRoleBindingAsync([new("ServiceAccount", workload.Name, namespaceProperty: ns)], false, cancellationToken).ConfigureAwait(false);
         await kubernetes.CoreV1.PatchNamespacedSecretAsync(Apply(workload.Connections), workload.Connections.Metadata.Name, ns, fieldManager: OperatorOptions.FieldManager, force: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         var deployment = await kubernetes.AppsV1.PatchNamespacedDeploymentAsync(Apply(workload.Deployment), workload.Name, ns, fieldManager: OperatorOptions.FieldManager, force: true, cancellationToken: cancellationToken).ConfigureAwait(false);
         await kubernetes.CoreV1.PatchNamespacedServiceAsync(Apply(workload.Service), workload.Name, ns, fieldManager: OperatorOptions.FieldManager, force: true, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -280,7 +284,6 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
     /// <remarks>The binding is created by the chart: the operator may only update it, since Kubernetes can't restrict the creation of objects by name</remarks>
     protected virtual async Task SyncClusterRoleBindingAsync(IReadOnlyCollection<Rbacv1Subject> subjects, bool exclusive, CancellationToken cancellationToken)
     {
-        static string Key(Rbacv1Subject subject) => $"{subject.NamespaceProperty}/{subject.Name}";
         for (var attempt = 1; ; attempt++)
         {
             V1ClusterRoleBinding binding;
@@ -289,12 +292,8 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
             {
                 throw new InvalidOperationException($"The ClusterRoleBinding '{this.Options.WorkloadClusterRoleBinding}', which grants the workloads the cluster-wide reads they need, does not exist: it is installed by the chart");
             }
-            var current = binding.Subjects ?? [];
-            var wanted = exclusive
-                ? subjects.DistinctBy(Key).ToList()
-                : current.Concat(subjects).DistinctBy(Key).ToList();
-            if (current.Count == wanted.Count && current.Select(Key).ToHashSet().SetEquals(wanted.Select(Key))) return;
-            binding.Subjects = wanted.OrderBy(Key).ToList();
+            if (MergeSubjects(binding.Subjects, subjects, exclusive) is not List<Rbacv1Subject> merged) return;
+            binding.Subjects = merged;
             try
             {
                 await kubernetes.RbacAuthorizationV1.ReplaceClusterRoleBindingAsync(binding, binding.Metadata.Name, fieldManager: OperatorOptions.FieldManager, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -302,6 +301,52 @@ public class WorkloadReconciler(ILogger<WorkloadReconciler> logger, OperatorLead
             }
             catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.Conflict && attempt < 5) { }
         }
+    }
+
+    /// <summary>
+    /// Makes the role binding of the shared secrets bind the specified service accounts, which lets them read the secrets of the operator's namespace (see #281)
+    /// </summary>
+    /// <param name="subjects">The service accounts to bind</param>
+    /// <param name="exclusive">A boolean indicating whether or not the binding must bind the specified service accounts only, removing the others</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/></param>
+    /// <returns>A new awaitable <see cref="Task"/></returns>
+    /// <remarks>The binding is created by the chart: the operator only updates it</remarks>
+    protected virtual async Task SyncSharedSecretsRoleBindingAsync(IReadOnlyCollection<Rbacv1Subject> subjects, bool exclusive, CancellationToken cancellationToken)
+    {
+        if (!this.Options.SharedSecrets.Enabled) return;
+        for (var attempt = 1; ; attempt++)
+        {
+            V1RoleBinding binding;
+            try { binding = await kubernetes.RbacAuthorizationV1.ReadNamespacedRoleBindingAsync(this.Options.SharedSecrets.RoleBinding, this.Options.Namespace, cancellationToken: cancellationToken).ConfigureAwait(false); }
+            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new InvalidOperationException($"The RoleBinding '{this.Options.SharedSecrets.RoleBinding}' of the namespace '{this.Options.Namespace}', which lets workloads read the shared secrets, does not exist: it is installed by the chart");
+            }
+            if (MergeSubjects(binding.Subjects, subjects, exclusive) is not List<Rbacv1Subject> merged) return;
+            binding.Subjects = merged;
+            try
+            {
+                await kubernetes.RbacAuthorizationV1.ReplaceNamespacedRoleBindingAsync(binding, binding.Metadata.Name, binding.Metadata.NamespaceProperty, fieldManager: OperatorOptions.FieldManager, cancellationToken: cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.Conflict && attempt < 5) { }
+        }
+    }
+
+    /// <summary>
+    /// Merges the specified subjects into those of a binding
+    /// </summary>
+    /// <param name="current">The current subjects of the binding, if any</param>
+    /// <param name="subjects">The subjects to bind</param>
+    /// <param name="exclusive">A boolean indicating whether or not the binding must bind the specified subjects only</param>
+    /// <returns>The subjects the binding must have, or null if they're unchanged</returns>
+    public static List<Rbacv1Subject>? MergeSubjects(IList<Rbacv1Subject>? current, IReadOnlyCollection<Rbacv1Subject> subjects, bool exclusive)
+    {
+        static string Key(Rbacv1Subject subject) => $"{subject.NamespaceProperty}/{subject.Name}";
+        current ??= [];
+        var wanted = exclusive ? subjects.DistinctBy(Key).ToList() : current.Concat(subjects).DistinctBy(Key).ToList();
+        if (current.Count == wanted.Count && current.Select(Key).ToHashSet().SetEquals(wanted.Select(Key))) return null;
+        return [.. wanted.OrderBy(Key)];
     }
 
     /// <summary>

@@ -65,6 +65,18 @@ rules:
   - apiGroups: [ cloud-streams.io ]
     resources: {{ toJson (without $statuses "schemas/status") }}
     verbs: [ get, update, patch ]
+  # the leases of the health monitors of the gateways and brokers of the namespace
+  - apiGroups: [ coordination.k8s.io ]
+    resources: [ leases ]
+    verbs: [ get, create, update, delete ]
+  # the data-protection keys of the dashboard's cookies, in a secret of the namespace, which Kubernetes can't restrict the creation of by name
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ create ]
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    resourceNames: [ cloud-streams-data-protection ]
+    verbs: [ get, update ]
   {{- if has "kubernetes" .Values.secrets.providers }}
   # the 'kubernetes' secret provider reads the secrets labelled 'cloud-streams.io/secret=true' of the gateway's namespace
   - apiGroups: [ "" ]
@@ -93,6 +105,18 @@ rules:
   - apiGroups: [ cloud-streams.io ]
     resources: [ brokers/status ]
     verbs: [ get, update, patch ]
+  # the leases of the health monitors of the gateways and brokers of the namespace
+  - apiGroups: [ coordination.k8s.io ]
+    resources: [ leases ]
+    verbs: [ get, create, update, delete ]
+  # the data-protection keys of the dashboard's cookies, in a secret of the namespace, which Kubernetes can't restrict the creation of by name
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ create ]
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    resourceNames: [ cloud-streams-data-protection ]
+    verbs: [ get, update ]
   {{- if has "kubernetes" .Values.secrets.providers }}
   - apiGroups: [ "" ]
     resources: [ secrets ]
@@ -150,6 +174,10 @@ rules:
     resources: [ customresourcedefinitions ]
     resourceNames: {{ toJson $crds }}
     verbs: [ get ]
+  # the leases of the health monitors of the gateways and brokers of the namespaces it serves
+  - apiGroups: [ coordination.k8s.io ]
+    resources: [ leases ]
+    verbs: [ get, create, update, delete ]
   {{- if has "kubernetes" .Values.secrets.providers }}
   - apiGroups: [ "" ]
     resources: [ secrets ]
@@ -256,6 +284,10 @@ rules:
     resourceNames: [ {{ $fullname }}-gateway, {{ $fullname }}-broker, {{ $fullname }}-workload ]
     verbs: [ bind ]
   - apiGroups: [ rbac.authorization.k8s.io ]
+    resources: [ roles ]
+    resourceNames: [ {{ $fullname }}-shared-secrets ]
+    verbs: [ bind ]
+  - apiGroups: [ rbac.authorization.k8s.io ]
     resources: [ clusterrolebindings ]
     resourceNames: [ {{ $fullname }}-workload ]
     verbs: [ get, update, patch ]
@@ -312,4 +344,62 @@ subjects:
   - kind: ServiceAccount
     name: {{ $operator }}
     namespace: {{ .Release.Namespace }}
+---
+# the data-protection keys of the API's dashboard, in a secret of the release's namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-api
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ create ]
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    resourceNames: [ cloud-streams-data-protection ]
+    verbs: [ get, update ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-api-keys
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-api
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cloud-streams.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if has "kubernetes" .Values.secrets.providers }}
+---
+# The shared secrets, those of the release's namespace, which the gateways and brokers of the namespaces of 'secrets.sharedWith' may read. Only the secrets
+# labelled 'cloud-streams.io/secret=true', and not labelled with another namespace, are read: a role can't enforce labels
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-shared-secrets
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [ "" ]
+    resources: [ secrets ]
+    verbs: [ get ]
+---
+# the operator binds the service accounts of the workloads of the namespaces the secrets are shared with: the chart never sets the subjects
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-shared-secrets
+  labels:
+    {{- include "cloud-streams.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-shared-secrets
+{{- end }}
 {{- end }}

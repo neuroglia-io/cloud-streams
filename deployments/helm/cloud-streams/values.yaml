@@ -32,7 +32,9 @@ resources:
   # 'kubernetes': resources are Kubernetes custom resources, which kubectl and GitOps tools manage too. The chart deploys the operator, which validates
   # resources with an admission webhook and deploys the gateways and brokers from their resources, and the API, which serves the management API and the
   # dashboard. The 'gateways' and 'brokers' lists declare resources, which the operator creates when they're missing. Redis still stores the partition
-  # index, the deduplication keys, the rate limits and the leases. Requires Kubernetes 1.30 or later
+  # index, the deduplication keys, the rate limits and the leases of subscriptions. With the 'kubernetes' secret provider,
+  # a namespace reads the secrets of its Kubernetes namespace, and the namespaces of 'secrets.sharedWith' those of the release's namespace.
+  # Requires Kubernetes 1.30 or later
   store: redis
   kubernetes:
     # the Kubernetes namespace of the 'default' namespace of Cloud Streams. Defaults to the release's namespace

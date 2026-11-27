@@ -147,7 +147,13 @@ public class KubernetesSecretProvider(IHttpClientFactory httpClientFactory, IOpt
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var configuration = options.CurrentValue.Kubernetes;
         var server = configuration.Server ?? GetInClusterServer();
-        var kubernetesNamespace = configuration.Namespace ?? await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "namespace", cancellationToken).ConfigureAwait(false);
+        var sharedNamespace = configuration.Namespace ?? await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "namespace", cancellationToken).ConfigureAwait(false);
+        // in Kubernetes mode, the secrets of a namespace are those of its Kubernetes namespace, where no label is needed to tell whose they are (see #281). The
+        // namespace of the shared secrets keeps telling them apart with the namespace label, should it also be the Kubernetes namespace of a namespace
+        var kubernetesNamespace = configuration.NamespacedSecrets && !string.IsNullOrWhiteSpace(@namespace)
+            ? (@namespace == SecretOptions.DefaultSharedNamespace ? configuration.DefaultNamespace : @namespace)
+            : sharedNamespace;
+        var ownedByNamespace = kubernetesNamespace != sharedNamespace;
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server, $"api/v1/namespaces/{Uri.EscapeDataString(kubernetesNamespace)}/secrets/{Uri.EscapeDataString(path)}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await ReadServiceAccountFileAsync(configuration.ServiceAccountDirectory, "token", cancellationToken).ConfigureAwait(false));
         using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -155,7 +161,7 @@ public class KubernetesSecretProvider(IHttpClientFactory httpClientFactory, IOpt
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException($"Kubernetes did not provide the secret '{path}' of the namespace '{kubernetesNamespace}': it responded with '{(int)response.StatusCode} {response.StatusCode}'. Is the service account allowed to get secrets?");
         var secret = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false))!;
         // a secret of another namespace, or of a namespace when a shared one is read, is answered as missing rather than refused, so as not to reveal it
-        if (secret["metadata"]?["labels"]?[NamespaceLabel]?.GetValue<string>() != @namespace) return null;
+        if (!ownedByNamespace && secret["metadata"]?["labels"]?[NamespaceLabel]?.GetValue<string>() != @namespace) return null;
         if (!string.IsNullOrWhiteSpace(configuration.LabelSelector))
         {
             var separator = configuration.LabelSelector.IndexOf('=');

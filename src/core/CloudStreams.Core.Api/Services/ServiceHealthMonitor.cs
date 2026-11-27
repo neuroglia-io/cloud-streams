@@ -181,7 +181,7 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await leases.ReleaseAsync(this._leaseKey, timeout.Token).ConfigureAwait(false);
+            await leases.ReleaseAsync(this._leaseKey, this.Resource.GetNamespace(), timeout.Token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -252,7 +252,7 @@ public abstract class ServiceHealthMonitor<TResource>(ILogger logger, IJsonSeria
         if (service?.HealthChecks == null) return;
         // only the process that holds the lease checks the service: the others keep trying to acquire it, and take over when its owner stops or dies (see #180)
         this._leaseKey ??= $"{this.Resource.Kind.ToLowerInvariant()}:{this.Resource.GetQualifiedName()}";
-        this._holdsLease = await leases.TryAcquireAsync(this._leaseKey, GetInterval(service.HealthChecks) * 2 + LeaseGracePeriod, cancellationToken).ConfigureAwait(false);
+        this._holdsLease = await leases.TryAcquireAsync(this._leaseKey, this.Resource.GetNamespace(), GetInterval(service.HealthChecks) * 2 + LeaseGracePeriod, cancellationToken).ConfigureAwait(false);
         if (!this._holdsLease) return;
         var baseUri = service.Uri.OriginalString.TrimEnd('/');
         var path = service.HealthChecks.Request.Path;

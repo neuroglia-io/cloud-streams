@@ -255,6 +255,22 @@ and brokers, and the chart only deploys the API, a gateway with the settings of 
 - name: CloudStreams__Resources__Kubernetes__Namespaces__{{ $index }}
   value: {{ $namespace | quote }}
 {{- end }}
+# the secrets of a namespace are those of its Kubernetes namespace, and the shared ones those of the release's namespace
+- name: CloudStreams__Secrets__Kubernetes__NamespacedSecrets
+  value: "true"
+- name: CloudStreams__Secrets__Kubernetes__DefaultNamespace
+  value: {{ include "cloud-streams.defaultNamespace" . | quote }}
+- name: CloudStreams__Secrets__Kubernetes__Namespace
+  value: {{ .Release.Namespace | quote }}
+# the namespace of the data-protection keys, and the identity of the replica in the leases
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: POD_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
 {{- end }}
 {{- end }}
 

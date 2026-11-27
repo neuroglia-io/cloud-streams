@@ -183,11 +183,13 @@ public static class CloudStreamsAuthenticationExtensions
                     oidc.TokenValidationParameters.NameClaimType = options.Oidc.NameClaimType;
                     oidc.TokenValidationParameters.RoleClaimType = options.Oidc.RoleClaimType;
                 });
-            // the cookie is encrypted with data protection keys, which must be shared by all replicas: they are persisted to the Redis database Cloud Streams already uses
+            // the cookie is encrypted with data protection keys, which must be shared by all replicas: they are persisted to the Redis database Cloud Streams already uses,
+            // unless another repository is registered, e.g. a Kubernetes secret in Kubernetes mode (see #280)
             services.AddDataProtection().SetApplicationName("cloud-streams");
             services.TryAddSingleton<IConnectionMultiplexer>(provider => ConnectionMultiplexer.Connect(provider.GetRequiredService<IConfiguration>().GetConnectionString("redis")!));
             services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(provider => new ConfigureOptions<KeyManagementOptions>(keyManagement =>
-                keyManagement.XmlRepository = new RedisXmlRepository(() => provider.GetRequiredService<IConnectionMultiplexer>().GetDatabase(), DataProtectionKey)));
+                keyManagement.XmlRepository = provider.GetService<Microsoft.AspNetCore.DataProtection.Repositories.IXmlRepository>()
+                    ?? new RedisXmlRepository(() => provider.GetRequiredService<IConnectionMultiplexer>().GetDatabase(), DataProtectionKey)));
         }
         if (apiKeyEnabled)
         {

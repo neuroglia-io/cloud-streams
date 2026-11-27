@@ -191,7 +191,7 @@ Resources are stored in Redis by default, which lets Cloud Streams run anywhere.
 | Operator (`cloud-streams-operator` image) | the chart, 2 replicas | deploys a gateway or a broker from its resource, reports its conditions, and validates resources with an admission webhook. One replica, elected with a `Lease`, reconciles; every replica serves the webhook |
 | API | the chart | a gateway that serves the management API and the dashboard, for every namespace or for those of `api.namespaces` |
 | Gateways and brokers | the operator, from their resources | each runs in the Kubernetes namespace of its resource, with rights in that namespace only |
-| EventStoreDB and Redis | you | Redis still holds the partition index, the deduplication keys, the rate limits and the leases (#280) |
+| EventStoreDB and Redis | you | Redis still holds the partition index, the deduplication keys, the rate limits and the leases of the subscriptions |
 
 **Installation.** Kubernetes 1.30 or later is required.
 
@@ -270,7 +270,16 @@ Error from server: admission webhook "resources.cloud-streams.io" denied the req
 - **Field-level rights:** Kubernetes RBAC can't restrict the fields a user edits: the `operator` ClusterRole may edit subscriptions as a whole, whereas the API only lets an operator suspend, resume, replay and skip.
 - **Components:** each one has only the rights it needs. The API manages the resources of the namespaces it serves. A gateway reads and writes those of its own namespace, and a broker reads its subscriptions and writes their status. Both read the CRDs, the schemas and the namespaces across the cluster. The operator manages the workloads' objects, and may write, but not read, the secrets of other namespaces, since it copies the connection strings there.
 
-**Secrets.** With the `kubernetes` secret provider, a gateway or a broker the operator deploys reads the secrets labelled `cloud-streams.io/secret=true` of its own Kubernetes namespace, and nothing else (see [Transports](#transports)).
+**Secrets.** With the `kubernetes` secret provider, the secrets of a namespace of Cloud Streams are those of its Kubernetes namespace, labelled `cloud-streams.io/secret=true` (see [Transports](#transports)):
+- **Own secrets:** a gateway or a broker the operator deploys reads those of its own Kubernetes namespace, with no `cloud-streams.io/namespace` label needed: where a secret lives tells whose it is.
+- **Shared secrets:** those of the release's namespace, not labelled with a namespace, are read by the namespaces `secrets.sharedWith` lists, by default `default`. The operator binds the service accounts of their gateways and brokers to the `<release>-shared-secrets` Role, which lets them get the secrets of the release's namespace.
+- **Default namespace:** when it's the release's namespace, as by default, its own secrets are told apart from the shared ones with the `cloud-streams.io/namespace: default` label, as in Redis mode.
+- **Rights:** the operator only binds a workload to the secrets of its own namespace, and to the shared ones it's allowed. Kubernetes can't restrict reads by label: a gateway may read every secret of its namespace, so keep the others out of the namespaces of Cloud Streams, or use Vault.
+
+**Coordination.**
+- **Health monitors:** a single process at a time probes a gateway or a broker, which holds a `Lease` named `cloud-streams-health-<kind>-<name>.<namespace>` in the namespace of the monitored resource. The API and the gateways of that namespace compete for it.
+- **Data-protection keys:** the keys that encrypt the dashboard's cookies are kept in the `cloud-streams-data-protection` secret of the process' namespace, shared by the replicas that serve the dashboard.
+- **Subscriptions:** broker replicas keep sharing subscriptions with leases in Redis, which Redis is required for anyway: a `Lease` per subscription would cost the API server a write every few seconds per subscription.
 
 **Usage.**
 
@@ -301,9 +310,8 @@ kubectl -n orders patch subscription billing --type merge -p '{"spec":{"suspende
 4. Upgrade the release with `resources.store=kubernetes`. The operator then deploys the gateways and brokers of the copied resources: the chart no longer does.
 
 **Limits.**
-- **Coordination:** leases and data-protection keys still use Redis (#280).
-- **Secrets:** the secrets of other namespaces, shared by the release's namespace, aren't readable yet by the workloads the operator deploys (#281).
 - **Management port:** the gateways the operator deploys serve the management API on their single port, when it's enabled.
+
 ### Delivery and retries
 
 The broker delivers each event with a `POST` to the subscriber's endpoint (`spec.subscriber.endpoint`, or that of the sink `spec.subscriber.sink` names), or over the transport its scheme selects (see [Transports](#transports)). Any `2xx` response acknowledges the event. For a subscription that tracks a stream offset, the broker then commits `status.stream.ackedOffset` (the offset of the *next* event to deliver) and moves on. Offsets are only committed after a successful delivery, so delivery is **at-least-once**: subscribers should be idempotent.

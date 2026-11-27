@@ -440,4 +440,50 @@ public sealed class KubernetesResourceDatabaseTests(KubernetesResourceDatabaseTe
         Assert.Equal(first.Copied + first.Existing, second.Existing);
     }
 
+    [Fact]
+    public async Task A_Single_Process_Should_Hold_The_Lease_Of_A_Health_Monitor_Until_It_Expires()
+    {
+        // arrange: two processes compete for the lease of a gateway of the default namespace (see #280)
+        var options = new KubernetesResourceStoreOptions() { DefaultNamespace = KubernetesDefaultNamespace };
+        var first = new KubernetesHealthMonitorLeaseManager(this._kubernetes, options, TimeProvider.System);
+        var second = new KubernetesHealthMonitorLeaseManager(this._kubernetes, options, TimeProvider.System);
+        const string key = "gateway:leased.default";
+        var duration = TimeSpan.FromSeconds(2);
+
+        // act & assert
+        Assert.True(await first.TryAcquireAsync(key, "default", duration));
+        Assert.False(await second.TryAcquireAsync(key, "default", duration));
+        Assert.True(await first.TryAcquireAsync(key, "default", duration));
+        var lease = await this._kubernetes.CoordinationV1.ReadNamespacedLeaseAsync(KubernetesHealthMonitorLeaseManager.GetLeaseName(key), KubernetesDefaultNamespace);
+        Assert.Equal(first.OwnerId, lease.Spec.HolderIdentity);
+        // the lease of a process that stopped renewing it expires
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        Assert.True(await second.TryAcquireAsync(key, "default", duration));
+        Assert.False(await first.TryAcquireAsync(key, "default", duration));
+        // only its holder releases it
+        await first.ReleaseAsync(key, "default");
+        Assert.False(await first.TryAcquireAsync(key, "default", duration));
+        await second.ReleaseAsync(key, "default");
+        Assert.True(await first.TryAcquireAsync(key, "default", duration));
+    }
+
+    [Fact]
+    public async Task The_Data_Protection_Keys_Should_Be_Shared_Through_A_Secret()
+    {
+        // arrange: two replicas store keys in the secret of their namespace (see #280)
+        var options = new KubernetesResourceStoreOptions() { DefaultNamespace = KubernetesDefaultNamespace };
+        var first = new KubernetesXmlRepository(this._kubernetes, options);
+        var second = new KubernetesXmlRepository(this._kubernetes, options);
+
+        // act
+        first.StoreElement(new System.Xml.Linq.XElement("key", new System.Xml.Linq.XAttribute("id", "1")), "key-1");
+        second.StoreElement(new System.Xml.Linq.XElement("key", new System.Xml.Linq.XAttribute("id", "2")), "key-2");
+
+        // assert
+        Assert.Equal(["1", "2"], second.GetAllElements().Select(e => e.Attribute("id")!.Value).Order());
+        Assert.Equal(["1", "2"], first.GetAllElements().Select(e => e.Attribute("id")!.Value).Order());
+        var secret = await this._kubernetes.CoreV1.ReadNamespacedSecretAsync(KubernetesXmlRepository.SecretName, KubernetesDefaultNamespace);
+        Assert.Equal(["key-1.xml", "key-2.xml"], secret.Data.Keys.Order());
+    }
+
 }

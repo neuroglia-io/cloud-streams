@@ -72,6 +72,11 @@ public class OperatorOptions
     public virtual WorkloadOptions Broker { get; set; } = new() { Image = "ghcr.io/neuroglia-io/cloud-streams-broker:latest" };
 
     /// <summary>
+    /// Gets/sets the options of the shared secrets, which the workloads of some namespaces may read (see #281)
+    /// </summary>
+    public virtual SharedSecretOptions SharedSecrets { get; set; } = new();
+
+    /// <summary>
     /// Gets/sets the options of the admission webhook the operator serves
     /// </summary>
     public virtual WebhookOptions Webhook { get; set; } = new();
